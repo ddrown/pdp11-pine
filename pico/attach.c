@@ -78,8 +78,7 @@ static char rcsid[] = "$Id: attach.c,v 4.8 1993/11/08 23:08:56 mikes Exp $";
  * AskAttach - ask for attachment fields and build resulting structure
  *             return pointer to that struct if OK, NULL otherwise
  */
-AskAttach(fn, sz, cmnt)
-char *fn, *sz, *cmnt;
+int AskAttach(char *fn, char *sz, char *cmnt)
 {
     int	   i, status;
     long   l = 0;

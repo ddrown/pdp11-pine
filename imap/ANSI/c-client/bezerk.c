@@ -60,6 +60,8 @@ extern int errno;		/* just in case */
 #include "rfc822.h"
 #include "misc.h"
 #include "dummy.h"
+#include <time.h>
+#include <sys/uio.h>
 
 /* Berkeley mail routines */
 
@@ -902,7 +904,7 @@ void bezerk_expunge (MAILSTREAM *stream)
 	  } while (i <= stream->nmsgs);
 				/* dump checkpoint of the results */
 	  bezerk_save (stream,fd);
-	  sprintf ((r = LOCAL->buf),"Expunged %d messages",n);
+	  sprintf ((r = LOCAL->buf),"Expunged %ld messages",n);
 	}
       }
 				/* notify upper level, free locks */
@@ -1125,7 +1127,7 @@ int bezerk_lock (char *file,int flags,int mode,char *lock,int op)
    * And everywhere that it was installed, It was a total loss.  -- MRC 9/25/91
    */
 				/* build hitching post file name */
-    sprintf (tmp,"%s.%d.%d.",lock,time (0),getpid ());
+    sprintf (tmp,"%s.%ld.%d.",lock,time (0),getpid ());
     j = strlen (tmp);		/* append local host name */
     gethostname (tmp + j,(MAILTMPLEN - j) - 1);
 				/* try to get hitching-post file */
@@ -1264,7 +1266,7 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
   fstat (fd,&sbuf);		/* get status */
 				/* calculate change in size */
   if ((delta = sbuf.st_size - LOCAL->filesize) < 0) {
-    sprintf (LOCAL->buf,"Mailbox shrank from %d to %d bytes, aborted",
+    sprintf (LOCAL->buf,"Mailbox shrank from %ld to %ld bytes, aborted",
 	     LOCAL->filesize,sbuf.st_size);
     mm_log (LOCAL->buf,ERROR);	/* this is pretty bad */
     bezerk_unlock (fd,stream,lock);
@@ -1727,7 +1729,7 @@ void bezerk_write_message (struct iovec iov[],int *i,FILECACHE *m)
 				/* length of internal + message headers */
   iov[*i].iov_len = (m->header + m->headersize) - m->internal;
 				/* suppress extra newline if present */
-  if ((iov[*i].iov_base)[iov[*i].iov_len - 2] == '\n') iov[(*i)++].iov_len--;
+  if (((char *)iov[*i].iov_base)[iov[*i].iov_len - 2] == '\n') iov[(*i)++].iov_len--;
   else (*i)++;			/* unlikely but... */
   iov[*i].iov_base = m->status;	/* pointer/counter to status */
   iov[(*i)++].iov_len = strlen (m->status);

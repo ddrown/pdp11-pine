@@ -46,12 +46,7 @@
 #include <sys/types.h>
 #include <sys/dir.h>
 
-/* The definition for this in Linux's sys/types.h is wrong */
 
-struct iovec {
-  caddr_t iov_base;		/* starting address */
-  size_t iov_len;		/* length in bytes */
-};
 
 
 #define gethostid clock		/* non in the Linux C library?? */
