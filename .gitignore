@@ -1,6 +1,7 @@
 .bld.hlp
 c-client
 imap/ANSI/c-client/makefile
+!imap/ANSI/c-client/makefile.*
 imap/ANSI/c-client/osdep.h
 imapd
 pico/osdep.[ch]
