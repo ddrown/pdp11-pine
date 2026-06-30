@@ -38,6 +38,7 @@
 #include "osdep.h"
 #include <sys/file.h>
 #include <sys/stat.h>
+#include <stdio.h>
 #include "misc.h"
 
 #define SUBSCRIPTIONFILE(t) sprintf (t,"%s/.mailboxlist",myhomedir ())

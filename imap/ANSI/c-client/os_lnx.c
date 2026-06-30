@@ -63,8 +63,12 @@ TCPSTREAM {
 extern int errno;		/* just in case */
 #include <pwd.h>
 #include <syslog.h>
+#include <grp.h>
+#include <arpa/inet.h>
 #include "misc.h"
-extern char *crypt();
+#include <time.h>
+#include <stdio.h>
+extern char *crypt(const char *key, const char *salt);
 
 /* Write current time in RFC 822 format
  * Accepts: destination string

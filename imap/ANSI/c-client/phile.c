@@ -49,6 +49,7 @@ extern int errno;		/* just in case */
 #include "rfc822.h"
 #include "misc.h"
 #include "dummy.h"
+#include <time.h>
 
 /* File routines */
 
