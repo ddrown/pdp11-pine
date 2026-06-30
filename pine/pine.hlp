@@ -1,0 +1,3612 @@
+# $Id: pine.hlp,v 4.60 1993/12/07 20:25:10 mikes Exp $
+#
+#            T H E    P I N E    M A I L   S Y S T E M
+#
+#   Laurence Lundblade, Mike Seibel, Mark Crispin, Steve Hubert, 
+#     Sheryl Erez, David Miller
+#   Networks and Distributed Computing
+#   Computing and Communications
+#   University of Washington
+#   Administration Building, AG-44
+#   Seattle, Washington, 98195, USA
+#
+#   Please address all bugs and comments to "pine-bugs@cac.washington.edu"
+#
+#   Copyright 1989-1993  University of Washington
+#
+#    Permission to use, copy, modify, and distribute this software and its
+#   documentation for any purpose and without fee to the University of
+#   Washington is hereby granted, provided that the above copyright notice
+#   appears in all copies and that both the above copyright notice and this
+#   permission notice appear in supporting documentation, and that the name
+#   of the University of Washington not be used in advertising or publicity
+#   pertaining to distribution of the software without specific, written
+#   prior permission.  This software is made available "as is", and
+#   THE UNIVERSITY OF WASHINGTON DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED,
+#   WITH REGARD TO THIS SOFTWARE, INCLUDING WITHOUT LIMITATION ALL IMPLIED
+#   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, AND IN
+#   NO EVENT SHALL THE UNIVERSITY OF WASHINGTON BE LIABLE FOR ANY SPECIAL,
+#   INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+#   LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, TORT
+#   (INCLUDING NEGLIGENCE) OR STRICT LIABILITY, ARISING OUT OF OR IN CONNECTION
+#   WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#  
+#   Pine and Pico are trademarks of the University of Washington.
+#   No commercial use of these trademarks may be made without prior
+#   written permission of the University of Washington.
+#
+#   Pine is in part based on The Elm Mail System:
+#    ***********************************************************************
+#    *  The Elm Mail System  -  Revision: 2.13                             *
+#    *                                                                     *
+#    * 			Copyright (c) 1986, 1987 Dave Taylor               *
+#    * 			Copyright (c) 1988, 1989 USENET Community Trust    *
+#    ***********************************************************************
+# 
+#
+
+
+		    Help text for the Pine mailer
+
+This file is in a little format created to be turned into text strings
+in a C program and to support a few other features such as page numbering 
+and alternate versions that are created at run time.  There are two
+shell scripts that run on this.  Cmplhelp.sh is the first and turns
+this into a C file (helptext.c) of text strings that are compiled and linked.
+The other program, cmplhlp2.sh, turns this into a .h file (helptext.h) with
+extern string definitions of the strings in the .c file.  The code that
+actually processes these files while pine is running is in help.c
+
+The lines with "===== xxxx ====" divide the different help screens.  The xxx
+is the name of the variable that strings will be put in, which are also
+declared in helptext.h.
+
+
+# is a comment
+
+{x:y} constructs are the key bindings, either x or y is used.
+      x and y are best the same length so things always line up
+__    doesn't do anything but help keep things lined up in this file.  It is
+      removed before printing to the screen (except for ^_).
+
+___---- starts a new page, the ___ is removed when displayed.  Starts at
+column 73
+
+To actually get a { in the text use '{{:{}'.  To get a } make sure it is
+not matched by a {
+
+The text is formatted in emacs with the fill column set to 78.
+
+Text with ______ indents is formatted with fill column at 82
+
+___include <filename> includes a file at run time.  It should be
+followed by "___end_include" with text to be displayed if the file
+is unopenable in between.
+
+============= h_news =================
+                      RELEASE NOTES FOR PINE 3.89                        ___----
+                        University of Washington
+                              December, 1993
+
+I. TABLE OF CONTENTS
+
+   -Summary of changes since Pine 3.88
+   -Configuring Pine
+   -Reading News
+   -Changes since Pine 3.07
+   -Rationale for user-interface changes in 3.8x
+   -PC-Pine: Background, Differences/Limitations
+   -Coming attractions
+   -Detailed change history
+
+
+II. SUMMARY OF CHANGES                                                   ___----
+
+
+- Pine 3.89 is a primarily a maintenance (bug fix) release, correcting
+  several bugs introduced in 3.88 and earlier.
+
+- If this is the first version of Pine you've used since Pine 3.0x,
+  you should read the subsequent section on changes since 3.07. 
+
+- Fixed: Possibly the last bugs associated with zero length folders
+  causing crash with \"Bad msgno in mail_fetchstructure\" with new mail
+  arrival and \"Bad msgno in mail_elt\" after failed save.
+
+- Fixed: Bug in \"Goto\" command causing attempted open of garbaged 
+  folder names and other odd behavior under certain circumstances.
+
+- Fixed: Explicitly set mode of temporary files for sendmail to 0600.    ___----
+
+
+- Fixed: BOOTP gateway, netmask and nameserver recognition (packet-driver
+  version).
+
+- Fixed: Display bug showing zero length attachments on re-entering the 
+  composer.
+
+- Fixed: Export no longer reports success when write fails.              ___----
+
+Note to Sequent PTX users:  if you are experiencing performance problems,
+ make sure you get the new patch from Sequent to make \"fsync\" work like
+ all other Unix \"fsync\"s instead of just doing a \"sync\" instead!
+
+Note to AIX users: There have been reported problems with pine built
+ in certain AIX 3.2.X environments.  If you experience problems building
+ or running a newly built pine, you might try pine-bin.aix32 available on
+ ftp.cac.washington.edu.  Work to find the source of these problems 
+ continues.
+
+Note to NeXT users: We're aware of, but unable to reproduce, a crash
+ in the Folder Index.  If you can reproduce it, please send details to
+ pine-bugs@cac.washington.edu.
+
+III. CONFIGURING PINE                                                    ___----
+
+Pine configuration is accomplished via entries in a personal configuration
+file, and/or --in the case of Unix Pine-- an optional system-wide
+configuration file.  The standard pathnames for these files are as
+follows:
+
+ -Unix Pine system-wide configuration file: /usr/local/lib/pine.conf
+ -Unix Pine personal configuration file:  ~/.pinerc
+ -PC-Pine personal configuration file:  \\PINE\\PINERC
+
+Unix Pine can normally be used without any personal configuration, since
+the normal defaults or entries in the system-wide pine configuration file
+should usually be sufficient to get Pine running.  However, PC-Pine needs
+information that you must supply the first time you run Pine.
+
+Beyond the basic information necessary to run Pine, there are an         ___----
+ever-growing number of features that you can enable via entries in your
+personal config file.  Below is the default pinerc configuration file,
+including comments, that is created if none exists.  Note: comments in
+existing pinerc files are not updated by new versions of Pine, but new
+variables will be added as appropriate. 
+
+-------------------------------------------------------------------------___----
+\043 Updated by Pine(tm) 3.89, copyright 1989-1993 University of Washington.
+\043
+\043 Pine configuration file -- customize as needed.
+\043
+\043 This file sets the configuration options used by Pine and PC-Pine.  If you
+\043 are using Pine on a Unix system, there may be a system-wide configuration
+\043 file which sets the defaults for these variables.  There are comments in
+\043 this file to explain each variable, but if you have questions about
+\043 specific settings see the section on configuration options in the Pine
+\043 notes.  On Unix, run pine -conf to see how system defaults have been set.
+\043 For variables that accept multiple values, list elements are separated
+\043 by commas.  A line beginning with a space or tab is considered to be a
+\043 continuation of the previous line.
+
+\043------------------------ Essential Parameters --------------------------___----
+
+\043 personal-name specifies your full name as it should appear on outgoing mail.
+\043 If unset, Unix Pine will obtain your full name from the system passwd file.
+personal-name=
+
+\043 user-domain specifies the domain part of your return address on outgoing
+\043 email and is also used as the default domain for email composed to a
+\043 local user.  If unset, Unix Pine will obtain the domain from the system.
+user-domain=
+
+\043 List of SMTP servers for sending mail.  You must have an SMTP server   ___----
+\043 for use with PC-Pine.  Example: smtp-server=mailhost.u.washington.edu
+\043 If blank on Unix, sendmail will be used.
+smtp-server=
+
+\043 inbox-path specifies the name/path/location of your INBOX.  Example:
+\043 inbox-path={carson.u.washington.edu}inbox (INBOX on a remote computer)
+\043 Normal Unix default is the local INBOX (usually /user/spool/mail/$USER)
+inbox-path=
+
+\043-------------------- Collections, Folders, and Files -------------------___----
+
+\043 incoming-folders are those other than INBOX that receive new messages.
+\043 Folder syntax: optnl-label {optnl-imap-hostname}folder-path
+\043 Use only if you filter incoming email into multiple files or receive
+\043 email on several different machines.
+\043 Example:
+\043 incoming-folders=Consulting       {carson.u.washington.edu}filter/to-help,
+\043                  Widget-Project   {carson.u.washington.edu}filter/to-widget,
+\043                  Old-Student-Acct {imap.berkeley.edu}inbox
+incoming-folders=
+
+\043 folder-collections specifies a list of folder collections wherein saved
+\043 messages are stored.  The first collection is the default for saves.
+\043 Collection syntax: optnl-label {optnl-imap-hostname}optnl-directory-path[]
+\043 Example:                                                              ___----
+\043 folder-collections=Saved-Email    {foo.bar.edu}mail/[],
+\043                    Widget-Project widget/[],  <-- Valid only in Unix Pine
+\043                    Local-PC       mail\\[]     <-- Valid only in PC-Pine
+folder-collections=mail/[]
+
+\043 news-collections specifies one or more collections of news groups.
+\043 News collection syntax: optnl-label *{news-host/protocol}[]
+\043 Examples:
+\043 news-collections=News *[]   <-- if your login host carries news
+\043 news-collections=Subscribed-Groups *{news.u.washington.edu/nntp}[]
+news-collections=
+
+\043 default-fcc specifies where a copy of outgoing mail is saved.  If this is
+\043 not a path name, it will be in the default collection for saves.
+\043 Unix Pine default is normally \"sent-mail\" in the default folder collection.
+\043 PC-Pine default is \"SENTMAIL\" (stored as SENTMAIL.MTX)              ___----
+\043 Example of remote case: {carson.u.washington.edu}sent-mail
+\043 To suppress saving of outgoing mail, set: default-fcc=\"\"
+default-fcc=
+
+\043 mail-directory is where postponed & interrupted msgs are held temporarily.
+mail-directory=
+
+\043 read-message-folder specifies where already-read messages will be stored.
+\043 If set, you will be asked when you quit Pine if you want read messages
+\043 to be moved to this folder and deleted from your INBOX.
+read-message-folder=
+
+                                                                         ___----
+\043 signature-file specifies the name or path of a file containing text that
+\043 will automatically be inserted in outgoing mail.
+signature-file=
+
+\043 address-book specifies the filename or path name of Pine's addressbook.
+\043 Unix Pine default is normally ~/.addressbook
+\043 PC-Pine default is \\PINE\\ADDRBOOK
+address-book=
+
+\043------------------------------ Preferences -----------------------------___----
+
+\043 feature-list= comma-separated list of features from the following set:
+\043 Note: the value \"old-growth\" is shorthand for the indicated features...
+\043 enable-full-header-cmd        (included in old-growth set)
+\043 enable-unix-pipe-cmd          (included in old-growth set)
+\043 enable-bounce-cmd             (included in old-growth set)
+\043 enable-alternate-editor-cmd   (included in old-growth set)
+\043 enable-suspend                (included in old-growth set)
+\043 enable-tab-completion         (included in old-growth set)
+\043 enable-jump-shortcut          (included in old-growth set)
+\043 quit-without-confirm          (included in old-growth set)
+\043 enable-apply-cmd              (included in old-growth set)
+\043 enable-flag-cmd               (included in old-growth set)
+\043 enable-zoom-cmd               (included in old-growth set)
+                                                                         ___----
+\043 expanded-view-of-folders
+\043 use-function-keys
+\043 include-header-in-reply
+\043 signature-at-bottom
+\043 delete-skips-deleted
+\043 expunge-without-confirm
+\043 auto-move-read-msgs
+                                                                         ___----
+\043 e.g.
+\043 feature-list= old-growth, signature-at-bottom
+\043 The feature-list that is in effect when you are running Pine is the
+\043 combination of the feature-list set by the system manager in the pine.conf
+\043 file plus the feature-list set by you here.  (PC-Pine doesn't have a
+\043 pine.conf so this doesn't apply in that case.)  The feature-list is additive
+\043 and the order is significant.  First the system-wide pine.conf values are
+\043 read, then yours.  Any of the features listed above may also have the
+\043 characters \"no-\" prepended to it, to cancel its effect.  So, for example,
+\043 you could set \"feature-list= old-growth, no-quit-without-confirm\" if you
+\043 wanted to have all of the old-growth features except for that one.  Or,
+\043 if the system manager has set \"signature-at-bottom\" in the pine.conf file, 
+\043 you can cancel that with \"no-signature-at-bottom\".  The default condition 
+\043 for all of the features is no-, that is, off.
+feature-list=
+                                                                         ___----
+
+\043 Pine executes these keys upon startup (e.g. to view msg 13: i,j,1,3,CR,v)
+initial-keystroke-list=
+
+\043 saved-msg-name-rule= determines default folder name for Saves...
+\043 Choose one: 
+\043   default-folder, by-from, by-sender, by-recipient, last-folder-used
+\043 Normal default is \"default-folder\", which on Unix means \"saved-messages\"
+\043 and in PC-Pine means \"SAVEMAIL\"
+saved-msg-name-rule=
+
+\043 sort-key= order in which messages will be presented...
+\043 Choose one: subject, from, arrival, date, size.
+\043 Normal default is \"arrival\"
+sort-key=
+                                                                         ___----
+
+\043 character-set should reflect the capabilities of the display you have.
+\043 Normal default is US-ASCII.  Typical alternatives include ISO-8859-x,
+\043 where x is a number between 1 and 9.
+character-set=
+
+\043 editor specifies the program invoked by ^_ in the Composer.
+\043 This is normally an alternative to Pine's internal composer (Pico)
+editor=
+
+\043 Program to view images if format such as GIF and TIFF
+image-viewer=
+
+\043 Used if \"user-domain\" not set.  Strips hostname from user's return address.
+\043 Not applicable for PC-Pine
+use-only-domain-name=
+
+
+\043--------- Set within or by Pine: No need to edit below this line -------___----
+
+\043 Your printer selection
+printer=
+
+\043 Special print command if it isn't one of the standard printers
+personal-print-command=
+
+\043 Date last time you were asked about deleting old sent-mail (automatic)
+last-time-prune-questioned=
+
+\043 Version of Pine used last session (set automatically)
+last-version-used=3.85
+
+---------------------------------------------------------------------------
+(End of pinerc file.)
+                                                                         ___----
+The \"enable-jump-shortcut\" option allows you to enter message numbers 
+without typing the \"J\" command.
+
+The \"expanded-view-of-folders\" will cause all folder collections to be 
+expanded when you look at the FOLDER LIST, rather than the default 
+\"abstracted\" view.
+
+\"Delete-skips-deleted\" changes the standard behavior of the delete
+command when you are viewing messages.  Normally, pressing \"D\" marks the
+current message for deletion and moves to the next message.  With
+\"delete-skips-deleted\" set, Pine will jump to the next undeleted
+message. 
+                                                                         ___----
+The \"saved-msg-name-rule\" replaces the old \"elm-style-save\" option.  
+
+There is a new option to specify a folder to save messages that have 
+been read.  If set, you will be prompted upon quitting Pine to save
+viewed messages to this folder.  If the option is set in the global
+pine.conf file, it can be overridden with an explicit null string (\"\")
+value.
+
+  # The folder where a copy of read mail is saved.
+  read-message-folder=
+
+If this variable is set, and you'd like the transfer to occur without 
+prompting you when you quit Pine, add \"auto-move-read-msgs\" to your
+feature list.
+                                                                         ___----
+A note on folder collections: the -f command line option, and .pinerc
+variables specifying the location of \"default-fcc\" and \"mail-directory\"
+can be fully-qualified path names, but if they are ambiguous, they will
+be interpreted relative to the primary (first) folder-collection
+specification.  This is in contrast to the signature file, which is
+relative to home directory.  Also, a .newsrc file -- if you are using
+NNTP to access news -- must be in your home directory on Unix or in
+\\NEWSRC on DOS.  Note that the \"mail-directory\" variable is now used 
+only to define a place to put postponed and interrupted messages. 
+
+                                                                         ___----
+A note on default-fcc: if you are using PC-Pine and wish to have the same 
+sent-mail file as for Unix Pine, you *must* set \"default-fcc=sent-mail\"
+and make sure that the Unix sent-mail file is in the directory defined as 
+your primary folder-collection; that is, the first one in the 
+folder-collection list.
+
+
+IV. READING NEWS                                                         ___----
+
+Background.  
+
+Pine can read Internet news (NetNews or Usenet) groups, using the same
+commands as for mail.  This capability is still \"work in progress\", so
+some obvious capabilities are missing.  For example, Pine does not yet
+know how to post messages to a news group, nor does it have commands to
+subscribe to or unsubscribe newsgroups.  The consequence of this is that,
+for now, you must already have a \"newsrc\" file in order to permit Pine
+to read news.  Any Unix newsreader (e.g. rn, trn, nn) can be used to
+create a suitable .newsrc file.  Pine will update the .newsrc file in a
+way that is compatible with other news readers, although Pine uses the
+information in the file in a slightly different way than other news readers.
+
+Configuring Pine for news access.                                        ___----
+
+Pine can access news folders in any one of three different ways: 
+
+ -Using the Network News Transport Protocol (NNTP) to access news on
+  a remote news server.  In this case the newsrc file is stored on 
+  the machine where Pine is running.  Put a line similar to the following
+  in your .pinerc to use this mode of access:  
+
+      news-collections=News *{news.wherever.edu/nntp}[]
+
+ -Using the Internet Message Access Protocol (IMAP) to access news       ___----
+  on a remote news server.  In this case, your newsrc file is stored
+  on the news server, in your home directory, so you must have an
+  account on the news server, but you would be running Pine on a 
+  different machine.  The news server must be running an IMAPd server
+  process.  Put a line similar to the following in your .pinerc
+  to use this mode of access: 
+
+      news-collections=News *{news.wherever.edu}[]
+
+ -Using local file access to the news database.  In this case, your newsrc
+  file is stored on the news server, in your home directory, so you must
+  have an account on the news server, and you would be running Pine on the
+  same machine.  Put a line similar to the following in your .pinerc to
+  use this mode of access: 
+
+      news-collections=News *[]
+
+
+In the first two examples, the hostname \"news.wherever.edu\" should be  ___----
+replaced with the domain name of your local news server.  For Unix Pine,
+these entries can be placed in either the system-wide or your personal
+configuration file.
+
+If you are a PC-Pine user, either option 1 (NNTP) or option 2 (IMAP) is
+possible.  If you don't have an account on the news server, or if the news
+server is not running an IMAP daemon, then you must use NNTP.  In this
+case, a Unix .newsrc file can be transferred to your PC.  It should be
+named \\NEWSRC.  A future version of PC-Pine will be able to access and
+update a newsrc file stored on a Unix host, so that it will be possible to
+alternate between PC-Pine and Unix-based news readers. 
+
+Using Pine to read news.                                                 ___----
+
+Once defined in the .pinerc (or the global pine.conf) file, the news
+folder collection can be accessed either via the FOLDER LIST screen,
+of via the GOTO command.
+
+Once a news folder has been opened, Pine currently positions you at the
+last message.  (In the future, this is expected to change.)  Pine uses the
+same commands for manipulating news folders as for mail folders.  This
+means, for example, that when you are done with a message, you would use
+\"D\" to mark it as Deleted (or Dismissed, if you prefer.)
+
+This \"mail like\" behavior differs from that of most newsreaders, wherein
+a message is implicitly dismissed after you have looked at it once. We
+strongly believe that Pine should offer as much consistency as possible
+between mail and news, so the mail paradigm --wherein a message does not
+magically disappear without explicit action by the user-- is used for
+news as well.
+
+News folders are actually Read-Only, but the newsrc file allows Pine to  ___----
+keep track of which messages you have dismissed (marked as Deleted) just
+as in a regular mail folder. The difference is that, although messages
+marked as Deleted will show up in the Index (just as mail messages do
+until an eXpunge), you cannot expunge news messages.  However, in the
+future there will be a way to \"hide\" (or \"eXclude\") messages that are
+so marked from the Folder Index.
+
+If you answer a message in a news folder, the index view will show the
+\"A\" flag as usual; but the newsrc file has no way of storing this flag,
+so it will not be preserved across sessions.  The Deleted flag is the only
+one that is preserved between sessions. 
+
+NOTE: full NetNews functionality is not yet available in Pine; there
+is still much to be done in this area.  Stay tuned...
+
+
+V. CHANGES SINCE PINE 3.07                                               ___----
+
+Version 3.89 is the fourth maintenance release since 3.85, which was a
+major release with lots of changes and new features since 3.07.  If you
+are upgrading from 3.07 to 3.89, here are some of the changes you may
+notice:
+
+- Pine 3.8x has several major new features (compared to Pine 3.07):
+   o Various UI improvements (command consistency, simplification, etc).
+   o Multiple folder collections.
+   o Remote folder create/append (requires new IMAPd).
+   o Composer has Mark command for block cut/paste.
+   o Messages directly to you marked with \"+\" in Folder Index.
+   o Messages that have been answered marked with \"A\" in Folder Index.
+   o Improved handling of text and postscript attachments.
+   o Improved mailbox lock handling: latest Pine will now be read-write.
+   o Several new .pinerc options.
+   o Several new command line options.
+   o Easier access to newsgroups (but still not a full newsreader).
+   o TAB command to move to next unseen message.
+
+- Several command key changes were needed to allow for new features:     ___----
+   o Print is now \"Y\" instead of \"L\"
+   o The Folder List is now uniformly accessible via \"L\"
+   o Viewing/saving attachments is now done via \"V\" instead of \"A\"
+   o SortIndex is now \"$\" instead of \"Z\"
+
+- In addition...
+  - Release includes PC-Pine ports, as well as Unix Pine.
+  - Ability to view plain text attachments.
+  - Correct MIME type assigned for text, postscript and TIFF files.
+  - Configurable by feature (instead of having to choose 1 feature level).
+  - Initial keystroke list in configuration or command line.
+  - Command line -p flag to specify an alternate personal config file.
+  - Command line -P flag to specify an alternate system-wide config file.
+  - Command line -o flag for opening a mailbox Read-Only.
+  - Command line -I flag for initial keystroke list.
+  - More support for USENET news access via both IMAP and NNTP
+    (The NNTP driver reads/updates local newsrc configuration files).
+  - Changed order of reply prompts to reduce mistakes.                   ___----
+  - In the Save command, folder name completion using TAB key.
+  - More consistency of commands across screens.
+  - Main menu command selection via Prev/Next/Enter.
+  - An option for automatically saving read-messages upon quitting.
+  - Better INBOX lock handling: latest Pine always gets read-write access.
+  - Improved display defaults for charsets other than us-ascii.
+  - PC-Pine: code-page translation to ISO-8859 charset.
+  - PC-Pine: improvements in how location of config files are specified.
+  - PC-Pine: generate X-Sender line with authenticated address.
+  - PC-Pine: more config flexibility in specifying location of support files.
+  - PC-Pine: prompts before saving user name in pinerc; can disable save.
+  - PC-Pine: NNTP driver changed to warn of missing NEWSRC file.
+  - PC-Pine: if \\PINE\\PINE.PWD exists, prompts for saving passwd on disk.
+  - Changed Keyboard lock strategy to eliminate use of system passwd file.
+  - Removed disk quota command (hard to make it accurate!)
+  - Reorganized source code to make ports more straight forward.          
+  - Integrated several contributed ports.
+  - Pinerc configuration variable for addressbook location.              ___----
+  - SMTP-host config variable now allows a list of host names.
+  - Choice of several rules for generating default folder names in Save.
+  - Several other new .pinerc options.  (See PINERC section, below.)
+  - Globally-set (pine.conf) features can now be negated in pinerc.
+  - Many bug fixes!
+
+NOTE: Several commands can be enabled by .pinerc options, but not all of 
+them actually exist yet.  In particular: Flag, Bounce, Pipe, Apply, Zoom.
+Also: news item eXclude/uneXclude and news group subscription/unsubscription
+are not yet available. 
+
+Handling Locking with multiple sessions.                                 ___----
+
+Pine 3.84 introduced a new mechanism to handle competition between
+multiple sessions for a single INBOX.  Previously, the first session would
+have to be stopped before another could get read/write permissions on an
+open inbox.  Now, the newest session forces the older session to surrender
+read/write access to the mailbox.  Note: in the future, Unix Pine will
+also support the MTX mailbox format used by PC-Pine.  This format permits
+multiple sessions to all have read-write access (except that eXpunge can 
+only occur when there is a single session). 
+
+Folder Collections.                                                      ___----
+
+Pine allows you to have full access to sets of folders on you local
+machine plus those on any remote host running an IMAP server.  These sets
+of folders are called \"collections\" and Pine has some special new
+browsing features to take advantage of them. By default, everyone has one
+folder collection.  Additional collections may be defined by editing your
+.pinec configuration file. 
+
+MIME Attachments.                                                        ___----
+
+Pine now recognizes attachments which are displayable text and marks them
+the appropriate MIME type for text.  Pine has a new system for determining
+which MIME text attachments should be displayed automatically and which
+should be displayable on request.  In addition there is a new text
+attachment viewer module just for browsing these attachments.  Finally,
+Pine will now recognize postscript files and TIFF image files and assign
+the correct MIME type information in the message.
+
+Other things you should know.
+
+Unfortunately, when you Save a message to a folder, the message state
+flags (e.g. whether it was Deleted, or Answered) are not preserved.  This
+will be fixed in a future release. 
+
+Msg sizes are intentionally left blank in the index when using NNTP.
+                                                                         ___----
+If a file called ~/mail.txt exists and is either empty or appears to be a
+Tenex-style mailbox, Pine will decide to use its \"tenex2\" driver which
+will move all pending mail from /usr/spool/mail/$USER to mail.txt, and use
+mail.txt as your INBOX.  This behavior is subject to change; in particular,
+the \"tenex2\" driver will be deprecated in favor of an MTX driver that
+will provide a common mailbox format between Unix Pine and PC-Pine.
+
+
+VI. RATIONALE FOR USER-INTERFACE CHANGES IN PINE 3.8x                    ___----
+
+In Pine 3.85/3.86, there are many feature additions and more consistent
+use of command keys; but a few changes may trip you up the first time. 
+Here are some specific things to watch out for, and an explanation of why
+we changed them: 
+
+  o Main menu: \"F FOLDERS\" is now \"L LIST FOLDERS\"
+    WHY: In order to implement a pervasive command (L) to get to the Folder
+         List screen, available from all major screens.  The letter \"F\" 
+         conflicted with \"Forward\" on the Folder Index and Message Text 
+         screens.
+
+  o The \"L Print\" command is now the \"Y Print\" command.              ___----
+    WHY: We needed to reclaim L so there would be a consistent and 
+         mnemonic command for the important operation of getting to the 
+         Folder List screen (\"L ListFldrs\").  Since printing is also an
+         important operation, this change was made with great reluctance. 
+         On the other hand, \"L Print\" wasn't especially mnemonic, and
+         \"Y Print\" offers a nice environmental message!
+      
+  o The \"O OTHER\" command on the Main menu and the corresponding 
+    \"OTHER\" screen has been eliminated.  In its place, there is a Setup
+    command, and a couple of other commands added to the key menu at the
+    bottom of the Main menu. 
+    WHY: Simplification.  Providing more direct access to some of the
+         \"miscellaneous\" functions allowed elimination of the Other screen.
+         This also allowed us to use \"O OTHER CMDS\" on the main key menu,
+         for greater consistency with the other screens.
+                                                                         ___----
+  o The Main menu now supports selection of the principal commands using 
+    Previous/Next navigation commands, and RETURN to select.
+    WHY: Consistency with the other Pine screens.
+
+  o In \"Reply\" the order of prompts has been reversed.  The prompt          
+    \"Include original message in Reply?\" is now always the first one.
+    WHY: \"Reply to all recipients?\" depends on the specific msg header,
+         and therefore is not always present.  Although it may take
+         getting used to, we felt that in the long run it would be better
+         to have the first prompt be the one that is *always* applicable. 
+         Also, with the future ability to post news replies, there will be
+         different prompts following a Reply.  Again it seemed best to
+         start with the invariant prompt.
+                                                                         ___----
+  o The ^T sub-command under Save and Goto will behave slightly differently.
+    WHY: We hope the new \"select\" behavior makes it clearer to the user
+         what is going on.  In other words, a \"user interface improvement\".
+
+  o The \"Z Sort Folder\" command is now \"$ Sort Index\"
+    WHY: Two reasons.  The change from Z to $ was because we will need 
+         \"Z\" for some of the newsreading and aggregate operations
+         that are planned for a future release.  Besides, \"$\" looks more
+         like an \"S\" for Sort than \"Z\" does...  In addition, the word
+         \"Folder\" was changed to \"Index\" to emphasize that only the
+         Index is being affected; the folder itself is *not* reordered by
+         the Sort command.
+
+  o The disk quota command has been removed.
+    WHY: Because on many systems it caused nothing but trouble, 
+         moreover it was useless for remote folder management. 
+
+
+VII. PC-PINE: BACKGROUND, DIFFERENCES/LIMITATIONS                         ___----
+
+Summary: There are several known limitations in the PC version...
+
+   o There is no spelling checker.
+   o Sorting the Index (by other than Arrival) is *hopelessly* slow.
+   o The alternate editor function is not available.
+   o Memory: it needs about 500K out of 640K.
+   o Probably can't run image viewer from within Pine, due to memory.
+   o Performance optimization still needs to be done.
+   o Versions: packet driver, Novell LWP, FTP PC-TCP, Sun PC-NFS
+
+Most of the work done on Pine from 6/92 to 6/93 focused on changes needed to
+support a truly distributed electronic messaging environment (e.g. remote
+folder manipulation), and getting Pine to run on DOS (which was a *lot* of
+work).  The first version of PC-Pine (3.84) was released in July 1993, and
+included first steps toward integrating news and email access in Pine.
+
+Doing the DOS port was very difficult for a variety of reasons, but      ___----
+especially because of DOS memory management (or lack thereof).  However,
+simply porting Pine 3.07 to DOS was not sufficient.  For a desktop mailer
+such as PC-Pine to be useful at UW, it was necessary to fully support
+access to existing *remote* saved-message folders, as well as local
+(desktop) folders -- and of course, the remote INBOX.  Accomplishing this
+required extensions to IMAP, a new version of the IMAPd server code, and
+extensive work in Pine to support multiple collections of folders. 
+
+The principal reason for porting Unix Pine to DOS was to obviate the need
+for PC users to transfer files between their PC and the Unix system running
+Pine.  Now it is possible to save messages directly to the PC's filesystem,
+and to directly include PC files in outgoing messages.  Binary files (e.g.
+word processing documents, spreadsheets, image files, executables) may be 
+directly attached to your messages. 
+
+With the advent of Pine 3.85/3.86, both Unix Pine and PC-Pine have       ___----
+essentially similar functionality and user-interface.  But there are
+some differences.  Below is a list of PC-Pine differences and limiations:
+
+-Sorting the index is *hopelessly* slow right now... especially for
+ newsgroups accessed via NNTP. 
+
+-There is no spelling checker for PC-Pine.
+
+-The \"alternate editor\" function is not available.
+                                                                         ___----
+-Composing/Replying/Forwarding: the entire message text must fit in DOS 
+ memory.  However, attachments may be any size.
+
+-PC-Pine wants about 500K of DOS memory.
+
+-Don't expect to display a picture without exiting PC-Pine, due
+ to DOS memory limitations.  In some configurations, there *may* be enough
+ memory for the viewer and a small image, but don't count on it.
+
+-Performance optimization has not been done.  This will be most          ___----
+ noticeable when using NNTP to access newsgroups, or when Index screens are
+ redrawn while using PC-Pine over low-speed lines (via SLIP or PPP).
+ Encoding a decoding attachments is also very slow in this version.
+
+-While message folders may be either local or remote, several support
+ files must be available on the local disk.  In particular:
+	\\pine\\pinerc
+	\\pine\\addrbook (you may specify a different name/location for this)
+	\\newsrc
+	\\pine\\pine.sig (you may specify a different name/location for this)
+
+ Other files (postponed and interrupted messages, debug files) are also
+ stored locally.  The same is true for Unix Pine, but only users of both
+ PC-Pine and Unix Pine must worry about keeping their pinerc, address book,
+ and newsrc files in sync.   This may be done using remote file system 
+ protocols or manual copying.  (Remote access to these support files is
+ planned for the future.)
+
+-PC-Pine wants to live in a directory called \\PINE                      ___----
+
+-The PC-PINE message folder format, denoted by files with an \"MTX\" extension,
+ is based on byte-counts for maximum efficiency, so they must not be edited.
+ The format is non-standard, but conversion utilities would not be difficult.
+ In the future, this format may be supported in Unix Pine as well.
+
+-PC-Pine does not create debug files
+
+-PC-Pine mouse support is not yet available on some screens
+
+                                                                         ___----
+VIII. COMING ATTRACTIONS
+
+  - Shared (plus personal) address books
+  - Improved network news support, including posting and subscribing
+  - Implementation of \"missing\" commands (Bounce, Pipe, Flag)
+  - Improved MIME support, including \"mailcap\"
+  - For PC-Pine, beginnings of \"offline\" support
+  - For PC-Pine, performance improvement
+  - A Windows/Winsock version (though not initially a GUI)
+  - Access to remote support files: address books, newsrc, pinerc
+  - Operations on multiple messages (aggregate operations)
+  - Threaded Index views
+  - Improved Search capability
+  - Access to directory services from Composer
+
+
+IX. DETAILED CHANGE HISTORY                                              ___----
+
+               Pine 3.89   December 7, 1993
+
+User-visible changes...
+  - ^L side effect is new mail check
+Serious bug fixes...
+  - /tmp file for sendmail has mode based on default umask <Matt Freedman>
+  - Pine loops to make infinitely long .pine-debug <Mike Kuniavsky>
+  - Crash: \"Bad msgno in mail_fetchstructure\" <Ian Lumb> <Mike Kuniavsky>
+  - Crash: \"Bad msgno in mail_elt\" <Ian Lumb> <TJ Olny>
+  - INBOX index appears empty after Send <Mike Kuniavsky> <TJ Olny>
+  - PC-Pine problem with folder name after \"Goto\" <Landy, Berlinger, Pommert>
+  - Postpone: if canceled, attachment size displayed zero length <Dave King>
+  - PC-Pine: WATTCP BOOTP ignores gateway, nameservers
+  - Export: Reports success even after failed write <David Wall>         ___----
+
+               Pine 3.88   November 22, 1993
+
+User-visible changes...
+ -Use Tab instead of Next/Delete to prompt for next folder (News,IMF)
+ -Revised Goto default: always INBOX if not already in INBOX
+ -Change \"(y/n)\" prompts to \"(y/n/^c)\" prompts
+ -Have D,N cmds suggest using Tab when on last (unread) msg.
+ -Add \"checking for new mail\" indicator (\"*\") to anchor line
+ -ESC ESC <char> is now an alternative for Control-<char>
+ -New prompt added after KB lock passwd is entered to allow confirm
+ -Changed exit prompt in pico to (hopefully) prevent lost work.
+ -Decreased checkpoint and mail_ping intervals.
+ -After postpone, cursor is placed in body of text, rather than header
+Serious bug fixes...
+ -Loop: Pine loops on SIGHUP if in composer
+ -Crash: \"Bad msgno in mail_fetchstructure\"
+ -Crash: on Save <Matt Friedman>
+ -Crash: Crash when entering address that just fits screen width         ___----
+ -Crash: in folder list <TJ Olny>
+ -Crash: <Grant Weber>
+ -Crash: save msg to mail/postponed... resume causes crash <Barry Landy>
+ -Crash: SIGUSR2 after ckpoint, Panic: Lock when already locked <Karnes>
+MIME changes...
+ -Change trigger algorithm for QP and B64 encoding inline of text
+ -Base64 text attachments were not NL canonicalized
+ -Any IMAGE type, including TIFF, now passed to external viewer
+ -Change back to *not* NL canonicalizing application/postscript
+ -Attachment failure due to protection needs immediate feedback
+Misc bug fixes...
+ -Fix pico to write term init string when using terminfo
+ -Utilize new C-client callback to notify Pine of flag changes
+ -Modify \"new version\" page to reflect that 3.88 is a mtce release
+ -At low speed pico may leave terminal in funny state.
+ -3.87 SIGWINCH doesn't trigger repaint of some text <Khan Mark Klatt>
+ -Put separator string between consecutive text attachments.
+ -Allow override of global smtp-server variable.  <Barry Bouwsma>        ___----
+ -Omit beep from Tab message
+ -When returning to INBOX, return to same message as before. <RonJ>
+ -Don't complain about \"unable to create ~/mail\" if not used <MRC>
+ -Composer: 3.07 ^J on other than Attchmnt line fails <Robert Lummis>
+ -Composer: for ^R, append trailing NL if missing, and advise user
+ -Off by one after new mail arrives while in compose <John Underwood>
+ -\"last-folder\" name rule doesn't remember collection. <MRC>
+ -Revise message generated by \"D\" on last msg in folder <Matthew Barry>
+
+ -SIGWINCH causes tcp_getdata() to fail <DLM>
+ -Fix signal handling/cleanup on quit to avoid crash in Sun CmdTool
+ -Fix BASH incompatibility <Gary Anderson>
+ -Fix: BCC lost on sent-mail copy
+ -Fix: columnar (tab) displays in MESSAGE TEXT view
+ -G in \"Incoming\" collection matches names in default folder coll.
+ -Pinerc: allow $ in initial key list, <Dave King>
+ -Save bug induced by \"elm-style-save\" in 3.87 <Kent Yates>
+ -Compose: timestamp msg when sent, not at start of compose              ___----
+ -Compose: ^J removes second space after .\"  <Matthew Barry>
+ -Compose: Suspend broken if invoked from shell (signal process group)
+ -Postpone: Extra blank lines added at the end of msg (down to 1...)
+
+ -Messages with only an FCC silently fail <CWheeler>
+ -On AIX, terminfo should be default, not termcap (Pine & Pico)
+ -Problems forwarding/replying with nested MIME attachments
+ -Change pico to NL canonicalize included files
+ -Msg pointer off-by-1 bug (headers don't match msg) <Barry Landy>
+ -Save msg is corrupted in above case <Barry Landy>
+ -No attachment sent if ^X while in header?
+ -Re-fix long BCC exceeding sendmail limits
+ -Bky mailbox From separator sometimes missed by Pine
+ -Checkpointing of flag changes not always happening
+ -Delay in building folder list (sort to put INBOX first)
+ -Timestamp ping and checkpoint debug entries
+ -NNTP driver needs to send \"mode reader\" to INN <Ken Weaverling>      ___----
+ -default-fcc=$VARIABLE becomes \"\" when variable is unset <Barry Landy>
+ -Suppress \"out of context\" msg for FCC <Leland Woodbury>
+ -Pine beeps on outgoing/sent-mail (out of context error) <Ken Kutz>
+ -\"~user\" now expanded in .pinerc
+ -Misc corrections to help text and messages
+ -Bug in IMAPd address search
+
+
+               Pine 3.87   October 8, 1993                               ___----
+
+ -crash in bezerk_open caused by out-of-context FCC (Leland Woodbury)
+ -crash on Solaris with missing feature list (Keith Christopher)
+ -crash with [No Message Text Available] message (Grant Weber)
+ -crash on folder Rename (Dan Larsen)
+ -crash with \"Bad msgno in mail_fetchstructure\" (Les Pennington)
+ -need one more NL before included text if NO sig file (Jeannine Senechal)
+ -makefile.sgi repairs (Mike Brudenell)
+
+               Pine 3.86   October 5, 1993                               ___----
+
+ -Revert to having GOTO enabled by default.
+ -Revert to allowing open folders to be deleted.
+ -Revert to former meaning of -i command line flag.
+ -Add command line flag -I for initial keystroke list (replaces -i overload).
+ -Make personal feature list add to global feature list instead of replace.
+ -Allow negation of previously-enabled features by prefixing \"no-\".
+ -Add \"by-from\" name rule; change \"by-sender\" to use Sender: field
+ -Add \"expunge-without-confirm\" feature.
+ -Add \"auto-move-read-msgs\" feature.
+                                                                         ___----
+ -Change \"save-by-X\" rules to strip routing data from offered foldername.
+ -Change Pine to use FIND ALL, to avoid conflict with .mailboxlist.
+ -Change IMAPd's FIND ALL behavior to not check file type. 
+ -Change Tenex-format mailbox extensions from .txt to .TxT.
+ -Change composer to only put one blank between .sig and included text.
+ -Change pine to expand tabs on fixed, 8-char boundaries.
+ -Change address book nickname display length to match input limit.
+ -Change inline-text encoding rule to use quoted-printable more often.
+ -Change NewVersion message to indicate it only shows once, etc.
+ -Change wording of monthly pruning message.
+ -Change Ctl-K message to appear less frequently.
+
+ -Fix: Delete in/after spell-check may trash msg or crash Pine.          ___----
+ -Fix: crash resulting from M->S->? key sequence. 
+ -Fix: crash resulting from null To: field. 
+ -Fix: crash resulting from \"::\" in From: header.
+ -Fix: crash resulting from replying to above.
+ -Fix: for long headers (address lists longer than a screen). 
+ -Fix: [Mark Set] message should vanish after ^K. 
+ -Fix: \"No attachments\" msg in Postpone is too long to fit. 
+ -Fix: Ext. help inclusion confusion (insert page breaks as file is read). 
+ -Fix: Low-speed fixes that broke in Pico 2.0.
+ -Fix: Select/Goto should return to previous folder when open fails.
+ -Fix: Spaces at beginning of filenames are now ignored in Save/Export.
+ -Fix: put domain literal brackets around X-Sender when necessary.
+ -Fix: Can't save to INBOX if \"inbox\" is implicit in inbox-path.
+ -Fix Pico so lines w/tabs display correctly when characters deleted. 
+ -Fix negative network number in bracketed host numbers for DOS SMTP clients.
+ -Fix Tenex driver to never cause a kiss-of-death to be sent or received.
+ -Fix: Some global config options not transferred/displayed correctly?
+                                                                         ___----
+ -Fix: Use \"default state\" when returning to INBOX, instead of wrong msg #.
+ -Make PC-Pine more graceful when out of memory during a Send.
+ -Suppress From: (Sender Unknown) in included headers for -nr mode
+ -Improve performance of TAB and Del-skips-del on large folders.
+ -Improve failure case when .addressbook or .pinerc can't be re-written.
+ -IMAPd ignores kiss-of-death if current mailbox is not bezerk, mmdf, or mbox
+ -Use XHDR in NNTP client drivers to work around a missing LISTGROUP command.
+ -Internal FIND/FIND ALL redesign (no user or Pine-visible changes)
+ -Create separate VAX ULtrix (VUL) port.
+ -Rsh program name and pathname now set in c-client makefile for each port.
+ -Modify some ports to be only makefiles (and perhaps os_???.h files).
+ -Suppress Tenex driver new-mail snarf if it can't get RW access to spool.
+                                                                         ___----
+               Pine 3.85   September 21, 1993
+
+ - Integrated Unix/DOS release.
+ - First Unix release with PC-Pine (3.84) features.
+ - Recognition and proper MIME typing of postscript and TIFF files.
+ - Improved display defaults for charsets other than us-ascii.
+ - PC-Pine: code-page translation to ISO charset
+ - PC-Pine: improvements in how location of config files are specified.
+ - PC-Pine: generate X-Sender line with authenticated address.
+ - PC-Pine: more config flexibility in specifying location of support files.
+ - PC-Pine: prompts for personal data in pinerc: more flexibility for labs. 
+ - PC-Pine: NNTP driver changed to warn of missing NEWSRC file.
+ - PC-Pine: if \\PINE\\PINE.PWD exists, prompt for saving passwd on disk.
+ - Changed Keyboard lock strategy to eliminate use of system passwd file.
+ - Reorganized source code to make ports more straight forward.          ___----
+ - Integrated several contributed ports.
+ - New technical notes.
+ - Fixed bug with packet driver PC-Pine and IMAP connections breaking.
+ - Pinerc configuration variable for addressbook location.
+ - Command line flag for specifying a system-wide configuration file.
+ - Command line flag for opening a mailbox Read-Only.
+ - SMTP-host config variable now allows a list of host names.
+ - Removed disk quota command (hard to make it accurate!)
+ - Many bug fixes!
+ 
+               Pine 3.84   July 12, 1993                                 ___----
+
+ - Fixed NNTP driver bugs
+ - Fixed scroll state problem which caused crashes
+ - Changed internal handling of mailbox extensions (now driver dependent)
+ - Cleanup context prompts which were too wide
+ - PC-Pine configuration is written to a pinerc if it is new
+ - Smarter rebuilding of the index cache
+ - Fixed Ultrix quota bug
+ - Fixed more DOS memory management problems
+ - Reworked installation and configuration instructions
+ 
+               Pine 3.83   June 17, 1993                                 ___----
+
+ - Support for multiple folder collections
+ - Support for new remote create/append functions in latest IMAPd
+ - Internal changes for DOS
+ - New configuration settings in .pinerc
+ - Command line and pinerc setting for initial keystrokes
+ - Can create and append to remote folders via IMAP
+ - Viewer module for plain text attachments
+ - Better MIME typing of attachments
+ - Modifications to several variables in pinerc
+ - Changed the keymenu layout
+ - Changed names of many commands (e.g. \"F\" Folders to \"L\" List folders)
+ - Allow for horizontal scrolling of 1-line input questions
+
+               Pine 3.81                                                 ___----
+
+ - Portability to AIX 3.2 on RS/6000's
+ - Portability to SVR4 
+ - Fixed bug with exporting on NeXTs (broke in 3.52)
+ - Fixed bug in sending attachments (broke in 3.73)
+ - Changed elm-style-save to save-by-sender
+ - Quotes are retained for all setting when .pinerc is rewritten
+ - Fixed bug causing core dump with .pinerc unterminated by newline
+
+
+               Pine 3.80  Oct 4, 1992
+
+ - Merge of changes in Pine 3.05, Pine 3.73 and Pine 3.52
+ - RETURN works in the address book to select an address
+ - ^L documented in help text on main screen
+
+               Pine 3.73                                                 ___----
+ - Changed label \"Open\" to \"Open Fldr\" in folders screen
+ - Changed search prompt for where is command
+ - Fixed sorting of folder name
+ - Improved formatting for the folders screen
+ - Internal improvements in the way the folder list is created
+ - Updated comments in imap.c
+ - Killed some dead code in init.c
+ - Fix not to attempt to output messages when tty is uninitialized
+ - Fixed image viewer race causing xv to fail for viewing images
+ - Can play sounds on SPARC stations
+ - Better fix for nasty date / Berkeley mail file separator bug.
+						                         ___----
+ - Recognize more variants of GIF files, GIF* instead of GIF87
+ - Zero length attachments are now not considered images
+ - Bug fixes to date parsing, parse_date(), handles a few more dates
+ - Bug fix to error messages for unknown commands. 
+ - Bug fix for displaying 8 bit characters on some systems
+ - More bug fixes to swallow function keys better
+ - Added handling of richtext \\paragraph 
+
+               Pine 3.06                                                 ___----
+
+ - Added -a flag for anonymous mode as distinct from -nr mode
+ - Added simple forwarding for -nr mode
+
+
+               Pine 3.05
+
+ - Displays only last component of file path in nr mode
+ - When expunging gets the \"s\" after message in the delete count right
+ - Got \"screen\" spelled right, was \"screeen\"
+ - Bug fixes to strindex and strrindex (not sure what was broken)
+ - Bug fixes to swallow function keys better
+
+
+                Pine 3.04   Sept 8, 1992                                 ___----
+
+ - Fixed memory allocation problem in sending
+ - Fixed bad folder delimiter writing when pine used with recent imapd's
+ - Bug fix to update_message_id for potential buffer reuse bug
+ - Fixed bug that caused occasional hanging on input
+ - '-n X' option added to start pine on item X in index (for use with '-i')
+
+
+               Pine 3.03           July  20 1992                       
+  - Printing of MIME messages now works
+  - Exporting of MIME messages now works
+  - Parity problem fixed (again), PASS8 not set when character-set unset
+  - Compiles properly on VAX/Ultrix
+  - Compiles properly on SGI box 
+  - Recognizes TIFF and PostScript when attaching, can't display then (yet)
+  - Fixed bug in Pico on SGI's causing CR to be interpreted as LF, ^J 
+
+
+               Pine 3.02           July  15 1992                         ___----
+
+  - Alternate editor command takes arguments properly now
+  - \"M\" from the News screen goes back to main menu
+  - ^C while in alternate editor doesn't kill Pine
+  - Added FAQ about alternate editor
+  - New variable to suppress messages about new versions of pine
+  - Title bar \"DEL\" now shown correctly in View when folder is sorted
+
+
+               Pine 3.01           July  13 1992
+
+  - Fixed sorting on From: field so it sorts on user id
+  - Fixed reversing of sort
+  - F6 for the address book now works again on the main menu
+  - More fixes for q-p encoding and end of line conventions
+  - Fixed so Pine will operated on RS232 parity other than 8N1
+  - Only puts tty into PASS8 mode when character-set is 8 bits
+
+
+               Pine 3.00           July  6 1992                          ___----
+
+  - Partially updated help text
+  - Confirms with user when sending to \"mailer-daemon\"
+  - MIME part count and size encoded in message id to gather MIME use stats
+  - Fixed bug caused by deleting first or preceding attachments
+  - Gives warning about being unable to postpone messages with attachments
+
+BUG FIXES AND IMPROVEMENTS (2.x to 3.0x)
+  - Bcc saved in sent-mail folder, and shown
+  - Fixed bugs causing core dumps and errors on with very long addresses
+  - Sorting by subject, date, sender and other fields
+  - Fixes for screen painting problems with Procomm and VT102's at low speeds
+  - \"Old-growth\" mode for power users; this enables viewing of full header
+  - Can view messages with ISO-2022 character set shifts (supports Japanese)
+  - No limit on the number of messages in a folder                       ___----
+  - More command line options: specify sort, go directly to index
+  - More .pinerc configuration: mail-directory, feature-level, signature-file.
+  - Alternate editor for message composition -- set \"editor\" in .pinerc
+  - Pays attention to umask when exporting files
+  - Option in .pinerc (old-style-reply) to have signature at bottom of reply
+  - More efficient screen painting for low speed dialup support
+  - Upon opening a folder the current message is the first unread message
+  - Carries along  date properly when saving messages to Berkeley mail folders
+  - Ports to Dynix/PTX and HP/UX
+  - Removal of \"View\" from main menu
+  - Many more small fixes, improvements and documentation updates
+
+               Pine 2.33           July  4 1992                          ___----
+
+  - Lock keyboard disabled for PTX port since it didn't work
+  - Saving attachments and custom printer config disable in restricted mode
+  - Signature is now included when forwarding MIME style
+  - Added line separating attachments from body when viewing MIME messages
+  - Title bar shows \"Folder:inbox\" or \"News: ..\"instead of \"\"inbox\"\"
+
+                                                                         ___----
+               Pine 2.32           July  2 1992           
+
+  - Release Notes reformatted to fit in 80x24
+  - Display's MIME MESSAGE/external-body types nicely
+  - Can reply to MIME message
+  - Fixed some nasty bugs related to quoted-printable encoding
+
+
+               Pine 2.31           Jun 30 1992       
+  - Fixed bug causing core dumps when attaching files
+  - Updated on-line release notes for Pine 3.0
+  - Shifted main menu to the right, so it looks better
+  - Added \"Forward\" to View menu for -nr mode
+  - Fix default screen size in Pico (off by one when screen size was unset)
+  - Forwarded attachments display nicely in the composer
+
+
+               Pine 2.30           June 29 1992                          ___----
+
+  - Saves and displays Bcc: line in sent-mail folder
+  - Fixed horrible bug introduced in 2.29 causing dates in saved messages
+     to be incorrect that would make folder unreadable
+  - Shows \"opening....\" message immediately with \"-i and -f options\"
+  - Fixed disk quotas for Dynix/ptx (and hopefully all of System v)
+  - Simplified Pine main menu, News moved to \"Other\"
+  - Moved site specific help text off of \"Who..\" to main menu help
+  - Can forward MIME message (messages with attachments)!
+  - Fixed bug causing \"Bogus sequence in FETCH\" on empty IMAP folders
+  - Fixes for restricted mode
+  - Function key support for file browser
+  - Fixed vt102 low speed subject painting bug in composer
+  - Removed \"V\" command from main menu (experiment)
+  - Switch back to repainting instead of scrolling in the composer
+  - Anonymous message forwarding (forwarding with -nr option) works
+
+
+               Pine 2.29           June 12 1992                          ___----
+
+  - .Pinerc variables may refer to environment variables (thanks to Pekka)
+  - Minimal MIME conformance for international character sets
+  - Passes ISO-2022 escape sequences
+  - Fixed line wrapping so it works properly with tabs and breaks at a space
+  - Fixed bug in composer causing ^M's to appear when send failed and other
+  - Fixed ptx bug causing prompting for passwd when rimaping to remote
+  - More efficient screen painting when composing message header 
+  - Checkpoints a little less frequently and just as a message is
+         displayed for viewing
+  - Carries received date when copying message for Berkeley compatibility
+  - Saves blank outgoing messages in sent-mail properly (adds blank line)
+  
+
+               Pine 2.28            June 2 1992                          ___----
+
+  - Fixed bug causing screen to be left in reverse occasionally when exiting
+  - Fixed occasional lack of repaint after message composition
+  - Message number painted correctly in title bar when stream is READONLY
+  - Postponing messages with attachments now works
+  - Port to HP/UX by Dave Miller at WSU
+  - Bug fix for ports with no resizing from Dave Miller
+  - Bug fix for folder opening from Dave Miller
+  - Go to first unread msg when folder is opened, rather than recent message
+  - Fixed recently reintroduced bug causing sent-mail to have status \"N\".
+  - Will prompt before overwriting existing file when saving attachments
+  - Almost fixed bug with junk at end of text attachments (most junk gone)
+  - Fixed bug causing core dump when sorting on From line
+  - Fixed bug so pine doesn't do end of month renaming in News Reader mode
+  - Fixed bug causing prompting for creation of folder when empty one exists
+  - Fixed bug causing loss of composition when declining postpone overwrite
+  - Renamed \"seasoned\" mode to \"old-growth\" mode
+  
+
+               Pine 2.27            May 22 1992                          ___----
+
+  - Fixed bug causing command line sort option to be ignored
+  - Sort now returns to command line specification when opening new folder
+  - Fixed another bug causing <CR> defaults to y/n prompts to be ignored
+  - Fixed bug expanding file names, causing problems saving messages & other
+  - More fixes for the misplaced index pointer bug
+  - Fix for index screen occasionally not repainting after msg composition
+  - Fixed bug causing text attachments to be detached incorrectly
+  - Fixed rare bug causing crashes when opening certain mail folders
+
+
+               Pine 2.26            May 15 1992
+
+  - Fixed bug causing core dump when new mail arrived on PTX 
+  - Note: Pine2.24 and up have new more memory efficient Berkeley mail driver
+  - Fixed bug causing title bar not updating when going from 0 messages to more
+  - Disabled ^Z during keyboard lock
+
+
+               Pine 2.25            May 12 1992                          ___----
+
+  - Fixed bug in <CR> defaults to y/n prompts (bug introduced in 2.24)
+  - Fixed sorting stability bug when sorting by subject
+  - Fix for misplaced index pointer (think it's really fixed this time)
+  - Fix for potential nasty bug writing mail files
+  - Partial portability to PTX for Pine and Pico
+  - Doesn't show \"READONLY\" in folder name in nr mode
+  - Fixed bug where \"D\" would not show when deleting with folder sorted
+
+
+               Pine 2.24            May 1 1992                          
+
+  - Basic port to DOS - compiles and sort of runs
+  - Fixed index painting bug occurring with new mail and cursor movement
+  - Shows mail stream status, \"CLOSED\" or \"READONLY\" in title bar
+  - Fixed bug with formatting and order in header included in reply
+  - Beginning of seedling, sapling and seasoned mode        
+  - Full display of message header and MIME message                      ___----
+  - Fixed bug in index painting/sorting (could be misplaced cursor bug)
+  - nr_mode now doesn't display the From field
+  - nr_mode now doesn't ask \"really quit\" question
+  - Fixed bug causing binary files not to be attached properly
+  - Picked up latest c-client patch for coping with bogus MIME 
+  - \"Fixed up unaligned....\" error no longer occurs
+  - Fixed printing bug -- correct header, but wrong text was printed
+  - Reversed secondary sort on arrival with primary sort on subject
+  - Shows cursor as -> in index when speed is less than 4800 baud
+  - Only last part of path included with attached files
+  - Fixed \"fetch for non-existent msgno no\" abort when changing folders
+  - Change print and export to use parsed envelopes for 10K savings in code
+  - q_status_messages printfs share buffer for 10K savings in data
+  - Probably fixed problem with Procomm in the addrbook (painting was weird)
+  - Configuration variable to set mail directory
+  - Configuration variable to select signature file                      ___----
+  - Configuration variable to have signature put at bottom of reply
+  - Sent-mail always renamed to last month (killed fancy rename calculations)
+  - Sent-mail deleting is now in date order from oldest to newest
+  - Fixed bug causing core dump when default-fcc is set to \"\" on Suns
+  - Pine pays attention to umask when creating all files but mail folders
+  - Better detection and error messages when mail stream/imap connection dies
+  - Tightened up code for yes/no prompting for 1.5K mem savings
+
+
+               Pine 2.21            Mar 25 1992                          
+
+  - For UWIN/clarinet (nr_mode): eliminate host name in {{:{}} in folder names
+  - In nr_mode don't display sizes of the articles
+  - Changes labels on commands from \"Messages\" to \"Articles\" for nr_mode
+  - Plugged up help text for view mode when in nr_mode
+  - Fixed bug that would generate bogus mime when composing mail
+
+
+               Pine 2.20            Mar 25 1992                          ___----
+
+  - Portability to Ultrix 3.X
+  - Portability to MIPS in BSD mode
+  - Fixed bug with From: line in including full header in reply
+  - Block delete added to FAQ
+  - Basic support for MIME and attachments
+  - File browser in composer for selecting attachment and file to read in
+  - Fixed day of week bug when replying to message (core dump on Sunday)
+  - Presentation of message header in uniform order
+  - Shows parsed message header rather than original header
+ 
+
+               Pine 2.15            Mar 17, 1992                         ___----
+
+  - Command line switch, \"-i\", to go straight into index
+  - Accepts more non-standard dates; won't show \"xxx xx\" so often
+  - Can sort index by Subject,Date,Arrival,From, Size and reverse
+  - Doesn't repaint whole screen when new mail arrives
+  - Command line option to specify sort
+  - Message numbers are internally long instead of int (getting ready for DOS)
+  - End of folder name is shown rather start in status line
+  - Command line switch, \"-nr\", for news/read-only mode
+
+                                                                         ___----
+               Pine 2.10            Feb 25, 1992      
+
+  - Fixed bug causing core dumps when errors occurred in very large headers
+  - Fixed bug sending mail to very long distribution lists
+  - Long message header lines are broken up in saved messages
+  - No limit on the number of messages in a mail folder
+  - Better memory performance on mailstreams (for overall performance increase)
+  - Will send via SMTP if smtp-server variable is set
+  - Better timing on display of error messages when sending mail
+  - Error checking when opening .signature file
+
+
+               Pine 2.4            Feb 28, 1992        
+
+  - Minor fixes to signature inclusion
+
+
+               Pine 2.3            Feb 18, 1992                          ___----
+
+  - Fixed bug in status message timing, particularly when opening folders
+  - More complete technical documentation (tech-notes.me)
+  - Changed menu label \"OTHER\" to \"OTHER CMDS\".
+  - Warning given when suspending Pine with imap connection
+  - Report error if suspended too long and IMAP connection is broken
+  - Better error reporting when folders directory can't be opened
+  - Added Frequently Asked questions section to main menu help text
+  - Improved \"-f\" option.  When given the inbox is no longer opened
+  - Default folder for \"g\" command included folders opened with \"o\"
+  - Reads .signature file when sending mail
+  - Help text corrections for folders screens
+  - Pine supported for AIX (fixed nasty command argument parsing bug)
+  - Unsupported port of Pine to 4.3BSD on a VAX, (port named \"bsd\")
+  - Fixed bug causing core dump when doing ^X in composer and declining send
+  - Fixed lack of repainting composer key menu when returning from help
+  - Newline inserts a comma when appropriate when editing mail headers
+                                                                         ___----
+  - Optimization turned on for Dynix version
+  - Fixed bug occurring when default-fcc is set to \"\"
+
+
+               Pine 2.2            Jan 31, 1992
+
+  - Fixed bug causing core dump with new and empty address lists on close
+  - Fixed cursor positioning bug after deleting all items out of addrToFldrs list
+  - Fixed bug causing core dump with T command on empty address book
+  - Fixed bug causing \"Re: Re: Re: ....\" in subject lines on some platforms
+  - Moved <time.h> include to os-xxx.h because it varies on some platforms
+  - Rearranged #ifdefs for <stdlib.h> so it isn't included by default
+  - Rearranged #ifdefs for gcos_name so Bezerkly format is the default
+  - Includes unofficial Sunos 4.0 port
+  - Fix to signals.c so it can be compiled with debugging off
+  - Fix bug causing repeated querying for monthly sent-mail querying
+
+                                                  
+               Pine 2.1            Jan 21 1992                           ___----
+
+  - Fixed address book bug causing core dumps with empty address books
+
+
+               Pine 2.0            Jan 15 1992
+
+  - New version numbering.  Dropped one digit so it's major.minor.compile
+  - Fixed bug causing occasional abort if the user's .pinerc was absent
+  - Fixed bug causing the composer not go into function key mode when it should
+  - Complete documentation for Other screen
+  - Fixed off by one error with pruning dates in .pinerc
+  - Fixed bug causing core dump when scrolling with large header
+
+
+============= h_mail_text_att_view   ========================
+      HELP TEXT FOR VIEWING TEXT ATTACHMENTS                             ___----
+
+This function allows you to view the contents of an attachment if that
+attachment is plain text.  You can only view one attachment at a time.
+
+
+ _{F1:? }  Get Help    Display this help text 
+
+ _{F3:E }  Exit Viewer Go back to mail viewing.
+
+ _{F7:- }  Prev Page   Show the previous page of the current attachment.
+ 
+{ F8:Spc}  Next Page   Show the next page of the current attachment by pressing
+ ______                the space bar.
+
+ _{F9:Y }  Print       Print the current attachment on paper.  You can select the
+ ______                printer or the print command via the \"Setup\" command
+ ______                on the Main menu.
+                                                                         ___----
+{F11:S }   Save        Copy the current attachment to a file.  If you just enter
+ ______                a filename, the attachment will be saved with that name in
+ ______                your home/current directory.  You may enter the full
+ ______                path and filename to save it in another directory.
+
+{F12: W }  Where is    Search the attachment for a string of letters.  If it is
+ ______                found, move to it.  The string can be one word or a phrase.
+ ______                If there are multiple occurrences, the cursor moves to the
+ ______                first occurrence beyond the current cursor position.
+
+============= h_mail_index   ========================
+      FOLDER INDEX COMMANDS                                              ___----
+
+{Available  Commands -- Screen 1        Available Commands -- Screen 2          :Navigating the List of Messages          Operations on the Current Message}
+{-------------------------------        ------------------------------          :-------------------------------          ---------------------------------}
+{F1  Show Help Text                      F1  Show Help Text                     : P   Move to the previous message        V  View                 Y  Print}
+{F2  Toggle to see more commands         F2  Toggle to see more commands        : N   Move to the next message            R  Reply to message     F  Forward}
+{F3  MAIN MENU Screen                    F3  Quit Pine                          : -   Show previous screen of messages    D  Mark for deletion      }
+{F4  View current message                F4  Compose a message                  :Spc  Show next screen of messages        U  Undelete (remove deletion mark)}
+{F5  Move to previous message            F5  FOLDER LIST screen                 : J   Jump to a specific message          T  Take Address into Address Book}
+{F6  Move to next message                F6  Goto a specified folder            : W   Whereis -- search for a             S  Save into an email folder} 
+{F7  Show previous screen of messages    F7  Zoom                               :       specific message                  E  Export as a plain text file}
+{F8  Show next screen of messages        F8  Whereis                            :                                         |  Pipe to a Unix Command}
+{F9  Mark message for deletion           F9  Print message                      :FOLDER INDEX Screen Commands             B  Bounce               * Flag}
+{F10 Undelete (remove delete mark)       F10 Take address into address book     :----------------------------}
+{F11 Reply to message                    F11 Save message into an email folder  :  G  Goto a specified folder     General Pine Commands }
+{F12 Forward                             F12 Export message into a plain file   :  $  Sort order of index         --------------------- }
+{                                                                               :  H  Full header mode            O  Show all other available commands }
+{Available Commands -- Screen 3                                                 :  X  Expunge/Exclude             ?  Show Help text     Q Quit Pine }
+{------------------------------                                                 :  Z  Zoom      A Apply           M  MAIN MENU Screen   L FOLDER LIST screen}
+{F3  Expunge/Exclude       F7 Jump to message   F10 Bounce (remail) msg         : TAB Next-New  & Unexclude       C  Compose a message }
+{F4  Unexclude  F5  Apply  F8 Next New          F11 Flag message as important   :}
+{F6  Sort order of index   F9 Full Header Mode  F12 Pipe to a Unix command      :}
+                                                                         ___----
+
+NOTE:
+
+The presence or absence of the following commands is determined by
+options in the Pine configuration file \"feature-list\" variable:
+
+  Header Mode (toggles between display of full or edited message headers)
+  Apply next cmd to selected messages      <NOT YET IMPLEMENTED>
+  Flag message as important                <NOT YET IMPLEMENTED>
+  Zoom Index view                          <NOT YET IMPLEMENTED>
+  Bounce (remail) message                  <NOT YET IMPLEMENTED>
+  Pipe message to a Unix command           <NOT YET IMPLEMENTED>
+
+The \"Pipe message to a Unix command\" command is not available in PC-Pine.
+                                                                         ___----
+      DESCRIPTION OF FOLDER INDEX SCREEN 
+
+The folder index displays the headers or summary information of each
+message in the current folder.  This is useful if you want to quickly scan
+new messages, or find a particular message without having to go through
+the text of each message, or to quickly get rid of junk messages, etc.  If
+the list is too long to fit on one screen, you can page up and down in the
+list with the {F7:-}/{F8:SPACE} commands.  The current message is always
+highlighted, and its message number is shown in the status line.  Each
+message line contains the following columns: 
+
+Status      The first column shows the status of the message.  It may be blank,
+            or it may contain a \"D\" if the message is marked for deletion, or
+            it may contain an \"N\" if the message is new (unread) and the text
+            has never been looked at, or an \"A\" if the message has been
+	    answered (by using they Reply command).  If the very first
+	    character of status is a \"+\", the message was sent directly to
+	    your account (you did not get it as part of a cc: or mailing list).
+                                                                         ___----
+Number      Messages in a folder are numbered, from one through the number of 
+            messages in the folder, to help you know where you are in the 
+            folder.
+
+Date Sent   The date the message was sent.  Note that by default, messages are 
+            ordered by arrived time, not by date sent.  (The sort command can
+            be used to change the order that messages are presented.)
+
+Sender      The name of the person that sent the mail.  Various formats are
+            used for mail addresses, therefore, this may show the address of
+            the sender rather than the full name.  If you are the sender of the
+            message, such as when you Cc: yourself on a message, rather than 
+            showing your name, it will show the name of the recipient of 
+            the message.
+
+Size        The number in parentheses is the number of characters in the 
+            message.
+
+Subject     As much of the message's Subject line as will fit on the screen.
+                                                                         ___----
+
+      EXPORTING FROM PINE 
+Using the Export command is the easiest way to take a message that you
+have received and put it in a plain file in your home directory.  The file
+can then be edited or used otherwise.  The message will be written to the
+file with a small amount of the mail header information.  If the received
+message is a script that is to be executed or compiled, you will want to
+edit the file to remove the header lines. 
+
+For those in search of a text editor on a Unix system, look into the
+program \"Pico\" which is based on Pine's composer. 
+
+Editing exported files is safe.  Be aware, however, that it is not always
+safe to edit a Pine email folder directly.  If you intend to use a message
+as input for another program, always use the \"export\" command or
+attachments. 
+                                                                         ___----
+     NEXT NEW (TAB) COMMAND
+
+When you press the TAB key, Pine advances to the next \"interesting\" 
+message.  When you are using Pine to read email, that message is the 
+next new message in the folder (a new message is one you have not read 
+before).  When reading news folders, Pine cannot tell which messages you
+have read and which you have not, so the next \"interesting\" message is
+the next one which you have not yet deleted.
+
+      End of help for folder index
+   ------------------------------------------------------------
+============= h_mail_view   ========================
+      MESSAGE TEXT COMMANDS                                              ___----
+{Available  Commands -- Screen 1        Available Commands -- Screen 2          :Navigating the List of Messages          Operations on the Current Message}
+{-------------------------------        ------------------------------          :-------------------------------          ---------------------------------}
+{F1  Show Help Text                      F1  Show Help Text                     : P   Display previous message            V  View attachment      Y  Print}
+{F2  Toggle to see more commands         F2  Toggle to see more commands        : N   Display next message                R  Reply to message     F  Forward}
+{F3  MAIN MENU Screen                    F3  Quit Pine                          : -   Show previous page of this message  D  Mark for deletion      }
+{F4  View attachment                     F4  Compose a message                  :Spc  Show next page of this message      U  Undelete (remove deletion mark)}
+{F5  Display previous message            F5  FOLDER LIST screen                 : J   Jump to a specific message          T  Take Address into Address Book}
+{F6  Display next message                F6  Goto a specified folder            : W   Whereis -- search for a             S  Save into an email folder}
+{F7  Previous screen of this message     F7  FOLDER INDEX screen                :       specific word in message          E  Export as a plain text file}
+{F8  Next screen of this message         F8  Whereis                            :                                         |  Pipe to a Unix Command}
+{F9  Mark message for deletion           F9  Print message                      :MESSAGE TEXT Screen Commands             B  Bounce               * Flag}
+{F10 Undelete (remove delete mark)       F10 Take address into address book     :----------------------------}
+{F11 Reply to message                    F11 Save message into an email folder  :  G  Goto a specified folder     General Pine Commands }
+{F12 Forward                             F12 Export message into a plain file   :  H  Full Header Mode            --------------------- } 
+{                                                                               : TAB Next New                    O  Show all other available commands }
+{Available Commands -- Screen 3                                                 :                                 ?  Show Help text      Q Quit Pine }
+{------------------------------                                                 :                                 M  MAIN MENU Screen    L FOLDER LIST screen}
+{F7  Jump to message    F9  Full header mode      F11 Flag message              :                                 I  FOLDER INDEX Screen C  Compose a message }
+{F8  Next New           F10 Bounce this message   F12 Pipe to a Unix command    :}
+
+                                                                         ___----
+NOTE:
+
+The presence or absence of the following commands is determined by
+options in the Pine configuration file \"feature-list\" variable:
+
+  Header Mode (toggles between display of full or edited message headers)
+  Flag message as important                <NOT YET IMPLEMENTED>
+  Bounce (remail) message                  <NOT YET IMPLEMENTED>
+  Pipe message to a Unix command           <NOT YET IMPLEMENTED>
+
+The \"Pipe message to a Unix command\" command is not available in PC-Pine.
+                                                                         ___----
+
+      DESCRIPTION OF MESSAGE TEXT SCREEN 
+
+The upper right corner of the view message screen displays status information
+about the currently open collection and folder and about the current
+message.  It shows the name of the collection in angle brackets and then
+the name of the folder.  The status line also displays the number of
+messages in the folder, the number of the current message and the percentage of
+the current message that has been displayed on the screen.  If the message
+is marked for deletion \"DEL\" will appear in the upper right as well. 
+                                                                         ___----
+      EXPORTING AND IMPORTING MESSAGES 
+
+Using the Export command is the easiest way to take a message that you
+have received and put it in a plain file in your home directory.  The file
+can then be edited or used otherwise.  The message will be written to the
+file with a small amount of the mail header information.  If the received
+message is a script that is to be executed or compiled, you will want to
+edit the file to remove the header lines. 
+
+For those in search of a text editor on a Unix system, look into the
+program \"Pico\" which is based on Pine's composer. 
+
+Editing exported files is safe.  Be aware, however, that it is not safe to
+edit a Pine email folder directly.  If you intend to use a message as
+input for another program, always use the \"export\" command or
+attachments. 
+                                                                         ___----
+As far as importing a file, you have two alternatives: importing into the   
+text of a message or including a file as an attachment.  If you have a
+plain text file that resides on the same machine as your Pine program, you
+can use the \"Read File\" option to include it in an email message.  If
+that file is not plain text, or if you need to insure that it is delivered
+completely intact, you should attach the file.  This will add special
+encoding to the file.  To attach a file, move your cursor to the header
+area and use the \"Attach\" command. 
+                                                                         ___----
+     NEXT NEW (TAB) COMMAND
+      
+When you press the TAB key, Pine advances to the next \"interesting\"
+message.  When you are using Pine to read email, that message is the
+next new message in the folder (a new message is one you have not read
+before).  When reading news folders, Pine cannot tell which messages you
+have read and which you have not, so the next \"interesting\" message is
+the next one which you have not yet deleted.
+
+                                                                         ___----
+      ALTERNATE CHARACTER SETS
+
+Pine attempts to stay out of the way so that it won't prevent you from
+viewing mail in any character set.  It will simply send the message to
+your display device.  If the device is capable of diplaying the message
+as it was written it will do so.  If not, the display may be partially
+or totally incorrect.  If the message is marked as being in a character
+set other than \"US-ASCII\" and it is a character set that is different from
+the set you have indicated with the \"character-set\" variable in your
+.pinerc file, then a warning message will be printed to your screen
+at the beginning of the message display.
+
+In all cases Pine requires that the display device can handle the
+character set.  For example, most X-terminals will display the ISO-8859-1
+character set if the right font is selected.  VT220's and higher also
+display ISO-8859-1.  Displays for other characters sets are less common.
+                                                                         ___----
+When you are sending mail, Pine will label the outgoing mail with the
+character set you currently have set up in the \"character-set\"
+variable in your .pinerc, but only if you actually use some of the
+special characters.  For example, if you are set up for ISO-8859-1,
+but don't type anything but plain ASCII text the mail will be
+labeled as \"US-ASCII\" rather than \"ISO-8859-1\".
+
+These features depend in part on the MIME standard for multimedia/
+multipart email.  It is an official Internet standard the use of which is
+growing.  In particular, the labeling of each message with a character set
+depends on MIME.  At this time, most e-mail will not have a label
+specifying the character set of the message and Pine will assume such
+messages to be \"US-ASCII\".
+
+      End of help for View Message
+   ------------------------------------------------------------
+===== main_menu_tx ======
+      MAIN MENU COMMANDS and GENERAL PINE INFORMATION                    ___----
+
+{Available Commands -- Screen 1       Available Commands -- Screen 2      :General Pine Commands      MAIN MENU Screen Commands}
+{------------------------------            -------------------------      :---------------------      -------------------------}
+{F1  Show help text                       F1  Show help text              :?  Show help text          O  Show all other available commands}
+{F2  Show all other available commands    F2  Show other commands         :C  Compose a message       P  Select previous command up on menu}
+{                                         F3  Quit Pine                   :I  FOLDER INDEX screen     N  Select next command down on menu}
+{F4  Execute current MAIN MENU command    F4  Compose a message           :L  FOLDER LIST screen      R  Display complete Pine release notes}
+{F5  Select previous command up on menu   F5  FOLDER LIST screen          :A  ADDRESS BOOK screen     K  Lock keyboard (Unix Pine Only)}
+{F6  Select next command down on menu     F6  Goto a specified folder     :S  SETUP functions         G  Goto a specified folder}
+{                                         F7  FOLDER INDEX screen         :Q  Quit Pine}
+{F9  Display complete Pine release notes  F9  SETUP functions             :}
+{F10 Lock keyboard                        F10 ADDRESS BOOK screen         :}
+
+  Contents:                                                              ___----
+      Local Contact Information
+      General Information
+               1. Main Menu Commands (above)
+               2. Giving Commands in Pine
+               3. Notes on Pine Screens
+      Basic Features
+               4. Printing on PCs and Macs
+               5. Mark, cut and paste in the composer
+               6. Pine Over Dialup Lines
+      Solutions of Common Problems
+               7. Lost Read/Write on INBOX
+               8. If ^C Doesn't Work on a Mac
+      Configurable Features
+               9. Placement of Signature Files
+              10. Understanding File Carbon Copy
+              11. Alternate editor for composing messages
+              12. Using PC-Pine to get PC-Pine Updates
+      Background Information                                             ___----
+              13. What is MIME?
+              14. History and Origin of Pine
+              15. Pine contributors
+              16. Copyright notice
+
+              ----------------------------------------                   ___----
+                      Local Support Contacts
+              ----------------------------------------
+___include /usr/local/lib/pine.info
+
+  [ This is the generic who-to-call text that comes with Pine ]
+  [ and PC_Pine has not been updated for your local system.   ]
+   
+If you believe you have found a real bug in the Pine program, talk it over
+with one of the computer support staff at your site.  You may also want to
+use the \"Update\" feature (see Setup from the main menu) to verify that
+you are working with the current version of Pine for your system.  Once
+you are sure it is not just a local problem, send email to: 
+
+            pine-bugs@cac.washington.edu
+
+We welcome comments and suggestions.
+
+                              -Pine Development Team
+
+___end_include
+              ----------------------------------------                   ___----
+                    Global Pine Help Information
+              ----------------------------------------
+
+     2. Giving Commands in Pine                                       
+COMMANDS: The bottom two lines of the screen are always used to list the
+commands you can give.  You press the keys that are highlighted to give the
+command.  The commands for getting help and going back to the main menu are
+always present (except when viewing help as you are now).
+
+{:OTHER COMMANDS: The \"Other Commands\" function changes the keys you see}
+{:at the bottom of any screen.  In some cases there are three different pages}
+{:of keys which it toggles through.  ALL COMMANDS ARE ACTIVE, even if they}
+{:are not currently showing at the bottom of your screen.}
+                                                                         ___----
+{:CONTROL KEY:  When composing mail and in a few other places in Pine you}
+{:have to use Control keys which means pressing the control key and the }
+{:letter indicated at the same time.  This is usually shown with a \"^\" in}
+{:front of the letter.}
+
+PAGING UP/DOWN: The \"+\" and \"-\" keys are used for moving to the next
+or previous page.  The space bar is a synonym for \"+\".  You may also use
+^V to page down and ^Y to page up as you do in the message composer. 
+
+RETURN KEY: The return key is usually a synonym for a frequently used
+command.  When viewing a message, there is currently not a default command,
+so RETURN does nothing; when in the index, it is synonymous with \"view msg\".
+In the key menu at the bottom of the screen, whatever is enclosed in square
+brackets [] is the same as the return key.
+                                                                         ___----
+REPAINTING THE SCREEN: Sometimes what is displayed on the screen will be
+incorrect due to noise on the phone line or other causes and you will want to
+repaint the whole screen to make it correct.  You can use the ^L command to do
+this.  It never hurts to do it when in doubt.
+
+If your terminal has no arrow keys, you may use the usual emacs commands for
+moving around the screen:
+
+    ^F  Forward       ^B Backward       ^N  Next Line     ^P Previous Line
+
+  Also to be consistent with the composer the following always work:
+
+    ^V  Next Pg       ^Y Prev Pg        ^G  Get Help      ^L Redraw Screen
+
+  And where appropriate
+
+    ^D Delete character   ^K Kill line     ^U Undelete/Unjustify
+                                                                         ___----
+     3. Notes on Pine Screens 
+
+The top line of the screen is Pine's status line.  It will always display
+the current version of Pine and will also convey information about the
+status of the program.  This is where you look to find out what collection,
+folder and message number is active. 
+
+If the top line says \"READONLY\" it means that the open folder (typically
+your INBOX) is \"locked\" by another mail session -- most likely a more
+recent session of Pine has taken the INBOX lock.  See an earlier part of
+this \"Help\" section for an explanation of how you can understand the
+READONLY sessions. 
+                                                                         ___----
+If the top line says \"CLOSED\" it means that you are trying to access a
+folder on a remote mail server, and for some reason, communication with
+the mail server has either been lost, or never successfully established. 
+This can be a result of trying to open a non-existent folder, or one
+stored on an invalid or non-operational server, or it can mean that
+Pine has been suspended for more that 30 minutes while accessing a remote
+mail server. 
+
+                                                                         ___----
+Basic Features
+--------------
+    
+      4. Printing on PCs and Macs from Unix Pine
+
+Printing directly to printers attached to PCs is known to work with the 
+following communication software: UW-modified NCSA Telnet, WinQVT, WRQ 
+Reflections, Kermit and Procomm.  All but the latest version of UW-modified 
+NCSA telnet require \"capfile = PRN\" in the config.tel file.  Direct printing 
+does not work with current versions of Novell LWP, DEC Pathworks and PC-NFS. 
+On the Mac, direct printing is known to work with UW-modified NCSA telnet 
+(version 2.3.2WA), Microphone II  v4.0, MacKermit, and VersaTerm (both regular 
+and Pro). 
+
+      5. Mark, Cut and Paste in Composer (block moves)                   ___----
+
+In the message composer, you use the mark (ctrl-^), cut (ctrl-k) and 
+paste (crtl-u) sequence to move a block of text.  This is a convenient 
+way to move large blocks of text around in the composer.  If you use 
+the cut command before specifying a mark, it will cut one line of text.
+
+      6. Pine Over Dialup Lines (modem)                                  ___----
+
+Pine can usually recognize when it is being used over a low speed dialup
+line via a modem.  In this case it will show the current message in the
+index with a \"->\" instead of showing it all in reverse video.  This
+results in faster operation.  The screen painting in the message composer
+is also done slightly differently at low speed.
+
+If you attempt to upload files from your PC or Mac directly into the Pine
+composer you may find it doesn't work very well.  This is because Pine was
+designed for humans to type messages into, including features like line
+wrapping and notification of new mail, which confuse the process of 
+uploading files.  The best way to accomplish this is to up load the file
+outside of Pine using Kermit of xmodem and then include the file with the
+^R command.
+
+Solutions to Common Problems                                             ___----
+----------------------------
+
+      7. Lost Read/Write on INBOX                                       
+Pine only allows one email session to modify a Berkeley Unix format mail
+folder at a time.  If you have one Pine session open and then begin
+another, the first session switches into \"READONLY\" with respect to your
+INBOX.  A common scenario would be that you left one session running in
+your office and started the second from a dial-in connection from home. 
+          
+When you get back to that first Pine session, you will note that it is
+\"READONLY\".  As the name implies, you can't take any action on a
+READONLY mailbox, so it won't delete or expunge.  Not as obvious but
+equally true is the fact that a READONLY session does not get notification
+of new email messages.  If your INBOX is on a server and accessed via
+IMAP, any state changes (e.g. marking a message for deletion) made by the
+old session in the last few minutes/seconds before the new session is
+started up (since the checkpoint) may be lost.  Don't worry, there is no
+risk to the messages themselves. 
+
+      8. If ^C Doesn't Work on a Mac                                     ___----
+
+There's a problem with the default configuration of the Macintosh version 
+of NCSA telnet which prevents Control-Cs from reaching Pine.  Under the
+\"session menu\", select \"setup keys\".  There you'll see an entry for ^C.
+You should make sure it's blank.  If it's not, ^C won't work in Pine. 
+This will fix it just for the current session.  To make it permanent
+you have to edit the configuration file.  You should add a line:
+
+        localkeys={{:{}0,19,17}
+
+somewhere after the line that contains \"name=default\".  Also, on
+VersaTerm Pro a similar problem occurs where ^C causes a break to be 
+sent on the modem or serial line.
+
+Configurable Features                                                    ___----
+---------------------
+
+      9. Placement of Signature Files
+
+Pine encourages a format different from the usual for replies
+which include the original text.  The idea is to add the new text
+*before* the original included text so that the readers of the message
+see the new text they are interested in right away without having to
+read through the original text they have seen before.  This is why the
+signature is included before the original text.  Similar is true for
+forwarding messages.  Unfortunately placing the signature before the
+text is cumbersome when the reply is to be interspersed within the
+original text.  Adding \"signature-at-bottom\" to the \"feature-list\"
+variable in your Pine configuration file (PINERC or .pinerc) will cause 
+Pine to put the signature (and cursor) at the end of the message as is 
+more conventional.
+                                                                         ___----
+By default, Pine will use a file in your home directory called 
+\".signature\" however, in order to permit a different signature for
+mail than that used in Bulletin Board applications, you may set the
+\"signature-file\" variable to the name of a file containing your
+email signature.
+                                                                        
+      10. Understanding File Carbon Copy                                 ___----
+
+Pine automatically saves a copy of all the outgoing email that you send. 
+By default, this goes into a file \"sent-mail\" or \"sentmail\" in your
+regular email directory.  You can use set the variable \"default-fcc\" in
+your Pine configuration file to change this.  For instance, some people
+who use both PC-Pine and Pine want all their sent mail to be put in the
+same folder.  This could be done with a default-fcc (on the PC) like this: 
+      default-fcc={computer.used.for.unix.pine}mail/sent-mail
+If you want no file-carbon-copy at all, you place two double quotes there:
+      default-fcc=\"\"
+Note that whatever directory you specify for the fcc must already exist.  If
+the specific file does not exist, you will be asked if you want to create 
+it or not.
+                                                                         ___----
+      11. Alternate Editor for Composing Messages
+
+There are two ways to get Pine to use an alternate editor for composing
+messages.  One option is to choose an editor ahead of time and set the
+\"editor\" variable in your Pine configuration file.  If this is done,
+\"^_ Alt Edit\" will show in the menu of the composer.  The second option
+is to enable the feature \"enable-alternate-editor-cmd\" in the Pine
+configuration variable \"feature-list\".  Then you can give the \"^_\"
+command while in the composer even if it is not shown on the menu.  You
+will be prompted for the name of the editor to invoke.  At present you
+cannot edit the header with the alternate editor. 
+
+      12. Using PC-Pine to get PC-Pine Updates                           ___----
+
+PC-Pine has the ability to access newsgroups, understand MIME messages
+and write files to your PC's disk.  If you put this all together, you find
+that you can use PC-Pine to pickup newer versions of PC-Pine.  If you see
+bugs in PC-Pine and want to find out if you have the most current version 
+or if you know there is a more current version and need to get it, use 
+Pine's internal update function.  You can select \"Update\" from Pine's
+\"SETUP\" function.
+       
+Update connects your PC to the machine pine.cac.washington.edu which
+always holds the most current version of PC-Pine.  You may then view a the
+message containing the new version and, using Pine's \"View Attachment\"
+command, save it to your local disk. 
+        
+Background Information                                                   ___----
+----------------------
+
+      13. What is MIME?
+MIME stands for \"Multipurpose Internet Mail Extensions\" and it is a
+specification for including binary data in Internet mail messages, which
+until now have generally been limited to ascii text.  MIME-capable
+mailers, such as Pine 3.x, allow word processing documents, spreadsheets,
+programs, images, audio, and other binary data to be attached to a 
+message.  MIME allows for alternative representations of the same data.
+For example, there can be an attachment in text form followed by one
+containing bitmap page images of the same information.
+
+MIME-capable mail software is not yet widely deployed, but MIME support 
+is growing rapidly.  If you need to send binary data to colleagues at
+institutions not yet supporting MIME, encourage them to talk to their
+system administrators about installing MIME tools.  MIME software, 
+compatible with many different mail programs, is freely available (as 
+is our own Pine mailer.)
+
+                                                                         ___----
+     14. History and Origin of Pine
+ 
+Pine was originally conceived in 1989 as a simple, easy-to-use mailer for
+administrative staff at the University of Washington in Seattle.  The goal
+was to provide a simple mailer that naive users could use without fear of
+making mistakes.  We wanted to cater to users who were less interested in
+using electronic mail than in doing their jobs; users who perhaps had some
+computer anxiety.  We felt the way to do this was to build a system that
+didn't do surprising things the user didn't understand, a mailer that had
+limited, well-thought-out functionality.  A that time, there was no such
+Unix mailer commercially or freely available, but Elm seemed closest to
+the goal, so we started modifying it. 
+                                                                         ___----
+
+One of the greatest problems with most mailers on Unix systems is the
+editor.  One can normally choose between emacs and vi.  We experimented with
+some versions of emacs and settled on a hacked version of micro emacs.
+Eventually it became heavily modified and tightly integrated with the rest
+of Pine.  One of the main features of having a tightly coupled editor is
+that it can guide the user through editing the header of the message, and
+Pine takes great care to do this.  A very simple and efficient interface to
+the Unix spell command was also added.  The emacs style key bindings were
+retained, though most of the other wild and wonderful emacs functions were
+not.  The Pine composition editor is also available as a very simple stand
+alone editor named \"pico\". 
+                                                                         ___----
+Also working at the University of Washington is the author of the Interactive 
+Mail Access Protocol (IMAP).  IMAP is a functional superset of POP.  The IMAP
+author had finished writing the \"c-client\" library as an interface to IMAP
+and as a switch between drivers for IMAP mailboxes, Berkeley mail files and 
+Tenex mail files.  Great care was taken to make the code writing the mail files
+robust against disks filling up, other mailers overwriting the mail file, and
+other errors to guarantee mail file consistency.  It was clear that Pine would
+benefit greatly from using the c-client to access mail storage so the old Elm
+code was replaced by calls to the c-client.  Consequently Pine can write and
+access three different mail file formats and new ones can be added by creating
+a simple driver.  In addition the c-client does a very careful job of doing all
+the RFC 822 header parsing and achieves the highest compliance with the RFC.
+
+The name \"Pine\" originally stood for \"Pine Is Nearly Elm\"; today
+\"Pine Is No-longer Elm\" is more appropriate.  As it evolves, we hope the
+interpretation \"Program for Internet News and Email\" will also apply.
+                                                                         ___----
+Work continues on Pine.  Thanks and credits go the following people:
+    - The originators of Elm for a base to start from.
+    - Terry Gray and Ron Johnson for the opportunity to create Pine and 
+        for valuable and continuing input to its design.
+    - Steve Hubert for many recent enhancements including the MIME text
+        attachment viewer and many new configuration options.
+    - Sheryl Erez for recent work on help text and documentation
+    - Laurence Lundblade, the original Pine programmer.
+    - Mark Crispin for IMAP, the c-client library and solid Internet mail
+        protocol advice.
+    - Mike Seibel for the Pine composer, and all the major development 
+        since Pine 3.0, including PC-Pine
+
+Pine Development Team, University of Washington,  1993
+                                                                         ___----
+Please send comments and correspondence to \"pine-bugs@cac.washington.edu\"
+
+Authors addresses:
+    Mike Seibel        <mikes@cac.washington.edu>
+    Mark Crispin       <mrc@cac.washington.edu>
+    Steve Hubert       <hubert@cac.washington.edu>
+    Sheryl Erez        <erez@cac.washington.edu>
+    Laurence Lundblade <lgl@cac.washington.edu>      (emeritus)
+
+Pine source code is available via anonymous FTP from ftp.cac.washington.edu 
+on the Internet. 
+
+                                                                         ___----
+     15. Pine contributors
+The following is a partial list of people have made contributions to Pine
+in the way of bug fixes, ports to new platforms, suggestions and advice.
+Many thanks to all! 
+
+Shoa Aminpour           Gordon Good             Richard Murphy
+J.J. Baily              Bob Gregory             Il Oh
+Billy Barron            Ed Greshko              Mike Ramey
+Chris Beecher           Dmitri L. Gringauz      Phil Rand
+John Benjamins          David Halliwell         Jochiam Richter
+Birko Bergt             Peter Hausken           Thomas Riemer
+Ken Bobey               Jeff Hayward            Alexis Rosen
+Andy Brager             Ron Johnson             Michael Ross
+D.K. Brownlee           William Kreuter         Bob Sandstrom
+Brian Burriston         Pekka Kytolaakso        Michael F. Santangelo
+Bill Campbell           Barry Landy             Shin-ya Satoh
+Russel Campbell         Chris Latham            Corey Satten
+Donn Cave               Jon Lebo                Michael Shepard
+Richard Cheever         Allen Leonard           Alan Thew
+Mike Coghlan            Robert L. Lewis         Jason R. Thorpe
+Justine Comer           Bruce Lilly             Marc Unangst
+Chuck Cooper            Matthew Lyle            Edward Vielmetti
+Barry Cornelius         John Mackin             Ross Wakelin
+Tony Flemming           James Matheson          Rich Wales
+Matthew Freedman        Mark McNair             David Wall
+Richard Fritz           Pete Mellor             Bob Williams
+Marcelo A. Gallardo     Dave Miller             Steve Woodyatt
+Adam Garrett            Robert Moris            Michael A. Crowley
+
+
+    16. Trademark and Copyright notice                                   ___----
+
+Pine is a trademark of the University of Washington
+Copyright 1989-1993  University of Washington
+
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose and without fee to the University of
+Washington is hereby granted, provided that the above copyright notice
+appears in all copies and that both the above copyright notice and this
+permission notice appear in supporting documentation, and that the name of
+the University of Washington not be used in advertising or publicity
+pertaining to distribution of the software without specific, written prior
+permission.  This software is made available \"as is\", and
+                                                                         ___----
+THE UNIVERSITY OF WASHINGTON DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED,
+WITH REGARD TO THIS SOFTWARE, INCLUDING WITHOUT LIMITATION ALL IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, AND IN
+NO EVENT SHALL THE UNIVERSITY OF WASHINGTON BE LIABLE FOR ANY SPECIAL,
+INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, TORT
+(INCLUDING NEGLIGENCE) OR STRICT LIABILITY, ARISING OUT OF OR IN CONNECTION
+WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+      End of Main Menu Help
+   ------------------------------------------------------------
+===== h_folder_maint =====
+      FOLDER LIST COMMANDS                                               ___----
+
+{Available Commands -- Screen 1       Available Commands -- Screen 2           :Navigating the Folder Screen            Operations on the Selected Folder}
+{-------------------------------      ------------------------------           :----------------------------            ---------------------------------}
+{F1  Show Help Text                    F1  Show Help Text                      : P   Move to previous folder            V  View Index of selected folder}
+{F2  Toggle to see more commands       F2  Toggle to see more commands         : N   Move to next folder                D  Delete}
+{F3  MAIN MENU Screen                  F3  Quit Pine                           : -   Show previous page of listing      R  Rename}
+{F4  Select folder and view it         F4  Compose a message                   :Spc  Show next page of listing}
+{F5  Move to previous folder                                                   :}
+{F6  Move to next folder               F6  Specify a folder to go to           :FOLDER LIST Screen Commands              General Pine Commands}
+{F7  Show previous screen of listing   F7  Show FOLDER INDEX of current folder :---------------------------              ---------------------}
+{F8  Show next screen of listing       F8  Whereis (search folder names)       :A  Add a folder                          O  Show all other available commands}
+{F9  Delete selected folder            F9  Print folder listing                :G  Specify a folder to go to             ?  Show Help text
+{F10 Add a new folder                                                          :I  Show FOLDER INDEX of current folder   M  MAIN MENU Screen}
+{F11 Rename selected folder                                                    :W  Whereis (search folder names)         Q  Quit Pine}
+{:Y  Print folder listing                  C  Compose a message}
+
+
+      ABOUT FOLDERS                                                      ___----
+
+Folders are places where messages are kept.  Every message has to be in a
+folder.  Every folder has a name.  Everyone starts out with 3 folders:
+\"INBOX\"    This is the folder, often kept on an IMAP server, where your 
+             new messages are delivered.
+\"sent-mail\" or \"sentmail\"
+             This is the folder where Pine automatically keeps a copy of all 
+             the messages which you send out.  Normally, this is kept on the 
+             system running Pine.
+\"saved-messages\" or \"savemail\"
+             Whenever you choose to save a message for more than a few days,
+             you will probably want to move it out of your inbox and into the
+             folder for saved messages.  This folder is created automatically
+             by Pine and is located on the system running Pine.
+                                                                         ___----
+You may create as many other folders as you wish.  They must be given
+names that can be filenames on your Pine system.  On DOS, that means they
+must be 8-characters of less; even on Unix, you shouldn't put special
+characters like \"/\".  All PC-Pine folders have the DOS extenstion \".MTX\"
+which stands for Mailbox-text.  You should never alter a \".MTX\" DOS file
+with a program other than Pine.
+
+You can move messages from one folder to another by opening the original
+folder and saving messages into the other folder just as you can save
+message from your INBOX to any folder.  
+
+The folder list screen displays the names of all the folders in a given
+collection and allows you to create, rename and delete folders.  To open a
+folder, go into the folders screen from the main menu.  If you have
+multiple collections, select the appropriate collection and then move the
+cursor to the folder you want to open, and give the {F2:\"O\"} command.
+You can also press RETURN instead of {F2.:\"O.\"}
+                                                                         ___----
+From the message index or view message screen you can open another folder with
+the {F5:\"G\"} command.  You will be prompted for the name of the folder to
+open.  At the prompt you can give the command {F4:^T} to view your folder
+collections. 
+
+      ABOUT COLLECTIONS                                                
+
+All messages must be saved into folders, but when you start to save many
+message, you start to get lots of folders.  Soon, you have too many
+folders to keep track of without further organization or have folders on
+more that one machine. 
+
+That is where collections come in.  A collection of folders is just a group 
+of folders in the same directory on the same machine.  Some people use both
+PC-Pine and Unix Pine.  Those people might have one collection on the PC and
+another on the Unix machine they use.
+                                                                         ___----
+
+Pine treats certain collections in a special way.  There is a collection
+called \"incoming-folders\" which you use to supplement your normal INBOX
+specification if you have multiple accounts or filter email into different
+incoming mail folders.  The \"incoming-folders\" variable is set in your
+Pine configuration file.  Your INBOX is presented in this collection if
+you have multiple collections defined.  Pine knows that it should not save
+messages into that area. 
+
+You can also define collections for news.  This is specified with the
+\"news-collections\" variable in Pine's configuration file.  A typical
+news collection would be specified as \"*{{:{}news.u.washington.edu/nntp}[]\". 
+That would translate as \"all the newsgroups I am subscribed to which    ___----
+appear on the campus news server\".  The syntax for news collections is
+special: 
+      \"*\"     tells Pine that this is a bulletin board (with shared,
+                  read-only news groups)
+      \"/nntp\" says that Pine should use the NNTP protocol to get to these
+                  folders, thus permitting use of a local .newsrc 
+      \"[]\"    means that this is a collection, not a folder
+
+The final, and probably most important special collection is the one which
+you specify at the first item of the configuration for \"folder-collections\".
+This is the default collection for your saved and sent messages folders.
+
+There is no technical limit to the number of collections you can have. 
+Everyone starts with just one collection and few people ever have more
+than a dozen or so. 
+
+                                                                         ___----
+      COLLECTION SYNTAX 
+
+Pine has a special syntax that allows you to tell Pine everything it needs
+to know about the collection:
+
+  label               The single-word name you give to the collection
+  *                   Collections starting with a \"*\" are bulletin boards
+  {{:{}host.name      The computer where the files reside.
+  /nntp               Add this to use the NNTP protocol to access the file
+  /anonymous          Add this for anonymous IMAP access to the folder
+  }           
+  /path/to/directory/ Full path to the directory where the files are
+  [                   Start of the \"[]\" token for collections
+  *text*              Optional text and wildcard to select only certain files
+  ]                   Close the collection token
+                                                                         ___----
+Below are some examples of collection syntax:
+  MAIN   mail\\[]     The directory mail in default directory on a DOS 
+                       system.  Note that is a DOS-style \"\\\" not a 
+                       Unix-style \"/\".
+
+  FEBMAIL old/[*feb*] All files with the token \"feb\" in the \"old\" 
+                       directory which is part of my home directory on 
+                       a Unix system
+
+  CMAIL {{:{}carson.u.washington.edu}mail/[]
+                      An IMAP connection to all the files in the \"mail\" 
+                       directory of my home directory on a computer called 
+                       Carson.
+
+  NEWS  *{{:{}news.u.washington.edu/nntp}[]
+                      An NNTP connection to the server \"news\".  The 
+                       collection includes all subscribed newsgroups.
+
+                                                                         ___----
+      ADVANCED NOTES ON FOLDERS
+
+Folders are just files in the filesystem.  They have some special
+formatting in them so the message sender and recipient can be
+distinguished and so one message can be separate from another, so they
+should not be edited with an editor.  If the format is corrupted Pine will
+no longer be able to read them.  If you want copies of your messages in
+text files that you can edit or do other things with, use the export
+command on the Message Text or Folder Index screens. 
+                                                                         ___----
+Two forms of folder specification that you might try to use don't behave
+as they should now, but will be supported by future UW IMAP servers:
+      {{:{}host}[*]
+      {{:{}host}~/[*]
+Until then, the following forms should be used (the asterisk is optional):
+      {{:{}host}./[*]           <-- to specify all files in the home directory
+      {{:{}host}mail/[*]        <-- to specify all files in a sub-directory
+
+      End of Help on Folder List
+   ------------------------------------------------------------
+===== h_folder_open =====
+      GOTO: FOLDER SELECT COMMANDS                                       ___----
+
+_{F1 : ? }  Show this help text
+_{F3 : E }  Exit the Folder Select menu (without selecting a folder)
+_{F4 : S }  Select the currently highlighted folder
+_{F5 : P }  Move to previous folder
+_{F6 : N }  Move to next folder
+_{F7 : - }  Previous page of the folder listing
+_{F8 :Spc}  Next page of the folder listing
+_{F12: W }  WhereIs (search folder names)
+
+      ABOUT FOLDERS                                                      ___----
+
+Folders are places where messages are kept.  Every message has to be in a
+folder.  Every folder has a name.  Everyone starts out with 3 folders:
+\"INBOX\"    This is the folder, often kept on an IMAP server, where your
+             new messages are delivered.
+\"sent-mail\" or \"sentmail\"
+             This is the folder where Pine automatically keeps a copy of all
+             the messages which you send out.  Normally, this is kept on the
+             system running Pine.
+\"saved-messages\" or \"savemail\"
+             Whenever you choose to save a message for more than a few days,
+             you will probably want to move it out of your inbox and into the
+             folder for saved messages.  This folder is created automatically
+             by Pine and is located on the system running Pine.
+                                                                         ___----
+You may create as many other folders as you wish.  They must be given
+names that can be filenames on your Pine system.  On DOS, that means they
+must be 8-characters of less; even on Unix, you shouldn't put special
+characters like \"/\".  All PC-Pine folders have the DOS extenstion \".MTX\"
+which stands for Mailbox-text.  You should never alter a \".MTX\" DOS file
+with a program other than Pine.
+
+You can move messages from one folder to another by opening the original
+folder and saving messages into the other folder just as you can save
+message from your INBOX to any folder.
+                                                                         ___----
+
+The folder list screen displays the names of all the folders in a given
+collection and allows you to create, rename and delete folders.  To open a
+folder, go into the folders screen from the main menu.  If you have
+multiple collections, select the appropriate collection and then move the
+cursor to the folder you want to open, and give the {F2:\"O\"} command.
+You can also press RETURN instead of {F2.:\"O.\"}
+
+From the message index or view message screen you can open another folder with
+the {F5:\"G\"} command.  You will be prompted for the name of the folder to
+open.  At the prompt you can give the command {F4:^T} to view your folder 
+collections.
+
+      ABOUT COLLECTIONS                                                  ___----
+
+All messages must be saved into folders, but when you start to save many
+message, you start to get lots of folders.  Soon, you have too many
+folders to keep track of without further organization or have folders on
+more that one machine.
+             
+That is where collections come in.  A collection of folders is just a group
+of folders in the same directory on the same machine.  Some people use both
+PC-Pine and Unix Pine.  Those people might have one collection on the PC and
+another on the Unix machine they use.
+                                                                         ___----
+
+Pine treats certain collections in a special way.  There is a collection  
+called \"incoming-folders\" which you use to supplement your normal INBOX
+specification if you have multiple accounts or filter email into different
+incoming mail folders.  The \"incoming-folders\" variable is set in your
+Pine configuration file.  Your INBOX is presented in this collection if
+you have multiple collections defined.  Pine knows that it should not save
+messages into that area.
+
+You can also define collections for news.  This is specified with the  
+\"news-collections\" variable in Pine's configuration file.  A typical
+news collection would be specified as \"*{{:{}news.u.washington.edu/nntp}[]\".
+That would translate as \"all the newsgroups I am subscribed to which    ___----
+appear on the campus news server\".  The syntax for news collections is
+special:
+      \"*\"     tells Pine that this is a bulletin board (with shared,
+                  read-only news groups)
+      \"/nntp\" says that Pine should use the NNTP protocol to get to these
+                  folders, thus permitting use of a local .newsrc
+      \"[]\"    means that this is a collection, not a folder
+
+The final, and probably most important special collection is the one which
+you specify at the first item of the configuration for \"folder-collections\".
+This is the default collection for your saved and sent messages folders.
+
+There is no technical limit to the number of collections you can have.  
+Everyone starts with just one collection and few people ever have more
+than a dozen or so.
+
+                                                                         ___----
+      ADVANCED NOTES ON FOLDERS
+
+Folders are just files in the filesystem.  They have some special
+formatting in them so the message sender and recipient can be
+distinguished and so one message can be separate from another; so they
+should not be edited with an editor.  If the format is corrupted Pine will
+no longer be able to read them.  If you want copies of your messages in
+text files that you can edit or do other things with use the export
+command on the view message or folder index screens.
+                                                                         ___----
+
+      ANONYMOUS FOLDERS
+
+Certain folders have been setup on a file server specifically for
+anonymous access.  You need to use Pine's /anonymous flag to get at
+these folders.  For example, this is the complete folder name for the
+pine archives:
+       *{{:{}pine.cac.washington.edu/anonymous}updates
+When you use the anonymous flag, you are attaching to the folder using
+the IMAP protocol.  (NOTE: the above name syntax is subject to change!)
+  
+      End of Help on Goto: Folder Select
+   ------------------------------------------------------------
+===== h_folder_save =====
+      SAVE: FOLDER SELECT COMMANDS                                       ___----
+
+_{F1 : ? }  Show this help text
+_{F3 : E }  Exit the Folder Select menu (without selecting a folder)
+_{F4 : S }  Select the currently highlighted folder
+_{F5 : P }  Move to previous folder
+_{F6 : N }  Move to next folder
+_{F7 : - }  Previous page of the folder listing
+_{F8 :Spc}  Next page of the folder listing
+_{F12: W }  WhereIs (search folder names)
+
+
+      ABOUT FOLDERS                                                      ___----
+
+Folders are places where messages are kept.  Every message has to be in a
+folder.  Every folder has a name.  Everyone starts out with 3 folders:
+\"INBOX\"    This is the folder, often kept on an IMAP server, where your
+             new messages are delivered.
+\"sent-mail\" or \"sentmail\"
+             This is the folder where Pine automatically keeps a copy of all
+             the messages which you send out.  Normally, this is kept on the
+             system running Pine.
+\"saved-messages\" or \"savemail\"
+             Whenever you choose to save a message for more than a few days,
+             you will probably want to move it out of your inbox and into the
+             folder for saved messages.  This folder is created automatically
+             by Pine and is located on the system running Pine.
+                                                                         ___----
+You may create as many other folders as you wish.  They must be given
+names that can be filenames on your Pine system.  On DOS, that means they
+must be 8-characters of less; even on Unix, you shouldn't put special
+characters like \"/\".  All PC-Pine folders have the DOS extenstion \".MTX\"
+which stands for Mailbox-text.  You should never alter a \".MTX\" DOS file
+with a program other than Pine.
+
+You can move messages from one folder to another by opening the original
+folder and saving messages into the other folder just as you can save
+message from your INBOX to any folder.
+                                                                         ___----
+
+The folder list screen displays the names of all the folders in a given
+collection and allows you to create, rename and delete folders.  To open a
+folder, go into the folders screen from the main menu.  If you have
+multiple collections, select the appropriate collection and then move the
+cursor to the folder you want to open, and give the {F2:\"O\"} command.
+You can also press RETURN instead of {F2.:\"O.\"}
+
+From the message index or view message screen you can open another folder with
+the {F5:\"G\"} command.  You will be prompted for the name of the folder to
+open.  At the prompt you can give the command {F4:^T} to view your folder 
+collections.
+
+      ABOUT COLLECTIONS                                                  ___----
+
+All messages must be saved into folders, but when you start to save many
+message, you start to get lots of folders.  Soon, you have too many
+folders to keep track of without further organization or have folders on
+more that one machine.
+             
+That is where collections come in.  A collection of folders is just a group
+of folders in the same directory on the same machine.  Some people use both
+PC-Pine and Unix Pine.  Those people might have one collection on the PC and
+another on the Unix machine they use.
+                                                                         ___----
+
+Pine treats certain collections in a special way.  There is a collection  
+called \"incoming-folders\" which you use to supplement your normal INBOX
+specification if you have multiple accounts or filter email into different
+incoming mail folders.  The \"incoming-folders\" variable is set in your
+Pine configuration file.  Your INBOX is presented in this collection if
+you have multiple collections defined.  Pine knows that it should not save
+messages into that area.
+
+You can also define collections for news.  This is specified with the  
+\"news-collections\" variable in Pine's configuration file.  A typical
+news collection would be specified as \"*{{:{}news.u.washington.edu/nntp}[]\".
+That would translate as \"all the newsgroups I am subscribed to which    ___----
+appear on the campus news server\".  The syntax for news collections is
+special:
+      \"*\"     tells Pine that this is a bulletin board (with shared,
+                  read-only news groups)
+      \"/nntp\" says that Pine should use the NNTP protocol to get to these
+                  folders, thus permitting use of a local .newsrc
+      \"[]\"    means that this is a collection, not a folder
+
+The final, and probably most important special collection is the one which
+you specify at the first item of the configuration for \"folder-collections\".
+This is the default collection for your saved and sent messages folders.
+
+There is no technical limit to the number of collections you can have.  
+Everyone starts with just one collection and few people ever have more
+than a dozen or so.
+
+                                                                         ___----
+      ADVANCED NOTES ON FOLDERS
+
+Folders are just files in the filesystem.  They have some special
+formatting in them so the message sender and recipient can be
+distinguished and so one message can be separate from another; so they
+should not be edited with an editor.  If the format is corrupted Pine will
+no longer be able to read them.  If you want copies of your messages in
+text files that you can edit or do other things with use the export
+command on the view message or folder index screens.
+
+      End of Help on Save: Folder Select
+  ------------------------------------------------
+
+===== h_folder_fcc =====
+      FCC: FOLDER SELECT COMMANDS                                        ___----
+
+_{F1 : ? }  Show this help text
+_{F3 : E }  Exit the Folder Select menu (without selecting a folder)
+_{F4 : S }  Select the currently highlighted folder
+_{F5 : P }  Move to previous folder
+_{F6 : N }  Move to next folder
+_{F7 : - }  Previous page of the folder listing
+_{F8 :Spc}  Next page of the folder listing
+_{F12: W }  WhereIs (search folder names)
+
+      ABOUT FOLDERS                                                      ___----
+
+Folders are places where messages are kept.  Every message has to be in a
+folder.  Every folder has a name.  Everyone starts out with 3 folders:
+\"INBOX\"    This is the folder, often kept on an IMAP server, where your
+             new messages are delivered.
+\"sent-mail\" or \"sentmail\"
+             This is the folder where Pine automatically keeps a copy of all
+             the messages which you send out.  Normally, this is kept on the
+             system running Pine.
+\"saved-messages\" or \"savemail\"
+             Whenever you choose to save a message for more than a few days,
+             you will probably want to move it out of your inbox and into the
+             folder for saved messages.  This folder is created automatically
+             by Pine and is located on the system running Pine.
+                                                                         ___----
+You may create as many other folders as you wish.  They must be given
+names that can be filenames on your Pine system.  On DOS, that means they
+must be 8-characters of less; even on Unix, you shouldn't put special
+characters like \"/\".  All PC-Pine folders have the DOS extenstion \".MTX\"
+which stands for Mailbox-text.  You should never alter a \".MTX\" DOS file
+with a program other than Pine.
+
+You can move messages from one folder to another by opening the original
+folder and saving messages into the other folder just as you can save
+message from your INBOX to any folder.
+                                                                         ___----
+
+The folder list screen displays the names of all the folders in a given
+collection and allows you to create, rename and delete folders.  To open a
+folder, go into the folders screen from the main menu.  If you have
+multiple collections, select the appropriate collection and then move the
+cursor to the folder you want to open, and give the {F2:\"O\"} command.
+You can also press RETURN instead of {F2.:\"O.\"}
+
+From the message index or view message screen you can open another folder with
+the {F5:\"G\"} command.  You will be prompted for the name of the folder to
+open.  At the prompt you can give the command {F4:^T} to view your folder 
+collections.
+
+      ABOUT COLLECTIONS                                                  ___----
+
+All messages must be saved into folders, but when you start to save many
+message, you start to get lots of folders.  Soon, you have too many
+folders to keep track of without further organization or have folders on
+more that one machine.
+             
+That is where collections come in.  A collection of folders is just a group
+of folders in the same directory on the same machine.  Some people use both
+PC-Pine and Unix Pine.  Those people might have one collection on the PC and
+another on the Unix machine they use.
+                                                                         ___----
+
+Pine treats certain collections in a special way.  There is a collection  
+called \"incoming-folders\" which you use to supplement your normal INBOX
+specification if you have multiple accounts or filter email into different
+incoming mail folders.  The \"incoming-folders\" variable is set in your
+Pine configuration file.  Your INBOX is presented in this collection if
+you have multiple collections defined.  Pine knows that it should not save
+messages into that area.
+
+You can also define collections for news.  This is specified with the  
+\"news-collections\" variable in Pine's configuration file.  A typical
+news collection would be specified as \"*{{:{}news.u.washington.edu/nntp}[]\".
+That would translate as \"all the newsgroups I am subscribed to which    ___----
+appear on the campus news server\".  The syntax for news collections is
+special:
+      \"*\"     tells Pine that this is a bulletin board (with shared,
+                  read-only news groups)
+      \"/nntp\" says that Pine should use the NNTP protocol to get to these
+                  folders, thus permitting use of a local .newsrc
+      \"[]\"    means that this is a collection, not a folder
+
+The final, and probably most important special collection is the one which
+you specify at the first item of the configuration for \"folder-collections\".
+This is the default collection for your saved and sent messages folders.
+
+There is no technical limit to the number of collections you can have.  
+Everyone starts with just one collection and few people ever have more
+than a dozen or so.
+
+                                                                         ___----
+      ADVANCED NOTES ON FOLDERS
+
+Folders are just files in the filesystem.  They have some special
+formatting in them so the message sender and recipient can be
+distinguished and so one message can be separate from another; so they
+should not be edited with an editor.  If the format is corrupted Pine will
+no longer be able to read them.  If you want copies of your messages in
+text files that you can edit or do other things with use the export
+command on the view message or folder index screens.
+
+      End of Help on Fcc: Folder Select
+   ---------------------------------------
+===== h_address_book =====
+      ADDRESS BOOK COMMANDS                                              ___----
+
+{Available  Commands -- Screen 1      Available Commands -- Screen 2           :Address Book Navigation                General Pine Commands}
+{-------------------------------      ------------------------------           :-----------------------                ---------------------}
+{F1  Show Help Text                   F1  Show Help Text                       : P  Prev Address                       ?  Display this help text}
+{F2  Toggle to see more commands      F2  Toggle to see more commands          : N  Next Address                       O  Show all other available commands}
+{F3  MAIN MENU Screen                 F3  Quit Pine                            : -  Previous page of address book      M  MAIN MENU screen}
+{F4  Edit selected entry              F4  Compose a message to selected addr   :Spc Next page of address book          Q  Quit Pine}
+{F5  Move to previous entry           F5  FOLDER LIST screen                   : W  Where is (search for word/         C  Compose a message to selected addr}
+{F6  Move to next entry               F6  Specify a folder to go to            :       name in address book)           L  FOLDER LIST screen}
+{F7  Previous page of address book    F7  FOLDER INDEX screen                  :                                       G  Specify a folder to go to}
+{F8  Next page of address book        F8  Whereis (search through address book):Address Book Commands                  I  FOLDER INDEX screen}
+{F9  Delete selected entry            F9  Print address book                   :---------------------}
+{F10 Add a simple entry                                                        : E  Edit selected entry}
+{F11 Create an entry for a list                                                : D  Delete selected entry}
+{F12 Add to a list entry                                                       : A  Add a simple entry}
+{: S  Create an entry for a list}
+{: Z  Add to a list entry}
+{: Y  Print address book}
+
+                                                                         ___----
+      2. General Description of the Address Book
+
+The address book helps you keep a list of addresses you send mail to so you
+do not have to remember addresses that are often complex.  Each entry in the
+address book has three parts.  The nickname is short, usually less than eight
+letters, and easy to remember.  You type this nickname in as you are
+addressing the message in the composer and the address will be taken from the
+address book.  The name is a longer field where you can put the full name of
+the person and other information to clearly identify the address.  Usually the
+full names are put in last name first so they sort nicely in alphabetical
+order.  The third part is the address itself.  The addresses are sorted
+alphabetically on the full name with distribution lists sorted to the end.
+                                                                         ___----
+Pine also allows distribution lists so you can have one nickname that refers
+to a list of addresses to send mail to.  Each distribution list has a
+nickname, a full name and a list of addresses.  The addresses may be actual
+addresses or they may be other nicknames in your address book.  They may even
+refer to other distribution lists.  The command to create a distribution list
+is {F4:\"S\"} and the command to add entries to an existing list is {F5:\"Z\"}. 
+Use {F11:\"D\"} to delete entries, placing the cursor on the address if an 
+address is to be deleted, or on the nickname or full name of the list to 
+delete the whole list.
+
+The distribution lists in Pine are private distribution lists as is the rest
+of the address book and can't be shared among several users.  One reason for
+this is that any shared distribution list set up would be only available to
+Pine users and therefore would preclude others using other mailers from using
+the list even though they might be in the list.
+
+
+      3. Notes on Address formats                                        ___----
+
+There are a number of different formats for e-mail addresses, depending on the
+kind of network the recipient is on.  The Internet style is preferred and
+hopefully the world is moving toward it.  Also, it is often necessary to
+combine address formats to get mail to some sites.
+
+The standard format for the Internet address is:
+
+                User Name <user@dept.org.domain>
+                           or
+                User Name <user@computer.dept.org.domain>
+
+The number of segments on the right of the \"@\" sign can vary depending on
+how the address is structured for the particular host.  Therefore, the above
+examples are not absolute.  If you are sending to someone on the same system
+as you are, you can leave the \"@\" and all the information to its right off
+of the address, and Pine will fill it in automatically.  Sometimes you can also
+abbreviate the right part of the address if you are at the same site.  So if
+                                                                         ___----
+your address is \"You <you@admin.washington.edu>\" and you're sending mail to
+\"Them <them@purchase.washington.edu>\" then the address \"Them <them@purchase>\"
+is often sufficient.  You may also leave off the user name and the angle
+brackets and use just the plain address.
+
+   Examples:    Dan Green <dang@cac>
+                The Flying Legume <wingbean@laxvax.math.washington.edu>
+                dizzy@deegee.com
+                Joe Jackson <joe>
+
+Another common Internet format is:
+
+                dang@cac.washington.edu (Dan Green)
+
+This is an older, unofficial format that will hopefully fall into disuse.
+Pine understands both formats, but generates the official Internet style
+addresses.
+                                                                         ___----
+When sending messages across gateways to other networks, the address gets
+more complicated because they often have an Internet part and a part for the
+other network.  One example of this is:
+
+                joe%uwavm@gate.upitt.edu
+
+First the message goes to the gateway gate.upitt.com and the gateway
+deletes its name from the address and turns the % into an @.  The gateway
+then figures out what to do with the address joe@uwavm.  
+                                                                         ___----
+You may see an email address which looks like this:
+
+                host1!host2!host3!user
+
+This is an address on the UUCP network.  \"host1,\" and \"host2,\" are the
+names of computers between you and the computer, \"host3,\" that \"user\"
+to whom you want to send mail to has an account on.  In many cases, there 
+will be a UUCP gateway, so you can just send your email to:
+                
+                user@host3.uucp
+                                                                         ___----
+BITNET sites use a format that is similar to the Internet:
+   
+                host@site
+
+If you are sending mail from an Internet site to a BITNET site a local
+gateway may have been setup so you can send mail to:
+         
+                host@site.bitnet
+
+This will automatically forward the mail through to BITNET rather than you
+having to explicitly route it through a gateway.
+
+
+      End of Help for the Address Book
+   ------------------------------------------------------------
+===== h_use_address_book =====
+      COMPOSER: ADDRESS SELECT COMMANDS                                  ___----
+
+{F1 : ? }  Show this help text
+{F3 : E }  Exit the Address Select (without selecting an address)
+{F4 : S }  Select the currently highlighted entry
+{F5 : P }  Move to previous entry
+{F6 : N }  Move to next entry
+{F7 : - }  Previous page of the address book listing
+{F8 :Spc}  Next page of the address book listing
+{F12: W }  WhereIs (search through address book)
+
+                                                                         ___----
+      GENERAL DESCRIPTION OF THE ADDRESS BOOK
+
+The address book helps you keep a list of addresses you send mail to so you
+do not have to remember addresses that are often complex.  Each entry in the
+address book has three parts.  The nickname is short, usually less than eight
+letters, and easy to remember.  You type this nickname in as you are
+addressing the message in the composer and the address will be taken from the
+address book.  The name is a longer field where you can put the full name of
+the person and other information to clearly identify the address.  Usually the
+full names are put in last name first so they sort nicely in alphabetical
+order.  The third part is the address itself.  The addresses are sorted
+alphabetically on the full name with distribution lists sorted to the end.
+                                                                         ___----
+Pine also allows distribution lists so you can have one nickname that refers
+to a list of addresses to send mail to.  Each distribution list has a
+nickname, a full name and a list of addresses.  The addresses may be actual
+addresses or they may be other nicknames in your address book.  They may even
+refer to other distribution lists. 
+
+The distribution lists in Pine are private distribution lists as is the rest
+of the address book and can't be shared among several users.  One reason for
+this is that any shared distribution list set up would be only available to
+Pine users and therefore would preclude others using other mailers from using
+the list even though they might be in the list.
+
+      End of Help for Composer: Address Select
+   ------------------------------------------------------------
+===== h_composer =====
+      COMPOSER COMMANDS             ** May not be available              ___----
+                                    depending on configuration and hardware 
+
+CURSOR MOTION KEYS                     |EDITING KEYS
+  ^B (Left Arrow)   Back character     | ^D       Delete current character  
+  ^F (Right Arrow)  Forward character  | ^H (DEL) Delete previous character
+  ^P (Up Arrow)     Previous line      | ^^       Set a mark
+  ^N (Down Arrow)   Next line          | ^K       Cut marked text or
+  ^A                Beginning of line  |           delete current line
+  ^E                End of line        | ^U       Paste text, undelete lines
+  ^Y                Previous page      |           cut with ^K, or unjustify
+  ^V                Next page          |-------------------------------------
+  ^@ (Ctrl-SPACE)   Next word          |SCREEN/COMPOSITION COMMANDS
+---------------------------------------| ^W       Whereis (search for string)
+MESSAGE COMMANDS | GENERAL COMMANDS    | ^T **    Spell checker
+ ^C   Cancel     |  ^G    Get help     | ^J       Justify paragraph  
+ ^O   Postpone   |  ^Z ** Suspend      | ^L       Redraw Screen
+ ^X   Send       |  ^_ ** Alt. editor  | ^R       Read in a file
+                                                                         ___----
+      2. Control Keys Not Used by Pine                                 
+
+Pine has used nearly all the control keys it has access to.  There are
+certain control keys that are reserved by other programs or for technical
+reasons.  Pine will not use any of these combinations: 
+   
+    ^S     Used by Unix as \"stop output\"
+    ^Q     Used by Unix as \"resume output\"
+    ^]     Often used by Telnet as escape key
+    ^\\     Often used by Unix as \"Abort\"
+    ESC    Technical keymap conflict with arrow keys
+
+Note: even though Pine does not use ^S or ^Q (sometimes known as XOFF and
+XON), the system you are using may intercept those characters.  If you
+accidentally hit a ^S and your keyboard mysteriously freezes up, try typing
+a ^Q and see if that puts things right.
+
+      3. Control Keys in the Header                                      ___----
+
+When the cursor is in the header part of the message, some of the control
+commands have special meaning.  You will see this difference reflected in
+the menu displayed at the bottom of your Pine compose screen. 
+
+When in the header, the following keys have these meanings:
+         ^J   Attach file
+         ^R   Rich Header
+         ^T   To Address Book or Files
+The following keys are not active in the header:  ^W, ^_ and ^^
+
+      4. About Marking, Cutting and Pasting                              ___----
+
+The mark feature (^^) allows you to mark any segment of text, cut it out
+(^K), move the cursor, and paste it (^U) in the new location.  You can
+paste more than once, allowing you to use this feature to copy a block of
+text also. 
+
+If you use ^K (delete) and ^U (undelete) without using ^^ (mark), then
+Pine assumes you want to delete 1 line for each ^K and paste all the lines
+that were deleted together by pressing ^K multiple times. 
+
+Mark is shown as \"^^\".  The first \"^\" means you should hold down the 
+\"Control\" key on your keyboard.  The second \"^\" means \"type the 
+character ^\".  
+ 
+      5. About the Contents of the Message                               ___----
+
+Messages are usually just text, about 80 columns wide.  Using upper and lower
+case is encouraged.  On some systems the size limit of the message is about
+100,000 characters, which is about 2,000 lines.  You can include punctuation
+and special characters found on most keyboards, but you can't include
+characters with diacritical marks and certain special symbols.
+
+Text automatically wraps as you type past the end of a line so you do not have 
+to hit return.  Using the {F4:\"^J\"} command, you can also reformat text 
+explicitly, perhaps after you have deleted some text.
+
+You can include other text files with the {F5.:\"^R.\"} You will be prompted
+for the file name of the file.
+
+
+      6. Full Explanation of Composer Commands                           ___----
+
+ ______Arrow keys      Move the cursor around.
+
+ ______Delete key
+ ______Back Space key  Erase character and move back one character.
+
+ _{^D:^D}  Delete      Delete the character under the cursor
+
+ _{F1:^G}  Help        Display this help screen.
+
+ _{F2:^X}  Send        Finish composing this message and send it off to the 
+ ______                addressees. 
+
+ _{F3:^C}  Cancel      Stop sending this message.  Anything you have composed is
+ ______                lost.  You have a chance to confirm cancellation.
+                                                                         ___----
+ _{F4:^J}  Justify     Reformat the text in the paragraph the cursor is on.  A
+ ______                paragraph is separated by one blank line.  This is useful
+ ______                when you have been editing a paragraph and the lines become
+ ______                uneven.  The text is left aligned or justified and the
+ ______                right is ragged.  If the text is already justified as typed
+ ______                with auto-wrap no justification will be done.
+
+ _{F5:^R}  Read File   This will allow you to copy in text from an existing file.
+ ______                You will be prompted for the name of a file to be inserted
+ ______                into the message.  The file name is relative to your home
+ ______                directory or must be a full path name on your system.
+ ______                The file will be inserted where the cursor is located.  
+ ______                The file to be read must be on the same system as Pine.
+ ______                If you use Pine on a Unix machine but have files on a PC or
+ ______                MAC, the files must be transferred to the system Pine is 
+ ______                running on before they can be read. 
+                                                                         ___----
+ _{F6:^W}  Where is    Search the message for a word or part of a word.  Only the
+ ______                message part of your mail is searched, and the cursor is
+ ______                put on the first occurrence appearing after the location of
+ ______                the cursor.  The search will wrap to the beginning of the
+ ______                message when it no longer finds matches in the remainder of
+ ______                the message.
+ ______                 To search for the same string a second time, press {F12:^W}
+ ______                to begin search and then just press RETURN to accept the
+ ______                previous search string shown in square brackets rather than
+ ______                entering a new search string. 
+
+ _{F7:^Y}  Prev Page   Go back one page in the message text.
+
+ _{F8:^V}  Next Page   Go forward one page in the message text.
+                                                                         ___----
+ _{^^:^^}  Mark        Set a mark in message text.  This is used to set a mark
+ ______                and then perform a delete/move operation on a block of
+ ______                text.
+
+ _{F9:^K}  Del Line    Delete the entire line the cursor is currently on.  The last
+ ______                batch of lines that were deleted one after another is saved
+ ______                so they can be undeleted elsewhere.  If you have set the
+ ______                mark, then the marked block is deleted.
+
+{F10: ^U}  Undel Line  Undelete the last line, series of lines, or marked block 
+ ______                you deleted.  Using Mark, Del Line, and Undel Line is
+ ______                a convenient way to move text to a new location in your 
+ ______                message.  Also, Unjustify the last justification.
+                                                                         ___----
+{F11: ^O}  Postpone    Temporarily stop working on the current message so you may
+ ______                read other messages or compose another message.  You can
+ ______                then resume working on the postponed message by going back
+ ______                in to compose.  You will be asked if you want to continue
+ ______                the postponed message.  Only one message can be postponed
+ ______                at a time.  When you are ready to resume entering your
+ ______                message, choose Compose.  At that point you will be
+ ______                prompted with the question \"Continue work in progress?\".
+ ______                Choose yes and your existing message will appear.  Choose
+ ______                no, and you will be given a blank screen to compose a new
+ ______                message.  You may resume composing the previously postponed
+ ______                message later. 
+                                                                         ___----
+{F12: ^T}  To Spell    Check the spelling in the message you are composing.  You
+ ______                will be prompted at the bottom of the screen with each
+ ______                misspelled word.  You can correct the word, then press
+ ______                return to actually change it in the text.  If the word is
+ ______                not misspelled or is a name or such, don't change it and
+ ______                just press return to continue the spell check.  If a 
+ ______                word is misspelled more than once, then you 
+ ______                will be prompted to confirm the correction of each
+ ______                occurrence of it.  Pine uses the Unix spelling checker 
+ ______                and not one of its own so what is considered right and 
+ ______                wrong is not a function of Pine.  Lines beginning with \">\"
+ ______                (included messages) will not be checked.  There is no
+ ______                spell check feature with PC-Pine.
+
+                                                                         ___----
+      7. Other Composer Features (Bcc: and Fcc:)
+  
+There are two additional header fields that are normally not shown.
+These are Bcc: (Blind Carbon Copy) and Fcc: (File Carbon Copy).  Those
+addressed in the Bcc: field will receive a copy of the message but it
+will not show anywhere that they did receive a copy.  The Fcc: field
+specifies the folder name to which a copy of the message is saved to
+as it is sent, usually \"sent-mail\" (Unix) or \"sentmail\" (PC-Pine).
+
+      End of Help for Message Composer
+   ------------------------------------------------------------
+======= h_composer_to ====
+      HELP FOR 'TO:' IN MESSAGE COMPOSER                                 ___----
+
+                                                                Page
+  Contents   1. The To: field in general...........................2
+             2. Commands for editing the To: field.................3
+             3. Address formats....................................8
+
+
+  ----------------------------------------------------------------------
+      1. The To: field in general                                        ___----
+
+Type in the electronic addresses you want to send mail to.  You may type a
+full name and address, just the local address, the nickname of someone in your
+address book, or a local mail alias defined by your system administrator.
+When you move the cursor out of the To: field, the nicknames will be expanded
+to the addresses in your address book, and the local names will be expanded to
+include the addressee's full name.  The To: field may be several lines long,
+and have many addresses in it separated by commas.  You can move around the
+To: field and/or the header with the arrow keys.
+
+Examples:
+   Full address           spiff@cs.washington.edu
+   local address          spiff
+   address book nickname  spf   (expands to spiff@cs.washington.edu)
+   local alias            ndc-tech   (a mailing list maintained by the
+                          system administrator)
+
+      2. Commands for editing the To: field                              ___----
+
+ ______Arrow keys      Move the cursor around.
+
+ ______Delete key
+ ______Back Space key  Erase character and move back one character.
+
+ _{F4:^D}  Del Char    Delete character under the cursor.  
+
+ _{F1:^G}  Help        Display this help screen.
+
+ _{F2:^X}  Send        Finish composing this message and send it off to the 
+ ______                addressees.
+
+ _{F3:^C}  Cancel      Stop sending this message.  Anything you have composed is
+ ______                lost.  You have a chance to confirm cancellation.
+                                                                         ___----
+ _{F5:^R}  Rich Hdr    Expand the header to show the Bcc: (Blind Carbon Copy) and
+ ______                Fcc: (File Carbon Copy) fields, so they can be edited.
+ ______                Giving this command again hides these fields again but does
+ ______                not remove the information. 
+
+ _{F6:^J}  Attchmnts   Use this command to attach a file to a message.
+ ______                First you will be prompted for the file name, and then a
+ ______                description of the file you just attached.  Once the file is
+ ______                attached it will be displayed in the \"Attchmnts:\" line in
+ ______                the message header with its size.  The contents of the file
+ ______                won't actually show in your message.  The advantage of
+ ______                attaching a file this way over including it with the ^R
+ ______                command is that you can attach any kind of file, including
+ ______                files that are not text files.  For certain filetypes and
+ ______                hardware, the user will be able to display it right in 
+ ______                the mail program!
+                                                                         ___----
+ ______                You delete an attachment by deleting the \"Attchmnts\" 
+ ______                header line.  You can also manually edit the filename 
+ ______                and/or description shown there.
+
+ _{F7:^Y}  Prev Page   Go back one page in the message text.
+
+ _{F8:^V}  Next Page   Go forward one page in the message text.
+
+ _{F9:^K}  Del Line    Delete the entire line the cursor is currently on.  The last
+ ______                batch of lines that were deleted one after another is saved
+ ______                so they can be undeleted elsewhere. 
+
+{F10: ^U}  Undel Line  Undelete the last line or series of lines you deleted.  To
+ ______                delete a series of lines and move them to another part of
+ ______                your message addresses  be sure to delete them all at once.
+ ______                Using the Del Line and Undel Line commands is a convenient
+ ______                way to rearrange the order of addresses in the To: field,
+ ______                or move addresses between the To:, Cc: and Bcc: fields. 
+ ______                Alternatively, Reverses previous Justify operation.
+                                                                         ___----
+{F11: ^O}  Postpone    Temporarily stop working on the current message so you may
+ ______                read other messages, or compose another message.  You can
+ ______                then resume working on the postponed message by going back
+ ______                in to compose.  You will be asked if you want to continue
+ ______                the postponed message.  Only one message can be postponed
+ ______                at a time.  When you are ready to resume entering your
+ ______                message, choose Compose.  At that point you will be
+ ______                prompted with the question \"Continue work in progress?\".
+ ______                Choose yes and your existing message will appear.  Choose
+ ______                no, and you will be given a blank screen to compose a new
+ ______                message.  You may resume composing the previously postponed
+ ______                message later. 
+                                                                         ___----
+{F12: ^T}  To AddrBk   Go into the address book so you can browse through your
+ ______                addresses.  Put the cursor on the entry you want to send
+ ______                mail to and give the command to select the address
+ ______                ({F2:\"S\"} Select).  You will return to the To: field,and
+ ______                the address will be filled in.  You may go into the address
+ ______                book several times to pick several addresses. 
+
+
+      3. Address formats                                                 ___----
+
+There are a number of different formats for e-mail addresses, depending on
+the kind of network the recipient is on.  The Internet style is preferred and
+hopefully the world is moving toward it.  Also, it is often necessary to
+combine address formats to get mail to some sites.
+
+The standard format for the Internet address is:
+
+                User Name <user@dept.org.domain>
+                           or
+                User Name <user@computer.dept.org.domain>
+
+The number of segments on the right of the \"@\" sign can vary depending on
+how the address is structured for the particular host.  Therefore, the above
+examples are not absolute.  If you are sending to someone on the same system
+as you are, you can leave the \"@\" and all the information to its right off
+of the address and Pine will fill it in automatically.  Sometimes you can also
+abbreviate the right part of the address if you are at the same site.  So if
+                                                                         ___----
+your address is \"You <you@astro.washington.edu>\" and you're sending mail to
+\"Them <them@aero.washington.edu>\" then the address \"Them <them@aero>\"
+is often sufficient.  You may also leave off the user name and the angle
+brackets and use just the plain address.
+
+   Examples:    Dan Green <dang@cac>
+                The Flying Legume <wingbean@laxvax.math.washington.edu>
+                dizzy@deegee.com
+                Joe Jackson <joe>
+
+Another common Internet format is:
+
+                dang@cac.washington.edu (Dan Green)
+
+This is an older, unofficial format that will hopefully fall into disuse.  Pine
+understands both formats, but generates the official Internet style addresses.
+                                                                         ___----
+When sending messages across gateways to other networks, the address gets
+more complicated because they often have an Internet part and a part for the
+other network.  One example of this is:
+
+                joe%uwavm@gate.upitt.edu
+
+First the message goes to the gate.upitt.com and then the gateway figures
+out what to do with the address joe%uwavm.  
+
+You may see an email address which looks like this:
+
+                host1!host2!host3!user
+
+This is an address on the UUCP network.  \"host1,\" and \"host2,\" are the
+names of computers between you and the computer, \"host3,\" that \"user\"
+to whom you want to send mail to has an account on.  In many cases, there 
+will be a UUCP gateway, so you can just send your email to:
+                
+                user@host3.uucp
+                                                                         ___----
+
+BITNET sites use a format that is similar to the Internet:
+   
+                host@site
+
+If you are sending mail from an Internet site to a BITNET site, a local
+gateway may have been setup so you can send mail to:
+         
+                host@site.bitnet
+
+This will automatically forward the mail through to BITNET rather than you
+having to explicitly route it through a gateway.
+
+            End of Help for To: in Message Composer
+     ------------------------------------------------------------
+======= h_composer_cc ====
+      HELP FOR CARBON COPY (CC:) IN MESSAGE COMPOSER                     ___----
+
+                                                                Page
+  Contents   1. The Carbon Copy field in general...................2
+             2. Commands for editing the Cc: field.................4
+             3. Address formats....................................9
+
+
+  ----------------------------------------------------------------------
+      1. The Carbon Copy field in general                                ___----
+
+
+The Cc: field is just like the To: field, except it is used for addressees
+that you wish to send a carbon copy to.  That is, the message is not directly
+addressed to these recipients, but you wanted them to see the message.  The
+only difference the recipients see is that their name is in the Cc: field,
+rather than the To: field.
+
+As in the To: field you may type a full name and address, just the local
+address, the nickname of someone in your address book, or a local mail alias
+defined by your system administrator.  When you move the cursor out of the Cc:
+field, the nicknames will be expanded to the addresses in your address book,
+and the local names will be expanded to include the actual user name.  The To:
+field may be several lines long, and have many addresses in it separated by
+commas.  You can move around the Cc: field and/or the header with the arrow
+keys.
+                                                                         ___----
+Examples:
+   Full address           spiff@cs.washington.edu
+   local address          spiff
+   address book nickname  spf   (expands to spiff@cs.washington.edu)
+   local alias            ndc-tech   (a mailing list maintained by the
+                          system administrator)
+
+                                                                         ___----
+      2. Commands for editing the Cc: field
+
+ ______Arrow keys      Move the cursor around.
+
+ ______Delete key
+ ______Back Space key  Erase character and move back one character.
+
+ _{F4:^D}  Del Char    Delete character under the cursor.
+
+ _{F1:^G}  Help        Display this help screen.
+
+ _{F2:^X}  Send        Finish composing this message and send it off to the 
+ ______                addressees.
+
+ _{F3:^C}  Cancel      Stop sending this message.  Anything you have composed is
+ ______                lost.  You have a chance to confirm cancellation.
+                                                                         ___----
+ _{F5:^R}  Rich Hdr    Expand the header to show the Bcc: (Blind Carbon Copy) and
+ ______                Fcc: (File Carbon Copy) fields, so they can be edited.
+ ______                Giving this command again hides these fields again but does
+ ______                not remove the information. 
+
+ _{F6:^J}  Attchmnts   Use this command to attach a file to a message.
+ ______                First you will be prompted for the file name, and then a
+ ______                description of the file you just attached.  Once the file is
+ ______                attached it will be displayed in the \"Attchmnts:\" line in
+ ______                the message header with its size.  The contents of the file
+ ______                won't actually show in your message.  The advantage of
+ ______                attaching a file this way over including it with the ^R
+ ______                command is that you can attach any kind of file, including
+ ______                files that are not text files.  For certain filetypes and
+ ______                hardware, the user will be able to display it right in 
+ ______                the mail program!
+                                                                         ___----
+ ______                You delete an attachment by deleting the \"Attchmnts\" 
+ ______                header line.  You can also manually edit the filename 
+ ______                and/or description shown there.
+
+ _{F7:^Y}  Prev Page   Go back one page in the message text.
+
+ _{F8:^V}  Next Page   Go forward one page in the message text.
+
+ _{F9:^K}  Del Line    Delete the entire line the cursor is currently on.  The last
+ ______                batch of lines that were deleted one after another is saved
+ ______                so they can be undeleted elsewhere. 
+
+{F10: ^U}  Undel Line  Undelete the last line or series of lines you deleted.  To
+ ______                delete a series of lines and move them to another part of
+ ______                your message addresses  be sure to delete them all at once.
+ ______                Using the Del Line and Undel Line commands is a convenient
+ ______                way to rearrange the order of addresses in the Cc: field,
+ ______                or move addresses between the To:, Cc: and Bcc: fields.
+ ______                Alternatively, reverses previous Justify operation.
+                                                                         ___----
+{F11: ^O}  Postpone    Temporarily stop working on the current message so you may
+ ______                read other messages, or compose another message.  You can
+ ______                then resume working on the postponed message by going back
+ ______                in to compose.  You will be asked if you want to continue
+ ______                the postponed message.  Only one message can be postponed
+ ______                at a time.  When you are ready to resume entering your
+ ______                message, choose Compose.  At that point you will be
+ ______                prompted with the question \"Continue work in progress?\".
+ ______                Choose yes and your existing message will appear.  Choose
+ ______                no, and you will be given a blank screen to compose a new
+ ______                message.  You may resume composing the previously postponed
+ ______                message later. 
+                                                                         ___----
+{F12: ^T}  To AddrBk   Go into the address book so you can browse through your
+ ______                addresses.  Put the cursor on the entry you want to send
+ ______                mail to and give the command to select the address
+ ______                ({F2:\"S\"} Select).  You will return to the Cc: field,and
+ ______                the address will be filled in.  You may go into the address
+ ______                book several times to pick several addresses. 
+
+
+      3. Address formats                                                 ___----
+
+There are a number of different formats for e-mail addresses, depending on
+the kind of network the recipient is on.  The Internet style is preferred and
+hopefully the world is moving toward it.  Also, it is often necessary to
+combine address formats to get mail to some sites.
+
+The standard format for the Internet address is:
+
+                User Name <user@dept.org.domain>
+                           or
+                User Name <user@computer.dept.org.domain>
+
+The number of segments on the right of the \"@\" sign can vary depending on
+how the address is structured for the particular host.  Therefore, the above
+examples are not absolute.  If you are sending to someone on the same system
+as you are, you can leave the \"@\" and all the information to its right off
+the address and Pine will fill it in automatically.  Sometimes you can also
+abbreviate the right part of the address if you are at the same site.  So if
+                                                                         ___----
+your address is \"You <you@astro.washington.edu>\" and you're sending mail to
+\"Them <them@aero.washington.edu>\" then the address \"Them <them@aero>\"
+is often sufficient.  You may also leave off the user name and the angle
+brackets and use just the plain address.
+
+   Examples:    Dan Green <dang@cac>
+                The Flying Legume <wingbean@laxvax.math.washington.edu>
+                dizzy@deegee.com
+                Joe Jackson <joe>
+
+Another common Internet format is:
+
+                dang@cac.washington.edu (Dan Green)
+
+This is an older, unofficial format that will hopefully fall into disuse.  Pine
+understands both formats, but generates the official Internet style addresses.
+                                                                         ___----
+When sending messages across gateways to other networks, the address gets
+more complicated because they often have an Internet part and a part for the
+other network.  One example of this is:
+
+                joe%uwavm@gate.upitt.edu
+
+First the message goes to the gate.upitt.com and then the gateway figures
+out what to do with the address joe%uwavm.  
+
+You may see an email address which looks like this:
+
+                host1!host2!host3!user
+
+This is an address on the UUCP network.  \"host1,\" and \"host2,\" are the
+names of computers between you and the computer, \"host3,\" that \"user\"
+to whom you want to send mail to has an account on.  In many cases, there 
+will be a UUCP gateway, so you can just send your email to:
+                
+                user@host3.uucp
+                                                                         ___----
+
+BITNET sites use a format that is similar to the Internet:
+   
+                host@site
+
+If you are sending mail from an Internet site to a BITNET site, a local
+gateway may have been setup so you can send mail to:
+         
+                host@site.bitnet
+
+This will automatically forward the mail through to BITNET rather than you
+having to explicitly route it through a gateway.
+
+      End of Help for Cc: in Message Composer
+   ------------------------------------------------------------
+======= h_composer_bcc ====
+      HELP FOR THE BLIND CARBON COPY (BCC:) FIELD IN MESSAGE COMPOSER    ___----
+
+                                                                Page
+  Contents   1. The Blind Carbon Copy field in general.............2
+             2. Commands for editing Bcc: the field................4
+             3. Address formats....................................9
+
+
+  ----------------------------------------------------------------------
+      1. The Blind Carbon Copy field in general                          ___----
+
+
+Bcc: is just the same as the To: and Cc: fields in the way the addresses are
+entered.  The recipients listed here will receive a copy of the message, but
+there will be nothing in the message header the that indicates a Bcc: was
+sent.  The To: and Cc: recipients will not know a copy was sent to the Bcc:
+recipients.
+
+As in the To: field you may type a full name and address, just a local
+address, the nickname of someone in your address book, or a local mail alias
+defined by your system administrator.  When you move the cursor out of the
+Bcc: field, the nicknames will be expanded to the addresses in your address
+book, and the local names will be expanded to include the actual user name.
+The To: field may be several lines long, and have many addresses in it
+separated by commas.  You can move around the Bcc: field and/or the header
+with the arrow keys.
+                                                                         ___----
+Examples:
+   Full address           spiff@cs.washington.edu
+   local address          spiff
+   address book nickname  spf   (expands to spiff@cs.washington.edu)
+   local alias            ndc-tech   (a mailing list maintained by the
+                          system administrator)
+
+                                                                         ___----
+      2. Commands for editing the Bcc: field
+
+ ______Arrow keys      Move the cursor around.
+
+ ______Delete key
+ ______Back Space key  Erase character and move back one character.
+
+ _{F4:^D}  Del Char    Delete character under the cursor.
+
+ _{F1:^G}  Help        Display this help screen.
+
+ _{F2:^X}  Send        Finish composing this message and send it off to the 
+ ______                addressees.
+
+ _{F3:^C}  Cancel      Stop sending this message.  Anything you have composed is
+ ______                lost. 
+                                                                         ___----
+ _{F5:^R}  Rich Hdr    Expand the header to show the Bcc: (Blind Carbon Copy) and
+ ______                Fcc: (File Carbon Copy) fields, so they can be edited.
+ ______                Giving this command again hides these fields again but does
+ ______                not remove the information. 
+
+ _{F6:^J}  Attchmnts   Use this command to attach a file to a message.
+ ______                First you will be prompted for the file name, and then a
+ ______                description of the file you just attached.  Once the file is
+ ______                attached it will be displayed in the \"Attchmnts:\" line in
+ ______                the message header with its size.  The contents of the file
+ ______                won't actually show in your message.  The advantage of
+ ______                attaching a file this way over including it with the ^R
+ ______                command is that you can attach any kind of file, including
+ ______                files that are not text files.  For certain filetypes and
+ ______                hardware, the user will be able to display it right in 
+ ______                the mail program!
+                                                                         ___----
+ ______                You delete an attachment by deleting the \"Attchmnts\" 
+ ______                header line.  You can also manually edit the filename 
+ ______                and/or description shown there.
+
+ _{F7:^Y}  Prev Page   Go back one page in the message text.
+
+ _{F8:^V}  Next Page   Go forward one page in the message text.
+
+ _{F9:^K}  Del Line    Delete the entire line the cursor is currently on.  The last
+ ______                batch of lines that were deleted one after another is saved
+ ______                so they can be undeleted elsewhere. 
+
+{F10: ^U}  Undel Line  Undelete the last line or series of lines you deleted.  To
+ ______                delete a series of lines and move them to another part of
+ ______                your message addresses  be sure to delete them all at once.
+ ______                Using the Del Line and Undel Line commands is a convenient
+ ______                way to rearrange the order of addresses in the Cc: field,
+ ______                or move addresses between the To:, Cc: and Bcc: fields. 
+ ______                Alternatively, reverses previous Justify operation.
+                                                                         ___----
+{F11: ^O}  Postpone    Temporarily stop working on the current message so you may
+ ______                read other messages, or compose another message.  You can
+ ______                then resume working on the postponed message by going back
+ ______                in to compose.  You will be asked if you want to continue
+ ______                the postponed message.  Only one message can be postponed
+ ______                at a time.  When you are ready to resume entering your
+ ______                message, choose Compose.  At that point you will be
+ ______                prompted with the question \"Continue work in progress?\".
+ ______                Choose yes and your existing message will appear.  Choose
+ ______                no, and you will be given a blank screen to compose a new
+ ______                message.  You may resume composing the previously postponed
+ ______                message later. 
+                                                                         ___----
+{F12: ^T}  To AddrBk   Go into the address book so you can browse through your
+ ______                addresses.  Put the cursor on the entry you want to send
+ ______                mail to and give the command to select the address
+ ______                ({F2:\"S\"} Select).  You will return to the Bcc: field,
+ ______                and the address will be filled in.  You may go into the 
+ ______                address book several times to pick several addresses. 
+
+
+      3. Address formats                                                 ___----
+
+There are a number of different formats for e-mail addresses, depending on
+the kind of network the recipient is on.  The Internet style is preferred and
+hopefully the world is moving toward it.  Also, it is often necessary to
+combine address formats to get mail to some sites.
+
+The standard format for the Internet address is:
+
+                User Name <user@dept.org.domain>
+                           or
+                User Name <user@computer.dept.org.domain>
+
+The number of segments on the right of the \"@\" sign can vary depending on
+how the address is structured for the particular host.  Therefore, the above
+examples are not absolute.  If you are sending to someone on the same system
+as you are, you can leave the \"@\" and all the information to its right off
+of the address and Pine will fill it in automatically.  Sometimes you can also
+abbreviate the right part of the address if you are at the same site.  So if
+                                                                         ___----
+your address is \"You <you@astro.washington.edu>\" and you're sending mail to
+\"Them <them@aero.washington.edu>\" then the address \"Them <them@aero>\"
+is often sufficient.  You may also leave off the user name and the angle
+brackets and use just the plain address.
+
+   Examples:    Dan Green <dang@cac>
+                The Flying Legume <wingbean@laxvax.math.washington.edu>
+                dizzy@deegee.com
+                Joe Jackson <joe>
+
+Another common Internet format is:
+
+                dang@cac.washington.edu (Dan Green)
+
+This is an older, unofficial format that will hopefully fall into disuse.  Pine
+understands both formats, but generates the official Internet style addresses.
+                                                                         ___----
+When sending messages across gateways to other networks, the address gets
+more complicated because they often have an Internet part and a part for the
+other network.  One example of this is:
+
+                joe%uwavm@gate.upitt.edu
+
+First the message goes to the gate.upitt.com and then the gateway figures
+out what to do with the address joe%uwavm.  
+
+You may see an email address which looks like this:
+
+                host1!host2!host3!user
+
+This is an address on the UUCP network.  \"host1,\" and \"host2,\" are the
+names of computers between you and the computer, \"host3,\" that \"user\"
+to whom you want to send mail to has an account on.  In many cases, there 
+will be a UUCP gateway, so you can just send your email to:
+                
+                user@host3.uucp
+                                                                         ___----
+
+BITNET sites use a format that is similar to the Internet:
+   
+                host@site
+
+If you are sending mail from an Internet site to a BITNET site ,a local
+gateway may have been setup so you can send mail to:
+         
+                host@site.bitnet
+
+This will automatically forward the mail through to BITNET rather than you
+having to explicitly route it through a gateway.
+
+      End of Help for Bcc: in Message Composer
+   ------------------------------------------------------------
+======= h_composer_fcc ====
+      HELP FOR FILE CARBON COPY (FCC:) IN MESSAGE COMPOSER               ___----
+
+This specifies a folder name in which to save a copy of the message for
+future reference.  This is \"sent-mail\" by default.  You may change this to
+any folder you like, but your choice is only used for the current message.
+The next message will be saved in \"sent-mail\" unless you change the Fcc: to
+another folder.  You may type ^T to get a list all your folders.
+
+This is referred to as File Carbon Copy, because folders are basically files.
+
+      End of Help Fcc: in for Message Composer
+   ------------------------------------------------------------
+
+======= h_composer_subject ====
+      HELP FOR MESSAGE SUBJECT: IN COMPOSER                              ___----
+
+This is simply a few words summarizing the message that will show up in
+listings of the header when the recipient gets the message.  You can type any
+text here you like.  It's nice to make it as specific as possible.
+
+      End of Help for Message Subject: in Composer
+   ------------------------------------------------------------
+====== h_composer_attachment =====
+      HELP FOR ATTACHING FILE                                            ___----
+
+This field shows the attachments or other \"parts\" of the message you
+are composing.  This is new in Pine 3.0 and part of MIME (see below)
+support.
+
+The most common use for this field will be to attach a file to your mail
+message.  You can just type the file name here and if the file is found
+and accessible it will be \"attached\".  You will know it is attached when
+the size of the file is shown.  You can also add a description of the file
+between the quote marks \"\".  You can remove and edit attachments to
+your messages by editing the items in this field.  If you delete the line,
+the file will not be included in your message.  When you attach a file,
+it will not actually be shown in your message, but if the line is the
+\"Attchmnts:\" field, the file will be included.
+
+Typing the file name here achieves the same result as using the {F6:^J}
+command.
+                                                                         ___----
+If some one sends you a message with different parts or attachments, you
+may forward that message with its different parts if you like.  When you
+do this the parts will show up in the \"Attchmts\" field too, but they
+will be in square brackets \"[]\".  These attachments can be images,
+files, other messages, sounds and even video.  The type will be shown.
+You can remove these attachments if you like by deleting the line from
+the field.  This is something you might want to do often because messages
+with attachments can become very large and it is better to send smaller
+messages if that will do.
+
+MIME is a new standard for sending multipart and multimedia e-mail.  It is
+not widely used yet, but its use is growing and Pine is one of the first
+mailers to have MIME capabilities.  Since MIME is a standard you can send
+messages with attachments to other users that have MIME based mailers,
+not necessarily Pine and they will be able to read them.  If you send a
+message with an attachment to some one that doesn't have a MIME based
+mailer, the text of your message will be readable, and the person may be able
+to extract the attached file, if the file is plain text.  It may be
+                                                                         ___----
+difficult to extract the attached file if it was a binary file.
+Because MIME is a new standard, Pine is one of the first implementations,
+and not everyone will be using MIME for a while one might expect things
+to operate a little more roughly and unpolished than usual.
+
+
+      End of Help for Message Attachment: in Composer
+   ------------------------------------------------------------
+====== h_composer_browse =====
+      HELP FOR FILE BROWSER                                              ___----
+
+Use this to browse files, perhaps from some other application.  The file
+name given can be a file in your home directory, an absolute file path
+name for your system, or a file path relative to your home directory. 
+No wild card characters may be used.  In Unix Pine, you may use \"~\" to
+refer to your home directory or \"~user\" to refer to another's home
+directory.  The file must reside on the system running Pine. 
+
+      End of Help for File Browsing: in Composer
+   ------------------------------------------------------------
+====== h_composer_ins =====
+      HELP FOR INSERTING FILE                                            ___----
+
+Use this to insert a file, perhaps from some other editor.  The file name
+given can be a file in your home directory, an absolute file path name for
+your system, or a file path relative to your home directory.  No wild card
+characters may be used.  In Unix Pine, you may use \"~\" to refer to your
+home directory or \"~user\" to refer to another's home directory.  The
+file must reside on the system running Pine. 
+
+      End help for Inserting file
+   ------------------------------------------------------------
+====== h_composer_search =====
+      HELP FOR SEARCH IN MESSAGE COMPOSER                                ___----
+
+Search the message for a word or part of a word.  When searching in the
+composer, only the message part of your mail is searched, and the cursor is
+put on the first occurrence appearing after the location of the cursor.  The
+search will wrap to the beginning of the message when it no longer finds
+matches in the remainder of the message.
+
+To search for the same string a second time, press {F12:^W} to begin search
+and then just press RETURN to accept the previous search string shown in
+square brackets rather than entering a new search string.
+
+      End help for search in message composer
+=========== h_oe_add_full ==================
+Type the full name of the person being added and press the RETURN key.  Press ^C
+to cancel addition. 
+=========== h_oe_add_nick ==================
+Type a short nickname and press RETURN.  A nickname is a short easy-to- 
+remember word, name or initials like \"joe\", or \"wcfields.\" Press ^C to cancel.
+========== h_oe_add_addr ================
+Type the e-mail address and press RETURN.  Press ^T to get a list of addresses
+from your current inbox.  Press ^C to cancel addition.
+========== h_oe_crlst_full ==============
+Type a long name (up to 50 chars) or description for the list that you are
+creating and press RETURN.  Press ^C to cancel creation of list.
+=========== h_oe_crlst_nick =============
+Type a nickname (short, easy-to-remember name or single word) for the list 
+you are creating and press RETURN.  Press ^C to cancel.
+========== h_oe_crlst_addr ==============
+Type an e-mail address, or a nickname already in the address book that you want
+to be part of this list and press RETURN. 
+========== h_oe_adlst_addr =============
+Type an e-mail address or a nickname already in the address book that you want
+to add to this list and press RETURN. ^T to get addresses from incoming mail.
+========== h_oe_editab_nick ============
+Edit the nickname to be correct using the arrow keys and delete key.  Press
+RETURN when done.  Press ^C to cancel editing and leave the nickname as it was.
+========== h_oe_editab_full ============
+Edit the full name to be correct using the arrow keys and delete key.  Press
+RETURN when done.  Press ^C to cancel editing and leave the full name as it was.
+========== h_oe_editab_addr ============
+Edit the address to be correct using the arrow keys and delete key.  Press
+RETURN when done.  Press ^C to cancel editing and leave the address as it was.
+========== h_oe_editab_al ============
+Edit the address to be correct using the arrow keys and delete key.  Press
+RETURN when done.  Press ^C to cancel editing and leave the address as it was.
+========== h_oe_searchab ===============
+Type the word or name you want to search for and press RETURN.  If you press
+RETURN with out entering anything the word in [] will be searched for.
+========== h_oe_searchrl ==========
+Type the word, name or address you want to search for and press RETURN.  If you
+press RETURN without entering anything the word in [] will be searched for.
+========== h_oe_save ==========
+Type the name of the folder you want to save the message in and press RETURN.  
+Press ^T to get a list of your folders.  Press ^C to cancel saving this mail.
+========== h_oe_takeaddr ==========
+Edit the e-mail address using the arrow and delete keys.  Press RETURN when 
+done.  Press ^C to cancel adding this entry to the address book.
+========== h_oe_takename ==========
+Edit the full name to be correct using the arrow and delete keys.  Press RETURN
+when done.  Press ^C to cancel adding this entry to the address book.
+========== h_oe_takenick ==========
+Type a nickname (short easy-to-remember name, initials or single word) for
+this entry in the address book and press RETURN.  Press ^C to cancel addition.
+========== h_oe_jump ==========
+Type the number of the message number you want to jump to and press
+RETURN.  Press ^C if you want to cancel jumping to another message.
+========== h_oe_broach ==========
+Type the name of the folder you want to open and press RETURN.  Press ^T to get
+a list of all your folders and make a selection.  Press ^C to cancel open.
+========== h_oe_foldsearch ==========
+Type the word, name or address you want to search for and press RETURN.  If you
+press RETURN without entering anything the word in [] will be searched for.
+========== h_oe_foldadd ==========
+Type the name of the folder you want to add and press RETURN.  Press ^C to 
+cancel adding a new folder.
+========== h_oe_foldrename ==========
+Change the old name of the folder to the new name using the arrow and delete
+keys and press RETURN.  Press ^C to cancel rename.
+========== h_oe_login ==========
+Enter your login name for the host you are opening the mailbox on.  Just press
+RETURN to use your login from this host as is, or edit it with delete key.
+========== h_oe_passwd ==========
+Type your password for the host and login shown as part of the prompt.  Press 
+^C to cancel opening folder.
+========== h_oe_choosep ==========
+Enter the number associated with the printer you want to select.  Press ^C to
+cancel the printer selection.  The current selection is shown high lit.
+========== h_oe_customp ==========
+Type the name of the Unix print command and press RETURN.  Press ^C to cancel
+the printer selection.
+========== h_oe_searchview ==========
+Type the word or name you want to search for and press RETURN.  If you press
+RETURN without entering anything the word in [] will be searched for.
+========== h_oe_keylock ==========
+The keyboard is in use and locked by another user.  Only that user can
+unlock this keyboard by typing the password.
+========== h_oe_export ==========
+Type the name of file in your home directory to write the mail message into and
+press RETURN.  You may also give an absolute path or use \"~\".  Use ^C to cancel
+========== h_wt_expire ==========
+At the beginning of each month Pine offers to rename your current sent-mail
+folder to one named for the month so you have a sent-mail folder for each month
+========== h_wt_delete_old ==========
+It is the beginning of the month, and we need to conserve disk
+space.  Please delete any sent-mail that you do not need.
+========== h_wt_auger_in ==========
+This emergency cancel is used when Pine is completely stuck.  It'll dump a core
+file for debugging and will NOT SAVE message under composition or status.
+========== h_select_sort ==========
+Select the order for sorting the message index by typing the capitalized letter.
+Arrival is by arrival in your mailbox; Date is by time/day message was sent.
+========== h_mini_setup ==========
+
+Select one of the setup tasks by typing the capitalized letter.
+========== h_sticky_personal_name ==========
+Type in your name as you want it to appear on outgoing email.  This entry will
+be saved into your Pine configuration file.
+========== h_sticky_inbox ============
+INBOX syntax is usually {{:{}complete.machine.name}INBOX
+This entry will be saved into your Pine configuration file.
+========== h_sticky_smtp ============
+The name of the computer on your campus which relays your outgoing email to 
+the Internet.  This entry will be saved into your Pine configuration file.
+========== h_sticky_user_id ==========
+The username or login-id part of your email address.  This entry will be 
+saved into your Pine configuration file.
+========== h_sticky_domain ==========
+The domain part of your email address, NOT the name of your PC.  This entry
+will be saved into your Pine configuration file.

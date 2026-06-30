@@ -1,0 +1,29 @@
+From holbrook@cic.net Fri Sep 24 13:22:49 1993
+Date: Thu, 23 Sep 1993 22:20:21 -0400 (EDT)
+From: Paul Holbrook <holbrook@cic.net>
+To: pine-info@cac.washington.edu
+Subject: patch to 3.85 to mark msgs cc to self with +
+
+Pine 3.85 contains the really nifty feature that messages that are sent 
+directly to you (ie, your mail address is in the To: field) are marked in 
+the index with a +.  This feature allows you to quickly see what messages 
+you might want to look at first, as opposed to messages that might be to 
+a mailing list.  
+
+An old Xerox mailer used to have this feature (any Hardy users out 
+there?), but it would also allow you to mark messages cc'd directly to 
+you as well.  So below I present a small hack to allow you to mark 
+messages to yourself.  If you install this, you'll see a '+' if the 
+message has you in the to *or* cc list.  (I have a vague recollection 
+that I might have suggested this feature to the Pine folks, so I get to 
+hack it the way I want it.  And if I didn't suggest it, they must have 
+read my mind.)
+
+Now all I want is the ability to sort on messages with that '+' mark.
+
+J. Paul Holbrook
+CICNet Technical Services Manager
+holbrook@cic.net    (313) 998-7680
+
+This patch was made to the file mailindx.c, which can be found in the
+pine3.85/pine directory. 

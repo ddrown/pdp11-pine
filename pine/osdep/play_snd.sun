@@ -1,0 +1,33 @@
+/*----------------------------------------------------------------------
+       Play audio
+ ----*/
+void
+gf_play_sound(f, c, flg)
+    FILTER_S *f;
+    int       c, flg;
+{
+    
+#define SND_BUF_SIZE 50000 /* 50K, a nice number on suns */
+    if(flg == GF_RESET) {
+        f->fd = open("/dev/audio", 1);
+        if(f->fd < 0) 
+          gf_error("Error opening /dev/audio");
+        f->line = fs_get(SND_BUF_SIZE + 10); 
+        f->n = 0; /* Count in the buffer */
+        f->linep = f->line;
+    } else if(flg == GF_DATA) {
+        if(f->n >= SND_BUF_SIZE) {
+            write(f->fd, f->line, f->n);
+            f->n = 0;
+            f->linep = f->line;
+        }
+        *(f->linep++) = c;
+        (f->n)++;
+    } else if(flg == GF_EOD) {
+        write(f->fd, f->line, f->n);
+        close(f->fd);
+        fs_give((void **)&(f->line));
+    }
+}
+
+

@@ -1,0 +1,132 @@
+/*----------------------------------------------------------------------
+       Get the current host and domain names
+
+    Args: hostname   -- buffer to return the hostname in
+          hsize      -- size of buffer above
+          domainname -- buffer to return domain name in
+          dsize      -- size of buffer above
+
+  Result: The system host and domain names are returned. If the full host
+          name is akbar.cac.washington.edu then the domainname is
+          cac.washington.edu.
+
+On Internet connected hosts this look up uses /etc/hosts and DNS to
+figure all this out. On other less well connected machines some other
+file may be read. If there is no notion of a domain name the domain
+name may be left blank. On a PC where there really isn't a host name
+this should return blank strings. The .pinerc will take care of
+configuring the domain names. That is, this should only return the
+native system's idea of what the names are if the system has such
+a concept.
+ ----*/
+void
+getdomainnames(hostname, hsize, domainname, dsize)
+     char *hostname, *domainname;
+     int   hsize, dsize;
+{
+#ifdef	LWP
+    char           *dn;
+    long            iaddr;
+    struct hostent *he;
+    struct in_addr in;
+
+    if((iaddr = getmyipaddr()) == -1){	/* host name not found! */
+	hostname[0] = '\0';
+	domainname[0] = '\0';
+	return;
+    }
+
+    if((he=gethostbyaddr((char *)&iaddr, 4, PF_INET)) == NULL){
+	in.s_addr = iaddr;
+	sprintf(hostname, "[%s]", inet_ntoa(in));
+	domainname[0] = '\0';
+	return;
+    }
+
+    strncpy(hostname, he->h_name, hsize-1);
+    if((dn = strindex(hostname, '.')) != NULL) {
+        strncpy(domainname, dn+1, dsize-1);
+    } else {
+        strncpy(domainname, hostname, dsize-1);
+    }
+
+    domainname[dsize-1] = '\0';
+#else
+#ifdef	PCTCP
+    char *dn;
+    long  myip;
+
+    hostname[0] = domainname[0] = '\0';
+
+    if(gethostname(hostname, hsize-1) <= 0){
+	if(myip = gethostid()){
+	    sprintf(hostname, "[%s]", inet_ntoa(myip));
+	}
+	else if(getconf("ifcust", "ip-address", &hostname[1], hsize-2)){
+	    /*
+	     * must be running older kernel, we'll have to look harder...
+	     */
+	    hostname[0] = '[';
+	    strcat(hostname, "]");
+	}
+	else
+	  strcpy(hostname, "0.0.0.0");
+    }
+
+    if(getdomainname(domainname, dsize-1) <= 0){
+	domainname[0] = '\0';
+	if(hostname[0] != '[' && (dn = strindex(hostname, '.')) != NULL)
+          strncpy(domainname, dn+1, dsize-1);
+	else
+          strncpy(domainname, hostname, dsize-1);
+    }
+#else
+#ifdef	PCNFS
+    char *dn;
+    unsigned   long  myip;
+
+    hostname[0] = domainname[0] = '\0';
+
+    if(gethostname(hostname, hsize-1) <= 0){
+	if(get_myipaddr((char *) &myip)){
+	    sprintf(hostname, "[%s]", inet_ntoa(myip));
+	}
+	else
+	  strcpy(hostname, "0.0.0.0");
+    }
+
+    if(getdomainname(domainname, dsize-1) <= 0){
+	domainname[0] = '\0';
+	if(hostname[0] != '[' && (dn = strindex(hostname, '.')) != NULL)
+          strncpy(domainname, dn+1, dsize-1);
+	else
+          strncpy(domainname, hostname, dsize-1);
+    }
+#else
+    char           *dn, hname[MAX_ADDRESS+1];
+    extern int      sock_initted;
+    long            myip;
+
+    hostname[0] = domainname[0] = '\0';
+
+    if(!sock_initted++)
+	sock_init();
+
+    tcp_cbrk(0x01);		/* turn off ctrl-break catching */
+
+    /*
+     * haven't discovered a way to find out the local host's 
+     * name with wattcp yet.
+     */
+    if(myip = gethostid())
+      sprintf(hostname, "[%s]", inet_ntoa(hname, myip));
+
+    if(getdomainname(domainname, dsize-1) == NULL){
+	domainname[0] = '\0';
+    }
+#endif	/* !PCNFS */
+#endif	/* !PCTCP */
+#endif	/* !LWP */
+}
+
+

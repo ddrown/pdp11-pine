@@ -1,0 +1,60 @@
+/*----------------------------------------------------------------------
+  This collection of routines looks up the login name and password on the
+system. For things like PC's it's OK for these to return NULL since there
+is no system login. Other code will figure out who the user actually is.
+  ----*/
+
+/* Don't need a gcos_name(), unused. */
+#ifdef notdef
+static char *
+gcos_name(gcos_field, logname)
+char *logname, *gcos_field;
+{
+}
+#endif
+
+char *
+get_system_login()
+{
+    return(NULL);
+}
+
+char *
+get_system_fullname()
+{
+    return(NULL);
+}
+
+char *
+get_system_homedir()
+{
+    static char driveb[] = "X:";
+
+    driveb[0] = '@' + _getdrive();
+    return(driveb);
+}
+
+char *
+get_system_passwd()
+{
+    return(NULL);
+}
+
+/*----------------------------------------------------------------------
+      Look up a userid on the local system and return rfc822 address
+
+ Args: name  -- possible login name on local system
+
+ Result: returns NULL or pointer to static string rfc822 address.
+  ----*/
+char *
+local_name_lookup(name)
+     char *name;
+{
+    static char buf[1];
+
+    buf[0] = '\0';
+    return(buf);
+}
+
+

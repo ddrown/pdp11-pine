@@ -1,0 +1,52 @@
+/*----------------------------------------------------------------------
+       Get the current host and domain names
+
+    Args: hostname   -- buffer to return the hostname in
+          hsize      -- size of buffer above
+          domainname -- buffer to return domain name in
+          dsize      -- size of buffer above
+
+  Result: The system host and domain names are returned. If the full host
+          name is akbar.cac.washington.edu then the domainname is
+          cac.washington.edu.
+
+On Internet connected hosts this look up uses /etc/hosts and DNS to
+figure all this out. On other less well connected machines some other
+file may be read. If there is no notion of a domain name the domain
+name may be left blank. On a PC where there really isn't a host name
+this should return blank strings. The .pinerc will take care of
+configuring the domain names. That is, this should only return the
+native system's idea of what the names are if the system has such
+a concept.
+ ----*/
+void
+getdomainnames(hostname, hsize, domainname, dsize)
+    char *hostname, *domainname;
+    int   hsize, dsize;
+{
+    char           *dn, hname[MAX_ADDRESS+1];
+    struct hostent *he;
+
+    gethostname(hname, MAX_ADDRESS);
+
+    he = gethostbyname(hname);
+
+    if(he == NULL && strlen(hname) == 0) {
+        strcpy(hostname, "");
+    } else if(he == NULL) {
+        strncpy(hostname, hname, hsize - 1);
+    } else {
+        strncpy(hostname, he->h_name, hsize-1);
+    }
+    hostname[hsize-1] = '\0';
+
+
+    if((dn = strindex(hostname, '.')) != NULL) {
+        strncpy(domainname, dn+1, dsize-1);
+    } else {
+        strncpy(domainname, hostname, dsize-1);
+    }
+    domainname[dsize-1] = '\0';
+}
+
+

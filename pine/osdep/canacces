@@ -1,0 +1,19 @@
+/*----------------------------------------------------------------------
+       Check if we can access a file in a given way
+
+   Args: file      -- The file to check
+         mode      -- The mode ala the access() system call, see ACCESS_EXISTS
+                      and friends in pine.h.
+
+ Result: returns 0 if the user can access the file according to the mode,
+         -1 if he can't (and errno is set).
+ ----*/
+int
+can_access(file, mode)
+    char *file; 
+    int   mode;
+{
+    return(access(file, mode));
+}
+
+

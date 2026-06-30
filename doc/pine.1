@@ -1,0 +1,240 @@
+.TH pine 1 "Version 3.85"
+.SH NAME
+pine \- read and send electronic mail with an easy user interface 
+.SH SYNTAX 
+.B pine
+[\-r] [\-k] [\-z] [\-h] [\-l] [\-conf] [\-f
+.I folder
+] [\-d
+.I debug-level
+] [\-n
+.I message-num
+] [\-sort
+.I order
+] [\-i
+.I keystrokes
+] [\-p
+.I config-file
+] [\-P
+.I config-file
+] [
+.I address
+,
+.I address
+] 
+
+.B pinef
+[\-r] [\-z] [\-h] [\-l] [\-conf] [\-f
+.I folder
+] [\-d
+.I debug-level
+] [\-n
+.I message-num
+] [\-sort
+.I order
+] [\-i
+.I keystrokes
+] [\-p
+.I config-file
+] [\-P
+.I config-file
+] [
+.I address
+,
+.I address
+] 
+
+.SH DESCRIPTION
+.I Pine 
+is a mail user agent designed primarily for novice users, though
+it's full-featured enough for processing large amounts of mail.
+.I Pine
+is completely interactive and runs on 80x24 or larger terminals, making use
+of the full screen. Some of the design principles were to keep things
+simple and straight-forward with a limited number of well selected
+features; to provide the user with a menu to pick commands from; to be
+forgiving of mistakes so the user can learn while doing without fear
+of disaster, and to provide immediate feedback to the user for each
+command.
+.I Pine
+has its own tightly integrated pager for scrolling though incoming
+messages and its own editor
+.I (Pico)
+for composing messages.
+.PP
+.I Pine
+uses the 
+.I c-client
+library to access mail files. The 
+.I c-client
+acts as a switch between different mail file formats/drivers.
+Currently it understands Berkeley mail files, Tenex mail files, the
+.B IMAP2bis
+protocol, and NetNews. 
+.B IMAP2bis
+is the Interactive Mail Access
+Protocol described in RFC 1176 and modified by the IMAP2bis draft paper.
+With an 
+.B IMAP
+server such as 
+.I imapd
+running on a central host users can access their e-mail from
+many different hosts on the network without having to login to the
+central host.
+.PP
+Outgoing mail is usually handed off to
+.IR sendmail ,
+but it can also be posted directly via 
+.B SMTP
+when configured to do so in the
+.I .pinerc
+file or the global
+.I pine.conf
+file. (SMTP is the Simple Mail Transfer Protocol defined in RFC-822).
+.PP
+.I Pine
+also supports
+.B MIME,
+The Multipurpose Internet Mail Extensions defined in RFC-1341. This
+allows
+.I Pine 
+to send and receive multipart and multimedia e-mail. 
+.I Pine
+meets the minimal 
+.B MIME
+compliance requirements and is able to view most parts of any received
+.B MIME
+message and to save all parts to files, whatever their format. On the
+composing side, the focus of the
+.B MIME 
+implementation has been to allow users to attach files to messages so they can
+transfer arbitrary messages, rather than on creating true multi-media
+e-mail with graphics and sounds. This allows UNIX
+.I Pine
+and
+.I PC-Pine 
+users to mail spread sheets and other such
+files back and forth. 
+.I Pine
+will recognize a few of the multimedia formats such as
+.B GIF
+files. When
+they are attached they are tagged as being images and if
+.I Pine
+is running on an X-terminal it will call
+.I xloadimage
+to display them.
+.PP
+The command line options are:
+.IP \fB-d\ \fIdebug-level\fR 20
+Debugging will be output to the 
+.I .pine-debugX
+file at level 
+.I debug-level
+(0-9).  A 
+.I debug-level
+of 0 turns debugging off for the session.
+.IP \fB-f\ \fIfolder\fR 20
+Open named folder (in place of INBOX) on startup
+.IP \fB-i\ \fIkeystrokes\fR 20
+Initial (comma separated list of) keystrokes which Pine should execute
+on startup.  If no
+\fIkeystrokes\fR are specified, Pine starts up in the FOLDER INDEX screen.
+.IP \fB-k\fR 20
+Use function keys for commands. This is the same as running the command
+.IR pinef .
+.IP \fB-l\fR 20
+When displaying folder list, expand all collections.
+.IP \fB-n\ \fImessage-num\fR 20
+Pine will start up with the specified message number being the current
+message.
+.IP \fB-p\ \fIconfig-file\fR 20
+Used the named file as the configuration file instead of 
+.IR .pinerc .
+.IP \fB-P\ \fIconfig-file\fR 20
+Used the named file as the configuration file instead of the regular 
+system-wide configuration file 
+.IR pine.conf .
+.IP \fB-r\fR 20
+Go into restricted demo mode.
+.I Pine
+will only send mail to itself
+and functions like save and export are restricted.
+.IP \fB-sort\ \fIorder\fR
+Sort the display of the index of the folder in one of the following orders: 
+.I arrival, subject, from, date, size,
+or
+.I reverse. Arrival 
+order is the default. Any sort may be reversed by adding 
+.I /reverse
+to it.
+.I Reverse
+by itself is the same as
+.IR arrival/reverse .
+.IP \fB-z\fR 20
+Enable ^Z or SIGTSTP so pine may be suspended.
+.IP \fIaddress\fR 20
+Send mail to 
+.I address.
+This will cause 
+.I Pine
+to go directly into the message composer.
+.IP \fB-h\fR 20
+Print out help on the possible flags and arguments that can be give in
+.IR Pine .
+.IP \fB-conf\fR 20
+Produce a sample/fresh copy of the \fBsystem\fR
+.I Pine
+configuration file on
+the standard output. This is distinct from the per user
+.I .pinerc
+file.
+
+.PP
+This documentation is not intended to be complete. The help screens
+in
+.I Pine
+constitute the main documentation. There are also some
+technical notes with the source. A general overview of features includes:
+.IP
+View, save, export, delete, print, reply and forward incoming mail.
+.IP
+Compose message in a simple editor with word wrap and spelling
+checker. A message under composition may be temporarily postponed while
+other work in
+.I Pine
+is being done.
+.IP
+Full screen selection and management of mail folders.
+.IP
+Address book to keep a list of long or frequently used addresses.
+Distribution lists are available and may refer to other lists or entries
+as many levels deep as desired.  Address book entries can be taken from
+incoming mail without retyping them. 
+.IP
+New mail checking and notification occurs automatically every thirty seconds.
+.IP
+On-line, context-sensitive help screens.
+.SH FILES
+.if n .ta 2.7i
+.if t .ta 2.0i
+/usr/spool/mail/xxxx	Folder for incoming mail
+.br
+~/.addressbook	Ascii address book file
+.br
+~/mail	Directory of mail folders
+.br
+~/.pine-debugx	Diagnostic log for debugging
+.br
+~/.pinerc	The user pine configuration file
+.br
+/usr/local/lib/pine.info	Local pointer to system administrator
+.br
+/usr/local/lib/pine.conf	System wide pine configuration file
+.br
+/tmp/.\\usr\\spool\\mail\\xxxx	Read/write per folder/mailbox lock files
+.SH "SEE ALSO"
+pico(1), binmail(1), aliases(5), mailaddr(7), sendmail(8), spell(1), imapd(8)
+.SH AUTHORS
+Mike Seibel, Steve Hubert, David Miller, and Mark Crispin, with contributions 
+on the design from many others

@@ -1,0 +1,19 @@
+/*----------------------------------------------------------------------
+       Return string describing the error
+
+   Args: errnumber -- The system error number (errno)
+
+ Result:  long string describing the error is returned
+  ----*/
+char *
+error_description(errnumber)
+    int errnumber;
+{
+    static char buffer[50];
+
+    strcpy(buffer, sys_errlist[errnumber]);
+
+    return ( (char *) buffer);
+}
+
+

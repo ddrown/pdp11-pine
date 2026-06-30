@@ -1,0 +1,117 @@
+/*----------------------------------------------------------------------
+
+            T H E    P I N E    M A I L   S Y S T E M
+
+   Laurence Lundblade and Mike Seibel
+   Networks and Distributed Computing
+   Computing and Communications
+   University of Washington
+   Administration Builiding, AG-44
+   Seattle, Washington, 98195, USA
+   Internet: lgl@CAC.Washington.EDU
+             mikes@CAC.Washington.EDU
+
+   Please address all bugs and comments to "pine-bugs@cac.washington.edu"
+
+   Copyright 1989-1993  University of Washington
+
+    Permission to use, copy, modify, and distribute this software and its
+   documentation for any purpose and without fee to the University of
+   Washington is hereby granted, provided that the above copyright notice
+   appears in all copies and that both the above copyright notice and this
+   permission notice appear in supporting documentation, and that the name
+   of the University of Washington not be used in advertising or publicity
+   pertaining to distribution of the software without specific, written
+   prior permission.  This software is made available "as is", and
+   THE UNIVERSITY OF WASHINGTON DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED,
+   WITH REGARD TO THIS SOFTWARE, INCLUDING WITHOUT LIMITATION ALL IMPLIED
+   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, AND IN
+   NO EVENT SHALL THE UNIVERSITY OF WASHINGTON BE LIABLE FOR ANY SPECIAL,
+   INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+   LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, TORT
+   (INCLUDING NEGLIGENCE) OR STRICT LIABILITY, ARISING OUT OF OR IN CONNECTION
+   WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+  
+   Pine and Pico are trademarks of the University of Washington.
+   No commercial use of these trademarks may be made without prior
+   written permission of the University of Washington.
+
+   Pine is in part based on The Elm Mail System:
+    ***********************************************************************
+    *  The Elm Mail System  -  Revision: 2.13                             *
+    *                                                                     *
+    * 			Copyright (c) 1986, 1987 Dave Taylor              *
+    * 			Copyright (c) 1988, 1989 USENET Community Trust   *
+    ***********************************************************************
+ 
+
+  ----------------------------------------------------------------------*/
+
+/*======================================================================
+
+ This contains most of Pine's interface to the local operating system
+and hardware.  Hopefully this file, os-xxx.h and makefile.xxx are the
+only ones that have to be modified for most ports.  Signals.c, ttyin.c,
+and ttyout.c also have some dependencies.  See the doc/tech-notes for
+notes on porting Pine to other platforms.  Here is a list of the functions
+required for an implementation:
+
+
+  File System Access
+     can_access          -- See if a file can be accessed
+     file_size           -- Return the number of bytes in the file
+     is_writable_dir     -- Check to see if directory exists and is writable
+     create_mail_dir     -- Make a directory
+     rename_file         -- change name of a file
+     build_path          -- Put together a file system path
+     last_cmpnt          -- Returns pointer to last component of path
+     expand_foldername   -- Expand a folder name to full path
+     fnexpand            -- Do filename exansion for csh style "~"
+     filter_filename     -- Make sure file name hasn't got weird chars
+     disk_quota          -- Check the user's disk quota
+     read_file           -- Read whole file into memory (for small files)
+     create_tmpfile      -- Just like ANSI C tmpfile function
+     temp_nam            -- Almost like common tempnam function
+     fget_pos,fset_pos   -- Just like ANSI C fgetpos, fsetpos functions
+
+  Abort
+     coredump            -- Abort running Pine dumping core if possible
+
+  System Name and Domain
+     hostname            -- Figure out the system's host name, only
+                              used internally in this file.
+     getdomainnames      -- Figure out the system's domain name
+     canonical_name      -- Returns canonical form of host name
+
+  Job Control
+     have_job_control    -- Returns 1 if job control exists
+     stop_process        -- What to do to stop process when it's time to stop
+			      (only used if have_job_control returns 1)
+
+  System Error Messages (in case given one is a problem)
+     error_description   -- Returns string describing error
+
+  System Password and Accounts
+     gcos_name           -- Parses full name from system, only used
+			      locally in this file so if you don't use it you
+			      don't need it
+     get_system_login    -- Returns user's login name 
+     get_system_fullname -- Returns user's full name 
+     get_system_homedir  -- Returns user's home directoru
+     get_system_passwd   -- Returns enscrypted password
+     local_name_lookup   -- Get full name of user on system
+     change_passwd       -- Calls system password changer
+
+  MIME utilities
+     mime_can_display    -- Can we display this type/subtype?
+     gf_play_sound       -- Play audio MIME if possible
+
+  Other stuff
+     srandom             -- Dummy srandom if you don't have this function
+
+  ====*/
+
+
+#include "headers.h"
+
+

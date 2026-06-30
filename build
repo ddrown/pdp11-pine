@@ -1,0 +1,233 @@
+#!/bin/sh
+#
+# $Id: build,v 4.12 1993/10/07 18:02:23 mikes Exp $
+#
+#            T H E    P I N E    M A I L   S Y S T E M
+#
+#   Laurence Lundblade and Mike Seibel
+#   Networks and Distributed Computing
+#   Computing and Communications
+#   University of Washington
+#   Administration Building, AG-44
+#   Seattle, Washington, 98195, USA
+#   Internet: lgl@CAC.Washington.EDU
+#             mikes@CAC.Washington.EDU
+#
+#   Please address all bugs and comments to "pine-bugs@cac.washington.edu"
+#
+#   Copyright 1989-1993  University of Washington
+#
+#    Permission to use, copy, modify, and distribute this software and its
+#   documentation for any purpose and without fee to the University of
+#   Washington is hereby granted, provided that the above copyright notice
+#   appears in all copies and that both the above copyright notice and this
+#   permission notice appear in supporting documentation, and that the name
+#   of the University of Washington not be used in advertising or publicity
+#   pertaining to distribution of the software without specific, written
+#   prior permission.  This software is made available "as is", and
+#   THE UNIVERSITY OF WASHINGTON DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED,
+#   WITH REGARD TO THIS SOFTWARE, INCLUDING WITHOUT LIMITATION ALL IMPLIED
+#   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, AND IN
+#   NO EVENT SHALL THE UNIVERSITY OF WASHINGTON BE LIABLE FOR ANY SPECIAL,
+#   INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+#   LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, TORT
+#   (INCLUDING NEGLIGENCE) OR STRICT LIABILITY, ARISING OUT OF OR IN CONNECTION
+#   WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#  
+#   Pine and Pico are trademarks of the University of Washington.
+#   No commercial use of these trademarks may be made without prior
+#   written permission of the University of Washington.
+#
+#   Pine is in part based on The Elm Mail System:
+#    ***********************************************************************
+#    *  The Elm Mail System  -  Revision: 2.13                             *
+#    *                                                                     *
+#    * 			Copyright (c) 1986, 1987 Dave Taylor               *
+#    * 			Copyright (c) 1988, 1989 USENET Community Trust    *
+#    ***********************************************************************
+# 
+#
+
+
+#
+#  General build script for Pine
+#
+
+cat > .bld.hlp <<EOF
+Usage: build <make-options> <target-platform>
+
+<target-platform> may be one of the following:
+    ult   Works on DECStations with Ultrix 4.1 or 4.2
+    nxt   Works on NeXT 68030's and 68040's running Next Mach 2.0     
+    sun   Works on SPARCs running SunOS 4.1
+    ptx   Works on Sequent Symmetry running Dynix/PTX
+    a32   Works on IBM RS/6000 running AIX 3.2
+    ...   Others are available, see doc/pine-ports
+  clean   Clean up object files and such.
+          Also, a good way to rebuild Pine/Pico from scratch.
+
+See the document doc/pine-ports for a list of other platforms that
+Pine has been ported to and for details about these and other ports.
+
+<make-options> are generally not needed. They are flags (anything
+beginning with -) and are passed to make. "-n" is probably the most
+useful, as it tells make to just print out what it is going to do and
+not actually do it.
+
+To build Pine and Pico the command "build xxx" should work where xxx
+is one of the targets. For example "build ult" to build Pine for Ultrix.
+
+
+The executables built by this are:
+
+ pine   The Pine mailer. Once compiled this should work just fine on
+        your system with no other files than this binary, and no
+        modifications to your system. Optionally you may create two
+        configuration files, /usr/local/lib/pine.conf and 
+        /usr/local/lib/pine.info. See the documentation for details.
+ 
+ pico   The standalone editor similar to the Pine message composer.
+        This is a very simple straight forward text editor.
+ 
+ imapd  The IMAP daemon. If you want to run Pine in client/server mode,
+        this is the daemon to run on the server. Installing this
+        requires system privileges and modifications to /etc/services.
+        See doc/tech-notes for more details.
+ 
+ mtest  The test IMAP client, an absolutely minimal mail client, useful
+        for debugging.
+
+In general you should be able to just copy the Pine and Pico binaries
+to the place you keep your other local binaries. /usr/local/bin is a
+likely place.
+  
+EOF
+                 
+
+maketarget="no-target"
+makeargs="CC=cc"
+PHOME=`pwd`
+
+args=$#
+while [ $args -gt 0 ]
+do
+  case $1 in
+ 
+    help) cat .bld.hlp
+          exit ;;
+
+    -*) makeargs="$makeargs $1" ;;
+
+    clean|???)
+         if [ $maketarget != no-target ]
+         then
+             echo "Can only make one target system at a time"
+             echo 'Both "$maketarget" and "$1" where given'
+             exit
+         else
+             maketarget=$1
+         fi
+       ;;
+
+      
+    *) makeargs="$makeargs $1" ;;
+
+  esac
+  
+  shift
+  
+  args=`expr $args - 1`
+
+done
+
+echo 'make args are "'$makeargs'"'
+
+case $maketarget in
+
+   ???) 
+        echo ''
+        cd $PHOME
+
+        if [ -s c-client ] ; then rm -f c-client ; fi
+        if [ -s imapd    ] ; then rm -f imapd    ; fi
+        if [ -s imap/ANSI/c-client/makefile.$maketarget ] ; then
+          ln -s imap/ANSI/c-client c-client
+          ln -s imap/ANSI/imapd imapd
+        elif [ -s imap/non-ANSI/c-client/makefile.$maketarget ] ; then
+          ln -s imap/non-ANSI/c-client c-client
+          ln -s imap/non-ANSI/imapd imapd
+        fi
+
+	if [ -s c-client/makefile ] ; then rm -f c-client/makefile ; fi
+	ln -s makefile.$maketarget c-client/makefile
+        echo "Making c-client library and mtest"
+        cd $PHOME/c-client
+        make $makeargs -f makefile.$maketarget
+        echo ''
+        echo "Making Imapd"
+        cd $PHOME/imapd
+        make $makeargs
+        echo ''
+        echo "Making Pico"
+        cd $PHOME/pico
+        make $makeargs -f makefile.$maketarget
+        echo ''
+        echo "Making Pine".
+        cd $PHOME/pine
+        make $makeargs -f makefile.$maketarget
+        cd $PHOME
+        if [ ! -d bin ] ;  then    mkdir bin;        fi
+        cd $PHOME/bin
+        rm -f pine mtest imapd pico
+        if [ -s ../pine/pine ] ;      then ln ../pine/pine  pine      ; fi
+        if [ -s ../c-client/mtest ] ; then ln ../c-client/mtest mtest ; fi
+        if [ -s ../imapd/imapd ] ;    then ln ../imapd/imapd imapd    ; fi
+        if [ -s ../pico/pico ] ;      then ln ../pico/pico pico ; fi
+        cd $PHOME
+        echo ''
+        echo "Links to executables are in bin directory:"
+        size bin/pine bin/mtest bin/imapd bin/pico
+        echo "Done"
+        ;;
+
+
+    clean) # This only sort of works 
+        echo "Cleaning c-client"
+	if [ -s $PHOME/c-client ] ; then
+          cd $PHOME/c-client
+	  if [ -s makefile.ult ] ; then 
+	    make -f makefile.ult clean
+	  elif [ -s makefile.nxt ] ; then
+	    make -f makefile.nxt clean
+	  fi
+	  rm $PHOME/c-client
+	fi
+        echo "Cleaning imapd"
+	if [ -s $PHOME/imapd ] ; then
+          cd $PHOME/imapd
+          make clean
+	  rm $PHOME/imapd
+	fi
+        echo "Cleaning Pine"
+        cd $PHOME/pine
+        make -f makefile.ult clean
+        echo "Cleaning pico"
+        cd $PHOME/pico
+        make $makeargs -f makefile.ult clean
+        echo "Done"
+        cd $PHOME
+        ;;
+
+    no-target)
+        echo "No target plaform for which to build Pine given."
+        echo 'Give command "build help" for help.'
+        ;;
+
+    *)  echo 'Do not know how to make Pine for target "'$maketarget'".'
+        ;;
+esac
+
+
+
+
+     

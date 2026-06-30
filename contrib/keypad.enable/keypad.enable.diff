@@ -1,0 +1,87 @@
+*** tcap.c.REAL	Tue Jul 27 14:18:14 1993
+--- tcap.c	Mon Aug  9 16:46:33 1993
+***************
+*** 77,82 ****
+--- 77,83 ----
+  extern int      tcapbeep();
+  extern int	tcaprev();
+  extern int      tcapopen();
++ extern int      tcapclose();
+  extern int      tput();
+  extern char     *tgoto();
+  
+***************
+*** 100,105 ****
+--- 101,107 ----
+  
+  char *KU, *KD, *KL, *KR;
+  char *KPPU, *KPPD, *KPHOME, *KPEND;
++ char *KS, *KE;
+  
+  struct KBSTREE *kpadseqs = NULL;
+  
+***************
+*** 109,115 ****
+  	MARGIN,
+  	SCRSIZ,
+          tcapopen,
+!         ttclose,
+          ttgetc,
+          ttputc,
+          ttflush,
+--- 111,117 ----
+  	MARGIN,
+  	SCRSIZ,
+          tcapopen,
+!         tcapclose,
+          ttgetc,
+          ttputc,
+          ttflush,
+***************
+*** 313,318 ****
+--- 315,322 ----
+        eolexist = FALSE;
+  
+      initstrng = tgetstr("is", &p);
++     KS         = tgetstr("ks", &p);
++     KE         = tgetstr("ke", &p);
+  
+      if (p >= &tcapbuf[TCAPSLEN]){
+  	if(Pmaster == NULL){
+***************
+*** 323,331 ****
+  
+      ttopen();
+  
+!     if(initstrng)
+        putpad(initstrng);
+  }
+  
+  
+  
+--- 327,351 ----
+  
+      ttopen();
+  
+!     if(initstrng)		/* terminal initialization string */
+        putpad(initstrng);
++ 
++     if(KS)			/* Enter keypad transmit mode */
++       putpad(KS);
+  }
++ 
++ 
++ /*
++  *
++  */
++ tcapclose()
++ {
++     if(KS && KE)		/* get out of keypad transmit mode */
++       putpad(KE);
++ 
++     ttclose();			/* restore tty modes */
++ }
++ 
+  
+  
+  

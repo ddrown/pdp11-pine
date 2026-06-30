@@ -1,0 +1,59 @@
+/*----------------------------------------------------------------------
+       Can we display this type/subtype?
+
+   Args: type      -- the MIME type to check
+         subtype   -- the MIME subtype
+         params    -- parameters
+
+ Result: returns 1 if the type is displayable, 0 otherwise.
+ ----*/
+mime_can_display(type, subtype, params)
+    int type;
+    char *subtype;
+    PARAMETER *params;
+{
+  switch(type) {
+    case TYPETEXT:
+        /* we always try to display text now */
+	return 1;
+#ifdef OLDWAY
+        if(ps_global->show_all_characters)
+          return(1);
+        while(params != NULL && strucmp(params->attribute,"charset") != 0)
+          params = params->next;
+
+	return(match_charset((params) ? params->value : "US-ASCII",
+			     ps_global->VAR_CHAR_SET) != 2);
+#endif
+
+    case TYPEAUDIO:
+     return(0);
+
+    case TYPEIMAGE:
+      if(getenv("DISPLAY") == NULL)
+        return(0);
+      if(strucmp(subtype, "gif") == 0 ||
+         strucmp(subtype, "pgm") == 0 ||
+         strucmp(subtype, "pbm") == 0 ||
+	 strucmp(subtype, "tiff") == 0 ||
+	 strucmp(subtype, "jpeg") == 0)
+          return(1);
+      else
+        return(0);
+
+
+    case TYPEAPPLICATION:
+      return(0);
+
+    case TYPEMULTIPART:
+      return(1);
+
+    case TYPEMESSAGE:
+      return(1);
+
+    default:
+      return(0);
+  }
+}
+
+

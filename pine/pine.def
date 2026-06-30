@@ -1,0 +1,447 @@
+;
+; Module definition file for pcpine 3.xx
+;
+; mikes, 920822
+;
+;
+; Here we're just specifying obvious functions to place in 
+; overlays:
+;
+NAME pine
+
+;
+; arg parsing...
+;
+FUNCTIONS:1 _pine_args _decode_sort _parg _args_help _stoi 
+            _first_sorted_unread
+
+;
+; main menu functions...
+;
+FUNCTIONS:2 _main_menu_screen _show_main_screen _do_menu _quit_screen
+            _paint_keyhelp _count_deleted
+
+;
+; mail index functions
+;
+FUNCTIONS:3 _mail_index_screen _mouse_in_index
+FUNCTIONS:4 _do_index_border _redraw_index_body _top_ent_calc 
+            _update_mess_status
+FUNCTIONS:5 _build_header_line _clear_index_cache _clear_index_cache_ent
+            _get_index_cache _i_cache_size _i_cache_hit _icread _icwrite
+            _i_cache_width _build_header_cache _flush_index_cache
+            _status_string
+FUNCTIONS:6 _sort_blip _compare_subjects _get_sub _compare_to _compare_from
+            _compare_cc _compare_message_dates _convert_to_gmt _days_in_month
+            _compare_size _sort_current_folder _sort_name
+
+;
+; main menu functions...
+;
+FUNCTIONS:8 _mail_view_screen _display_text_att _decode_text _match_iso2022
+FUNCTIONS:9 _format_message _zero_atmts 
+FUNCTIONS:10 _describe_mime _format_mime_size _mime_show _type_desc _part_desc 
+FUNCTIONS:11 _body_type_names _message_puts  _match_charset _format_envelope 
+FUNCTIONS:12 _display_parameters
+FUNCTIONS:13 _scrolltool _set_scroll_text _redraw_scroll_text 
+	     _scroll_scroll_text _BeginScroll
+             _zero_scroll_text _push_scroll_state _pop_scroll_state
+FUNCTIONS:14 _end_scroll_text _format_scroll_text
+             _get_scroll_text_lines
+FUNCTIONS:15 _ScrollFile _make_file_index
+             _search_text _search_scroll_text
+
+;
+; Various command functions
+;
+FUNCTIONS:16 _process_cmd
+FUNCTIONS:17 _save_msg _save _default_save_context
+FUNCTIONS:18 _export_message
+FUNCTIONS:19 _grab_addr_cmd
+FUNCTIONS:20 _jump_to
+FUNCTIONS:21 _broach_folder _folder_complete _do_broach_folder
+             _sorted_msgno
+FUNCTIONS:22 _expunge_and_close _closest_not_deleted
+FUNCTIONS:23 _search_headers
+FUNCTIONS:24 _print_message
+FUNCTIONS:25 _select_sort
+FUNCTIONS:26 _attachments _detach _save_attachment _display_attachment 
+             _run_viewer
+
+;
+; folder management functions...
+;
+FUNCTIONS:27 _folder_screen _folders_for_fcc _folder_lister _find_folder
+             _redraw_folder_screen _display_folder _paint_folder_name
+             _off_folder_display
+FUNCTIONS:28 _compare_names _compare_lengths
+FUNCTIONS:29 _find_folders_in_context _free_folders_in_context 
+             _context_mailbox _mm_mailbox _context_bboard _mm_bboard
+             _context_fqn_to_an _folder_delete _folder_insert
+             _folder_insert_index _folder_entry _folder_is_nick
+             _folder_total _find_folder_list _free_folder_list _folder_index 
+             _folder_exists _folder_list_entry _new_folder_list
+FUNCTIONS:31 _add_new_folder _context_create _mail_create _map_create
+             _dawz_create _nntp_create _dummy_create
+FUNCTIONS:32 _rename_folder _context_rename _mail_rename _map_rename 
+             _dawz_rename _nntp_rename _dummy_rename
+FUNCTIONS:33 _delete_folder _context_delete _mail_delete _map_delete
+             _dawz_delete _nntp_delete _dummy_delete
+FUNCTIONS:34 _print_folders
+FUNCTIONS:35 _search_folders
+FUNCTIONS:36 _add_up_disk_usage
+
+;
+; address book management functions...
+; *** separate view from lookup text ***
+FUNCTIONS:37 _addr_book_screen _addr_book _display_book _redraw_addr_screen
+FUNCTIONS:38 _get_adrbk _adrbk_count _init_addr_disp _end_adrbk _adrbk_get
+
+;
+; help functions...
+;
+FUNCTIONS:39 _helper _get_help_text _free_help_text _copy_fix_keys
+FUNCTIONS:40 _print_all_help
+
+FUNCTIONS:41 _expand_address _build_address _addr_list_string _addr_string
+             _address_is_us
+FUNCTIONS:42 _adrbk_open _adrbk_close
+FUNCTIONS:43 _adrbk_write _addrbk_get
+FUNCTIONS:44 _adrbk_listadd _adrbk_listdel _adrbk_delete _adrbk_add
+FUNCTIONS:45 _adrbk_formatname _adrbk_newentry _adrbk_clearrefs
+FUNCTIONS:46 _adrbk_lookup
+FUNCTIONS:47 _cmp_addr _compare_nicks _compare_addr_ents _sort_addr_list
+
+;
+; composer functions...
+;
+FUNCTIONS:48 _InitMailHeader _InitEntryText _readbuf _sgetline
+             _ArrangeHeader _edinit _func_init _breplace _pico_replace
+             _insline
+FUNCTIONS:49 _ResizeHeader _HeaderOffset _HeaderFocus
+FUNCTIONS:50 _AskAttach _SyncAttach _ParseAttach _NewAttach _ZotAttach
+             _intag
+;FUNCTIONS:50 _HeaderEditor _LineEdit
+FUNCTIONS:51 _HeaderEditor _LineEdit
+             _FormatLines _PaintHeader _PaintBody _ShowPrompt
+             _ToggleHeader _HeaderLen _break_point
+             _UpdateHeader
+             _NewTop _display_delimiter _InvertPrompt _partial_entries
+;FUNCTIONS:51 _LineEdit 
+;FUNCTIONS:52 _FormatLines _PaintHeader _PaintBody _ShowPrompt
+;             _ToggleHeader _HeaderLen _break_point
+;FUNCTIONS:53 _UpdateHeader
+;	     _NewTop _display_delimiter _InvertPrompt _partial_entries
+FUNCTIONS:54 _ComposerHelp _strend _strqchr _KillHeaderLine
+             _SaveHeaderLines _hldelete
+FUNCTIONS:55 _packbuf _packheader _zotheader _zotentry _zotedit
+             _zotdisplay _zotbuf
+;             _quickexit _wquit _suspend_composer _abort_composer
+
+;
+; searching functions
+;
+FUNCTIONS:56 _forwsearch _readpattern _forscan _expandp
+
+;
+; browser functions
+;
+FUNCTIONS:57 _FileBrowse 
+FUNCTIONS:58 _PaintCell _PaintBrowser _BrowserKeys
+             _PlaceCell _layoutcells _BrowserAnchor
+FUNCTIONS:59 _FindCell _sisin _compresspath
+FUNCTIONS:60 _getfcells _zotfcells _zotmaster _ResizeBrowser _getfnames
+             _homeless _sstrcasecmp
+
+;
+; file i/o functions
+;
+FUNCTIONS:62 _fileread _insfile _readin _ifile
+FUNCTIONS:63 _filewrite _filesave _writeout _writetmp _filename
+
+;
+; composer display functions
+;
+FUNCTIONS:64 _vtinit _vttidy _vtmove _vtputc _vtpute _movecursor
+FUNCTIONS:65 _execute _update _updateline _updext _modeline _showCompTitle
+FUNCTIONS:67 _mlerase _mlyesno _mlreply _mlreplyd _emlwrite _mlwrite _mlputs 
+FUNCTIONS:68 _mlputi _mlputli _resize_pico _wkeyhelp _wstripe
+             _worthit _doton
+
+;
+; c-client functions
+;
+FUNCTIONS:70 _context_open _mail_open _map_open _dawz_open _nntp_mopen 
+             _dummy_open _mm_login _mail_link _passfile _encrypt _decrypt
+             _xsum
+FUNCTIONS:71 _context_close _mail_close _map_close _dawz_close _nntp_fetchfast
+             _nntp_close _dummy_close
+             _mail_fetchfast _map_fetchfast _dawz_fetchfast _dummy_fetchfast
+             _mail_fetchstructure _map_fetchstructure _dawz_fetchstructure
+             _nntp_fetchstructure _dummy_fetchstructure
+FUNCTIONS:73 _mail_fetchbody _map_fetchbody _dawz_fetchbody _nntp_fetchbody
+             _dummy_fetchbody
+             _mail_fetchheader _map_fetchheader _dawz_fetchheader
+             _nntp_fetchheader _dummy_fetchheader
+             _mail_fetchtext _map_fetchtext _dawz_fetchtext _nntp_fetchtext
+             _dummy_fetchtext
+FUNCTIONS:74 _mail_search _map_search _dawz_search _nntp_search _dummy_search
+FUNCTIONS:75 _mail_expunge _map_expunge _dawz_expunge _nntp_expunge 
+             _dummy_expunge
+             _mail_copy _map_copy _dawz_copy _nntp_copy dummy_copy
+             _context_append _mail_append _map_append _dawz_append _nntp_append
+             _mail_move _map_move _dawz_move _nntp_move
+             _dawz_string_init _dawz_string_next _dawz_string_setpos
+
+FUNCTIONS:76 _expand_foldername _fnexpand _mime_can_display
+
+FUNCTIONS:77 _init_vars _init_init_vars _expand_variables _init_username
+             _init_hostname _read_pinerc _write_pinerc _process_feature_list
+             _process_init_cmds _parse_list _set_variable_list
+             _new_version_announce _first_time_user _read_xtable
+             _set_current_val _set_feature_list_current_val
+
+FUNCTIONS:78 _dump_global_conf _set_variable _init_mail_dir
+FUNCTIONS:79 _compare_sm_files _get_sent_mail_list
+             _expire_sent_mail _delete_old_sent_mail _prune_folders
+
+;FUNCTIONS:80 _gf_set_so_readc _gf_set_so_writec _gf_set_readc _gf_set_writec
+;             _gf_set_terminal _gf_filter_init _gf_binary_b64 
+;             _gf_b64_binary _gf_qp_8bit _gf_8bit_qp _gf_rich2plain
+;             _gf_rich2plain_opt _gf_8bit_put_quote _gf_8bit_put
+;FUNCTIONS:81 _gf_iso_filter _gf_iso_filter_opt
+;             _gf_wrap _gf_wrap_filter_opt _gf_nvtnl_local _gf_local_nvtnl
+;             _gf_busy
+
+FUNCTIONS:82 _setup_mini_menu _do_setup_task _lock_keyboard _news_screen
+             _select_printer _redraw_printer_select _change_passwd
+             
+
+;
+; string functions
+;
+FUNCTIONS:83 _rplstr _sqzspaces _strucmp _struncmp _srchstr _strindex
+             _strrindex _strcat_nocr _sstrcpy _crlf2lf _month_abbrev
+             _month_num _lf2crlf _sinserts
+FUNCTIONS:84 _parse_date _compare_dates
+;FUNCTIONS:83 _rplstr _sqzspaces _strucmp _struncmp _srchstr _strindex
+;FUNCTIONS:84 _strrindex _strcat_nocr _sstrcpy _crlf2lf _month_abbrev
+;             _month_num
+FUNCTIONS:85 _pretty_command _temp_file_name _comatose _byte_string 
+             _enth_string _repeat_char _long2string _int2string _prettysz
+
+;
+; imap functions
+;
+FUNCTIONS:86 _mm_log _mm_dlog _mm_notify _mm_exists _mm_expunged
+FUNCTIONS:87 _mm_searched _mm_diskerror
+
+;
+; status functions
+;
+FUNCTIONS:88 _display_message _messages_queued _output_message _Centerline
+FUNCTIONS:89 _d_q_status_message _q_status_message _q_status_message1
+             _q_status_message2 _q_status_message3 _q_status_message4
+             _q_status_message7 _flush_status_messages _mark_status_dirty
+             _pretty_fn
+FUNCTIONS:90  _want_to
+FUNCTIONS:91 _radio_buttons _radio_help _draw_radio_prompt
+
+FUNCTIONS:92 _dawz_search_all _dawz_search_answered _dawz_search_bcc
+             _dawz_search_before _dawz_search_body _dawz_search_cc
+             _dawz_search_date _dawz_search_deleted _dawz_search_flag
+             _dawz_search_flagged _dawz_search_from _dawz_search_keyword
+FUNCTIONS:93 _dawz_search_new _dawz_search_old _dawz_search_on
+             _dawz_search_recent _dawz_search_seen _dawz_search_since
+             _dawz_search_string _dawz_search_subject _dawz_search_text
+             _dawz_search_to _dawz_search_unanswered _dawz_search_undeleted
+             _dawz_search_unflagged _dawz_search_unkeyword _dawz_search_unseen
+
+;
+; send related functions
+;
+FUNCTIONS:94 _pine_send _call_mailer _check_addresses _outgoing2strings
+             _strings2outgoing _create_message_body _text_part
+             _tidy_smtp_mess _pine_simple_send _mime_stats _mime_recur
+             _file_type _set_mime_types
+FUNCTIONS:95 _compose_screen _compose_mail _parse_postponed_header 
+FUNCTIONS:96 _forward _reply _generate_reply_to _copy_parameters
+             _fetch_contents _get_body_part_text _copy_body _copy_envelope
+             _reply_delimiter _format_text_header _forward_delimiter
+             _week_abbrev
+FUNCTIONS:99 _append_message2 _generate_message_id _pretty_addr_string
+             _bezerk_puts _unix_puts
+FUNCTIONS:100 _addr_book_delete _add_add _addr_to_list _change_address_entry
+              _create_list _find_in_book _search_book _next_line _next_field
+              _prev_line _prev_field _paint_line _addr_add _addr_lookup
+              _warn_bad_addr _illegal_chars
+
+;
+; new mail notification
+;
+FUNCTIONS:101 _new_mail _new_mail_mess _check_point _reset_check_point
+              _zero_new_mail_count _streams_died _pico_new_mail
+              _time_to_check _mail_ping _dawz_ping _map_ping _nntp_ping
+              _dummy_ping _mail_check _dawz_check _map_check _nntp_check
+              _dummy_check
+
+;
+; OS dependent stuff
+;
+FUNCTIONS:102 _file_size _is_writeable _create_mail_dir
+              _rename_file _build_path
+              _filter_filename _get_domainnames
+FUNCTIONS:103 _simple_opendir _simple_readdir _simple_closedir
+FUNCTIONS:104 _read_file _read_binary_file
+FUNCTIONS:105 _dos_gets _dos_gives
+FUNCTIONS:106 _error_name _error_description
+
+;
+; Printer related stuff
+;
+FUNCTIONS:107 _have_printer _printer_ready _p_printer_error _send_printer
+              _open_printer _close_printer _print_char _print_text
+              _print_text1 _print_text2 _print_text3
+
+;
+; Titlebar and Keymenu routines
+;
+FUNCTIONS:108 _format_titlebar _redraw_titlebar _set_titlebar _update_titlebar
+              _update_titlebar_message _update_titlebar_percent _update_del
+              _update_titlebar_page _push_titlebar_state _pop_titlebar_state
+              _savebits _equalbits
+FUNCTIONS:109 _output_keymenu _blank_keymenu _format_keymenu
+              _redraw_keymenu _draw_keymenu
+
+;
+; MORE composer functions
+;
+FUNCTIONS:110 _gotobol _gotoeol _backchar _forwchar _gotobob _gotoeob
+              _forwline _backline _getgoal 
+FUNCTIONS:111 _forwpage _backpage _setmark _swapmark
+FUNCTIONS:112 _lalloc _lfree _lchange _insspace _linsert _lnewline _geninsert
+              _ldelete _ldelnewline
+FUNCTIONS:113 _kdelete _kinsert _kremove _yank _killtext
+FUNCTIONS:114 _pico_help _whelp _array_len _wscrollw _rebindfunc
+FUNCTIONS:115 _setfillcol _showcpos _getccol _tab _newline _forwdel
+              _backdel _getregion _markregion _killregion
+FUNCTIONS:116 _wrapword _joinlines _forwword _backword _inword
+              _fillpara _gotobop _gotoeop 
+
+;
+; Yet more pico related functions
+;
+FUNCTIONS:117 _namebuffer _itoa _addline _anycb _bfind _bclear
+FUNCTIONS:118 _copy _makename
+FUNCTIONS:119 _ffropen _ffputline _ffgetline _ffwopen _ffclose
+
+;
+; C-Client SMTP related functions
+;
+FUNCTIONS:120 _smtp_open _smtp_close _smtp_mail _smtp_rcpt _smtp_send
+              _smtp_reply _smtp_fake _smtp_soutr _pine_rfc822_header
+              _pine_smtp_mail _pine_encode_body _pine_rfc822_output
+              _l_flush_net _l_putc  _pine_rfc822_output_body
+              _pine_write_body_header _pine_free_body _pine_free_body_data
+              _pine_free_body_part
+
+FUNCTIONS:121 _rfc822_output _rfc822_output_body _rfc822_encode_body
+;             _rfc822_header _rfc822_header_line _rfc822_address_line
+              _rfc822_header_line _rfc822_address_line
+              _rfc822_8bit _rfc822_binary 
+              _my_rfc822_output _my_rfc822_output_body
+
+FUNCTIONS:122 _context_find _mail_find _map_find _dawz_find _nntp_find
+              _dummy_find
+              _context_find_all _mail_find_all _map_find_all _dawz_find_all
+              _nntp_find_all _dummy_find_all
+              _context_find_bboards _mail_find_bboards _map_find_bboards 
+              _dawz_find_bboards _nntp_find_bboards _dummy_find_bboards
+              _context_find_all_bboard _dummy_find_all_bboards
+              _mail_find_all_bboard _map_find_all_bboards 
+              _dawz_find_all_bboards _nntp_find_all_bboards
+
+FUNCTIONS:123 _sm_subscribe _sm_unsubscribe _sm_read
+              _context_subscribe _mail_subscribe _map_subscribe
+              _dawz_subscribe _nntp_subscribe _dummy_subscribe
+              _context_unsubscribe _mail_unsubscribe _map_unsubscribe
+              _dawz_unsubscribe _nntp_unsubscribe _dummy_unsubscribe
+              _mail_subscribe_bboard _map_subscribe_bboard
+              _dawz_subscribe_bboard _nntp_subscribe_bboard 
+              _dummy_subscribe_bboard
+              _mail_unsubscribe_bboard _map_unsubscribe_bboard
+              _dawz_unsubscribe_bboard _nntp_unsubscribe_bboard
+              _dummy_unsubscribe_bboard	_nntp_read_sdb _nntp_update_sdb
+
+FUNCTIONS:124 _context_isambig _context_digest _context_apply
+              _context_same_stream _same_stream _canonical_name
+
+FUNCTIONS:125 _ttopen _ttclose _bktoshell _ttflush _init_mouse
+              _ibmopen _ibmclose _enter_text_mode _exit_text_mode
+              _end_keyboard _end_signals _end_screen _end_tty_driver
+
+FUNCTIONS:126 _GetKey _ttgetc _checkmouse _ctrlkey _specialkey _pico_mouse
+              _enhanced_keybd _fallowc
+
+FUNCTIONS:127 _register_mfunc _clear_mfunc _register_keys _register_key
+
+FUNCTIONS:129 _nntp_search_all _nntp_search_answered _nntp_search_deleted
+              _nntp_search_flagged _nntp_search_keyword _nntp_search_new
+              _nntp_search_old _nntp_search_recent _nntp_search_seen
+              _nntp_search_unanswered _nntp_search_undeleted 
+              _nntp_search_unflagged _nntp_search_unkeyword _nntp_search_unseen
+              _nntp_search_before _nntp_search_on _nntp_search_since 
+              _nntp_msgdate _nntp_search_body _nntp_search_subject
+              _nntp_search_text _nntp_search_bcc _nntp_search_cc
+              _nntp_search_from _nntp_search_to _nntp_search_date
+              _nntp_search_flag _nntp_search_string
+
+FUNCTIONS:130 _mail_fetchflags _dawz_fetchflags _nntp_fetchflags
+              _dummy_fetchflags _map_fetchflags _mail_fetchfrom
+              _mail_fetchsubject _mail_free_body _mail_free_body_data
+              _mail_free_parameter _mail_free_body_part _mail_free_address
+              _mail_free_envelope
+
+FUNCTIONS:131 _get_system_fullname _get_system_homedir _get_system_login
+              _get_system_passwd
+
+FUNCTIONS:132 _init_screen _init_signals _init_save_defaults _init_keyboard
+              _init_tty_driver _init_folders _init_driver _new_context
+              _config_screen _set_ftype
+
+FUNCTIONS:133 _rfc822_header _rfc822_write_address _rfc822_address _rfc822_cat
+              _rfc822_write_body_header _rfc822_default_subtype 
+              _rfc822_parse_msg _rfc822_parse_content
+              _rfc822_parse_content_header _rfc822_parse_adrlist
+              _rfc822_parse_address _rfc822_parse_routeaddr 
+              _rfc822_parse_addrspec _rfc822_parse_phrase _rfc822_parse_word
+              _rfc822_cpy _rfc822_quote _rfc822_cpy_adr _rfc822_skipws
+              _rfc822_date
+
+FUNCTIONS:134 _imap_expunged _imap_fake _imap_host _imap_OK _imap_parse_address
+              _imap_parse_adrlist _imap_parse_body _imap_parse_body_structure
+              _imap_parse_data _imap_parse_envelope _imap_parse_flaglst
+              _imap_parse_flags _imap_parse_number _imap_parse_prop
+              _imap_parse_reply _imap_parse_string _imap_parse_unsolicited
+              _imap_parse_user_flag _imap_reply _imap_searched _imap_send
+              _imap_send_literal
+
+FUNCTIONS:136 _dcreadb _dcwriteb _dchit _dcget _dos_cache _dumpmetacache
+
+FUNCTIONS:137 _read_command _read_char _extended_code _optionally_enter
+              _line_paint _validatekeys _while_waiting
+
+FUNCTIONS:138 _mail_string_init _mail_string_next _mail_string_setpos
+              _strcrlfcpy _strcrlflen
+
+FUNCTIONS:139 _mail_valid _mail_valid_net _mail_valid_net_parse _dawz_valid
+              _dawz_isvalid _dos_valid_from _map_valid _nntp_valid _dummy_valid
+
+FUNCTIONS:140 _count_unseen _update_news_prefix
+
+FUNCTIONS:141 _mail_newaddr _mail_newbody _mail_newbody_parameter
+              _mail_newbody_part _mail_newenvelope _mail_initbody
+
+FUNCTIONS:142 _mail_clearflag _map_clearflag _dawz_clearflag _nntp_clearflag
+              _dummy_clearflag _mail_setflag _map_setflag _dawz_setflag
+              _nntp_setflag _dummy_setflag _dawz_getflags _nntp_getflags

@@ -1,0 +1,254 @@
+               Platforms Pine has been ported to (or attempted).
+
+Each platform is labeled with a three letter abbreviation.  This file
+defines those names.  Not all items mentioned here represent full
+ports, some are only place holders.  A different name should be chosen
+for each software/hardware configuration that requires changes to
+Pine, Pico or the C-client.  The list of software/hardware
+configurations for a three letter name is kept here and can hopefully
+be kept up to date.  That is, if you are getting something working
+that's not listed here, let us know at pine@cac.washington.edu.  If
+you're trying to build Pine for something not listed here, you might
+just try doing "build" for the thing you think is closest.  In many
+cases the differences are small and it will work.  If all else fails,
+the generic port (gen) is a good place to start.
+
+As of August, 1993, the released version of Pine is 3.85.  The last previous
+release was 3.07.  There have been lots of changes in between and the
+latest version is not heavily tested in production environments.
+
+
+			 Primary Distribution
+
+These ports have recieved at least limited production testing at the 
+University of Washington.  They were done by us and we will do our best 
+to fix bugs and keep them up to date.
+
+a32   ---  AIX 3.2 on an RS/6000
+  Many people contributed to this port.  We do have our own systems to
+  try this on, but it has been only lightly used so far.  Contributors
+  include (but aren't limited to) Markus Baertschi <markus@oahu.cern.ch>,
+  Doug Carter <dougc@clam.com>, and
+  Thomas Riemer <triemer@rose.chem.wesleyan.edu>.
+ 
+msc  ---  MS DOS using Microsoft C
+  Version 3.84 was the initial DOS release of Pine, so there are no
+  doubt still some problems.  Most of the problems are related to
+  handling low memory.  Support is currently provided for Novell's Lan 
+  WorkPlace, FTP Software's PC-TCP, and the University of Waterloo's 
+  WATTCP with Packet Drivers.  Support for Sun's PC-NFS and Windows 
+  Sockets are forthcoming.
+    
+nxt  ---  NeXT MACH on Next 68030 and 68040 machines
+  This version has been used quite a bit.
+
+ptx  ---  Dynix/PTX V2.0.3 on a Sequent
+  Donn Cave <donn@u.washington.edu> did much of the work for the original
+  port.  This port is in heavy use at the University of Washington.
+
+sun  ---  SunOS 4.1 on SPARCStations
+  Since we don't have many Suns, this has not yet been heavily used and 
+  may have some bugs.
+
+ult  ---   Ultrix 4.1 and 4.2 on DECStations/Systems
+  This version has been used extensively.  See vul below for VAX platforms.
+
+
+			  Limited Use Ports
+
+These ports are known to build and have recieved limited testing, but are
+not in production use at the University of Washington.  We will do our 
+best to fix bugs and keep them up to date, as resources permit.
+
+bsd  ----  4.3 Berkeley UNIX
+  Done but only very lightly tested.  The one BSD system we have is not
+  a production time-sharing system, it is just a timekeeper.
+
+hpp  --- HP/UX 8.0 on HP 710 (PA/RISC)
+  Thanks to David Miller <dmiller@beta.tricity.wsu.edu> for this port.  
+  David is now <dlm@cac.washington.edu> and is working on the Pine
+  project.  As with most of the 3.85 ports, this has been only lightly
+  tested.
+
+lnx  ---  Linux 0.99.11
+  This is based on an original port of Pine 3.05 by Birko Bergt 
+  <bergt@informatik.tu-chemnitz.de>.  This port has only been lightly
+  tested.
+
+osf  --- DEC OSF/1 V1.2A  (Rev. 10.41)
+  This has been lightly tested on a DEC 3000/300AXP workstation.
+
+pt1  ---  Dynix/PTX V1.4.0 on a Sequent
+  Donn Cave <donn@u.washington.edu> did much of the work for the original
+  port.  This is a slight variant of the ptx port.  Pine 3.88 has been 
+  lightly tested at this time.
+
+sol  --- Solaris 2.2
+  This has been very lightly tested.  It is compiled with the Sun C compiler
+  in BSD compatibility mode.  Contributors include Marc Boucher <marc@com.org>,
+  Steven Fought <keeper@lighthouse.caltech.edu>, and
+  Ross Wakelin <rossw@march.co.uk>.  Keith Christopher 
+  <keithc@library.welch.jhu.edu> has successfully compiled it with GCC2.4.5.
+
+vul  --- VAX Ultrix 4.1
+  This is identical to the ult port except for slight differences in 
+  compiler options between Ultrix/RISC and Ultrix/VAX.  Thanks to Ralph
+  Sims <ralphs@halcyon.com> for use of his system to test this port.
+
+
+
+			  Contributed Ports
+
+These ports have been contributed by outside persons and/or are not in 
+production use at the University of Washington.  We will assist with 
+the diagnosis of bugs and incorporate necessary changes as time permits.
+
+aix  ---  PAIX/370 1.2.1 on IBM 3090  #### NOT FOR RS/6000's (see a32) #####
+  This port was done by us.  It has not been tried or tested for version
+  3.85, since we are pleased to no longer have to support PAIX/370!
+
+aux  ---  A/UX 3.0
+  Thanks to Marcelo A. Gallardo <marcelo@sparcwood.Princeton.EDU> and 
+  Alexis Rosen <alexis@panix.com> for the Pine 3.07 port to A/UX.  
+  It is not included in this release, but full integration of this port 
+  is expected soon.
+
+bsi  ---  BSD/386 Gamma 4.1
+  This is a BSD/386 port based on contributions of Michael F. Santangelo 
+  <mike@cblcbos1.umd.edu>.  It is lightly tested.
+  
+cvx  ---  Convex
+  This is a Convex port based on contributions from Pekka Kytolaakso 
+  <Pekka.Kytolaakso@csc.fi>.  It is lightly tested.
+
+dyn  ---   Dynix 3.0 and 3.1 on Sequent Symmetry
+  This port was done by us.  Version 3.07 of the port was used extensively.
+  We no longer have a system running Dynix, so the 3.85 version of the
+  port is completely untested.
+
+isc  --- Interactive Systems Corporation, UNIX
+  Thanks to Andy Brager <andyb@wndrsvr.la.ca.us> for this port.  This port 
+  is completely untested on Pine 3.85.
+
+sgi  ---  Silicon Graphics IRIS with IRIX 4.0.1
+  Thanks to John Benjamins <johnb@edge.cis.mcmaster.ca>, Melissa Harp,
+  and others for this port.  IRIX is a mix of System V and BSD.  Didn't
+  work on IRIX 3.3.1 as of 3.07 port.  Untested on 3.85 port.
+
+s40  ---  SunOS 4.0 on SPARCStation and Sun 386i
+  Just slightly different from the sun port.  No system to test on.
+
+sv4  --- System V release 4
+  This is based on the Solaris port, but differs in certain incompatibilities
+  between Solaris and various SVR4 versions.  It has recieved light testing
+  on SVR4.0 and SVR4.2 platforms.
+
+
+		      Partial, New, or Obsolete Ports
+
+These ports are partial, obsolete, and/or their state is unknown.
+
+ami  ---  Amiga
+  This is a placeholder for an AmigaDOS 2.0+ port.  Contact David Miller 
+  <dlm@cac.washington.edu> for more information.
+
+coh  ---  Coherent
+  This is a starting point for a Coherent port of Pico based on diffs 
+  from Dmitry L. Gringauz <dmitry@golem.com>.  It is completely untested.
+  
+gen  --- Generic port
+  This may be a good place to start a new port.
+
+mac  ---  Apple MacIntosh
+  This is really a place holder. No port is likely since the user
+  interface isn't even close and IMAP clients (MacMS and Maelstrom)
+  exist for the MAC. The c-client and mtest run on the Mac.
+
+mip  ---  MIPS RC3240 running Risc/OS 4.51+
+  Works on MIPS box.  Compiled in BSD mode.  Thanks to Matthew Lyle
+  <matt@dbaix.oc.com>.  This port has not been updated for Pine 3.0
+  or later and is not included.
+
+sco --- Santa Cruz Operation UNIX
+  Some work has been done on this, in particular a version of the
+  c-client has been ported by Ken Bobey, though it is not included 
+  here yet.
+
+sv3  --- System V release 3
+  Included in contrib/port.sv3. This is a port of Pine 2.4, partially
+  adapted for Pine 2.28. Thanks to J.J. Bailey <jjb@jagware.acco.com>for
+  the original work.
+
+t20  ---  TOPS 20 on a DEC 10 !!!
+  The c-client has been ported, but not the rest of Pine.
+
+ul3  ---  Ultrix 3.1 
+  Thanks to Il Oh for this port.  The changes were mostly to adapt to
+  an older compiler that didn't understand things like void.  This port
+  has not been updated for Pine 3.0 or later and is not included.
+
+vms  ---  DEC VMS/OpenVMS
+  This is a place holder for an eventual port to VMS.  We have recieved 
+  various reports that c-client and IMAPd have been ported to VMS, but 
+  we have not heard of any successful ports of Pico or Pine.
+
+
+		     Miscellaneous Contributions
+
+The following patches and utilities are provided for your convenience in 
+the contrib directory.
+
+carmel  ---  Carmel c-client driver
+  The Carmel mail file stores messages in individual files and
+  implements folders or mailboxes with index files that contain
+  references to the files a nd a full c-client envelope in an easily
+  parsed form. It was written as a needed part of the pod mail file
+  driver with hopes that it might be useful otherwise some day. It has
+  only been run with the pod driver.
+
+  Advantages over Berkeley format and driver:
+    + Opening mail folder is very fast
+    + Expunge is fast
+    + Check point is very fast
+    + Memory usage is much lower
+    + Search of message headers is fast
+  Disadvantages:
+    - Fetching a large message is slow
+    - Searching the message bodies is slow
+    - Sorting the mailbox is slow
+
+keypad.enable  ---  Enable application keypad
+  These context diffs when applied to pico/tcap.c enable entrance
+  and exit of "keypad mode".  This mode is especially useful (and
+  necessary!) for HP terminals which require this mode to make the
+  arrow keys useful.
+
+  These changes are based on a bug report submitted by Jochiam Richter
+  (zjr@rz.uni-jena.de).
+
+utils/ansiprt.c
+  Simple filter to wrap ANSI media copy escape sequences around
+  text on stdin.  Writes /dev/tty to get around things that might be
+  trapping stdout.  This is actually a feature because it was written
+  to be used with pine's personal print option set up to take "enscript"
+  output and send it displayward to be captured/printed to a postscript
+  device.  Pine, of course, uses popen() to invoke the personal print
+  command, and interprets stdout as diagnostic messages from the command.
+ 
+  Michael Seibel, mikes@cac.washington.edu
+
+utils/brk2pine.sh
+  A filter to convert personal mail aliases in a .mailrc file into
+  pine address book format.
+
+  Usage: program [.mailrc] >> .addressbook
+
+  Corey Satten, corey@cac.washington.edu, 9/25/91
+
+utils/mailtrfc.sh
+  mailtrfc.sh -- A shell script to analyze the mail traffic as logged in
+  /usr/spool/mqueue/syslog*. This currently as the University of Washington
+  domains wired in and needs to be made more general. Also, lots more
+  formats of message ID's could be added.
+
+

@@ -1,0 +1,31 @@
+              Pine/Pico/Imapd Distribution 3.85
+
+Copyright 1989-1993 University of Washington.  Pine is a trademark of the
+University of Washington.  See Pine technical notes for full disclaimer
+and distribution privilege information.
+
+bin        - Compiled binaries are found here
+build      - Shell script to compile Pine and Pico
+c-client   - Source for the c-client library
+contrib    - Contributed ports and additions
+doc        - Documentation directory. The main documentation is tech-notes
+imapd      - The Imapd source directory
+makefile   - In case make is tried to build Pine and Pico
+pico       - The Pico source directory
+pine       - The Pine source directory
+
+
+Most of the documentation is in doc/tech-notes. It is not user level
+docuemtation, but there are things in it some users might find useful.
+There are also instructions for building and porting Pine. It is
+available in plain text, Troff and Postscript formats.
+
+The current list of bugs and other planned improvements is in
+doc/pine-future-enhancements. 
+
+
+
+
+
+
+

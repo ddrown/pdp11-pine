@@ -1,0 +1,109 @@
+/*----------------------------------------------------------------------
+  This collection of routines looks up the login name and password on the
+system. For things like PC's it's OK for these to return NULL since there
+is no system login. Other code will figure out who the user actually is.
+  ----*/
+static struct passwd *unix_pwd = NULL;
+
+/*----------------------------------------------------------------------
+      Pull the name out of the gcos field if we have that sort of /etc/passwd
+
+   Args: gcos_field --  The long name or GCOS field to be parsed
+         logname    --  Replaces occurances of & with logname string
+
+ Result: returns pointer to buffer with name
+  ----*/
+static char *
+gcos_name(gcos_field, logname)
+    char *logname, *gcos_field;
+{
+    static char fullname[MAX_FULLNAME+1];
+    register char *fncp, *gcoscp, *lncp, *end;
+
+    /* full name is all chars up to first ',' (or whole gcos, if no ',') */
+    /* replace any & with logname in upper case */
+
+    for(fncp = fullname, gcoscp= gcos_field, end = fullname + MAX_FULLNAME - 1;
+        (*gcoscp != ',' && *gcoscp != '\0' && fncp != end);
+	gcoscp++) {
+
+	if(*gcoscp == '&') {
+	    for(lncp = logname; *lncp; fncp++, lncp++)
+		*fncp = toupper(*lncp);
+	} else {
+	    *fncp++ = *gcoscp;
+	}
+    }
+    
+    *fncp = '\0';
+    return(fullname);
+}
+
+
+char *
+get_system_login()
+{
+    if(unix_pwd == NULL) {
+        unix_pwd = getpwuid(getuid());
+        if(unix_pwd == NULL)
+          return((char *)NULL);
+    }
+    return(unix_pwd->pw_name);
+}
+char *
+get_system_fullname()
+{
+    if(unix_pwd == NULL) {
+        unix_pwd = getpwuid(getuid());
+        if(unix_pwd == NULL)
+          return((char *)NULL);
+    }
+    return(gcos_name(unix_pwd->pw_gecos, unix_pwd->pw_name));
+}
+char *
+get_system_homedir()
+{
+    if(unix_pwd == NULL) {
+        unix_pwd = getpwuid(getuid());
+        if(unix_pwd == NULL)
+          return((char *)NULL);
+    }
+    return(unix_pwd->pw_dir);
+}
+char *
+get_system_passwd()
+{
+    if(unix_pwd == NULL) {
+        unix_pwd = getpwuid(getuid()); /* Always do real lookup in case */
+                                       /* password is changed and kb locked */
+        if(unix_pwd == NULL)
+          return((char *)NULL);
+    }
+    return(unix_pwd->pw_passwd);
+}
+
+
+/*----------------------------------------------------------------------
+      Look up a userid on the local system and return rfc822 address
+
+ Args: name  -- possible login name on local system
+
+ Result: returns NULL or pointer to static string rfc822 address.
+  ----*/
+char *
+local_name_lookup(name)
+    char *name;
+{
+    struct passwd *pw;
+    static char    buf[100];
+
+    pw = getpwnam(name);
+    if(pw == NULL)
+      return((char *)NULL);
+
+    strcpy(buf, gcos_name(pw->pw_gecos, name));
+
+    return(buf);
+}
+
+

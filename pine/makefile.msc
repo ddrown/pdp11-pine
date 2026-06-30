@@ -1,0 +1,144 @@
+# $Id: makefile.msc,v 4.14 1993/08/23 22:06:21 mikes Exp $
+#
+#            T H E    P I N E    M A I L   S Y S T E M
+#
+#   Laurence Lundblade and Mike Seibel
+#   Networks and Distributed Computing
+#   Computing and Communications
+#   University of Washington
+#   Administration Building, AG-44
+#   Seattle, Washington, 98195, USA
+#   Internet: lgl@CAC.Washington.EDU
+#             mikes@CAC.Washington.EDU
+#
+#   Please address all bugs and comments to "pine-bugs@cac.washington.edu"
+#
+#   Copyright 1989-1993  University of Washington
+#
+#    Permission to use, copy, modify, and distribute this software and its
+#   documentation for any purpose and without fee to the University of
+#   Washington is hereby granted, provided that the above copyright notice
+#   appears in all copies and that both the above copyright notice and this
+#   permission notice appear in supporting documentation, and that the name
+#   of the University of Washington not be used in advertising or publicity
+#   pertaining to distribution of the software without specific, written
+#   prior permission.  This software is made available "as is", and
+#   THE UNIVERSITY OF WASHINGTON DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED,
+#   WITH REGARD TO THIS SOFTWARE, INCLUDING WITHOUT LIMITATION ALL IMPLIED
+#   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, AND IN
+#   NO EVENT SHALL THE UNIVERSITY OF WASHINGTON BE LIABLE FOR ANY SPECIAL,
+#   INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+#   LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, TORT
+#   (INCLUDING NEGLIGENCE) OR STRICT LIABILITY, ARISING OUT OF OR IN CONNECTION
+#   WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#  
+#   Pine and Pico are trademarks of the University of Washington.
+#   No commercial use of these trademarks may be made without prior
+#   written permission of the University of Washington.
+#
+#   Pine is in part based on The Elm Mail System:
+#    ***********************************************************************
+#    *  The Elm Mail System  -  Revision: 2.13                             *
+#    *                                                                     *
+#    * 			Copyright (c) 1986, 1987 Dave Taylor               *
+#    * 			Copyright (c) 1988, 1989 USENET Community Trust    *
+#    ***********************************************************************
+# 
+#
+
+
+#
+#     Make file for the Pine mail system for PC-DOS
+#
+#     NOTE: There are nmake preprocessing conditionals that control
+#           neccessary switches for the various IP stacks supported.
+#	    There's also a switch for producing executables for
+#	    symbol table include
+#
+#
+CC=cl
+CP=copy
+RM=del
+MAKE=nmake
+
+#   Most commonly fiddled flags for compiler.
+#   Uncomment the setttings desired here
+
+OPTIMIZE=    -Os
+#OPTIMIZE=    -Oq		# Oq is for pcode 
+PROFILE=     # -pg
+DEBUG=       # -Zi -Od
+CBASIC=      -WX -Gy -Gt2 -AL -DDOS -DMOUSE
+!IF	DEFINED(LWP)
+CFLAGS=	     $(OPTIMIZE) $(DEBUG) $(CBASIC) -DLWP
+LINKSCRIPT=  pine-lwp.lnk
+!ELSEIF	DEFINED(PCTCP)
+INCLUDES=    -Ic:\pctcp\toolkit\include
+CFLAGS=	     $(OPTIMIZE) $(DEBUG) $(CBASIC) $(INCLUDES) -DPCTCP
+LINKSCRIPT=  pine-pc.lnk
+!ELSEIF	DEFINED(PCNFS)
+INCLUDES=    -Ic:\nfs\ptk40\include
+CFLAGS=	     $(OPTIMIZE) $(DEBUG) $(CBASIC) $(INCLUDES) -DPCNFS
+LINKSCRIPT=  pine-nfs.lnk
+!ELSE
+CFLAGS=	     $(OPTIMIZE) $(DEBUG) $(CBASIC)
+LINKSCRIPT=  pine-wat.lnk
+!ENDIF
+
+LIBES =  # -ltermlib 
+
+HEADERS= headers.h pine.h os.h helptext.h context.h \
+	  ../c-client/mail.h ../c-client/osdep.h
+
+OBJ=    addrbook.obj addrutil.obj adrbklib.obj args.obj context.obj filter.obj \
+	folder.obj help.obj imap.obj init.obj mailcmd.obj mailindx.obj \
+	mailview.obj newmail.obj os.obj other.obj pine.obj print.obj  \
+	reply.obj screen.obj send.obj signals.obj  status.obj \
+	strings.obj ttyin.obj ttyout.obj  
+	
+all:	pine.exe
+	
+.c.obj:
+	$(CC) -c $(CFLAGS) $*.c
+
+os.h:	osdep\os-dos.h
+	$(RM) os.h
+	$(CP) osdep\os-dos.h os.h
+
+os.c:	osdep\os-dos.c
+	$(RM) os.c
+	$(CP) osdep\os-dos.c os.c
+
+osdep\os-dos.c:	osdep\bld_path.dos osdep\canacces osdep\canonicl.dos \
+		osdep\chnge_pw.dos osdep\coredump osdep\creatdir.dos \
+		osdep\diskquot.non osdep\domnames.dos osdep\dosextra \
+		osdep\err_desc.dos osdep\expnfldr.dos osdep\filesize \
+		osdep\fltrname.dos osdep\fnexpand.dos osdep\header \
+		osdep\hostname osdep\jobcntrl.dos osdep\lstcmpnt.dos \
+		osdep\mimedisp.dos osdep\play_snd.non osdep\pw_stuff.dos \
+		osdep\readfile.dos osdep\rename.dos osdep\tempfile \
+		osdep\tempnam.dos osdep\fgetpos osdep\writ_dir osdep\os-dos.ic
+	cd osdep
+	$(MAKE) -f makefile.dos includer os-dos.c
+	cd ..
+
+helpindx.exe:	helpindx.c
+		cl helpindx.c
+
+pine.ndx:	helpindx.exe pine.hlp
+		helpindx pine.hlp pine.ndx helptext.h
+
+helptext.h:	pine.ndx
+
+#helptext.c:	pine.hlp 
+#		./cmplhelp.sh  < pine.hlp > helptext.c
+
+$(OBJ):	$(HEADERS)
+
+pine.exe:  $(OBJ) pine.def ..\c-client\cclient.lib ..\pico\libpico.lib
+# this is for pine 8086 instruction version without symbol table
+	link /F /NOI /NOE /DYNAMIC:1024 /MAP:FULL /st:44000 /se:512 @$(LINKSCRIPT)
+# for testing 
+#	link /CO /F /NOI /NOE /DYNAMIC:1024 /MAP:FULL /st:44000 /se:512 @$(LINKSCRIPT)
+# this is for generating pcode
+#	link /PCODE /PACKC:55000 /I /F /NOI /NOE /st:32000 /se:256 @pine.lnk

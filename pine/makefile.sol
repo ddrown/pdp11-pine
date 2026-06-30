@@ -1,0 +1,160 @@
+# $Id: makefile.sol,v 1.7 1993/10/07 17:54:27 mikes Exp $
+#
+#            T H E    P I N E    M A I L   S Y S T E M
+#
+#   Laurence Lundblade and Mike Seibel
+#   Networks and Distributed Computing
+#   Computing and Communications
+#   University of Washington
+#   Administration Building, AG-44
+#   Seattle, Washington, 98195, USA
+#   Internet: lgl@CAC.Washington.EDU
+#             mikes@CAC.Washington.EDU
+#
+#   Please address all bugs and comments to "pine-bugs@cac.washington.edu"
+#
+#   Copyright 1989-1993  University of Washington
+#
+#    Permission to use, copy, modify, and distribute this software and its
+#   documentation for any purpose and without fee to the University of
+#   Washington is hereby granted, provided that the above copyright notice
+#   appears in all copies and that both the above copyright notice and this
+#   permission notice appear in supporting documentation, and that the name
+#   of the University of Washington not be used in advertising or publicity
+#   pertaining to distribution of the software without specific, written
+#   prior permission.  This software is made available "as is", and
+#   THE UNIVERSITY OF WASHINGTON DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED,
+#   WITH REGARD TO THIS SOFTWARE, INCLUDING WITHOUT LIMITATION ALL IMPLIED
+#   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, AND IN
+#   NO EVENT SHALL THE UNIVERSITY OF WASHINGTON BE LIABLE FOR ANY SPECIAL,
+#   INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+#   LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, TORT
+#   (INCLUDING NEGLIGENCE) OR STRICT LIABILITY, ARISING OUT OF OR IN CONNECTION
+#   WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+#   Pine and Pico are trademarks of the University of Washington.
+#   No commercial use of these trademarks may be made without prior
+#   written permission of the University of Washington.
+#
+#   Pine is in part based on The Elm Mail System:
+#    ***********************************************************************
+#    *  The Elm Mail System  -  Revision: 2.13                             *
+#    *                                                                     *
+#    * 			Copyright (c) 1986, 1987 Dave Taylor               *
+#    * 			Copyright (c) 1988, 1989 USENET Community Trust    *
+#    ***********************************************************************
+#
+#
+
+
+#
+#     Make file for the Pine mail system for Solaris 2.2
+#      (this is very similar to the generic SV4 port)
+#
+#
+#   Most commonly fiddled flags for compiler.
+#   Uncomment the setttings desired here
+#
+RM=          rm -f
+LN=          ln -s
+MAKE=        make
+OPTIMIZE=    # -O
+PROFILE=     # -pg
+DEBUG=       -g -DDEBUG
+
+LIBES=       -ltermlib -lsocket -lnsl -lgen
+LOCLIBES=    ../pico/libpico.a ../c-client/c-client.a
+
+# Use these for the Solaris C compiler
+CFLAGS= -DSV4 $(OPTIMIZE) $(PROFILE) $(DEBUG)
+# LDCC= /usr/bin/cc
+# If you don't have /usr/bin/cc (our Solaris 2.2 doesn't seem to have it,
+# it only has /usr/ucb/cc) then change LDCC to the following line and
+# give that a try.  This is still using the Solaris compiler but
+# leaving out the UCB compatibility includes and libraries.
+LDCC= ../pico/cc5.sol
+
+# Use these for the gcc compiler
+# CC=	gcc
+# CFLAGS=	-DSV4 $(OPTIMIZE) $(PROFILE) $(DEBUG) -ansi -DANSI
+# LDCC=	gcc
+
+obj=    addrbook.o addrutil.o adrbklib.o args.o context.o filter.o \
+	folder.o help.o helptext.o imap.o init.o mailcmd.o mailindx.o \
+	mailview.o newmail.o other.o pine.o print.o reply.o screen.o \
+	send.o signals.o status.o strings.o ttyin.o ttyout.o os.o
+
+cfiles= addrbook.c addrutil.c adrbklib.c args.c context.c filter.c \
+	folder.c help.c helptext.c imap.c init.c mailcmd.c mailindx.c \
+	mailview.c newmail.c other.c pine.c print.c reply.c screen.c \
+	send.c signals.c status.c strings.c ttyin.c ttyout.c os.c
+
+pine:  $(obj) $(LOCLIBES)
+	echo "char datestamp[]="\"`date`\"";" > date.c
+	$(CC) -c $(CFLAGS) -o date.o date.c
+	$(LDCC) $(LDFLAGS) $(CFLAGS) -o pine $(obj) date.o $(LOCLIBES) $(LIBES)
+
+# this is not part of pine
+pine-use:	pine-use.c
+	$(CC) -o pine-use pine-use.c
+
+clean:
+	$(RM) *.o os.h os.c helptext.c helptext.h
+	cd osdep; make clean; cd ..
+
+
+HEADERS= headers.h pine.h os.h helptext.h context.h \
+	  ../c-client/mail.h ../c-client/osdep.h
+
+addrbook.o:	addrbook.c  $(HEADERS) adrbklib.h
+addrutil.o:	addrutil.c  $(HEADERS) adrbklib.h
+adrbklib.o: 	adrbklib.c  $(HEADERS) adrbklib.h
+args.o:		args.c      $(HEADERS)
+context.o:	context.c   $(HEADERS) ../c-client/misc.h
+filter.o:	filter.c    $(HEADERS) ../pico/pico.h
+folder.o:	folder.c    $(HEADERS)
+help.o:		help.c      $(HEADERS)
+helptext.o:	helptext.c
+imap.o:	        imap.c      $(HEADERS)
+init.o:		init.c      $(HEADERS)
+mailcmd.o:	mailcmd.c   $(HEADERS)
+mailindx.o:	mailindx.c  $(HEADERS)
+mailview.o:	mailview.c  $(HEADERS)
+newmail.o:	newmail.c   $(HEADERS)
+os.o:		os.c 	    $(HEADERS)
+other.o:	other.c     $(HEADERS)
+pine.o:		pine.c      $(HEADERS)
+print.o:	print.c     $(HEADERS)
+reply.o:	reply.c     $(HEADERS)
+screen.o:	screen.c    $(HEADERS)
+send.o:	        send.c      $(HEADERS) ../c-client/smtp.h ../pico/pico.h
+signals.o:	signals.c   $(HEADERS)
+status.o:	status.c    $(HEADERS)
+strings.o:	strings.c   $(HEADERS)
+ttyin.o:	ttyin.c     $(HEADERS)
+ttyout.o:	ttyout.c    $(HEADERS)
+
+os.h:	osdep/os-sv4.h
+	$(RM) os.h
+	$(LN) osdep/os-sv4.h os.h
+
+helptext.c:	pine.hlp
+		./cmplhelp.sh  < pine.hlp > helptext.c
+
+helptext.h:	pine.hlp
+		./cmplhlp2.sh  < pine.hlp > helptext.h
+
+os.c:	osdep/os-sv4.c
+	$(RM) os.c
+	$(LN) osdep/os-sv4.c os.c
+
+osdep/os-sv4.c:	osdep/bld_path osdep/canacces osdep/canonicl \
+		osdep/chnge_pw osdep/coredump osdep/creatdir \
+		osdep/diskquot.sv4 osdep/domnames osdep/err_desc \
+		osdep/expnfldr osdep/fgetpos osdep/filesize osdep/fltrname \
+		osdep/fnexpand osdep/header osdep/hostname.una \
+		osdep/jobcntrl osdep/lstcmpnt osdep/mimedisp \
+		osdep/play_snd.non osdep/pw_stuff osdep/readfile \
+		osdep/rename osdep/srandom.dum osdep/tempfile osdep/tempnam \
+		osdep/writ_dir osdep/sunquota osdep/os-sv4.ic
+	cd osdep; $(MAKE) includer os-sv4.c; cd ..

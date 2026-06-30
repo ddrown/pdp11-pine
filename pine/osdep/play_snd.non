@@ -1,0 +1,11 @@
+/*----------------------------------------------------------------------
+       We don't know how to play audio.
+ ----*/
+void
+gf_play_sound(f, c, flg)
+    FILTER_S *f;
+    int       c, flg;
+{
+}
+
+

@@ -1,0 +1,43 @@
+/*----------------------------------------------------------------------
+    Read whole file into memory
+
+  Args: filename -- path name of file to read
+
+  Result: Returns pointer to malloced memory with the contents of the file
+          or NULL
+
+This won't work very well if the file has NULLs in it and is mostly
+intended for fairly small text files.
+ ----*/
+char *
+read_file(filename)
+    char *filename;
+{
+    int         fd;
+    struct stat statbuf;
+    char       *buf;
+
+    fd = open(filename, O_RDONLY);
+    if(fd < 0)
+      return((char *)NULL);
+
+    fstat(fd, &statbuf);
+
+    buf = fs_get(statbuf.st_size + 1);
+
+    /*
+     * On some systems might have to loop here, if one read isn't guaranteed
+     * to get the whole thing.
+     */
+    if(read(fd, buf, statbuf.st_size) != statbuf.st_size) {
+        close(fd);
+        return((char *)NULL);
+    }
+    close(fd);
+
+    buf[statbuf.st_size]= '\0';
+
+    return(buf);
+}
+
+

@@ -1,0 +1,2558 @@
+diff -Ncr pine3.84x/imap/non-ANSI/c-client/makefile.aux pineaux/imap/non-ANSI/c-client/makefile.aux
+*** pine3.84x/imap/non-ANSI/c-client/makefile.aux
+--- pineaux/imap/non-ANSI/c-client/makefile.aux	Wed Sep 22 09:46:58 1993
+***************
+*** 0 ****
+--- 1,80 ----
++ # Program:	Portable C client makefile -- A/UX version
++ #
++ # Last Edited:	24 August 1993
++ #
++ # Copyright 1993 by the University of Washington
++ #
++ #  Permission to use, copy, modify, and distribute this software and its
++ # documentation for any purpose and without fee is hereby granted, provided
++ # that the above copyright notice appears in all copies and that both the
++ # above copyright notice and this permission notice appear in supporting
++ # documentation, and that the name of the University of Washington not be
++ # used in advertising or publicity pertaining to distribution of the software
++ # without specific, written prior permission.  This software is made
++ # available "as is", and
++ # THE UNIVERSITY OF WASHINGTON DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED,
++ # WITH REGARD TO THIS SOFTWARE, INCLUDING WITHOUT LIMITATION ALL IMPLIED
++ # WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, AND IN
++ # NO EVENT SHALL THE UNIVERSITY OF WASHINGTON BE LIABLE FOR ANY SPECIAL,
++ # INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
++ # LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, TORT
++ # (INCLUDING NEGLIGENCE) OR STRICT LIABILITY, ARISING OUT OF OR IN CONNECTION
++ # WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++ CC = cc
++ CFLAGS = -g -B/usr/lib/big/ -Dconst= 
++ LDFLAGS = 
++ 
++ mtest: mtest.o c-client.a
++ 	echo $(CFLAGS) > CFLAGS
++ 	echo $(LDFLAGS) > LDFLAGS
++ 	$(CC) $(CFLAGS) -o mtest mtest.o c-client.a $(LDFLAGS)
++ 
++ clean:
++ 	rm -f *.o mtest c-client.a osdep.* CFLAGS LDFLAGS
++ 
++ mtest.o: mail.h smtp.h nntp.h misc.h osdep.h
++ 
++ c-client.a: mail.o bezerk.o tenex2.o mbox.o mh.o imap2.o news.o nntpclient.o \
++ 	dummy.o smtp.o nntp.o rfc822.o misc.o osdep.o sm_unix.o
++ 	rm -f c-client.a
++ 	ar -rc c-client.a mail.o bezerk.o tenex2.o mbox.o mh.o imap2.o news.o \
++ 	nntpclient.o dummy.o smtp.o nntp.o rfc822.o misc.o osdep.o sm_unix.o
++ 
++ mail.o: mail.h misc.h osdep.h
++ 
++ bezerk.o: mail.h bezerk.h rfc822.h misc.h osdep.h
++ 
++ tenex.o: mail.h tenex.h rfc822.h misc.h osdep.h
++ 
++ tenex2.o: mail.h tenex2.h rfc822.h misc.h osdep.h
++ 
++ mbox.o: mail.h mbox.h bezerk.h misc.h osdep.h
++ 
++ mh.o: mail.h mh.h rfc822.h misc.h osdep.h
++ 
++ imap2.o: mail.h imap2.h misc.h osdep.h
++ 
++ news.o: mail.h news.h misc.h osdep.h
++ 
++ nntpclient.o: mail.h nntp.h nntpclient.h misc.h rfc822.h news.h smtp.h osdep.h
++ 
++ dummy.o: mail.h dummy.h misc.h osdep.h
++ 
++ smtp.o: mail.h smtp.h rfc822.h misc.h osdep.h
++ 
++ nntp.o: mail.h nntp.h smtp.h rfc822.h misc.h osdep.h
++ 
++ rfc822.o: mail.h rfc822.h misc.h
++ 
++ misc.o: mail.h misc.h osdep.h
++ 
++ sm_unix.o: mail.h misc.h osdep.h
++ 
++ osdep.o: mail.h osdep.h os_aux.c
++ 	$(CC) $(CFLAGS) -c os_aux.c
++ 	mv os_aux.o osdep.o
++ 
++ osdep.h: os_aux.h
++ 	rm -f osdep.h
++ 	ln os_aux.h osdep.h
++ 
+diff -Ncr pine3.84x/imap/non-ANSI/c-client/os_aux.c pineaux/imap/non-ANSI/c-client/os_aux.c
+*** pine3.84x/imap/non-ANSI/c-client/os_aux.c
+--- pineaux/imap/non-ANSI/c-client/os_aux.c	Wed Sep 22 09:47:48 1993
+***************
+*** 0 ****
+--- 1,641 ----
++ /*
++  * Program:	Operating-system dependent routines -- A/UX version
++  *
++  * Last Edited:	24 August 1993
++  *
++  * Copyright 1993 by the University of Washington
++  *
++  *  Permission to use, copy, modify, and distribute this software and its
++  * documentation for any purpose and without fee is hereby granted, provided
++  * that the above copyright notice appears in all copies and that both the
++  * above copyright notice and this permission notice appear in supporting
++  * documentation, and that the name of the University of Washington not be
++  * used in advertising or publicity pertaining to distribution of the software
++  * without specific, written prior permission.  This software is made
++  * available "as is", and
++  * THE UNIVERSITY OF WASHINGTON DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED,
++  * WITH REGARD TO THIS SOFTWARE, INCLUDING WITHOUT LIMITATION ALL IMPLIED
++  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, AND IN
++  * NO EVENT SHALL THE UNIVERSITY OF WASHINGTON BE LIABLE FOR ANY SPECIAL,
++  * INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
++  * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, TORT
++  * (INCLUDING NEGLIGENCE) OR STRICT LIABILITY, ARISING OUT OF OR IN CONNECTION
++  * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++  *
++  */
++ 
++ /* TCP input buffer */
++ 
++ #define BUFLEN 8192
++ 
++ 
++ /* TCP I/O stream (must be before osdep.h is included) */
++ 
++ #define TCPSTREAM struct tcp_stream
++ TCPSTREAM {
++   char *host;			/* host name */
++   char *localhost;		/* local host name */
++   int tcpsi;			/* input socket */
++   int tcpso;			/* output socket */
++   int ictr;			/* input counter */
++   char *iptr;			/* input pointer */
++   char ibuf[BUFLEN];		/* input buffer */
++ };
++ 
++ #include "osdep.h"
++ #include <ctype.h>
++ #include <sys/time.h>
++ #include <time.h>
++ #include <sys/socket.h>
++ #include <netinet/in.h>
++ #include <netdb.h>
++ #include <errno.h>
++ #include <pwd.h>
++ #include <syslog.h>
++ #include "mail.h"
++ #include "misc.h"
++ 
++ extern char *sys_errlist[];
++ extern int sys_nerr;
++ 
++ /*
++ #define toint(c)	((c)-'0')
++ #define isodigit(c)	(((unsigned)(c)>=060)&((unsigned)(c)<=067))
++ */
++ 
++ /* Write current time in RFC 822 format
++  * Accepts: destination string
++  */
++ 
++ char *days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
++ 
++ void rfc822_date (date)
++ 	char *date;
++ {
++   int zone;
++   char *zonename;
++   struct tm *t;
++   struct timeval tv;
++   struct timezone tz;
++ 
++   gettimeofday (&tv,&tz);	/* get time and timezone poop */
++   t = localtime (&tv.tv_sec);	/* convert to individual items */
++ 				/* use this for older systems */
++   zone = (t->tm_isdst ? 60 : 0) -tz.tz_minuteswest;
++   sprintf (date,"%s, %d %s %d %02d:%02d:%02d %+03d%02d (%s)",
++ 	   days[t->tm_wday],t->tm_mday,months[t->tm_mon],t->tm_year+1900,
++ 	   t->tm_hour,t->tm_min,t->tm_sec,zone/60,abs(zone)%60,
++ 	   tzname[t->tm_isdst ? 1 : 0]);
++ }
++ 
++ /* Get a block of free storage
++  * Accepts: size of desired block
++  * Returns: free storage block
++  */
++ 
++ void *fs_get (size)
++ 	size_t size;
++ {
++   void *block = malloc (size);
++   if (!block) fatal ("Out of free storage");
++   return (block);
++ }
++ 
++ 
++ /* Resize a block of free storage
++  * Accepts: ** pointer to current block
++  *	    new size
++  */
++ 
++ void fs_resize (block,size)
++ 	void **block;
++ 	size_t size;
++ {
++   if (!(*block = realloc (*block,size))) fatal ("Can't resize free storage");
++ }
++ 
++ 
++ /* Return a block of free storage
++  * Accepts: ** pointer to free storage block
++  */
++ 
++ void fs_give (block)
++ 	void **block;
++ {
++   free (*block);
++   *block = NIL;
++ }
++ 
++ 
++ /* Report a fatal error
++  * Accepts: string to output
++  */
++ 
++ void fatal (string)
++ 	char *string;
++ {
++   mm_fatal (string);		/* output the string */
++   syslog (LOG_ALERT,"IMAP C-Client crash: %s",string);
++   abort ();			/* die horribly */
++ }
++ 
++ /* Copy string with CRLF newlines
++  * Accepts: destination string
++  *	    pointer to size of destination string
++  *	    source string
++  *	    length of source string
++  * Returns: length of copied string
++  */
++ 
++ unsigned long strcrlfcpy (dst,dstl,src,srcl)
++ 	char **dst;
++ 	unsigned long *dstl;
++ 	char *src;
++ 	unsigned long srcl;
++ {
++   long i,j;
++   char *d = src;
++ 				/* count number of LF's in source string(s) */
++   for (i = srcl,j = 0; j < srcl; j++) if (*d++ == '\012') i++;
++   if (i > *dstl) {		/* resize if not enough space */
++     fs_give ((void **) dst);	/* fs_resize does an unnecessary copy */
++     *dst = (char *) fs_get ((*dstl = i) + 1);
++   }
++   d = *dst;			/* destination string */
++ 				/* copy strings, inserting CR's before LF's */
++   while (srcl--) switch (*src) {
++   case '\015':			/* unlikely carriage return */
++     *d++ = *src++;		/* copy it and any succeeding linefeed */
++     if (srcl && *src == '\012') {
++       *d++ = *src++;
++       srcl--;
++     }
++     break;
++   case '\012':			/* line feed? */
++     *d++ ='\015';		/* yes, prepend a CR, drop into default case */
++   default:			/* ordinary chararacter */
++     *d++ = *src++;		/* just copy character */
++     break;
++   }
++   *d = '\0';			/* tie off destination */
++   return d- *dst;		/* return length */
++ }
++ 
++ 
++ /* Length of string after strcrlfcpy applied
++  * Accepts: source string
++  * Returns: length of string
++  */
++ 
++ unsigned long strcrlflen (s)
++ 	STRING *s;
++ {
++   unsigned long pos = GETPOS (s);
++   unsigned long i = SIZE (s);
++   unsigned long j = i;
++   while (j--) switch (SNX (s)) {/* search for newlines */
++   case '\015':			/* unlikely carriage return */
++     if (j && (CHR (s) == '\012')) {
++       SNX (s);			/* eat the line feed */
++       j--;
++     }
++     break;
++   case '\012':			/* line feed? */
++     i++;
++   default:			/* ordinary chararacter */
++     break;
++   }
++   SETPOS (s,pos);		/* restore old position */
++   return i;
++ }
++ 
++ /* Server log in
++  * Accepts: user name string
++  *	    password string
++  *	    optional place to return home directory
++  * Returns: T if password validated, NIL otherwise
++  */
++ 
++ long server_login (user,pass,home,argc,argv)
++ 	char *user;
++ 	char *pass;
++ 	char **home;
++ 	int argc;
++ 	char *argv[];
++ {
++   struct passwd *pw = getpwnam (lcase (user));
++ 				/* no entry for this user or root */
++   if (!(pw && pw->pw_uid)) return NIL;
++ 				/* validate password */
++   if (strcmp (pw->pw_passwd,(char *) crypt (pass,pw->pw_passwd))) return NIL;
++   setgid (pw->pw_gid);		/* all OK, login in as that user */
++   initgroups (user,pw->pw_gid);	/* initialize groups */
++   setuid (pw->pw_uid);
++ 				/* note home directory */
++   if (home) *home = cpystr (pw->pw_dir);
++   return T;
++ }
++ 
++ /* Return my user name
++  * Returns: my user name
++  */
++ 
++ char *uname = NIL;
++ 
++ char *myusername ()
++ {
++   return uname ? uname : (uname = cpystr (getpwuid (geteuid ())->pw_name));
++ }
++ 
++ 
++ /* Return my home directory name
++  * Returns: my home directory name
++  */
++ 
++ char *hdname = NIL;
++ 
++ char *myhomedir ()
++ {
++   return hdname ? hdname : (hdname = cpystr (getpwuid (geteuid ())->pw_dir));
++ }
++ 
++ 
++ /* Build status lock file name
++  * Accepts: scratch buffer
++  *	    file name
++  * Returns: name of file to lock
++  */
++ 
++ char *lockname (tmp,fname)
++ 	char *tmp;
++ 	char *fname;
++ {
++   int i;
++   sprintf (tmp,"/tmp/.%s",fname);
++   for (i = 6; i < strlen (tmp); ++i) if (tmp[i] == '/') tmp[i] = '\\';
++   return tmp;			/* note name for later */
++ }
++ 
++ /* TCP/IP open
++  * Accepts: host name
++  *	    contact port number
++  * Returns: TCP/IP stream if success else NIL
++  */
++ 
++ TCPSTREAM *tcp_open (host,port)
++ 	char *host;
++ 	long port;
++ {
++   TCPSTREAM *stream = NIL;
++   int sock;
++   char *s;
++   struct sockaddr_in sin;
++   struct hostent *host_name;
++   char hostname[MAILTMPLEN];
++   char tmp[MAILTMPLEN];
++   /* The domain literal form is used (rather than simply the dotted decimal
++      as with other Unix programs) because it has to be a valid "host name"
++      in mailsystem terminology. */
++ 				/* look like domain literal? */
++   if (host[0] == '[' && host[(strlen (host))-1] == ']') {
++     strcpy (hostname,host+1);	/* yes, copy number part */
++     hostname[(strlen (hostname))-1] = '\0';
++     if ((sin.sin_addr.s_addr = inet_addr (hostname)) != -1) {
++       sin.sin_family = AF_INET;	/* family is always Internet */
++       strcpy (hostname,host);	/* hostname is user's argument */
++     }
++     else {
++       sprintf (tmp,"Bad format domain-literal: %.80s",host);
++       mm_log (tmp,ERROR);
++       return NIL;
++     }
++   }
++ 
++   else {			/* lookup host name, note that brain-dead Unix
++ 				   requires lowercase! */
++     strcpy (hostname,host);	/* in case host is in write-protected memory */
++     if ((host_name = gethostbyname (lcase (hostname)))) {
++ 				/* copy address type */
++       sin.sin_family = host_name->h_addrtype;
++ 				/* copy host name */
++       strcpy (hostname,host_name->h_name);
++ 				/* copy host addresses */
++       memcpy (&sin.sin_addr,host_name->h_addr,host_name->h_length);
++     }
++     else {
++       sprintf (tmp,"No such host as %.80s",host);
++       mm_log (tmp,ERROR);
++       return NIL;
++     }
++   }
++ 
++ 				/* copy port number in network format */
++   if (!(sin.sin_port = htons (port))) fatal ("Bad port argument to tcp_open");
++ 				/* get a TCP stream */
++   if ((sock = socket (sin.sin_family,SOCK_STREAM,0)) < 0) {
++     sprintf (tmp,"Unable to create TCP socket: %s",strerror (errno));
++     mm_log (tmp,ERROR);
++     return NIL;
++   }
++ 				/* open connection */
++   if (connect (sock,(struct sockaddr *)&sin,sizeof (sin)) < 0) {
++     sprintf (tmp,"Can't connect to %.80s,%d: %s",hostname,port,
++ 	     strerror (errno));
++     mm_log (tmp,ERROR);
++     return NIL;
++   }
++ 				/* create TCP/IP stream */
++   stream = (TCPSTREAM *) fs_get (sizeof (TCPSTREAM));
++ 				/* copy official host name */
++   stream->host = cpystr (hostname);
++ 				/* get local name */
++   gethostname (tmp,MAILTMPLEN-1);
++   stream->localhost = cpystr ((host_name = gethostbyname (tmp)) ?
++ 			      host_name->h_name : tmp);
++ 				/* init sockets */
++   stream->tcpsi = stream->tcpso = sock;
++   stream->ictr = 0;		/* init input counter */
++   return stream;		/* return success */
++ }
++ 
++ /* TCP/IP authenticated open
++  * Accepts: host name
++  *	    service name
++  * Returns: TCP/IP stream if success else NIL
++  */
++ 
++ TCPSTREAM *tcp_aopen (host,service)
++ 	char *host;
++ 	char *service;
++ {
++   TCPSTREAM *stream = NIL;
++   struct hostent *host_name;
++   char hostname[MAILTMPLEN];
++   int i;
++   int pipei[2],pipeo[2];
++   /* The domain literal form is used (rather than simply the dotted decimal
++      as with other Unix programs) because it has to be a valid "host name"
++      in mailsystem terminology. */
++ 				/* look like domain literal? */
++   if (host[0] == '[' && host[i = (strlen (host))-1] == ']') {
++     strcpy (hostname,host+1);	/* yes, copy without brackets */
++     hostname[i-1] = '\0';
++   }
++ 				/* note that Unix requires lowercase! */
++   else if (host_name = gethostbyname (lcase (strcpy (hostname,host))))
++     strcpy (hostname,host_name->h_name);
++ 				/* make command pipes */
++   if (pipe (pipei) < 0) return NIL;
++   if (pipe (pipeo) < 0) {
++     close (pipei[0]); close (pipei[1]);
++     return NIL;
++   }
++   if ((i = fork ()) < 0) {	/* make inferior process */
++     close (pipei[0]); close (pipei[1]);
++     close (pipeo[0]); close (pipeo[1]);
++     return NIL;
++   }
++   if (i) {			/* parent? */
++     close (pipei[1]);		/* close child's side of the pipes */
++     close (pipeo[0]);
++   }
++   else {			/* child */
++     dup2 (pipei[1],1);		/* parent's input is my output */
++     dup2 (pipei[1],2);		/* parent's input is my error output too */
++     close (pipei[0]); close (pipei[1]);
++     dup2 (pipeo[0],0);		/* parent's output is my input */
++     close (pipeo[0]); close (pipeo[1]);
++ 				/* now run it */
++     execl ("/usr/bin/remsh","remsh",hostname,"exec",service,0);
++     _exit (1);			/* spazzed */
++   }
++ 
++ 				/* create TCP/IP stream */
++   stream = (TCPSTREAM *) fs_get (sizeof (TCPSTREAM));
++ 				/* copy official host name */
++   stream->host = cpystr (hostname);
++ 				/* get local name */
++   gethostname (hostname,MAILTMPLEN-1);
++   stream->localhost = cpystr ((host_name = gethostbyname (hostname)) ?
++ 			      host_name->h_name : hostname);
++   stream->tcpsi = pipei[0];	/* init sockets */
++   stream->tcpso = pipeo[1];
++   stream->ictr = 0;		/* init input counter */
++   return stream;		/* return success */
++ }
++ 
++ /* TCP/IP receive line
++  * Accepts: TCP/IP stream
++  * Returns: text line string or NIL if failure
++  */
++ 
++ char *tcp_getline (stream)
++ 	TCPSTREAM *stream;
++ {
++   int n,m;
++   char *st,*ret,*stp;
++   char c = '\0';
++   char d;
++ 				/* make sure have data */
++   if (!tcp_getdata (stream)) return NIL;
++   st = stream->iptr;		/* save start of string */
++   n = 0;			/* init string count */
++   while (stream->ictr--) {	/* look for end of line */
++     d = *stream->iptr++;	/* slurp another character */
++     if ((c == '\015') && (d == '\012')) {
++       ret = (char *) fs_get (n--);
++       memcpy (ret,st,n);	/* copy into a free storage string */
++       ret[n] = '\0';		/* tie off string with null */
++       return ret;
++     }
++     n++;			/* count another character searched */
++     c = d;			/* remember previous character */
++   }
++ 				/* copy partial string from buffer */
++   memcpy ((ret = stp = (char *) fs_get (n)),st,n);
++ 				/* get more data from the net */
++   if (!tcp_getdata (stream)) return NIL;
++ 				/* special case of newline broken by buffer */
++   if ((c == '\015') && (*stream->iptr == '\012')) {
++     stream->iptr++;		/* eat the line feed */
++     stream->ictr--;
++     ret[n - 1] = '\0';		/* tie off string with null */
++   }
++ 				/* else recurse to get remainder */
++   else if (st = tcp_getline (stream)) {
++     ret = (char *) fs_get (n + 1 + (m = strlen (st)));
++     memcpy (ret,stp,n);		/* copy first part */
++     memcpy (ret + n,st,m);	/* and second part */
++     fs_give ((void **) &stp);	/* flush first part */
++     fs_give ((void **) &st);	/* flush second part */
++     ret[n + m] = '\0';		/* tie off string with null */
++   }
++   return ret;
++ }
++ 
++ /* TCP/IP receive buffer
++  * Accepts: TCP/IP stream
++  *	    size in bytes
++  *	    buffer to read into
++  * Returns: T if success, NIL otherwise
++  */
++ 
++ long tcp_getbuffer (stream,size,buffer)
++ 	TCPSTREAM *stream;
++ 	unsigned long size;
++ 	char *buffer;
++ {
++   unsigned long n;
++   char *bufptr = buffer;
++   while (size > 0) {		/* until request satisfied */
++     if (!tcp_getdata (stream)) return NIL;
++     n = min (size,stream->ictr);/* number of bytes to transfer */
++ 				/* do the copy */
++     memcpy (bufptr,stream->iptr,n);
++     bufptr += n;		/* update pointer */
++     stream->iptr +=n;
++     size -= n;			/* update # of bytes to do */
++     stream->ictr -=n;
++   }
++   bufptr[0] = '\0';		/* tie off string */
++   return T;
++ }
++ 
++ 
++ /* TCP/IP receive data
++  * Accepts: TCP/IP stream
++  * Returns: T if success, NIL otherwise
++  */
++ 
++ long tcp_getdata (stream)
++ 	TCPSTREAM *stream;
++ {
++   fd_set fds;
++   FD_ZERO (&fds);		/* initialize selection vector */
++   if (stream->tcpsi < 0) return NIL;
++   while (stream->ictr < 1) {	/* if nothing in the buffer */
++     FD_SET (stream->tcpsi,&fds);/* set bit in selection vector */
++ 				/* block and read */
++     if ((select (stream->tcpsi+1,&fds,0,0,0) < 0) ||
++ 	((stream->ictr = read (stream->tcpsi,stream->ibuf,BUFLEN)) < 1)) {
++       close (stream->tcpsi);	/* nuke the socket */
++       if (stream->tcpsi != stream->tcpso) close (stream->tcpso);
++       stream->tcpsi = stream->tcpso = -1;
++       return NIL;
++     }
++     stream->iptr = stream->ibuf;/* point at TCP buffer */
++   }
++   return T;
++ }
++ 
++ /* TCP/IP send string as record
++  * Accepts: TCP/IP stream
++  *	    string pointer
++  * Returns: T if success else NIL
++  */
++ 
++ long tcp_soutr (stream,string)
++ 	TCPSTREAM *stream;
++ 	char *string;
++ {
++   return tcp_sout (stream,string,(unsigned long) strlen (string));
++ }
++ 
++ 
++ /* TCP/IP send string
++  * Accepts: TCP/IP stream
++  *	    string pointer
++  *	    byte count
++  * Returns: T if success else NIL
++  */
++ 
++ long tcp_sout (stream,string,size)
++ 	TCPSTREAM *stream;
++ 	char *string;
++ 	unsigned long size;
++ {
++   int i;
++   fd_set fds;
++   FD_ZERO (&fds);		/* initialize selection vector */
++   if (stream->tcpso < 0) return NIL;
++   while (size > 0) {		/* until request satisfied */
++     FD_SET (stream->tcpso,&fds);/* set bit in selection vector */
++     if ((select (stream->tcpso+1,0,&fds,0,0) < 0) ||
++ 	((i = write (stream->tcpso,string,size)) < 0)) {
++       puts (strerror (errno));
++       close (stream->tcpsi);	/* nuke the socket */
++       if (stream->tcpsi != stream->tcpso) close (stream->tcpso);
++       stream->tcpsi = stream->tcpso = -1;
++       return NIL;
++     }
++     size -= i;			/* count this size */
++     string += i;
++   }
++   return T;			/* all done */
++ }
++ 
++ /* TCP/IP close
++  * Accepts: TCP/IP stream
++  */
++ 
++ void tcp_close (stream)
++ 	TCPSTREAM *stream;
++ {
++ 
++   if (stream->tcpsi >= 0) {	/* no-op if no socket */
++     close (stream->tcpsi);	/* nuke the socket */
++     if (stream->tcpsi != stream->tcpso) close (stream->tcpso);
++     stream->tcpsi = stream->tcpso = -1;
++   }
++ 				/* flush host names */
++   fs_give ((void **) &stream->host);
++   fs_give ((void **) &stream->localhost);
++   fs_give ((void **) &stream);	/* flush the stream */
++ }
++ 
++ 
++ /* TCP/IP get host name
++  * Accepts: TCP/IP stream
++  * Returns: host name for this stream
++  */
++ 
++ char *tcp_host (stream)
++ 	TCPSTREAM *stream;
++ {
++   return stream->host;		/* return host name */
++ }
++ 
++ 
++ /* TCP/IP get local host name
++  * Accepts: TCP/IP stream
++  * Returns: local host name
++  */
++ 
++ char *tcp_localhost (stream)
++ 	TCPSTREAM *stream;
++ {
++   return stream->localhost;	/* return local host name */
++ }
++ 
++ 
++ /* Return implementation-defined string corresponding to error
++  * Accepts: error number
++  * Returns: string for that error
++  */
++ 
++ char *strerror (n)
++      int n;
++ {
++   return (n >= 0 && n < sys_nerr) ? sys_errlist[n] : NIL;
++ }
++ 
++ 
++ /* char *memmove (s,ct,n)
++ 	char *s;
++ 	char *ct;
++ 	int n;
++ {
++   bcopy (ct,s,n);
++   return ct;
++ } */
++ 
+diff -Ncr pine3.84x/imap/non-ANSI/c-client/os_aux.h pineaux/imap/non-ANSI/c-client/os_aux.h
+*** pine3.84x/imap/non-ANSI/c-client/os_aux.h
+--- pineaux/imap/non-ANSI/c-client/os_aux.h	Wed Sep 22 09:48:35 1993
+***************
+*** 0 ****
+--- 1,75 ----
++ /*
++  * Program:	Operating-system dependent routines -- A/UX version
++  *
++  * Last Edited:	24 August 1993
++  *
++  * Copyright 1993 by the University of Washington
++  *
++  *  Permission to use, copy, modify, and distribute this software and its
++  * documentation for any purpose and without fee is hereby granted, provided
++  * that the above copyright notice appears in all copies and that both the
++  * above copyright notice and this permission notice appear in supporting
++  * documentation, and that the name of the University of Washington not be
++  * used in advertising or publicity pertaining to distribution of the software
++  * without specific, written prior permission.  This software is made
++  * available "as is", and
++  * THE UNIVERSITY OF WASHINGTON DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED,
++  * WITH REGARD TO THIS SOFTWARE, INCLUDING WITHOUT LIMITATION ALL IMPLIED
++  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, AND IN
++  * NO EVENT SHALL THE UNIVERSITY OF WASHINGTON BE LIABLE FOR ANY SPECIAL,
++  * INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
++  * LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, TORT
++  * (INCLUDING NEGLIGENCE) OR STRICT LIABILITY, ARISING OUT OF OR IN CONNECTION
++  * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++  *
++  */
++ 
++ #define MAILFILE "/usr/mail/%s"
++ #define ACTIVEFILE "/usr/lib/news/active"
++ #define NEWSSPOOL "/usr/spool/news"
++ #define NEWSRC strcat (strcpy (tmp,myhomedir ()),"/.newsrc")
++ #define NFSKLUDGE
++ #define memmove memcpy
++ 
++ #include <sys/types.h>
++ #include <sys/dir.h>
++ #include <stdlib.h>
++ #include <strings.h>
++ #include <sys/uio.h>		/* needed for writev() prototypes */
++ #include <time.h>
++ 
++ extern int errno;
++ extern char *strerror ();
++ /* extern char *memmove (); */
++ 
++ 
++ /* Dummy definition overridden by TCP routines */
++ 
++ #ifndef TCPSTREAM
++ #define TCPSTREAM void
++ #endif
++ 
++ /* Function prototypes */
++ 
++ void rfc822_date  ();
++ void *fs_get  ();
++ void fs_resize  ();
++ void fs_give  ();
++ void fatal  ();
++ unsigned long strcrlfcpy  ();
++ unsigned long strcrlflen  ();
++ long server_login  ();
++ char *myusername ();
++ char *myhomedir ();
++ char *lockname  ();
++ TCPSTREAM *tcp_open  ();
++ TCPSTREAM *tcp_aopen  ();
++ char *tcp_getline  ();
++ long tcp_getbuffer  ();
++ long tcp_getdata  ();
++ long tcp_soutr  ();
++ long tcp_sout  ();
++ void tcp_close  ();
++ char *tcp_host  ();
++ char *tcp_localhost  ();
++ /* char *memmove (); */
+diff -Ncr pine3.84x/pico/makefile.aux pineaux/pico/makefile.aux
+*** pine3.84x/pico/makefile.aux
+--- pineaux/pico/makefile.aux	Tue Sep 21 12:04:00 1993
+***************
+*** 0 ****
+--- 1,53 ----
++ #
++ # Makefile for A/UX 3.0 version of the PINE composer library and 
++ # stand-alone editor pico.
++ #
++ 
++ #includes symbols for debugging
++ DASHO=		-g 
++ 
++ CFLAGS=		-DJOB_CONTROL -D_POSIX_SOURCE -DPOSIX
++ 
++ # switches for library building
++ LIBCMD=ar
++ LIBARGS=-ru
++ RANLIB=/bin/true
++ 
++ LIBS=		-ltermcap -lposix
++ 
++ OFILES=		attach.o ansi.o basic.o bind.o browse.o buffer.o \
++ 		composer.o display.o file.o fileio.o line.o osdep.o \
++ 		pico.o random.o region.o search.o spell.o tcap.o window.o word.o
++ 
++ CFILES=		attach.c ansi.c basic.c bind.c browse.c buffer.c \
++ 		composer.c display.c file.c fileio.c line.c osdep.c \
++ 		pico.c random.c region.c search.c spell.c tcap.c window.c word.c
++ 
++ HFILES=		estruct.h edef.h efunc.h ebind.h pico.h osdep.h
++ 
++ #
++ # dependencies for the Unix versions of pico and libpico.a
++ #
++ all:		pico
++ 
++ osdep.c:	os_unix.c
++ 		rm -f osdep.c
++ 		cp os_unix.c osdep.c
++ 
++ osdep.h:	os_unix.h
++ 		rm -f osdep.h
++ 		cp os_unix.h osdep.h
++ 
++ libpico.a:	osdep.c osdep.h $(OFILES)
++ 		$(LIBCMD) $(LIBARGS) libpico.a $(OFILES)
++ 		$(RANLIB) libpico.a
++ 
++ pico:		main.c libpico.a
++ 		$(CC) $(CFLAGS) main.c libpico.a $(LIBS) -o pico
++ 
++ .c.o:		; $(CC) -c $(CFLAGS) $(DASHO) $*.c
++ 
++ $(OFILES):	$(HFILES)
++ 
++ clean:
++ 		rm -f *.a *.o *~ osdep.c osdep.h
+diff -Ncr pine3.84x/pico/os_unix.h pineaux/pico/os_unix.h
+*** pine3.84x/pico/os_unix.h	Tue Aug 24 19:43:08 1993
+--- pineaux/pico/os_unix.h	Sat Aug 28 17:06:22 1993
+***************
+*** 42,48 ****
+  #ifndef	OSDEP_H
+  #define	OSDEP_H
+  
+! #if	defined(dyn)
+  #include	<strings.h>
+  #else
+  #include	<string.h>
+--- 42,48 ----
+  #ifndef	OSDEP_H
+  #define	OSDEP_H
+  
+! #if	defined(dyn) || defined(AUX)
+  #include	<strings.h>
+  #else
+  #include	<string.h>
+***************
+*** 114,120 ****
+  /*
+   * Place where mail gets delivered (for pico's new mail checking)
+   */
+! #if	defined(sv3) || defined(ct)
+  #define	MAILDIR		"usr/mail"
+  #else
+  #define	MAILDIR		"/usr/spool/mail"
+--- 114,120 ----
+  /*
+   * Place where mail gets delivered (for pico's new mail checking)
+   */
+! #if	defined(sv3) || defined(ct) || defined(AUX)
+  #define	MAILDIR		"usr/mail"
+  #else
+  #define	MAILDIR		"/usr/spool/mail"
+***************
+*** 130,136 ****
+   * What and where the tool that checks spelling is located.  If this is
+   * undefined, then the spelling checker is not compiled into pico.
+   */
+! #if	defined(COHERENT)
+  #define SPELLER         "/bin/spell"
+  #else
+  #define	SPELLER		"/usr/bin/spell"
+--- 130,136 ----
+   * What and where the tool that checks spelling is located.  If this is
+   * undefined, then the spelling checker is not compiled into pico.
+   */
+! #if	defined(COHERENT) || defined(AUX)
+  #define SPELLER         "/bin/spell"
+  #else
+  #define	SPELLER		"/usr/bin/spell"
+***************
+*** 139,145 ****
+  /* memcpy() is no good for overlapping blocks.  If that's a problem, use
+   * the memmove() in ../c-client
+   */
+! #if	defined (ptx) || defined(sv4) || defined(sco)
+  #define bcopy(a,b,s) memcpy (b, a, s)
+  #endif
+  
+--- 139,145 ----
+  /* memcpy() is no good for overlapping blocks.  If that's a problem, use
+   * the memmove() in ../c-client
+   */
+! #if	defined (ptx) || defined(sv4) || defined(sco) || defined(AUX)
+  #define bcopy(a,b,s) memcpy (b, a, s)
+  #endif
+  
+Binary files pine3.84x/pico/pico and pineaux/pico/pico differ
+diff -Ncr pine3.84x/pine/date.c pineaux/pine/date.c
+*** pine3.84x/pine/date.c
+--- pineaux/pine/date.c	Wed Sep 22 10:12:39 1993
+***************
+*** 0 ****
+--- 1 ----
++ char datestamp[]="Wed Sep 22 10:12:40 EDT 1993";
+diff -Ncr pine3.84x/pine/makefile.aux pineaux/pine/makefile.aux
+*** pine3.84x/pine/makefile.aux
+--- pineaux/pine/makefile.aux	Tue Sep 21 12:26:16 1993
+***************
+*** 0 ****
+--- 1,97 ----
++ #     Make file for the Pine mail system for A/UX
++ #
++ #
++ #   Most commonly fiddled flags for compiler.
++ #   Uncomment the setttings desired here
++ #
++ RM=          rm -f
++ LN=          ln -s
++ MAKE=        make
++ OPTIMIZE=    # -O
++ PROFILE=     # -pg
++ DEBUG=       -g 
++ 
++ LIBES=       -ltermcap -lc -lposix
++ LOCLIBES=    ../pico/libpico.a ../c-client/c-client.a
++ 
++ CFLAGS= $(OPTIMIZE) $(PROFILE) $(DEBUG)
++ 
++ obj=    addrbook.o addrutil.o adrbklib.o args.o context.o filter.o \
++ 	folder.o help.o helptext.o imap.o init.o mailcmd.o mailindx.o \
++ 	mailview.o newmail.o other.o pine.o print.o reply.o screen.o \
++ 	send.o signals.o status.o strings.o ttyin.o ttyout.o os.o
++ 
++ cfiles= addrbook.c addrutil.c adrbklib.c args.c context.c filter.c \
++ 	folder.c help.c helptext.c imap.c init.c mailcmd.c mailindx.c \
++ 	mailview.c newmail.c other.c pine.c print.c reply.c screen.c \
++ 	send.c signals.c status.c strings.c ttyin.c ttyout.c os.c
++ 
++ pine:  $(obj) $(LOCLIBES)
++ 	echo "char datestamp[]="\"`date`\"";" > date.c
++ 	$(CC) -c $(CFLAGS) -o date.o date.c
++ 	$(CC) $(LDFLAGS) $(CFLAGS) -o pine $(obj) date.o $(LOCLIBES) $(LIBES)
++ 
++ # this is not part of pine
++ pine-use:	pine-use.c
++ 	$(CC) -o pine-use pine-use.c
++ 
++ clean:
++ 	$(RM) *.o os.h os.c helptext.c helptext.h
++ 	cd osdep; make clean; cd ..
++ 
++ 
++ HEADERS= headers.h pine.h os.h helptext.h context.h \
++ 	  ../c-client/mail.h ../c-client/osdep.h
++ 
++ addrbook.o:	addrbook.c  $(HEADERS) adrbklib.h
++ addrutil.o:	addrutil.c  $(HEADERS) adrbklib.h
++ adrbklib.o: 	adrbklib.c  $(HEADERS) adrbklib.h
++ args.o:		args.c      $(HEADERS)
++ context.o:	context.c   $(HEADERS) ../c-client/misc.h
++ filter.o:	filter.c    $(HEADERS) ../pico/pico.h
++ folder.o:	folder.c    $(HEADERS)
++ help.o:		help.c      $(HEADERS)
++ helptext.o:	helptext.c
++ imap.o:	        imap.c      $(HEADERS)
++ init.o:		init.c      $(HEADERS)
++ mailcmd.o:	mailcmd.c   $(HEADERS)
++ mailindx.o:	mailindx.c  $(HEADERS)
++ mailview.o:	mailview.c  $(HEADERS)
++ newmail.o:	newmail.c   $(HEADERS)
++ os.o:		os.c 	    $(HEADERS)
++ other.o:	other.c     $(HEADERS)
++ pine.o:		pine.c      $(HEADERS)
++ print.o:	print.c     $(HEADERS)
++ reply.o:	reply.c     $(HEADERS)
++ screen.o:	screen.c    $(HEADERS)
++ send.o:	        send.c      $(HEADERS) ../c-client/smtp.h ../pico/pico.h
++ signals.o:	signals.c   $(HEADERS)
++ status.o:	status.c    $(HEADERS)
++ strings.o:	strings.c   $(HEADERS)
++ ttyin.o:	ttyin.c     $(HEADERS)
++ ttyout.o:	ttyout.c    $(HEADERS)
++ 
++ os.h:	osdep/os-aux.h
++ 	$(RM) os.h
++ 	$(LN) osdep/os-aux.h os.h
++ 
++ helptext.c:	pine.hlp
++ 		./cmplhelp.sh  < pine.hlp > helptext.c
++ 
++ helptext.h:	pine.hlp
++ 		./cmplhlp2.sh  < pine.hlp > helptext.h
++ 
++ os.c:	osdep/os-aux.c
++ 	$(RM) os.c
++ 	$(LN) osdep/os-aux.c os.c
++ 
++ osdep/os-aux.c:	osdep/bld_path osdep/canacces osdep/canonicl \
++ 		osdep/chnge_pw osdep/coredump osdep/creatdir \
++ 		osdep/diskquot.non osdep/domnames osdep/err_desc \
++ 		osdep/expnfldr osdep/fgetpos.non osdep/filesize osdep/fltrname \
++ 		osdep/fnexpand osdep/header osdep/hostname \
++ 		osdep/jobcntrl osdep/lstcmpnt osdep/mimedisp \
++ 		osdep/play_snd.non osdep/pw_stuff osdep/readfile \
++ 		osdep/rename.hom osdep/tempfile osdep/tempnam osdep/writ_dir \
++ 		osdep/os-aux.ic
++ 	cd osdep; $(MAKE) includer os-aux.c; cd ..
+diff -Ncr pine3.84x/pine/osdep/makefile.bas pineaux/pine/osdep/makefile.bas
+*** pine3.84x/pine/osdep/makefile.bas	Mon Aug 23 18:40:21 1993
+--- pineaux/pine/osdep/makefile.bas	Wed Sep  1 12:13:04 1993
+***************
+*** 6,12 ****
+  ALL	=	os-a32.c os-aix.c os-bsd.c os-bsi.c os-cvx.c os-dos.c \
+  		os-dyn.c os-gen.c os-hpp.c os-isc.c os-lnx.c os-nxt.c \
+  		os-osf.c os-ptx.c os-s40.c os-sgi.c \
+! 		os-sun.c os-sv4.c os-ult.c
+  
+  .SUFFIXES: .ic
+  
+--- 6,12 ----
+  ALL	=	os-a32.c os-aix.c os-bsd.c os-bsi.c os-cvx.c os-dos.c \
+  		os-dyn.c os-gen.c os-hpp.c os-isc.c os-lnx.c os-nxt.c \
+  		os-osf.c os-ptx.c os-s40.c os-sgi.c \
+! 		os-sun.c os-sv4.c os-ult.c os-aux.c
+  
+  .SUFFIXES: .ic
+  
+diff -Ncr pine3.84x/pine/osdep/os-aux.c pineaux/pine/osdep/os-aux.c
+*** pine3.84x/pine/osdep/os-aux.c
+--- pineaux/pine/osdep/os-aux.c	Thu Sep  2 01:32:33 1993
+***************
+*** 0 ****
+--- 1,1003 ----
++ /*----------------------------------------------------------------------
++ 
++             T H E    P I N E    M A I L   S Y S T E M
++ 
++    Laurence Lundblade and Mike Seibel
++    Networks and Distributed Computing
++    Computing and Communications
++    University of Washington
++    Administration Builiding, AG-44
++    Seattle, Washington, 98195, USA
++    Internet: lgl@CAC.Washington.EDU
++              mikes@CAC.Washington.EDU
++ 
++    Please address all bugs and comments to "pine-bugs@cac.washington.edu"
++ 
++    Copyright 1989-1993  University of Washington
++ 
++     Permission to use, copy, modify, and distribute this software and its
++    documentation for any purpose and without fee to the University of
++    Washington is hereby granted, provided that the above copyright notice
++    appears in all copies and that both the above copyright notice and this
++    permission notice appear in supporting documentation, and that the name
++    of the University of Washington not be used in advertising or publicity
++    pertaining to distribution of the software without specific, written
++    prior permission.  This software is made available "as is", and
++    THE UNIVERSITY OF WASHINGTON DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED,
++    WITH REGARD TO THIS SOFTWARE, INCLUDING WITHOUT LIMITATION ALL IMPLIED
++    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, AND IN
++    NO EVENT SHALL THE UNIVERSITY OF WASHINGTON BE LIABLE FOR ANY SPECIAL,
++    INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
++    LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, TORT
++    (INCLUDING NEGLIGENCE) OR STRICT LIABILITY, ARISING OUT OF OR IN CONNECTION
++    WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++   
++    Pine and Pico are trademarks of the University of Washington.
++    No commercial use of these trademarks may be made without prior
++    written permission of the University of Washington.
++ 
++    Pine is in part based on The Elm Mail System:
++     ***********************************************************************
++     *  The Elm Mail System  -  Revision: 2.13                             *
++     *                                                                     *
++     * 			Copyright (c) 1986, 1987 Dave Taylor              *
++     * 			Copyright (c) 1988, 1989 USENET Community Trust   *
++     ***********************************************************************
++  
++ 
++   ----------------------------------------------------------------------*/
++ 
++ /*======================================================================
++ 
++  This contains most of Pine's interface to the local operating system
++ and hardware.  Hopefully this file, os-xxx.h and makefile.xxx are the
++ only ones that have to be modified for most ports.  Signals.c, ttyin.c,
++ and ttyout.c also have some dependencies.  See the doc/tech-notes for
++ notes on porting Pine to other platforms.  Here is a list of the functions
++ required for an implementation:
++ 
++ 
++   File System Access
++      can_access          -- See if a file can be accessed
++      file_size           -- Return the number of bytes in the file
++      is_writable_dir     -- Check to see if directory exists and is writable
++      create_mail_dir     -- Make a directory
++      rename_file         -- change name of a file
++      build_path          -- Put together a file system path
++      last_cmpnt          -- Returns pointer to last component of path
++      expand_foldername   -- Expand a folder name to full path
++      fnexpand            -- Do filename exansion for csh style "~"
++      filter_filename     -- Make sure file name hasn't got weird chars
++      disk_quota          -- Check the user's disk quota
++      read_file           -- Read whole file into memory (for small files)
++      create_tmpfile      -- Just like ANSI C tmpfile function
++      temp_nam            -- Almost like common tempnam function
++      fget_pos,fset_pos   -- Just like ANSI C fgetpos, fsetpos functions
++ 
++   Abort
++      coredump            -- Abort running Pine dumping core if possible
++ 
++   System Name and Domain
++      hostname            -- Figure out the system's host name, only
++                               used internally in this file.
++      getdomainnames      -- Figure out the system's domain name
++      canonical_name      -- Returns canonical form of host name
++ 
++   Job Control
++      have_job_control    -- Returns 1 if job control exists
++      stop_process        -- What to do to stop process when it's time to stop
++ 			      (only used if have_job_control returns 1)
++ 
++   System Error Messages (in case given one is a problem)
++      error_description   -- Returns string describing error
++ 
++   System Password and Accounts
++      gcos_name           -- Parses full name from system, only used
++ 			      locally in this file so if you don't use it you
++ 			      don't need it
++      get_system_login    -- Returns user's login name 
++      get_system_fullname -- Returns user's full name 
++      get_system_homedir  -- Returns user's home directoru
++      get_system_passwd   -- Returns enscrypted password
++      local_name_lookup   -- Get full name of user on system
++      change_passwd       -- Calls system password changer
++ 
++   MIME utilities
++      mime_can_display    -- Can we display this type/subtype?
++      gf_play_sound       -- Play audio MIME if possible
++ 
++   Other stuff
++      srandom             -- Dummy srandom if you don't have this function
++ 
++   ====*/
++ 
++ 
++ #include "headers.h"
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++        Check if we can access a file in a given way
++ 
++    Args: file      -- The file to check
++          mode      -- The mode ala the access() system call, see ACCESS_EXISTS
++                       and friends in pine.h.
++ 
++  Result: returns 0 if the user can access the file according to the mode,
++          -1 if he can't (and errno is set).
++  ----*/
++ int
++ can_access(file, mode)
++     char *file; 
++     int   mode;
++ {
++     return(access(file, mode));
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++       Return the number of bytes in given file
++ 
++     Args: file -- file name
++ 
++   Result: the number of bytes in the file is returned or
++           -1 on error, in which case errno is valid
++  ----*/
++ long
++ file_size(file)
++     char *file;
++ {
++     struct stat buffer;
++ 
++     if (stat(file, &buffer) != 0)
++         return(-1L);
++     return(buffer.st_size);
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++       Check to see if a directory exists and is writable by us
++ 
++    Args: dir -- directory name
++ 
++  Result:       returns 0 if it exists and is writable
++                        1 if it is a directory, but is not writable
++                        2 if it is not a directory
++                        3 it doesn't exist.
++   ----*/
++ is_writable_dir(dir)
++     char *dir;
++ {
++     struct stat sb;
++ 
++     if(stat(dir, &sb) < 0)
++       /*--- It doesn't exist ---*/
++       return(3);
++ 
++     if(!(sb.st_mode & S_IFDIR))
++       /*---- it's not a directory ---*/
++       return(2);
++ 
++     if(can_access(dir, 07))
++       return(1);
++     else
++       return(0);
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++       Create the mail subdirectory.
++ 
++   Args: dir -- Name of the directory to create
++  
++  Result: Directory is created.  Returns 0 on success, else -1 on error
++ 	 and errno is valid.
++   ----*/
++ create_mail_dir(dir)
++     char *dir;
++ {
++     if(mkdir(dir, 0700) < 0)
++       return(-1);
++ 
++     (void)chmod(dir, 0700);
++     /* Some systems need this, on others we don't care if it fails */
++     (void)chown(dir, getuid(), getgid());
++     return(0);
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++       Rename a file
++ 
++   Args: tmpfname -- Old name of file
++         fname    -- New name of file
++  
++  Result: File is renamed.  Returns 0 on success, else -1 on error
++ 	 and errno is valid.
++   ----*/
++ rename_file(tmpfname, fname)
++     char *tmpfname, *fname;
++ {
++     int status;
++ 
++     (void) unlink(fname);
++     if ((status = link(tmpfname, fname)) != 0)
++         return(status);
++     (void) unlink(tmpfname);
++     return(0);
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++       Paste together two pieces of a file name path
++ 
++   Args: pathbuf      -- Put the result here
++         first_part   -- of path name
++         second_part  -- of path name
++  
++  Result: New path is in pathbuf.  No check is made for overflow.  Note that
++ 	 we don't have to check for /'s at end of first_part and beginning
++ 	 of second_part since multiple slashes are ok.
++ 
++ BUGS:  This is a first stab at dealing with fs naming dependencies, and others 
++ still exist.
++   ----*/
++ void
++ build_path(pathbuf, first_part, second_part)
++     char *pathbuf, *first_part, *second_part;
++ {
++     if(first_part == NULL)
++       strcpy(pathbuf, second_part);
++     else
++       sprintf(pathbuf, "%s/%s", first_part, second_part);
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++       Return pointer to last component of pathname.
++ 
++   Args: filename     -- The pathname.
++  
++  Result: Returned pointer points to last component in the input argument.
++   ----*/
++ char *
++ last_cmpnt(filename)
++     char *filename;
++ {
++     register char *p;
++ 
++     for(p = filename + strlen(filename) -1; p > filename; p--){
++         if(*p == '/' && *(p+1) != '\0')
++           return(p+1);
++     }
++     return(p);
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++       Expand a folder name, taking account of the folders_dir and `~'.
++ 
++   Args: filename -- The name of the file that is the folder
++  
++  Result: The folder name is expanded in place.  
++          Returns 0 and queues status message if unsuccessful.
++          Input string is overwritten with expanded name.
++          Returns 1 if successful.
++ 
++ BUG should limit length to MAXPATH
++   ----*/
++ int
++ expand_foldername(filename)
++     char *filename;
++ {
++     char         temp_filename[MAXPATH+1];
++ 
++     dprint(5, (debugfile, "=== expand_foldername called (%s) ===\n",filename));
++ 
++     if(filename[0] != '{') {
++         char *ill = filter_filename(filename);
++         if(ill != NULL) {
++             q_status_message1(1, 1,3, "%s in folder name", ill);
++             return(0);
++         }
++     }
++ 
++     strcpy(temp_filename, filename);
++     if(strucmp(temp_filename, "inbox") == 0) {
++         strcpy(filename, ps_global->VAR_INBOX_PATH == NULL ? "inbox" :
++                ps_global->VAR_INBOX_PATH);
++     } else if(temp_filename[0] == '{') {
++         strcpy(filename, temp_filename);
++     } else if(strindex("./~", temp_filename[0]) != NULL 
++ 	      && ps_global->restricted){
++ 	q_status_message(1, 1,3,"Pine demo only opens local folders");
++ 	return(0);
++     } else if(temp_filename[0] == '*') {
++         strcpy(filename, temp_filename);
++     } else if (temp_filename[0] == '~'){
++         if(fnexpand(temp_filename, sizeof(temp_filename)) == NULL) {
++             char *p = strindex(temp_filename, '/');
++     	    if(p != NULL)
++     	      *p = '\0';
++     	    q_status_message1(1, 1,2,
++                     "Error expanding folder name: \"%s\" unknown user",
++     	       temp_filename);
++     	    return(0);
++         }
++         strcpy(filename, temp_filename);
++     } else if(temp_filename[0] == '/') {
++         strcpy(filename, temp_filename);
++     } else {
++         sprintf(filename,"%s/%s", ps_global->folders_dir, temp_filename);
++     }
++     dprint(5, (debugfile, "returning \"%s\"\n", filename));    
++     return(1);
++ }
++ 
++ 
++ 
++ struct passwd *getpwnam();
++ 
++ /*----------------------------------------------------------------------
++        Expand the ~ in a file ala the csh (as home directory)
++ 
++    Args: buf --  The filename to expand (nothing happens unless begins with ~)
++          len --  The length of the buffer passed in (expansion is in place)
++ 
++  Result: Expanded string is returned using same storage as passed in.
++          If expansion fails, NULL is returned
++  ----*/
++ char *
++ fnexpand(buf, len)
++     char *buf;
++     int len;
++ {
++     struct passwd *pw;
++     register char *x,*y;
++     char name[20];
++     
++     if(*buf == '~') {
++         for(x = buf+1, y = name; *x != '/' && *x != '\0'; *y++ = *x++);
++         *y = '\0';
++         if(x == buf + 1) 
++           pw = getpwuid(getuid());
++         else
++           pw = getpwnam(name);
++         if(pw == NULL)
++           return((char *)NULL);
++         if(strlen(pw->pw_dir) + strlen(buf) > len) {
++           return((char *)NULL);
++         }
++         rplstr(buf, x - buf, pw->pw_dir);
++     }
++     return(len ? buf : (char *)NULL);
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++     Filter file names for strange characters
++ 
++    Args:  file  -- the file name to check
++  
++  Result: Returns NULL if file name is OK
++          Returns formatted error message if it is not
++   ----*/
++ char *
++ filter_filename(file)
++     char *file;
++ {
++ #ifdef ALLOW_WEIRD
++     static char illegal[] = {'\177', '\0'};
++ #else
++     static char illegal[] = {'"', '#', '$', '%', '&', '\'','(', ')','*',
++                           ',', ':', ';', '<', '=', '>', '?', '[', ']',
++                           '\\', '^', '|', '\177', '\0'};
++ #endif
++     static char error[100];
++     char ill_file[MAXPATH+1], *ill_char, *ptr, e2[10];
++ 
++     ptr = file;
++     while (*ptr == ' ') ptr++;	/* leading spaces GONE! */
++ 
++     if(*ptr == '*')
++       ptr++; /* Allow * at beginning for news groups */
++ 
++     while(*ptr && *ptr > ' ' && strindex(illegal, *ptr) == 0)
++       ptr++;
++ 
++     if(*ptr != '\0') {
++         if(*ptr == ' ') {
++             ill_char = "<space>";
++         } else if(*ptr == '\n') {
++             ill_char = "<newline>";
++         } else if(*ptr == '\r') {
++             ill_char = "<carriage return>";
++         } else if(*ptr == '\t') {
++     	    ill_char = "<tab>";
++         } else if(*ptr < ' ') {
++             sprintf(e2, "control-%c", *ptr + '@');
++             ill_char = e2;
++         } else if (*ptr == '\177') {
++     	    ill_char = "<del>";
++         } else {
++     	    e2[0] = *ptr;
++     	    e2[1] = '\0';
++     	    ill_char = e2;
++         }
++         if(ptr != file) {
++             strncpy(ill_file, file, ptr - file);
++             ill_file[ptr - file] = '\0';
++             sprintf(error,"Character \"%s\" after \"%s\" not allowed",ill_char,
++                     ill_file);
++         } else {
++             sprintf(error,
++                     "First character, \"%s\", not allowed",
++                     ill_char);
++         }
++             
++         return(error);
++     }
++     return((char *)NULL);
++ }
++ 
++ 
++ 
++ #if defined(USE_QUOTAS)
++ 
++ /*----------------------------------------------------------------------
++    This system doesn't have disk quotas.
++    Return space left in disk quota on file system which given path is in.
++ 
++     Args: path - Path name of file or directory on file system of concern
++           over - pointer to flag that is set if the user is over quota
++ 
++  Returns: If *over = 0, the number of bytes free in disk quota as per
++           the soft limit.
++ 	  If *over = 1, the number of bytes *over* quota.
++           -1 is returned on an error looking up quota
++            0 is returned if there is no quota
++ 
++ BUG:  If there's more than 2.1Gb free this function will break
++   ----*/
++ long
++ disk_quota(path, over)
++     char *path;
++     int  *over;
++ {
++     return(0L);
++ }
++ #endif /* USE_QUOTAS */
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++     Read whole file into memory
++ 
++   Args: filename -- path name of file to read
++ 
++   Result: Returns pointer to malloced memory with the contents of the file
++           or NULL
++ 
++ This won't work very well if the file has NULLs in it and is mostly
++ intended for fairly small text files.
++  ----*/
++ char *
++ read_file(filename)
++     char *filename;
++ {
++     int         fd;
++     struct stat statbuf;
++     char       *buf;
++ 
++     fd = open(filename, O_RDONLY);
++     if(fd < 0)
++       return((char *)NULL);
++ 
++     fstat(fd, &statbuf);
++ 
++     buf = fs_get(statbuf.st_size + 1);
++ 
++     /*
++      * On some systems might have to loop here, if one read isn't guaranteed
++      * to get the whole thing.
++      */
++     if(read(fd, buf, statbuf.st_size) != statbuf.st_size) {
++         close(fd);
++         return((char *)NULL);
++     }
++     close(fd);
++ 
++     buf[statbuf.st_size]= '\0';
++ 
++     return(buf);
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++    Create a temporary file, the name of which we don't care about 
++ and that goes away when it is closed.  Just like ANSI C tmpfile.
++   ----*/
++ FILE  *
++ create_tmpfile()
++ {
++     return(tmpfile());
++ }
++ 
++ 
++ 
++ /*
++  * This routine is derived from BSD4.3 code,
++  * Copyright (c) 1988 Regents of the University of California.
++  * All rights reserved.
++  */
++ #if defined(LIBC_SCCS) && !defined(lint)
++ static char sccsid[] = "@(#)tmpnam.c	4.5 (Berkeley) 6/27/88";
++ #endif /* LIBC_SCCS and not lint */
++ /*----------------------------------------------------------------------
++       Return a unique file name in a given directory.  This is not quite
++       the same as the usual tempnam() function, though it is very similar.
++       We want it to use the TMP environment variable only if dir is NULL,
++       instead of using TMP regardless if it is set.
++ 
++   Args: dir      -- The directory to create the name in
++         prefix   -- Prefix of the name
++  
++  Result: Malloc'd string equal to new name is returned.  It must be free'd
++ 	 by the caller.  Returns the string on success and NULL on failure.
++   ----*/
++ char *
++ temp_nam(dir, prefix)
++     char *dir, *prefix;
++ {
++     struct stat buf;
++     char *f, *name;
++     char *mktemp();
++ 
++     if (!(name = malloc((unsigned int)MAXPATHLEN)))
++         return((char *)NULL);
++ 
++     if (!dir && (f = getenv("TMPDIR")) && !stat(f, &buf) &&
++                          (buf.st_mode&S_IFMT) == S_IFDIR &&
++ 			 !can_access(f, WRITE_ACCESS|EXECUTE_ACCESS)) {
++         (void)strcpy(name, f);
++         goto done;
++     }
++ 
++     if (dir && !stat(dir, &buf) &&
++                          (buf.st_mode&S_IFMT) == S_IFDIR &&
++ 	                 !can_access(dir, WRITE_ACCESS|EXECUTE_ACCESS)) {
++         (void)strcpy(name, dir);
++         goto done;
++     }
++ 
++ #ifndef P_tmpdir
++ #define	P_tmpdir	"/usr/tmp"
++ #endif
++     if (!stat(P_tmpdir, &buf) &&
++                          (buf.st_mode&S_IFMT) == S_IFDIR &&
++ 			 !can_access(P_tmpdir, WRITE_ACCESS|EXECUTE_ACCESS)) {
++         (void)strcpy(name, P_tmpdir);
++         goto done;
++     }
++ 
++     if (!stat("/tmp", &buf) &&
++                          (buf.st_mode&S_IFMT) == S_IFDIR &&
++ 			 !can_access("/tmp", WRITE_ACCESS|EXECUTE_ACCESS)) {
++         (void)strcpy(name, "/tmp");
++         goto done;
++     }
++     return((char *)NULL);
++ 
++ done:
++     (void)strcat(name, "/");
++ 
++     if (prefix)
++         (void)strcat(name, prefix);
++     (void)strcat(name, "XXXXXX");
++     return(mktemp(name));
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++      Abort with a core dump
++  ----*/
++ void
++ coredump()
++ {
++     abort();
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++        Call system gethostname
++ 
++   Args: hostname -- buffer to return host name in 
++         size     -- Size of buffer hostname is to be returned in
++ 
++  Result: returns 0 if the hostname is correctly set,
++          -1 if not (and errno is set).
++  ----*/
++ hostname(hostname,size) 
++     char *hostname;
++     int size;
++ {
++     return(gethostname(hostname, size));
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++        Get the current host and domain names
++ 
++     Args: hostname   -- buffer to return the hostname in
++           hsize      -- size of buffer above
++           domainname -- buffer to return domain name in
++           dsize      -- size of buffer above
++ 
++   Result: The system host and domain names are returned. If the full host
++           name is akbar.cac.washington.edu then the domainname is
++           cac.washington.edu.
++ 
++ On Internet connected hosts this look up uses /etc/hosts and DNS to
++ figure all this out. On other less well connected machines some other
++ file may be read. If there is no notion of a domain name the domain
++ name may be left blank. On a PC where there really isn't a host name
++ this should return blank strings. The .pinerc will take care of
++ configuring the domain names. That is, this should only return the
++ native system's idea of what the names are if the system has such
++ a concept.
++  ----*/
++ void
++ getdomainnames(hostname, hsize, domainname, dsize)
++     char *hostname, *domainname;
++     int   hsize, dsize;
++ {
++     char           *dn, hname[MAX_ADDRESS+1];
++     struct hostent *he;
++ 
++     gethostname(hname, MAX_ADDRESS);
++ 
++     he = gethostbyname(hname);
++ 
++     if(he == NULL && strlen(hname) == 0) {
++         strcpy(hostname, "");
++     } else if(he == NULL) {
++         strncpy(hostname, hname, hsize - 1);
++     } else {
++         strncpy(hostname, he->h_name, hsize-1);
++     }
++     hostname[hsize-1] = '\0';
++ 
++ 
++     if((dn = strindex(hostname, '.')) != NULL) {
++         strncpy(domainname, dn+1, dsize-1);
++     } else {
++         strncpy(domainname, hostname, dsize-1);
++     }
++     domainname[dsize-1] = '\0';
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++        Return canonical form of host name ala c-client (UNIX version).
++ 
++    Args: host      -- The host name
++ 
++  Result: Canonical form, or input argument (worst case)
++  ----*/
++ char *
++ canonical_name(host)
++     char *host;
++ {
++     struct hostent *hent;
++     char hostname[MAILTMPLEN];
++     char tmp[MAILTMPLEN];
++     extern char *lcase();
++                                 /* domain literal is easy */
++     if (host[0] == '[' && host[(strlen (host))-1] == ']')
++       return host;
++ 
++     strcpy (hostname,host);       /* UNIX requires lowercase */
++                                 /* lookup name, return canonical form */
++     return (hent = gethostbyname (lcase (strcpy (tmp,host)))) ?
++       hent->h_name : host;
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++      This routine returns 1 if job control is available.  Note, thiis
++      could be some type of fake job control.  It doesn't have to be
++      real BSD-style job control.
++   ----*/
++ have_job_control()
++ {
++     return 1;
++ }
++ 
++ 
++ /*----------------------------------------------------------------------
++     If we don't have job control, this routine is never called.
++   ----*/
++ stop_process()
++ {
++     kill(0, SIGSTOP); 
++ }
++ 
++ 
++ 
++ extern char *sys_errlist[];
++ 
++ /*----------------------------------------------------------------------
++        Return string describing the error
++ 
++    Args: errnumber -- The system error number (errno)
++ 
++  Result:  long string describing the error is returned
++   ----*/
++ char *
++ error_description(errnumber)
++     int errnumber;
++ {
++     static char buffer[50];
++ 
++     strcpy(buffer, sys_errlist[errnumber]);
++ 
++     return ( (char *) buffer);
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++   This collection of routines looks up the login name and password on the
++ system. For things like PC's it's OK for these to return NULL since there
++ is no system login. Other code will figure out who the user actually is.
++   ----*/
++ static struct passwd *unix_pwd = NULL;
++ static int            pwd_looked_up = 0;
++ 
++ /*----------------------------------------------------------------------
++       Pull the name out of the gcos field if we have that sort of /etc/passwd
++ 
++    Args: gcos_field --  The long name or GCOS field to be parsed
++          logname    --  Replaces occurances of & with logname string
++ 
++  Result: returns pointer to buffer with name
++   ----*/
++ static char *
++ gcos_name(gcos_field, logname)
++     char *logname, *gcos_field;
++ {
++     static char fullname[MAX_FULLNAME+1];
++     register char *fncp, *gcoscp, *lncp, *end;
++ 
++     /* full name is all chars up to first ',' (or whole gcos, if no ',') */
++     /* replace any & with logname in upper case */
++ 
++     for(fncp = fullname, gcoscp= gcos_field, end = fullname + MAX_FULLNAME - 1;
++         (*gcoscp != ',' && *gcoscp != '\0' && fncp != end);
++ 	gcoscp++) {
++ 
++ 	if(*gcoscp == '&') {
++ 	    for(lncp = logname; *lncp; fncp++, lncp++)
++ 		*fncp = toupper(*lncp);
++ 	} else {
++ 	    *fncp++ = *gcoscp;
++ 	}
++     }
++     
++     *fncp = '\0';
++     return(fullname);
++ }
++ 
++ 
++ char *
++ get_system_login()
++ {
++     if(unix_pwd == NULL) {
++         if(!pwd_looked_up) {
++             unix_pwd = getpwuid(getuid());
++             pwd_looked_up = 1;
++         }
++         if(unix_pwd == NULL)
++           return((char *)NULL);
++     }
++     return(unix_pwd->pw_name);
++ }
++ char *
++ get_system_fullname()
++ {
++     if(unix_pwd == NULL) {
++         if(!pwd_looked_up) {
++             unix_pwd = getpwuid(getuid());
++             pwd_looked_up = 1;
++         }
++         if(unix_pwd == NULL)
++           return((char *)NULL);
++     }
++     return(gcos_name(unix_pwd->pw_gecos, unix_pwd->pw_name));
++ }
++ char *
++ get_system_homedir()
++ {
++     if(unix_pwd == NULL) {
++         if(!pwd_looked_up){
++             unix_pwd = getpwuid(getuid());
++             pwd_looked_up = 1;
++         }
++         if(unix_pwd == NULL)
++           return((char *)NULL);
++     }
++     return(unix_pwd->pw_dir);
++ }
++ char *
++ get_system_passwd()
++ {
++     if(unix_pwd == NULL) {
++         unix_pwd = getpwuid(getuid()); /* Always do real lookup in case */
++         pwd_looked_up = 1;             /* password is changed and kb locked */
++         if(unix_pwd == NULL)
++           return((char *)NULL);
++     }
++     return(unix_pwd->pw_passwd);
++ }
++ 
++ 
++ /*----------------------------------------------------------------------
++       Look up a userid on the local system and return rfc822 address
++ 
++  Args: name  -- possible login name on local system
++ 
++  Result: returns NULL or pointer to static string rfc822 address.
++   ----*/
++ char *
++ local_name_lookup(name)
++     char *name;
++ {
++     struct passwd *pw;
++     static char    buf[100];
++ 
++     pw = getpwnam(name);
++     if(pw == NULL)
++       return((char *)NULL);
++ 
++     strcpy(buf, gcos_name(pw->pw_gecos, name));
++ 
++     return(buf);
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++        Call the system to change the passwd
++  
++ It would be nice to talk to the passwd program via a pipe or ptty so the
++ user interface could be consistent, but we can't count on the the prompts
++ and responses from the passwd program to be regular so we just let the user 
++ type at the passwd program with some screen space, hope he doesn't scroll 
++ off the top and repaint when he's done.
++  ----*/        
++ change_passwd()
++ {
++     char cmd_buf[100];
++ 
++     int i;
++     for(i = 1; i < ps_global->ttyo->screen_rows; i ++) {
++         MoveCursor(i, 0);
++         CleartoEOLN();
++     }
++ 
++     MoveCursor(5, 0);
++     fflush(stdout);
++ 
++     Raw(0);
++     strcpy(cmd_buf, "passwd");
++     system(cmd_buf);
++     sleep(3);
++     Raw(1);
++     init_username(ps_global);
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++        Can we display this type/subtype?
++ 
++    Args: type      -- the MIME type to check
++          subtype   -- the MIME subtype
++          params    -- parameters
++ 
++  Result: returns 1 if the type is displayable, 0 otherwise.
++  ----*/
++ mime_can_display(type, subtype, params)
++     int type;
++     char *subtype;
++     PARAMETER *params;
++ {
++   switch(type) {
++     case TYPETEXT:
++         if(ps_global->show_all_characters)
++           return(1);
++         while(params != NULL && strucmp(params->attribute,"charset") != 0)
++           params = params->next;
++ 
++ 	return(match_charset((params) ? params->value : "US-ASCII",
++ 			     ps_global->VAR_CHAR_SET) != 2);
++ 
++     case TYPEAUDIO:
++      return(0);
++ 
++     case TYPEIMAGE:
++       if(getenv("DISPLAY") == NULL)
++         return(0);
++       if(strucmp(subtype, "gif") == 0 ||
++          strucmp(subtype, "pgm") == 0 ||
++          strucmp(subtype, "pbm") == 0 ||
++ 	 strucmp(subtype, "jpeg") == 0)
++           return(1);
++       else
++         return(0);
++ 
++ 
++     case TYPEAPPLICATION:
++       return(0);
++ 
++     case TYPEMULTIPART:
++       return(1);
++ 
++     case TYPEMESSAGE:
++       return(1);
++ 
++     default:
++       return(0);
++   }
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++        We don't know how to play audio.
++  ----*/
++ void
++ gf_play_sound(f, c, flg)
++     FILTER_S *f;
++     int       c, flg;
++ {
++ }
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++    This is an emulation of the ANSI C fgetpos function.
++   ----*/
++ fget_pos(stream, ptr)
++ FILE *stream;
++ fpos_t *ptr;
++ {
++     *ptr = (fpos_t)ftell(stream);
++     return (*ptr == -1L ? -1 : 0);
++ }
++ 
++ /*----------------------------------------------------------------------
++    This is an emulation of the ANSI C fsetpos function.
++   ----*/
++ fset_pos(stream, ptr)
++ FILE *stream;
++ fpos_t *ptr;
++ {
++     return fseek(stream, *ptr, 0);
++ }
++ 
++ 
+diff -Ncr pine3.84x/pine/osdep/os-aux.h pineaux/pine/osdep/os-aux.h
+*** pine3.84x/pine/osdep/os-aux.h
+--- pineaux/pine/osdep/os-aux.h	Thu Sep  2 13:18:40 1993
+***************
+*** 0 ****
+--- 1,321 ----
++ /*----------------------------------------------------------------------
++ 
++             T H E    P I N E    M A I L   S Y S T E M
++ 
++    Laurence Lundblade and Mike Seibel
++    Networks and Distributed Computing
++    Computing and Communications
++    University of Washington
++    Administration Builiding, AG-44
++    Seattle, Washington, 98195, USA
++    Internet: lgl@CAC.Washington.EDU
++              mikes@CAC.Washington.EDU
++ 
++    Please address all bugs and comments to "pine-bugs@cac.washington.edu"
++ 
++    Copyright 1989-1993  University of Washington
++ 
++     Permission to use, copy, modify, and distribute this software and its
++    documentation for any purpose and without fee to the University of
++    Washington is hereby granted, provided that the above copyright notice
++    appears in all copies and that both the above copyright notice and this
++    permission notice appear in supporting documentation, and that the name
++    of the University of Washington not be used in advertising or publicity
++    pertaining to distribution of the software without specific, written
++    prior permission.  This software is made available "as is", and
++    THE UNIVERSITY OF WASHINGTON DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED,
++    WITH REGARD TO THIS SOFTWARE, INCLUDING WITHOUT LIMITATION ALL IMPLIED
++    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, AND IN
++    NO EVENT SHALL THE UNIVERSITY OF WASHINGTON BE LIABLE FOR ANY SPECIAL,
++    INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
++    LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, TORT
++    (INCLUDING NEGLIGENCE) OR STRICT LIABILITY, ARISING OUT OF OR IN CONNECTION
++    WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++   
++    Pine and Pico are trademarks of the University of Washington.
++    No commercial use of these trademarks may be made without prior
++    written permission of the University of Washington.
++ 
++    Pine is in part based on The Elm Mail System:
++     ***********************************************************************
++     *  The Elm Mail System  -  Revision: 2.13                             *
++     *                                                                     *
++     * 			Copyright (c) 1986, 1987 Dave Taylor              *
++     * 			Copyright (c) 1988, 1989 USENET Community Trust   *
++     ***********************************************************************
++  
++ 
++   ----------------------------------------------------------------------*/
++ 
++ #ifndef _OS_INCLUDED
++ #define _OS_INCLUDED
++ 
++ 
++ /*----------------------------------------------------------------------
++ 
++    This first section has some constants that you may want to change
++    for your configuration.  This is the SGI version of the os.h file.
++    Further down in the file are os-dependent things that need to be set up
++    correctly for each os.  They aren't interesting, they just have to be
++    right.  There are also a few constants down there that may be of
++    interest to some.
++ 
++  ----*/
++ 
++ /*----------------------------------------------------------------------
++    Define this if you want the disk quota to be checked on startup.
++    Of course, this only makes sense if your system has quotas.  If it doesn't,
++    there should be a dummy disk_quota() routine in os-xxx.c so that defining
++    this won't be harmful anyway.
++  ----*/
++ /* #define USE_QUOTAS  /* comment out if you never want quotas checked */
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++    Turn this on if your system uses a shadow password file. Usually
++    this implies that the real passwords are not in /etc/passwd and they 
++    require running in privileged mode to get. Turning this on
++    only affects the keyboard lock, which becomes unavailable. 
++    (This should be fixed in a later revision.)
++  ----*/
++ /* #define HAVE_SHADOW_PASSWD  /* this disables keyboard lock */
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++     Timeouts (seconds)
++  ----*/
++ #define NEW_MAIL_TIME      (30) /* How often to check for new mail. There's 
++                                    some expense in doing this so it shouldn't
++                                    be done too frequently.  */
++ 
++ /*----------------------------------------------------------------------
++     Check pointing (seconds)
++  ----*/
++ #define CHECK_POINT_TIME (5*60) /* Check point the mail file (write changes
++ 				   to disk) if more than CHECK_POINT_TIME
++ 				   seconds have passed since the first
++ 				   change was made.  Depending on what is
++ 				   happening, we may wait up to four times
++ 				   this long, since we don't want to do the
++ 				   slow check pointing and irritate the user. */
++                                      
++ #define CHECK_POINT_FREQ   (12) /* Check point the mail file if there have been
++                                    at least this many (status) changes to the
++ 				   current mail file.  We may wait longer if
++ 				   it isn't a good time to do the checkpoint. */
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++  In scrolling through text, the number of lines from the previous
++  screen to overlap when showing the next screen.  Usually set to two.
++  ----*/
++ #define	OVERLAP		(2) 
++ 
++ 
++ 
++ /*----- System-wide config file ----------------------------------------*/
++ #define SYSTEM_PINERC             "/usr/local/lib/pine.conf"
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++    The default folder names and folder directories (some for backwards
++    compatibility).  Think hard before changing any of these.
++  ----*/
++ #define DF_DEFAULT_FCC            "sent-mail"
++ #define DEFAULT_SAVE              "saved-messages"
++ #define POSTPONED_MAIL            "postponed-mail"
++ #define INTERRUPTED_MAIL          "interrupted-mail"
++ #define DF_MAIL_DIRECTORY         "mail"
++ #define INBOX_NAME                "inbox"
++ #define DF_SIGNATURE_FILE         ".signature"
++ #define DF_ELM_STYLE_SAVE         "no"
++ #define DF_HEADER_IN_REPLY        "no"
++ #define DF_OLD_STYLE_REPLY        "no"
++ #define DF_USE_ONLY_DOMAIN_NAME   "no"
++ #define DF_FEATURE_LEVEL          "sapling"
++ #define DF_SAVE_BY_SENDER         "no"
++ #define DF_LOCAL_MAIL_FORMAT      "pine"
++ #define DF_SORT_KEY               "arrival"
++ #define DF_SAVED_MSG_NAME_RULE    "default-folder"
++ #define	DF_DRIVER_PROTO		  (&bezerkproto)
++ #define DF_STANDARD_PRINTER       "lpr"
++ #define ANSI_PRINTER              "attached-to-ansi"
++ #define DF_ADDRESSBOOK            ".addressbook"
++ 
++ /*----------------------------------------------------------------------
++    The default printer when pine starts up for the first time with no printer
++  ----*/
++ #define DF_DEFAULT_PRINTER        ANSI_PRINTER
++ 
++ 
++ #define srandom srand /* We need this */
++ 
++ /*----------------- Are we ANSI? ---------------------------------------*/
++ /* #define ANSI          /* this is an ANSI compiler */
++ 
++ /*------ If our compiler doesn't understand type void ------------------*/
++ /* #define void char     /* no void in compiler */
++ 
++ /*-------- Standard ANSI functions usually defined in stdlib.h ---------*/
++ #include <stdlib.h>  /* declarations of many common functions */
++ /*---- Declare getenv() if not already declared ------------------------*/
++ /* char *getenv();      /* often declared in stdlib.h */
++ 
++ 
++ /******* These are included in c-client/osdep.h. ************************/
++ #ifdef notdef
++ /*------- Standard string functions ------------------------------------*/
++ #include <strings.h>
++ /*---- Declare these if not already declared ---------------------------*/
++ /* char *strcpy(), *strncpy();  /* usually in string.h */
++ 
++ 
++ /*------- Include types.h if you have it -------------------------------*/
++ #include <sys/types.h>
++ #endif /*****************************************************************/
++ 
++ 
++ /*------- Some more includes that should usually be correct ------------*/
++ #include <pwd.h>
++ #include <sys/wait.h>
++ #include <sys/stat.h>
++ #include <fcntl.h>
++ #include <netdb.h>
++ #include <malloc.h>
++ #include <sys/uio.h>
++ 
++ 
++ 
++ /*----------------- time.h ---------------------------------------------*/
++ #include <time.h>
++ /* plain time.h isn't enough on some systems */
++ #include <sys/time.h>  /* For struct timeval usually in time.h */ 
++ 
++ 
++ 
++ /*--------------- signal.h ---------------------------------------------*/
++ #include <signal.h>      /* sometimes both required, sometimes */
++ #include <sys/signal.h>  /* only one or the other */
++ 
++ #define SigType void     /* value returned by signal() is void * */
++ /* #define SigType int      /* value returned by signal() is int * */
++ 
++ /* #define POSIX_SIGNALS    /* use POSIX signal semantics (ttyin.c) */
++ 
++ /*--- For AT&T-derviced systems ----------------------------------------*/
++ /* #define signal(a,b) sigset(a, b) /* sigset is just like signal */
++ /* extern void (*sigset())();       /* declare sigset if not declared already */
++ 
++ 
++ 
++ /*-------------- qsort argument type -----------------------------------*/
++ #define QSType void  /* qsort arg is of type void * */
++ /* #define QSType char  /* qsort arg is of type char * */
++ 
++ 
++ /*------ how help text is referenced (always char ** on Unix) ----------*/
++ #define HelpType char **
++ #define NO_HELP (char **)NULL
++ 
++ 
++ 
++ /*--------- System V terminal driver -----------------------------------*/
++ #define HAVE_TERMIO     /* this is for pure System V */
++ /* #define HAVE_TERMIOS    /* this is an alternative */
++ /* #define USE_POLL        /* use the poll() system call instead of select() */
++ /* #define USE_TERMINFO    /* use terminfo instead of termcap */
++ /* #include <sys/stream.h> /* for ptem.h */
++ /* #include <sys/ptem.h>   /* for struct winsize */
++ 
++ 
++ 
++ /*-- What argument does wait(2) take? Define this if it is a union -----*/
++ /* #define HAVE_WAIT_UNION  /* the arg to wait is a union wait * */
++ 
++ 
++ /*-------- Is window resizing available? -------------------------------*/
++ #define RESIZING  /* SIGWINCH and friends */
++ 
++ 
++ 
++ /*-------- If no vfork, use regular fork -------------------------------*/
++ #define vfork fork  /* vfork is just a lightweight fork, so can use fork */
++ 
++ 
++ 
++ /*----- The usual sendmail configuration for sending mail on Unix ------*/
++ #define SENDMAIL	"/usr/lib/sendmail"
++ #define SENDMAILFLAGS	"-oi -oem -t"	/* ignore dots in incoming mail,
++ 					   mail back errors, and
++ 					   get recipients from To, cc,
++ 					   and bcc header lines.      */
++ 
++ 
++ /*-------------- A couple constants used to size arrays ----------------*/
++ #include <sys/param.h>          /* Get it from param.h if available */
++ #undef MAXPATH                  /* Sometimes defined in param.h differently */
++ #define MAXPATH MAXPATHLEN      /* Longest pathname we ever expect */
++ /* #define MAXPATH        (512)    /* Longest pathname we ever expect */
++ #define MAXFOLDER      (64)     /* Longest foldername we ever expect */  
++ 
++ 
++ /*-- Max screen pine will display on. Used to define some array sizes --*/
++ #define MAX_SCREEN_COLS  (170) 
++ #define MAX_SCREEN_ROWS  (200) 
++ 
++ 
++ /*---- When no screen size can be discovered this is the size used -----*/
++ #define DEFAULT_LINES_ON_TERMINAL	(24)
++ #define DEFAULT_COLUMNS_ON_TERMINAL	(80)
++ 
++ 
++ /*----------------------------------------------------------------------
++     Where to put the output of pine in debug mode. Files are created
++  in the user's home directory and have a number appended to them when
++  there is more than one.
++  ----*/
++ #define DEBUGFILE	".pine-debug"
++ 
++ /*----------------------------------------------------------------------
++     The number of debug files to save in the user's home diretory. The files
++  are useful for figuring out what a user did when he complains that something
++  went wrong. It's important to keep a bunch around, usually 4, so that the
++  debug file in question will still be around when the problem gets 
++  investigated. Users tend to go in and out of Pine a few times and there
++  is one file for each pine invocation
++  ----*/
++ #define NUMDEBUGFILES 4
++ 
++ /*----------------------------------------------------------------------
++    The default debug level to set (approximate meanings):
++        1 logs only highest level events and errors
++        2 logs events like file writes
++        3
++        4 logs each command
++        5
++        6 
++        7 logs details of command execution (7 is highest to run any production)
++        8
++        9 logs gross details of command execution
++  ----*/
++ #define DEFAULT_DEBUG 2
++ 
++ 
++ 
++ /*----------------------------------------------------------------------
++     Various maximum field lengths, probably shouldn't be changed.
++  ----*/
++ #define MAX_FULLNAME      (50) 
++ #define MAX_NICKNAME      (20)
++ #define MAX_ADDRESS      (100)
++ #define MAX_NEW_LIST     (100)  /* Max addrs to be added when creating list */
++ #define MAX_SEARCH       (100)  /* Longest string to search for             */
++ #define MAX_ADDR_EXPN   (1000)  /* Longest expanded addr                    */
++ #define MAX_ADDR_FIELD (10000)  /* Longest fully-expanded addr field        */
++ 
++ 
++ #endif /* _OS_INCLUDED */
+diff -Ncr pine3.84x/pine/osdep/os-aux.ic pineaux/pine/osdep/os-aux.ic
+*** pine3.84x/pine/osdep/os-aux.ic
+--- pineaux/pine/osdep/os-aux.ic	Wed Sep  1 11:39:20 1993
+***************
+*** 0 ****
+--- 1,117 ----
++ ;
++ ; AUX os-aux.ic file for building os-aux.c.
++ ;
++ ; Boilerplate header.
++ include(header)
++ 
++ ; Can_access function.  Just calls access.  Only one version available.
++ include(canacces)
++ 
++ ; File_size function.  Only one version available.
++ include(filesize)
++ 
++ ; Is_writable_dir function.  Only one version available.
++ include(writ_dir)
++ 
++ ; Create_mail_dir function.  All Unixes use creatdir and DOS
++ ; uses creatdir.dos.
++ include(creatdir)
++ 
++ ; Rename_file function.  All Unixes use rename and DOS uses
++ ; rename.dos.  There is also one called rename.hom which
++ ; is currently unused.  Hom stands for homemade.
++ include(rename.hom)
++ 
++ ; Build_path function.  All Unixes use bld_path and DOS
++ ; uses bld_path.dos.
++ include(bld_path)
++ 
++ ; Last_cmpnt function.  All Unixes use lstcmpnt and DOS
++ ; uses lstcmpnt.dos.
++ include(lstcmpnt)
++ 
++ ; Expand_foldername function.  All Unixes use expnfldr and DOS
++ ; uses expnfldr.dos.
++ include(expnfldr)
++ 
++ ; Fnexpand function.  All Unixes use fnexpand and DOS
++ ; uses fnexpand.dos.
++ include(fnexpand)
++ 
++ ; Filter_filename function.  All Unixes use fltrname and DOS
++ ; uses fltrname.dos.
++ include(fltrname)
++ 
++ ; There are several versions of disk quotas.  Standard BSD-style quotas
++ ; (Australian) include diskquot.  Systems which don't have quotas use
++ ; diskquot.non.  Systems which use Sun-style quotas are slightly more
++ ; complicated.  They usually require different include files.  They are
++ ; set up to include the file sunquota and prepend include file info to
++ ; that.  See diskquot.*.
++ include(diskquot.non)
++ 
++ ; Read_file function.  All Unixes use readfile and DOS
++ ; uses readfile.dos.
++ include(readfile)
++ 
++ ; Create_tmpfile function.  This usually just calls the ANSI standard
++ ; tmpfile function if there is one.  That is the version in the file tempfile.
++ ; There is also a tempfile.non for Unix systems which don't have a tmpfile
++ ; function already.
++ include(tempfile)
++ 
++ ; Temp_nam function.  This usually just calls the "standard"
++ ; tmpnam function if there is one.  That is the version in the file tempnam.
++ include(tempnam)
++ 
++ ; Coredump function.  Version called coredump just calls abort, coredump.fpe
++ ; uses a floating point exception to cause the coredump on some systems.
++ include(coredump)
++ 
++ ; This is usually a call to gethostname.  That version is in the file hostname.
++ ; There is also a version called hostname.una which uses the uname system
++ ; call commonly found in SysV systems.  An unused version called
++ ; hostname.hom also exists.
++ include(hostname)
++ 
++ ; Getdomainnames function.  All Unixes use domnames and DOS
++ ; uses domnames.dos.
++ include(domnames)
++ 
++ ; Canonical_name function.  All Unixes use canonicl and DOS
++ ; uses canonicl.dos.
++ include(canonicl)
++ 
++ ; This file includes two functions, have_job_control and stop_process.
++ ; The Unix version is called jobcntrl and the slightly-different DOS
++ ; version is jobcntrl.dos.
++ include(jobcntrl)
++ 
++ ; Error_desciption function.  All Unixes use err_desc.  The version
++ ; called err_desc.dos is the same except that it doesn't declare the
++ ; variable sys_errlist[], which is already declared.  There
++ ; is also a version called err_desc.hom which is unused.
++ include(err_desc)
++ 
++ ; There are six functions in this include.  They are get_system_login,
++ ; get_system_fullname, get_system_homedir, get_system_passwd, gcos_name,
++ ; and local_name_lookup.  The Unix version is pw_stuff and the dos version
++ ; is pw_stuff.dos.  There is also a pw_stuff.fun.  Fun stands for funny
++ ; GCOS field.  It's currently unused.
++ include(pw_stuff)
++ 
++ ; Change_passwd function.  Unixes use chnge_pw.
++ ; There is also a DOS version.
++ include(chnge_pw)
++ 
++ ; Mime_can_display function.  Most Unixes use mimedisp.  Suns can
++ ; play audio so there is a separate Sun version.  DOS also has its own version.
++ include(mimedisp)
++ 
++ ; Gf_play_sound function.  There is a Sun version and everything else currently
++ ; uses play_snd_non, which is just an empty function.
++ include(play_snd.non)
++ 
++ ; Most systems have the ANSI fgetpos and fsetpos functions.  For those,
++ ; use fgetpos.  If a system doesn't have it use fgetpos.non.
++ include(fgetpos.non)
+Binary files pine3.84x/pine/pine and pineaux/pine/pine differ
+Binary files pine3.84x/pine/pine-use and pineaux/pine/pine-use differ
+diff -Ncr pine3.84x/pine/pine-use.c pineaux/pine/pine-use.c
+*** pine3.84x/pine/pine-use.c	Mon Aug 23 19:11:25 1993
+--- pineaux/pine/pine-use.c	Tue Aug 31 13:39:57 1993
+***************
+*** 56,63 ****
+  #include <sys/stat.h>
+  
+  #ifndef MAILSPOOLPCTS
+! #define MAILSPOOLPCTS "/usr/spool/mail/%s"
+! /* #define MAILSPOOLPCTS "/usr/mail/%s" */
+  #endif
+  
+  #define DAYSEC (60*60*24)
+--- 56,63 ----
+  #include <sys/stat.h>
+  
+  #ifndef MAILSPOOLPCTS
+! /* define MAILSPOOLPCTS "/usr/spool/mail/%s" */
+! #define MAILSPOOLPCTS "/usr/mail/%s" 
+  #endif
+  
+  #define DAYSEC (60*60*24)

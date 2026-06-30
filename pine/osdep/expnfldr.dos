@@ -1,0 +1,51 @@
+/*----------------------------------------------------------------------
+      Expand a folder name, taking account of the folders_dir.
+
+  Args: filename -- The name of the file that is the folder
+ 
+ Result: The folder name is expanded in place.  
+         Returns 0 and queues status message if unsuccessful.
+         Input string is overwritten with expanded name.
+         Returns 1 if successful.
+
+BUG should limit length to MAXPATH
+  ----*/
+int
+expand_foldername(filename)
+    char *filename;
+{
+    char         temp_filename[MAXPATH+1];
+
+    dprint(5, (debugfile, "=== expand_foldername called (%s) ===\n",filename));
+
+    if(filename[0] != '{') {
+        char *ill = filter_filename(filename);
+        if(ill != NULL) {
+            q_status_message1(0, 1, 3, "%s in folder name", ill);
+            return(0);
+        }
+    }
+
+    strcpy(temp_filename, filename);
+    if(strucmp(temp_filename, "inbox") == 0) {
+        strcpy(filename, ps_global->VAR_INBOX_PATH == NULL ? "inbox" :
+               ps_global->VAR_INBOX_PATH);
+    } else if(temp_filename[0] == '{') {
+        strcpy(filename, temp_filename);
+#ifndef	FORLATER
+    } else if(strindex(".\\", temp_filename[0]) != NULL 
+		&& ps_global->restricted){
+	q_status_message(0, 1, 3, "Pine demo only opens local folders");
+	return(0);
+#endif
+    } else if(temp_filename[0] == '*') {
+        strcpy(filename, temp_filename);
+    } else if(temp_filename[0] == '\\' || temp_filename[1] == ':') {
+	fixpath(temp_filename, MAXPATH);
+        strcpy(filename, temp_filename);
+    } else {
+        sprintf(filename,"%s\\%s", ps_global->folders_dir, temp_filename);
+    }
+    dprint(5, (debugfile, "returning \"%s\"\n", filename));    
+    return(1);
+}

@@ -1,0 +1,10 @@
+/*----------------------------------------------------------------------
+    Truncate a file to a specified length.  ISC doesn't have this
+    function.  This does nothing.  It isn't very important, and we
+    can't help anyway if we don't have a real truncate.
+  ----------------------------------------------------------------------*/
+truncate(path, length)
+    char *path;
+    int length;
+{
+}

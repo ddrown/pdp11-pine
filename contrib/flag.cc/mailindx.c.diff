@@ -1,0 +1,17 @@
+*** mailindx.c.ORIG	Tue Sep 21 03:15:11 1993
+--- mailindx.c	Thu Sep 23 22:05:27 1993
+***************
+*** 726,731 ****
+--- 726,735 ----
+      for(addr = envelope->to; addr && to_us == ' '; addr = addr->next)
+        if(address_is_us(addr, ps_global))
+          to_us = '+';
++     /* holbrook hack 9/23/93 to also mark messages cc'd to us */
++     for(addr = envelope->cc; addr && to_us == ' '; addr = addr->next)
++       if(address_is_us(addr, ps_global))
++         to_us = '+';
+  
+      sprintf(status, "%c %s %-3ld %s %2d ", to_us, status_string(cache),
+  	    message_number, month_abbrev(d.month), d.day);
+
+

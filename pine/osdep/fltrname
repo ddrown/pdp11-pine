@@ -1,0 +1,67 @@
+/*----------------------------------------------------------------------
+    Filter file names for strange characters
+
+   Args:  file  -- the file name to check
+ 
+ Result: Returns NULL if file name is OK
+         Returns formatted error message if it is not
+  ----*/
+char *
+filter_filename(file)
+    char *file;
+{
+#ifdef ALLOW_WEIRD
+    static char illegal[] = {'\177', '\0'};
+#else
+    static char illegal[] = {'"', '#', '$', '%', '&', '\'','(', ')','*',
+                          ',', ':', ';', '<', '=', '>', '?', '[', ']',
+                          '\\', '^', '|', '\177', '\0'};
+#endif
+    static char error[100];
+    char ill_file[MAXPATH+1], *ill_char, *ptr, e2[10];
+
+    ptr = file;
+    while (*ptr == ' ') ptr++;	/* leading spaces GONE! */
+
+    if(*ptr == '*')
+      ptr++; /* Allow * at beginning for news groups */
+
+    while(*ptr && *ptr > ' ' && strindex(illegal, *ptr) == 0)
+      ptr++;
+
+    if(*ptr != '\0') {
+        if(*ptr == ' ') {
+            ill_char = "<space>";
+        } else if(*ptr == '\n') {
+            ill_char = "<newline>";
+        } else if(*ptr == '\r') {
+            ill_char = "<carriage return>";
+        } else if(*ptr == '\t') {
+    	    ill_char = "<tab>";
+        } else if(*ptr < ' ') {
+            sprintf(e2, "control-%c", *ptr + '@');
+            ill_char = e2;
+        } else if (*ptr == '\177') {
+    	    ill_char = "<del>";
+        } else {
+    	    e2[0] = *ptr;
+    	    e2[1] = '\0';
+    	    ill_char = e2;
+        }
+        if(ptr != file) {
+            strncpy(ill_file, file, ptr - file);
+            ill_file[ptr - file] = '\0';
+            sprintf(error,"Character \"%s\" after \"%s\" not allowed",ill_char,
+                    ill_file);
+        } else {
+            sprintf(error,
+                    "First character, \"%s\", not allowed",
+                    ill_char);
+        }
+            
+        return(error);
+    }
+    return((char *)NULL);
+}
+
+

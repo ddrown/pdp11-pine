@@ -1,0 +1,31 @@
+/*----------------------------------------------------------------------
+       Call the system to change the passwd
+ 
+It would be nice to talk to the passwd program via a pipe or ptty so the
+user interface could be consistent, but we can't count on the the prompts
+and responses from the passwd program to be regular so we just let the user 
+type at the passwd program with some screen space, hope he doesn't scroll 
+off the top and repaint when he's done.
+ ----*/        
+change_passwd()
+{
+    char cmd_buf[100];
+
+    int i;
+    for(i = 1; i < ps_global->ttyo->screen_rows; i ++) {
+        MoveCursor(i, 0);
+        CleartoEOLN();
+    }
+
+    MoveCursor(5, 0);
+    fflush(stdout);
+
+    Raw(0);
+    strcpy(cmd_buf, "passwd");
+    system(cmd_buf);
+    sleep(3);
+    Raw(1);
+    init_username(ps_global);
+}
+
+

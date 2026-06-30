@@ -1,0 +1,994 @@
+/*----------------------------------------------------------------------
+    Translation tables to map DOS codepages to ISO-8859-1 charsets and
+    back.
+
+ Note: These tables were basically lifted from Kermit 3.11 and
+       the textps.c program also distributed from Columbia U.
+  ----------------------------------------------------------------------*/
+
+/*
+ * Map from ISO 8859-1 Latin-1 to Code Page 437
+ */
+unsigned char L1cp437[] = {
+  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
+ 16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,
+ 32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,
+ 48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,
+ 64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
+ 80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,
+ 96,  97,  98,  99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143,
+144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
+ 32, 173, 155, 156,  15, 157, 124,  21,  34,  64, 166, 174, 170, 196,  63,  45,
+248, 241, 253,  51,  39, 230,  20, 250,  44,  49, 167, 175, 172, 171,  63, 168,
+ 65,  65,  65,  65, 142, 143, 146, 128,  69, 144,  69,  69,  73,  73,  73,  73,
+ 68, 165,  79,  79,  79,  79, 153,  88,  79,  85,  85,  85, 154,  89,  63, 225,
+133, 160, 131,  97, 132, 134, 145, 135, 138, 130, 136, 137, 141, 161, 140, 139,
+ 63, 164, 149, 162, 147, 111, 148, 246, 111, 151, 163, 150, 129, 121,  63, 152
+};
+
+
+/*
+ * Map from ISO 8859-1 Latin-1 to Code Page 850
+ */
+unsigned char L1cp850[] = {
+  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
+ 16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,
+ 32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,
+ 48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,
+ 64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
+ 80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,
+ 96,  97,  98,  99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143,
+144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
+ 32, 173, 189, 156, 207, 190, 221, 245, 249, 184, 166, 174, 170, 240, 169, 238,
+248, 241, 253, 252, 239, 230, 244, 250, 247, 251, 167, 175, 172, 171, 243, 168,
+183, 181, 182, 199, 142, 143, 146, 128, 212, 144, 210, 211, 222, 214, 215, 216,
+209, 165, 227, 224, 226, 229, 153, 158, 157, 235, 233, 234, 154, 237, 232, 225,
+133, 160, 131, 198, 132, 134, 145, 135, 138, 130, 136, 137, 141, 161, 140, 139,
+208, 164, 149, 162, 147, 228, 148, 246, 155, 151, 163, 150, 129, 236, 231, 152
+};
+
+
+/*
+ * Map from ISO 8859-1 Latin-1 to Code Page 860
+ */
+unsigned char L1cp860[] = {
+  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
+ 16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,
+ 32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,
+ 48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,
+ 64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
+ 80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,
+ 96,  97,  98,  99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143,
+144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
+ 32, 173, 155, 156,  15,  89, 124,  21,  34,  64, 166, 174, 170, 196,  63,  45,
+248, 241, 253,  51,  39, 230,  20, 250,  44,  49, 167, 175, 172, 171,  63, 168,
+145, 134, 143, 142,  65,  65,  65, 128, 146, 144, 137,  69, 139, 152,  73,  73,
+ 68, 165, 169, 159, 140, 153,  79,  88,  79, 157, 150,  85, 154,  89,  63, 225,
+133, 160, 131, 132,  97,  97,  97, 135, 138, 130, 136, 101, 141, 161, 105, 105,
+ 63, 164, 149, 162, 147, 148, 111, 246, 111, 151, 163, 117, 129, 121,  63, 121
+};
+
+
+/*
+ * Map from ISO 8859-1 Latin-1 to Code Page 863
+ */
+unsigned char L1cp863[] = {
+  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
+ 16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,
+ 32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,
+ 48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,
+ 64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
+ 80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,
+ 96,  97,  98,  99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143,
+144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
+ 32,  63, 155, 156, 152,  89, 160, 143, 164,  64,  97, 174, 170, 196,  63, 167,
+248, 241, 253, 166, 161, 230, 134, 250, 165,  49, 111, 175, 172, 171, 173,  63,
+142,  65, 132,  65,  65,  65,  65, 128, 145, 144, 146, 148,  73,  73, 168, 149,
+ 68,  78,  79,  79, 153,  79,  79,  88,  79, 157,  85, 158, 154,  89,  63, 225,
+133,  97, 131,  97,  97,  97,  97, 135, 138, 130, 136, 137, 105, 105, 140, 139,
+ 63, 110, 111, 162, 147, 111, 111, 246, 111, 151, 163, 150, 129, 121,  63, 121
+};
+
+
+/*
+ * Map from ISO 8859-1 Latin-1 to Code Page 865
+ */
+unsigned char L1cp865[] = {
+  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
+ 16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,
+ 32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,
+ 48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,
+ 64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
+ 80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,
+ 96,  97,  98,  99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143,
+144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
+ 32, 173,  63, 156, 175,  89, 124,  21,  34,  64, 166, 174, 170, 196,  63, 196,
+248, 241, 253,  51,  39, 230,  20, 250,  44,  49, 167,  63, 172, 171,  63, 168,
+ 65,  65,  65,  65, 142, 143, 146, 128,  69, 144,  69,  69,  73,  73,  73,  73,
+ 68, 165,  79,  79,  79,  79, 153,  88, 157,  85,  85,  85, 154,  89,  63, 225,
+133, 160, 131,  97, 132, 134, 145, 135, 138, 130, 136, 137, 141, 161, 140, 139,
+ 63, 164, 149, 162, 147, 111, 148, 246, 155, 151, 163, 150, 129, 121,  63, 152
+};
+
+
+/*
+ * Map from ISO 8859-5 Latin-1 to Code Page 866
+ */
+unsigned char L5cp866[] = {
+  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
+ 16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,
+ 32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,
+ 48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,
+ 64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
+ 80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,
+ 96,  97,  98,  99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143,
+144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
+255, 240,  63,  63, 242,  83,  73,  79,  74,  63,  63,  72,  75,  45, 246,  63,
+128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143,
+144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159,
+160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175,
+224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239,
+252, 241,  63,  63, 243, 115, 105, 245, 106,  63,  63, 104, 107,  21, 247,  63
+};
+
+
+/*
+ * Translation table to map IBM Code Page 437 to Latin1
+ *
+ * The comments from textps.c read:
+ *
+ *  Line- and box-drawing characters are simulated with
+ *  dashes, bars, and plus signs.  Black and gray blobs (fill characters)
+ *  are replaced by X's.  Peseta is shown as P.  Greek letters that don't
+ *  exist in CourierLatin1 are shown as ?.  Untranslatable math symbols are
+ *  shown as ?.
+ */
+unsigned char cp437L1[] = {
+  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
+ 16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,
+ 32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,
+ 48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,
+ 64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
+ 80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,
+ 96,  97,  98,  99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+199, 252, 233, 226, 228, 224, 229, 231, 234, 235, 232, 239, 238, 236, 196, 197,
+201, 230, 198, 244, 246, 242, 251, 249, 255, 214, 220, 162, 163, 165,  80, 151,
+225, 237, 243, 250, 241, 209, 170, 186, 191,  43, 172, 189, 188, 161, 171, 187,
+ 88,  88,  88, 124,  43,  43,  43,  43,  43,  43, 124,  43,  43,  43,  43,  43,
+ 43,  43,  43,  43,  45,  43,  43,  43,  43,  43,  43,  43,  43,  45,  43,  43,
+ 43,  43,  43,  43,  43,  43,  43,  43,  43,  43,  43,  88,  88,  88,  88,  88,
+ 63, 223,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,
+ 63, 177,  63,  63,  63,  63,  63,  63, 176, 134, 135,  63, 110, 178,  88, 160
+};
+
+
+/*
+ * Translation table to convert IBM CODE PAGE 850 to Latin1
+ *
+ * The comments from textps.c read:
+ *
+ *  IBM Code Page 850.  Line- and box-drawing characters are simulated with 
+ *  dashes, bars, and plus signs.  Black blobs are replaced by X's.
+ */
+unsigned char cp850L1[] = {
+  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
+ 16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,
+ 32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,
+ 48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,
+ 64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
+ 80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,
+ 96,  97,  98,  99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+199, 252, 233, 226, 228, 224, 229, 231, 234, 235, 232, 239, 238, 236, 196, 197,
+201, 230, 198, 244, 246, 242, 251, 249, 255, 214, 220, 248, 163, 216, 215, 151,
+225, 237, 243, 250, 241, 209, 170, 186, 191, 174, 172, 189, 188, 161, 171, 187,
+ 88,  88,  88, 124,  43, 193, 194, 192, 169,  43, 124,  43,  43, 162, 165,  43,
+ 43,  43,  43,  43,  45,  43, 227, 195,  43,  43,  43,  43,  43,  45,  43, 164,
+240, 208, 202, 203, 200, 154, 205, 206, 207,  43,  43,  88,  88, 166, 204,  88,
+211, 223, 212, 210, 245, 213, 181, 254, 222, 218, 219, 217, 253, 221, 175, 180,
+173, 177,  61, 190, 182, 167, 247, 184, 176, 168, 134, 185, 179, 178,  88, 160
+};
+
+
+/*
+ * Map from ISO 8859-1 Latin-1 to Code Page 860
+ */
+unsigned char cp860L1[] = {
+  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
+ 16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,
+ 32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,
+ 48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,
+ 64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
+ 80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,
+ 96,  97,  98,  99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+199, 252, 233, 226, 227, 224, 193, 231, 234, 202, 232, 204, 212, 236, 195, 194,
+201, 192, 200, 244, 245, 242, 218, 249, 205, 213, 220, 162,  63, 217,  63, 21,
+225, 237, 243, 250, 241, 209, 170, 186, 191, 210, 172, 189, 188, 161, 171, 187,
+ 63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,
+ 63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,
+ 63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,
+ 63, 223,  63,  63,  63,  63, 181,  63,  63,  63,  63,  63,  63, 248,  63,  63,
+ 63, 177,  63,  63,  63,  63, 247,  63, 176, 183, 183,  63,  63, 178,  63,  63 
+};
+
+
+/*
+ * Map from ISO 8859-1 Latin-1 to Code Page 863
+ */
+unsigned char cp863L1[] = {
+  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
+ 16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,
+ 32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,
+ 48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,
+ 64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
+ 80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,
+ 96,  97,  98,  99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+199, 252, 233, 226, 194, 224, 182, 231, 234, 235, 232, 239, 238,  61, 192, 167,
+201, 200, 202, 244, 203, 207, 251, 249, 164, 212, 220, 162,  63, 217, 219,  63,
+166, 180, 243, 250, 168, 184, 179, 175, 206,  63, 172, 189, 188, 190, 171, 187,
+ 63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,
+ 63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,
+ 63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,
+ 63, 223,  63,  63,  63,  63, 181,  63,  63,  63,  63,  63,  63, 248,  63,  63,
+ 63, 177,  63,  63,  63,  63, 247,  63, 176, 183, 183,  63,  63, 178,  63,  63
+};
+
+
+/*
+ * Map from ISO 8859-1 Latin-1 to Code Page 865
+ */
+unsigned char cp865L1[] = {
+  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
+ 16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,
+ 32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,
+ 48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,
+ 64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
+ 80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,
+ 96,  97,  98,  99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+199, 252, 233, 226, 228, 224, 229, 231, 234, 235, 232, 239, 238, 236, 196, 197,
+201, 230, 198, 244, 246, 242, 251, 249, 255, 214, 220, 248,  63, 216,  63,  63,
+226, 237, 243, 250, 241, 209, 170, 186, 191,  63, 172, 189, 188, 161, 171, 164,
+ 63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,
+ 63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,
+ 63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,
+ 63, 223,  63,  63,  63,  63, 181,  63,  63,  63,  63,  63,  63, 248,  63,  63,
+ 63, 177,  63,  63,  63,  63, 247,  63, 176, 183, 183,  63,  63, 178,  63,  63
+};
+
+
+/*
+ * Map from ISO 8859-1 Latin-5 to Code Page 866
+ */
+unsigned char cp866L5[] = {
+  0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
+ 16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,  30,  31,
+ 32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,
+ 48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,
+ 64,  65,  66,  67,  68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
+ 80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,
+ 96,  97,  98,  99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111,
+112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191,
+192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207,
+208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223,
+ 63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,
+ 63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,
+ 63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,  63,
+224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239,
+161, 241, 164, 244, 167, 247, 174, 254,  63,  63,  63,  63, 240,  63,  63, 160
+};
+
+
+/*----------------------------------------------------------------------
+    Return the specified file's contents in a translation array
+
+  Args: file name to open
+
+  Result: Returns array of unsigned char
+
+  ----------------------------------------------------------------------*/
+unsigned char *
+read_xtable(fname)
+    char *fname;
+{
+    FILE *fp;
+    unsigned char *cp;
+    int  c, i = 0;
+
+    if(fname && (fp = fopen(fname, "r"))){
+	cp = (unsigned char *)fs_get(256 * sizeof(unsigned char));
+
+	while(fscanf(fp, "%d ", &c) == 1 && i < 256)
+	  cp[i++] = (unsigned char)c;
+
+	fclose(fp);
+
+	if(i != 256){		/* table MUST be correct size */
+	    q_status_message1(0,2,2,"Translation table \"%s\" too small",
+			      fname);
+	    display_message('x');
+	    fs_give((void **)&cp);
+	}
+
+	return(cp);
+    }
+    else
+      return(NULL);
+}
+
+
+/*----------------------------------------------------------------------
+    Return the DOS version number
+
+  Args: none.
+
+  Result: Returns long containing major version in low-order byte, 
+	  and the minor version in the high-order byte.
+
+  ----------------------------------------------------------------------*/
+unsigned int
+dos_version()
+{
+    union REGS rg;
+
+    rg.x.ax = 0x3000;			/* Have DOS report version num  */
+    intdos(&rg, &rg);
+    return(rg.x.ax);
+}
+
+
+/*----------------------------------------------------------------------
+    Return the active Global Code Page value
+
+  Args: none.
+
+  Result: Returns integer value corresponding to active code page
+
+  ----------------------------------------------------------------------*/
+int
+dos_codepage()
+{
+   union REGS rg;
+
+   rg.h.ah = 0x66;		/* DOS int function to get/set code page */
+   rg.h.al = 0x01;		/* sub-function to get code page */
+   intdos(&rg, &rg);
+   return(rg.x.bx);		/* returned in bx */
+}
+
+
+
+/*----------------------------------------------------------------------
+    Read whole file into memory in binary mode
+
+  Args: filename -- path name of file to read
+
+  Result: Returns pointer to malloced memory with the contents of the file
+          or NULL
+
+This won't work very well if the file has NULLs in it and is mostly
+intended for fairly small text files.
+  ----------------------------------------------------------------------*/
+char *
+read_binary_file(filename)
+     char *filename;
+{
+    int         fd;
+    struct stat statbuf;
+    char       *buf;
+    unsigned   nb;
+
+    fd = open(filename, O_RDONLY|O_BINARY);
+    if(fd < 0)
+      return(NULL);
+
+    fstat(fd, &statbuf);
+
+    buf = fs_get((size_t)statbuf.st_size + 1);
+
+    if((nb=read(fd, buf, (unsigned)statbuf.st_size)) <= 0) {
+        close(fd);
+	fs_give((void **)&buf);
+        return(NULL);
+    }
+    close(fd);
+
+    buf[nb]= '\0';
+
+    return(buf);
+}
+
+
+/*
+ * fs_zero - null out n bytes of the pointed to memory
+ */
+fs_zero(p, n)
+void *p;
+long n;
+{
+    memset(p, 0, (size_t)n);
+}
+
+
+/*
+ * have_ printer - use BIOS int 0x17 to get a system equipment list
+ *		   returning whether or not there's a printer
+ */
+have_printer()
+{
+    union REGS rg;
+
+    int86(0x11, &rg, &rg);		/* what's there ? */
+    return(rg.x.ax & 0xc000);		/* any printers ? */
+}
+
+
+/*
+ * printer_status - get printer status using BIOS printer services (int 17h)
+ * 		    return 0 if printer responds bad status otherwise.
+ */
+unsigned short printer_ready()
+{
+    union REGS rg;
+
+    if(!have_printer())			/* bother to get stat ? */
+      return(0xffff);
+
+    rg.h.ah = 0x02;			/* get printer status */
+    rg.x.dx = 0;			/* which printer */
+    int86(0x17, &rg, &rg);		/* do it */
+
+    return(rg.h.ah & ~(0xd6));		/* 0x10, 0x40 & 0x80 are OK */
+					/* 0x02 and 0x04 are ignored */
+}
+
+
+/*
+ * p_printer_error - given a a byte of error code, return the string
+ *                   corresponding to it.
+ */
+char *p_printer_error(err)
+unsigned short err;
+{
+    if(err == 0xffff)
+	return("No printer found");
+    else if(err & 0x01)
+	return("Status 1: Time out (on line?)");
+    else if(err & 0x08)
+	return("Status 8: I/O error");
+    else if(err & 0x20)
+	return("Status 32: Out of paper ");
+    else if(err & 0x40 || err & 0x80 || err & 0x10)
+	/* ACK from printer or printer NOT busy or printer selected */
+	return("");
+    else
+        return("Weird printer status");
+}
+
+
+/*
+ * send_printer - write a byte to the printer returning status 
+ */
+int send_printer(c)
+char c;
+{
+    union REGS rg;
+
+    rg.h.ah = 0;			/* service 0: send a byte */
+    rg.h.al = c;			/* which byte */
+    rg.x.dx = 0;			/* which printer */
+    int86(0x17, &rg, &rg);		/* do it */
+    return(rg.h.ah & ~(0xd6));		/* 0x10, 0x40 & 0x80 are OK */
+					/* 0x02 and 0x04 are ignored */
+}
+
+
+/*
+ * coreleft - returns the amount of core memory currently available
+ */
+long
+coreleft()
+{
+    long ramfree = 0L;
+    register int i = 0, j;
+    static unsigned segs[10];
+    union  REGS r;
+    struct SREGS s;
+
+    while(1){
+        r.h.ah = 0x48;			/* DOS alloc a paragraph */
+        r.x.bx = 0x0001;		/* grab 1 paragraph (16 bytes) */
+        intdos(&r, &r);
+        if(r.x.cflag){			/* carry flag set, no more core */
+	    for(j=0;j<i;j++){
+                r.h.ah = 0x49;		/* DOS free alloc'd core */
+                s.es = segs[j];		/* segment to free */
+                intdosx(&r, &r, &s);
+	    }
+	    return(ramfree*16L);
+        }
+	else
+            segs[i] = r.x.ax;		/* remember the sigment */
+
+        r.h.ah = 0x4a;			/* DOS resize alloc'd core */
+        r.x.bx = 0xffff;		/* grab the biggest we can */
+        s.es = segs[i];			/* segment to resize */
+        intdosx(&r, &r, &s);
+
+	if(r.x.cflag){
+            r.h.ah = 0x4a;			/* DOS resize alloc'd core */
+            s.es = segs[i];			/* segment to resize */
+            intdosx(&r, &r, &s);
+	    ramfree += r.x.bx;
+	}
+        else
+	    ramfree += 0xffff;
+
+        i++;
+    }
+}
+
+/*
+ * OS unique c-client calls and such.
+ */
+
+
+/*
+ * zone_offset - print the time zone offset in local differential
+ *               form : hours+minutes (HHMM)
+ */
+void
+zone_offset(buf)
+char *buf;
+{
+    struct timeb tb;
+
+    ftime(&tb);
+    sprintf(buf, "%02.2u%02.2u", tb.timezone/60, tb.timezone%60);
+}
+
+
+/*
+ * Special hook so externally we can avoid copying from one file to
+ * another.  It's quite a hack, and not exactly clear, but does help
+ * performance-wise.
+ */
+FILE *append_file = NULL;
+
+/*
+ * dos_gets - c-client callback for mail_fetchbody to use when receiving 
+ *            a message text too large for free mem (see mailview.c).
+ */
+char *dos_gets (f, stream, size)
+readfn_t  f;
+void     *stream;
+unsigned long      size;
+{
+    char tmp[MAILTMPLEN+1];
+    unsigned long j = 0L;
+
+    if(!append_file && (append_file = tmpfile()) == NULL){
+	char es[128];
+	/* post error message, dump the text in the bit bucket */
+	sprintf(es, "dos_gets: %s", error_description(errno));
+	mm_log(es,ERROR);
+	return(NULL);
+    }
+
+    while(size -= j){
+	(*f) (stream, j = min ((long) MAILTMPLEN, size), tmp);
+	if(fwrite(tmp, sizeof(char), (size_t)j, append_file) != j){
+	    /* problem writing temp file! bail gracefully */
+	    sprintf(tmp,"Error getting message: %s", error_description(errno));
+	    mm_log(tmp, ERROR);
+	    return(NULL);
+        }
+    }
+
+    return(cpystr(""));
+}
+
+
+/*
+ *                   ******* DOS Cache Manager *******
+ *
+ * Each mail stream has associated with it a cache of mail elements 
+ * ("elt" in c-client parlance).  This can get too ponderous slog around
+ * in the 640K *MAX* that DOS allows, so the idea is to manager some number
+ * of them in core and page the rest out to disk.  ALL CACHE ACCESS IN
+ * C-CLIENT MUST TO GO THRU THE mailcache() FUNCTION!!
+ *
+ */
+
+
+/*
+ * CacheBlock_SIZE: number of elt's cached in core at any one time
+ */
+#define	CB_SIZE	(20L)
+
+
+/*
+ * Meta cache structure.  Used by dos_cache to hold either short or long
+ * elt's and a flag reporting if the entry's been accessed/used or not.
+ */
+typedef struct metacache {
+    short		use;		/* cache slot in use flag */
+    union {
+	MESSAGECACHE	mc;
+	LONGCACHE	lc;
+    } cachel;				/* access to cache elements */
+} METACACHE;
+
+
+/*
+ * Master DOS cache structure.  Every mail stream gets one, and has it
+ * until it dies.  c-client worries about freeing this with a CH_INIT.
+ */
+typedef struct doscache {
+	FILE		*dcf;		/* DOS cache file pointer */
+	char		*name;		/* DOS cache file's name  */
+        long		cbase;		/* index of array in slot 1 of block */
+	METACACHE	mcb[CB_SIZE];	/* meta cache block */
+} DOSCACHE;
+
+
+/*
+ * dcreadb - dos cache read block; given a stream, read a new block
+ *	     of cache entries into core.  Doscache's cbase field
+ *           describes where to start loading.
+ */
+void dcreadb(cache)
+DOSCACHE *cache;
+{
+    size_t n;
+    
+    if(fseek(cache->dcf, cache->cbase * sizeof(METACACHE), SEEK_SET))
+      fatal("ran off end of dos cache file in dcreadb");
+
+    n = fread((void *)&cache->mcb[0],sizeof(METACACHE),
+		(size_t)CB_SIZE,cache->dcf);
+
+    if(n != CB_SIZE)
+      fatal("Can't read cache block in from disk");
+}
+
+
+/*
+ * dcwriteb - dos cache write block; given a stream, write the current 
+ *            block of cache entries to disk.  Guaranteed write, or fatal.
+ */
+void dcwriteb(cache)
+DOSCACHE *cache;
+{
+    size_t n;
+
+    if(fseek(cache->dcf, cache->cbase * sizeof(METACACHE), SEEK_SET))
+      fatal("ran off end of dos cache file in dcwriteb");
+
+    n = fwrite(&cache->mcb[0], sizeof(METACACHE), (size_t)CB_SIZE, cache->dcf);
+
+    if(n != CB_SIZE)
+      fatal("Can't write cache block to from disk");
+}
+
+
+
+/*
+ * dchit - make sure metacache entry for msgno is in core, if not, 
+ *         write current block and read in new one that contains it.
+ */
+void dchit(cache, msgno)
+DOSCACHE *cache;
+long      msgno;
+{
+    long i = msgno - 1;			/* index of msgno's elt */
+    size_t n;
+
+    if(msgno <= 0)
+      fatal("bogus msgno passed to dchit");
+
+    if(i >= cache->cbase && i < cache->cbase + CB_SIZE)
+      return;				/* everything's okey dokey */
+
+    dcwriteb(cache);			/* roll out the current block */
+
+    cache->cbase = (i/CB_SIZE) * CB_SIZE;
+    dcreadb(cache);			/* roll in the new block */
+}
+
+
+
+/*
+ * dcget - dos cache get; given a stream and a message number in it, 
+ *         return a pointer to the cache entry associated with it.
+ */
+METACACHE *dcget(stream, msgno)
+MAILSTREAM *stream;
+long        msgno;
+{
+    int i;
+    DOSCACHE *dc = (DOSCACHE *)stream->cache.c;
+
+    dchit(dc, msgno);			/* correct block in core? */
+
+    i = (int)((msgno-1)%CB_SIZE);	/* offset of entry in block */
+    if(!dc->mcb[i].use){		/* new cache entry! */
+	memset((void *)&dc->mcb[i], 0, sizeof(METACACHE));
+	dc->mcb[i].use = 1;		/* mark entry as accessed */
+	if(stream->scache){
+	    dc->mcb[i].cachel.mc.lockcount = 1;
+	    dc->mcb[i].cachel.mc.msgno = msgno;
+	}
+	else{
+	    dc->mcb[i].cachel.lc.elt.lockcount = 1;
+	    dc->mcb[i].cachel.lc.elt.msgno = msgno;
+	    dc->mcb[i].cachel.lc.env = NULL;
+	    dc->mcb[i].cachel.lc.body = NULL;
+	}
+    }
+
+    return(&dc->mcb[i]);
+}
+
+
+
+/*
+ * dos_cache - c-client callback used to manage cached elt's and 
+ *             envelopes. (see ../c-client/mail.c)
+ */
+void *dos_cache(stream, msgno, op)
+MAILSTREAM *stream;
+long        msgno;
+long        op;
+{
+    size_t n;
+    void *ret = NULL;
+    long i = msgno - 1;
+    unsigned long j = stream->cachesize;
+    METACACHE ctmp;
+    DOSCACHE  *dtmp = (DOSCACHE *)stream->cache.c;
+
+    switch ((int) op) {			/* what function? */
+      case CH_INIT:			/* initialize cache */
+        if (stream->cachesize) {	/* flush old cache contents */
+	    
+	    /*
+	     * WARNING: if lock counts are ever important, this will 
+	     *          have to become a loop counting down the 
+	     *          cachesize and calling something like 
+	     *          mail_free_elt() for each one!
+	     */
+	    fclose(dtmp->dcf); /* should auto blast tmpfile */
+	    if(dtmp->name){
+		unlink(dtmp->name);
+		fs_give((void **)&dtmp->name);
+	    }
+
+	    fs_give((void **)&stream->cache.c);
+	    stream->cachesize = 0;
+        }
+        break;
+
+      case CH_SIZE:			/* (re-)size the cache */
+        if (msgno > j) {		/* do nothing if size adequate */
+	    /*
+	     * TUNING POTENTIAL: the const 4 below could be tweeked
+	     */
+	    while(msgno > stream->cachesize)
+	      stream->cachesize += (CB_SIZE * 4);
+
+            if (stream->cache.c == NULL){
+		stream->cache.c = (void *)fs_get(sizeof(DOSCACHE));
+		memset(stream->cache.c, 0, sizeof(DOSCACHE));
+		dtmp = (DOSCACHE *)stream->cache.c;
+		if(!dtmp->name)
+		  dtmp->name = (char *)temp_nam(NULL, "pi");
+
+		/*
+		 * Can't use tmpfile() as MSC's library call won't 
+		 * observe TMP or TEMP env vars.  Wonders never cease.
+		 */
+		if((dtmp->dcf = (void *)fopen(dtmp->name, "w+b")) == NULL){
+		    sprintf(tmp_20k_buf,"Can't open DOS cache: %s",dtmp->name);
+		    fatal(tmp_20k_buf);
+		}
+
+		for(j = 0; j < stream->cachesize; j += CB_SIZE){
+		    dtmp->cbase = j;
+		    dcwriteb(dtmp);
+		}
+		dtmp->cbase = 0;
+	    }
+	    else{
+		/* init new entries */
+		fseek(dtmp->dcf, j * sizeof(METACACHE), SEEK_SET);
+		memset((void *)&ctmp, 0, sizeof(METACACHE));
+		for(;j < stream->cachesize; j++){
+		    n = fwrite((void *)&ctmp,sizeof(METACACHE),1,dtmp->dcf);
+		    if(n != 1L)
+		      fatal("Cache init failed on fwrite");
+		}
+	    }
+        }
+        break;
+ 
+      case CH_ELT:			/* return elt */
+      case CH_MAKEELT:			/* short elt, make if necessary */
+      case CH_LELT:			/* return long elt */
+      case CH_MAKELELT:			/* long elt, make if necessary */
+	ret = (stream->scache) ? (void *) &dcget(stream, msgno)->cachel.mc
+	                       : (void *) &dcget(stream, msgno)->cachel.lc;
+	break;
+
+      case CH_FREE:			/* free (l)elt */
+	/* 
+	 * SEE WARNING ABOVE! if we ever need lock counts
+	 * this should call an appropriate mail_free_XXX-like 
+	 * function.
+	 */
+	dcget(stream, msgno)->use = 0;
+	break;
+
+      case CH_EXPUNGE:			/* expunge cache slot */
+	{				/* slide down remainder of cache */
+	    METACACHE *dc_copy=(METACACHE *)fs_get(sizeof(METACACHE));
+
+/*
+ * OPTIMIZE: this could be made a little more efficient by using offset
+ *           into the current block in memory, and copying blocks of 
+ *           elt's at a time rather than individually.
+ */
+	    for (i = msgno+1; i <= stream->nmsgs; ++i){
+		memcpy((void *)dc_copy,
+		       (void *)dcget(stream, i),
+		       sizeof(METACACHE));
+		if(stream->scache) 
+		  dc_copy->cachel.mc.msgno = i - 1L;
+		else
+		  dc_copy->cachel.lc.elt.msgno = i - 1L;
+
+		memcpy((void *)dcget(stream, i-1),
+		       (void *)dc_copy,
+		       sizeof(METACACHE));
+	    }
+
+	    fs_give((void **)&dc_copy);
+	    memset((void *)dcget(stream, stream->nmsgs),
+		   0, 
+		   sizeof(METACACHE));
+	}
+
+	break;
+
+    default:
+      fatal ("Bad dos_cache op");
+      break;
+    }
+
+    return ret;
+}
+
+
+
+/*
+ * ***** FOR DEBUGGING *****
+ */
+void dumpmetacache(stream)
+MAILSTREAM *stream;
+{
+    FILE *fp;
+    long i;
+    size_t  n;
+    METACACHE ce;
+    DOSCACHE *dp = (DOSCACHE *)stream->cache.c;
+
+    if((fp=fopen("\\tmp\\cache.out","a")) == NULL)
+	return;
+    if(!stream->cache.c){
+	fprintf(fp,"NO CACHE ASSOCIATED WITH STREAM!!!\n");
+    }
+    else{
+        fprintf(fp,"****** cache has %ld entries (%d element blocks)\n", 
+		stream->cachesize, CB_SIZE);
+	fprintf(fp,"Those in core are:\n");
+	for(i=0; i < CB_SIZE; i++){
+	  fprintf(fp,"  %d) ", i+1);
+	  if(!dp->mcb[i].use){
+	     fprintf(fp,"EMPTY\n");
+	  }
+	  else{
+	     fprintf(fp,"# %ld, lock = %d, size = %ld\n", 
+			dp->mcb[i].cachel.mc.msgno,
+			dp->mcb[i].cachel.mc.lockcount,
+			dp->mcb[i].cachel.mc.rfc822_size);
+	  }
+	}
+
+	fprintf(fp,"Those on disk are:\n");
+	fseek(dp->dcf, 0L, SEEK_SET);
+	for(i=0; i < stream->cachesize; i++){
+	  fprintf(fp,"  %d) ", i+1);
+	  n = fread(&ce, sizeof(METACACHE), 1, dp->dcf);
+	  if(n != 1){
+	     fprintf(fp,"PROBLEM READING ENTRY!!!\n");
+	     break;
+	  }
+	  if(!ce.use){
+	     fprintf(fp,"EMPTY\n");
+	  }
+	  else{
+	     fprintf(fp,"# %ld, lock = %d, size = %ld\n", 
+			ce.cachel.mc.msgno,
+			ce.cachel.mc.lockcount,
+			ce.cachel.mc.rfc822_size);
+	  }
+	}
+    }
+    fclose(fp);
+}
+
+
+#ifdef	MOUSE
+/*
+ * mouse_in_index - general handler for mouse events in the pine's
+ *                  message index.
+ *                  returns: true if it did anything, false otherwise
+ *                  in the low 16 bits and what the calling routine
+ *                  should return in the high 16 bits.
+ *                  See ../pico/os_dos.c for more details...
+ */
+unsigned long
+mouse_in_index(down, row, col)
+int down, row, col;
+{
+    static   int ldown = 0, lrow = 0, lcol = 0, double_click = 0;
+    static   clock_t lastcalled = 0;
+    unsigned long rv = 0;
+
+    if(down){
+	if(lrow == row && lcol == col){		/* same event!! */
+	    if(clock() < (lastcalled + (clock_t)(CLOCKS_PER_SEC/2)))
+	      double_click++;
+	}
+
+	lrow  = row;
+	lcol  = col;
+	lastcalled = clock();
+    }
+    else if(lrow == row && lcol == col){	/* interesting event */
+	int    i;
+	long new_msgno;
+
+	new_msgno = ps_global->top_of_screen_sorted_msgno + (row - 2);
+	if(new_msgno > ps_global->max_msgno)
+	  new_msgno = ps_global->max_msgno;
+	
+        ps_global->current_sorted_msgno = new_msgno;
+
+	if(double_click)			/* fake view_screen request */
+	  rv = F_ON(F_USE_FK, ps_global) ? PF4 : 'V';
+	else
+	  rv = NO_OP_COMMAND;
+
+	double_click = 0;
+	rv           = (rv<<16)|TRUE;
+    }
+    return(rv);
+}
+#endif
