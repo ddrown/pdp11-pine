@@ -83,10 +83,10 @@ extern	int setimark(int, int);
 extern	int swapimark(int, int);
 
 /* bind.c */
-extern	int whelp(int, int);
+extern	void whelp(int, int);
 extern	int wscrollw(int, int, char **,int);
 extern	int normal(int, int (*)[2],int);
-extern	int rebindfunc(int (*a)(int, int),int (*)(int, int));
+extern	void rebindfunc(int (*a)(int, int),int (*)(int, int));
 
 /* browse.c */
 extern	int FileBrowse(char *, char *, char *);
@@ -100,11 +100,11 @@ extern	int packbuf(char **, int *, int);
 extern	int readbuf(char **);
 
 /* composer.c */
-extern	int InitMailHeader(struct pico_struct *);
+extern	void InitMailHeader(struct pico_struct *);
 extern	int ResizeHeader(void);
 extern	int HeaderEditor(int, int);
 extern	void PaintHeader(int, int);
-extern	int ArrangeHeader(void);
+extern	void ArrangeHeader(void);
 extern	int ToggleHeader(int);
 extern	int HeaderLen(void);
 static	struct hdr_line *next_line(int *, struct hdr_line *);
@@ -112,37 +112,37 @@ static	struct hdr_line *prev_line(int *, struct hdr_line *);
 extern	int UpdateHeader(void);
 extern	int entry_line(int, int);
 extern	int resolve_niks(int);
-extern	int ShowPrompt(void);
+extern	void ShowPrompt(void);
 extern	int packheader(void);
-extern	int zotheader(void);
+extern	void zotheader(void);
 
 /* display.c */
 extern	int vtinit(void);
-extern	int vttidy(void);
+extern	void vttidy(void);
 extern	int update(void);
-extern	int modeline(struct WINDOW *);
-extern	int movecursor(int, int);
-extern	int mlerase(void);
+extern	void modeline(struct WINDOW *);
+extern	void movecursor(int, int);
+extern	void mlerase(void);
 extern	int mlyesno(char *, int);
 extern	int mlreply(char *, char *, int, int);
 extern	int mlreplyd(char *, char *, int, int);
 extern	void emlwrite(char *, void *);
-extern	int mlwrite(char *, void *);
-extern	int scrolldown(struct WINDOW *, int, int);
-extern	int scrollup(struct WINDOW *, int, int);
-extern	int pprints(int, int);
+extern	void mlwrite(char *, void *);
+extern	void scrolldown(struct WINDOW *, int, int);
+extern	void scrollup(struct WINDOW *, int, int);
+extern	void pprints(int, int);
 extern	int doton(int *, unsigned int *);
 extern	int resize_pico(int, int);
-extern	int zotdisplay(void);
-extern	int pputc(int, int);
-extern	int pputs(char *, int);
-extern	int peeol(void);
+extern	void zotdisplay(void);
+extern	void pputc(int, int);
+extern	void pputs(char *, int);
+extern	void peeol(void);
 extern	CELL *pscr(int, int);
-extern	int pclear(int, int);
+extern	void pclear(int, int);
 extern	int pinsert(CELL);
 extern	int pdel(void);
 extern	void wstripe(int, int, char *, int);
-extern	int wkeyhelp(char *, char *);
+extern	void wkeyhelp(char *, char *);
 
 /* file.c */
 extern	int fileread(int, int);
@@ -161,13 +161,13 @@ extern	int ffgetline(char *, int);
 
 /* line.c */
 extern	struct LINE *lalloc(int);
-extern	int lfree(struct LINE *);
-extern	int lchange(int);
+extern	void lfree(struct LINE *);
+extern	void lchange(int);
 extern	int linsert(int, int);
 extern	int geninsert(LINE **, short *, LINE *, int, int, int);
 extern	int lnewline(void);
 extern	int ldelete(int, int);
-extern	int kdelete(void);
+extern	void kdelete(void);
 extern	int kinsert(int);
 extern	int kremove(int);
 
@@ -175,14 +175,14 @@ extern	int kremove(int);
 extern	int ttopen(void);
 extern	int ttclose(void);
 extern	int ttisslow(void);
-extern	int ttputc(int);
+extern	int ttputc(char);
 extern	int ttflush(void);
 extern	int ttgetc(void);
-extern	int ttgetwinsz(void);
+extern	void ttgetwinsz();
 extern	int GetKey(void);
 #ifdef	JOB_CONTROL
 extern	int alt_editor(int, int);
-extern	int bktoshell(void);
+extern	void bktoshell();
 #endif
 extern	int fallowc(int);
 extern	int fexist(char *, char *, long *);
@@ -192,7 +192,7 @@ extern	int homeless(char *);
 extern	char *errstr(int);
 extern	char *getfnames(char *, int *);
 extern	void fioperr(int, char *);
-extern	int fixpath(char *, int);
+extern	void fixpath(char *, int);
 extern	int compresspath(char *, char *, int);
 extern	void tmpname(char *);
 extern	void makename(char *, char *);
@@ -235,6 +235,7 @@ extern	int forwdel(int, int);
 extern	int backdel(int, int);
 extern	int killtext(int, int);
 extern	int yank(int, int);
+extern  int getccol(int);
 
 /* region.c */
 extern	int killregion(int, int);
@@ -260,13 +261,20 @@ extern	int forwword(int, int);
 extern	int fillpara(int, int);
 extern	int inword(void);
 
+/* tcap.c */
+extern void o_scrollup(int row, int n);
+extern void o_scrolldown(int row, int n);
+
+/* region.c */
+void unmarkbuffer();
+
 #else
 /* attach.c */
-extern	int AskAttach();
-extern	int SyncAttach();
-extern	int intag();
-extern	char *prettysz();
-extern  int AttachError();
+extern	int AskAttach(char *fn, char *sz, char *cmnt);
+extern	int SyncAttach(void);
+extern	int intag(char *, int);
+extern	char *prettysz(long);
+extern  int AttachError(void);
 
 /* basic.c */
 extern	int gotobol();
@@ -282,7 +290,7 @@ extern	int gotobop();
 extern	int gotoeop();
 extern	int forwpage();
 extern	int backpage();
-extern	int setmark();
+extern	int setmark(int, int);
 extern	int swapmark();
 extern	int setimark();
 extern	int swapimark();
@@ -294,7 +302,7 @@ extern	int normal();
 extern	int rebindfunc();
 
 /* browse.c */
-extern	int FileBrowse();
+extern	int FileBrowse(char *, char *, char *);
 extern	int ResizeBrowser();
 
 /* buffer.c */
@@ -329,25 +337,25 @@ extern	int modeline();
 extern	int movecursor();
 extern	int mlerase();
 extern	int mlyesno();
-extern	int mlreply();
-extern	int mlreplyd();
-extern	void emlwrite();
-extern	int mlwrite();
-extern	int scrolldown();
-extern	int scrollup();
-extern	int pprints();
-extern	int doton();
-extern	int resize_pico();
-extern	int zotdisplay();
-extern	int pputc();
-extern	int pputs();
-extern	int peeol();
-extern	CELL *pscr();
-extern	int pclear();
-extern	int pinsert();
-extern	int pdel();
-extern	void wstripe();
-extern	int wkeyhelp();
+extern	int mlreply(char *, char *, int, int);
+extern	int mlreplyd(char *, char *, int, int);
+extern	void emlwrite(char *, void *);
+extern	int mlwrite(char *, void *);
+extern	int scrolldown(struct WINDOW *, int, int);
+extern	int scrollup(struct WINDOW *, int, int);
+extern	int pprints(int, int);
+extern	int doton(int *, unsigned int *);
+extern	int resize_pico(int, int);
+extern	int zotdisplay(void);
+extern	int pputc(int, int);
+extern	int pputs(char *, int);
+extern	int peeol(void);
+extern	CELL *pscr(int, int);
+extern	int pclear(int, int);
+extern	int pinsert(CELL);
+extern	int pdel(void);
+extern	void wstripe(int, int, char *, int);
+extern	int wkeyhelp(char *, char *);
 
 /* file.c */
 extern	int fileread();
@@ -389,16 +397,16 @@ extern	int GetKey();
 extern	int alt_editor();
 extern	int bktoshell();
 #endif
-extern	int fallowc();
-extern	int fexist();
-extern	int isdir();
-extern	char *gethomedir();
-extern	int homeless();
+extern	int fallowc(int);
+extern	int fexist(char *, char *, long *);
+extern	int isdir(char *, long *);
+extern	char *gethomedir(int *);
+extern	int homeless(char *);
 extern	char *errstr();
 extern	char *getfnames();
-extern	void fioperr();
-extern	int fixpath();
-extern	int compresspath();
+extern	void fioperr(int, char *);
+extern	int fixpath(char *, int);
+extern	int compresspath(char *, char *, int);
 extern	void tmpname();
 extern	void makename();
 extern	int copy();
@@ -456,7 +464,7 @@ extern	int spell();
 #endif
 
 /* window.c */
-extern	int refresh();
+extern	int refresh(int, int);
 
 /* word.c */
 extern	int wrapword();

@@ -248,20 +248,20 @@ typedef struct  {
         int     (*t_open)();            /* Open terminal at the start.  */
         int     (*t_close)();           /* Close terminal at end.       */
         int     (*t_getchar)();         /* Get character from keyboard. */
-        int     (*t_putchar)();         /* Put character to display.    */
+        int     (*t_putchar)(char);         /* Put character to display.    */
         int     (*t_flush)();           /* Flush output buffers.        */
-        int     (*t_move)();            /* Move the cursor, origin 0.   */
+        int     (*t_move)(int, int);            /* Move the cursor, origin 0.   */
         int     (*t_eeol)();            /* Erase to end of line.        */
         int     (*t_eeop)();            /* Erase to end of page.        */
         int     (*t_beep)();            /* Beep.                        */
-	int	(*t_rev)();		/* set reverse video state	*/
+        int     (*t_rev)(int);		/* set reverse video state	*/
 }       TERM;
 
 /*	structure for the table of initial key bindings		*/
 
 typedef struct  {
         short   k_code;                 /* Key code                     */
-        int     (*k_fp)();              /* Routine to handle it         */
+        int     (*k_fp)(int, int);              /* Routine to handle it         */
 }       KEYTAB;
 
 /*	structure for the name binding table		*/

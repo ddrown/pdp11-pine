@@ -50,7 +50,7 @@ static char rcsid[] = "$Id: basic.c,v 4.5 1993/09/29 16:45:07 mikes Exp $";
 #include	"estruct.h"
 #include        "edef.h"
 #include        "pico.h"
-
+#include	"efunc.h"
 
 #ifdef	ANSI
     int getgoal(struct LINE *);
@@ -64,8 +64,8 @@ static char rcsid[] = "$Id: basic.c,v 4.5 1993/09/29 16:45:07 mikes Exp $";
  * beginning of the current line.
  * Trivial.
  */
-gotobol(f, n)
-int f, n;
+int
+gotobol(int f, int n)
 {
     curwp->w_doto  = 0;
     return (TRUE);
@@ -77,9 +77,8 @@ int f, n;
  * location. Error if you try and move out of the buffer. Set the flag if the
  * line pointer for dot changes.
  */
-backchar(f, n)
-int             f;
-register int    n;
+int
+backchar(int f, int n)
 {
     register LINE   *lp;
     register int    status;
@@ -122,8 +121,8 @@ register int    n;
 /*
  * Move the cursor to the end of the current line. Trivial. No errors.
  */
-gotoeol(f, n)
-int f, n;
+int
+gotoeol(int f, int n)
 {
     curwp->w_doto  = llength(curwp->w_dotp);
     return (TRUE);
@@ -136,9 +135,8 @@ int f, n;
  * location, and move ".". Error if you try and move off the end of the
  * buffer. Set the flag if the line pointer for dot changes.
  */
-forwchar(f, n)
-int             f;
-register int    n;
+int
+forwchar(int f, int n)
 {
     if (n < 0)
       return (backchar(f, -n));
@@ -165,8 +163,8 @@ register int    n;
  * argument (n) must be a positive integer for
  * this to actually do anything
  */
-gotoline(f, n)
-int f, n;
+int
+gotoline(int f, int n)
 {
     if (n < 1)		/* if a bogus argument...then leave */
       return(FALSE);
@@ -183,8 +181,8 @@ int f, n;
  * considered to be hard motion; it really isn't if the original value of dot
  * is the same as the new value of dot. Normally bound to "M-<".
  */
-gotobob(f, n)
-int f, n;
+int
+gotobob(int f, int n)
 {
     curwp->w_dotp  = lforw(curbp->b_linep);
     curwp->w_doto  = 0;
@@ -198,8 +196,8 @@ int f, n;
  * (ZJ). The standard screen code does most of the hard parts of update.
  * Bound to "M->".
  */
-gotoeob(f, n)
-int f, n;
+int
+gotoeob(int f, int n)
 {
     curwp->w_dotp  = curbp->b_linep;
     curwp->w_doto  = 0;
@@ -214,8 +212,8 @@ int f, n;
  * controls how the goal column is set. Bound to "C-N". No errors are
  * possible.
  */
-forwline(f, n)
-int f, n;
+int
+forwline(int f, int n)
 {
     register LINE   *dlp;
 
@@ -243,6 +241,7 @@ int f, n;
  * alternate. Figure out the new line and call "movedot" to perform the
  * motion. No errors are possible. Bound to "C-P".
  */
+int
 backline(f, n)
 int f, n;
 {
@@ -288,6 +287,7 @@ int f, n;
  * here we look for a <NL><NL> or <NL><TAB> or <NL><SPACE>
  * combination to delimit the begining of a paragraph	
  */
+int
 gotobop(f, n)
 int f, n;	/* default Flag & Numeric argument */
 {
@@ -332,6 +332,7 @@ int f, n;	/* default Flag & Numeric argument */
  * here we look for a <NL><NL> or <NL><TAB> or <NL><SPACE>
  * combination to delimit the begining of a paragraph
  */
+int
 gotoeop(f, n)
 int f, n;	/* default Flag & Numeric argument */
 
@@ -380,6 +381,7 @@ int f, n;	/* default Flag & Numeric argument */
  * column, return the best choice for the offset. The offset is returned.
  * Used by "C-N" and "C-P".
  */
+int
 getgoal(dlp)
 register LINE   *dlp;
 {
@@ -415,6 +417,7 @@ register LINE   *dlp;
  * the overlap; this value is the default overlap value in ITS EMACS. Because
  * this zaps the top line in the display window, we have to do a hard update.
  */
+int
 forwpage(f, n)
 int             f;
 register int    n;
@@ -470,6 +473,7 @@ register int    n;
  * EMACS manual. Bound to "M-V". We do a hard update for exactly the same
  * reason.
  */
+int
 backpage(f, n)
 int             f;
 register int    n;
@@ -536,8 +540,8 @@ register int    n;
  * errors are possible. Bound to "M-.".  If told to set an already set mark
  * unset it.
  */
-setmark(f, n)
-int f, n;
+int
+setmark(int f, int n)
 {
     if(!curwp->w_markp){
         curwp->w_markp = curwp->w_dotp;
@@ -561,6 +565,7 @@ int f, n;
  * that moves the mark about. The only possible error is "no mark". Bound to
  * "C-X C-X".
  */
+int
 swapmark(f, n)
 int f, n;
 {
@@ -569,7 +574,7 @@ int f, n;
 
     if (curwp->w_markp == NULL) {
 	if(Pmaster == NULL)
-	  mlwrite("No mark in this window");
+	  mlwrite("No mark in this window", NULL);
 	return (FALSE);
     }
 
@@ -589,6 +594,7 @@ int f, n;
  * errors are possible. Bound to "M-.".  If told to set an already set mark
  * unset it.
  */
+int
 setimark(f, n)
 int f, n;
 {
@@ -604,6 +610,7 @@ int f, n;
  * that moves the mark about. The only possible error is "no mark". Bound to
  * "C-X C-X".
  */
+int
 swapimark(f, n)
 int f, n;
 {
@@ -612,7 +619,7 @@ int f, n;
 
     if (curwp->w_imarkp == NULL) {
 	if(Pmaster == NULL)
-	  emlwrite("Programmer botch! No mark in this window");
+	  emlwrite("Programmer botch! No mark in this window", NULL);
 	return (FALSE);
     }
 

@@ -48,6 +48,7 @@ static char rcsid[] = "$Id: display.c,v 4.16 1993/11/19 04:01:12 mikes Exp $";
  */
 
 #include        <stdio.h>
+#include	<stdlib.h>
 #include	"osdep.h"
 #include        "pico.h"
 #include	"estruct.h"
@@ -56,18 +57,18 @@ static char rcsid[] = "$Id: display.c,v 4.16 1993/11/19 04:01:12 mikes Exp $";
 
 
 #ifdef	ANSI
-    int vtmove(int, int);
-    int vtputc(CELL);
-    int vtpute(CELL);
-    int vteeol(void);
+    void vtmove(int, int);
+    void vtputc(CELL);
+    void vtpute(CELL);
+    void vteeol(void);
     int updateline(int, CELL *, CELL *, short *);
-    int updext(void);
-    int mlputi(int, int);
-    int mlputli(long, int);
+    void updext(void);
+    void mlputi(int, int);
+    void mlputli(long, int);
     int showCompTitle(void);
     int nlforw(void);
     int dumbroot(int, int);
-    int dumblroot(long, int);
+    long int dumblroot(long, int);
 #else
     int vtmove();
     int vtputc();
@@ -114,6 +115,7 @@ VIDEO   **pscreen;                      /* Physical screen. */
  * The original window has "WFCHG" set, so that it will get completely
  * redrawn on the first call to "update".
  */
+int
 vtinit()
 {
     register int i;
@@ -180,6 +182,7 @@ vtinit()
  * system prompt will be written in the line). Shut down the channel to the
  * terminal.
  */
+void
 vttidy()
 {
     movecursor(term.t_nrow-1, 0);
@@ -195,6 +198,7 @@ vttidy()
  * screen. There is no checking for nonsense values; this might be a good
  * idea during the early stages.
  */
+void
 vtmove(row, col)
 int row, col;
 {
@@ -209,6 +213,7 @@ int row, col;
  * only puts printing characters into the virtual terminal buffers. Only
  * column overflow is checked.
  */
+void
 vtputc(c)
 CELL c;
 {
@@ -245,6 +250,7 @@ CELL c;
  * not yet on left edge, don't print it yet. check for overflow on
  * the right margin.
  */
+void
 vtpute(c)
 CELL c;
 {
@@ -284,6 +290,7 @@ CELL c;
  * Erase from the end of the software cursor to the end of the line on which
  * the software cursor is located.
  */
+void
 vteeol()
 {
     register VIDEO      *vp;
@@ -304,6 +311,7 @@ vteeol()
  * correct for the current window. Third, make the virtual and physical
  * screens the same.
  */
+int
 update()
 {
     register LINE   *lp;
@@ -725,6 +733,7 @@ out:
  *	    will be scrolled right or left to let the user see where
  *	    the cursor is
  */
+void
 updext()
 {
     register int rcursor;		/* real cursor location */
@@ -758,6 +767,7 @@ updext()
  * row and column variables. It does try an exploit erase to end of line. The
  * RAINBOW version of this routine uses fast video.
  */
+int
 updateline(row, vline, pline, flags)
 int  row;
 CELL vline[];				/* what we want it to end up as */
@@ -879,6 +889,7 @@ short *flags;				/* and how we want it that way  */
  * change the modeline format by hacking at this routine. Called by "update"
  * any time there is a dirty window.
  */
+void
 modeline(wp)
 WINDOW *wp;
 {
@@ -906,8 +917,8 @@ WINDOW *wp;
 	register char *cp;
 	register int n;		/* cursor position count */
 	register BUFFER *bp;
-	register i;		/* loop index */
-	register lchar;		/* character to draw line in buffer with */
+	register int i;		/* loop index */
+	register int lchar;		/* character to draw line in buffer with */
 	char     tline[NLINE];	/* buffer for part of mode line */
 	CELL     c;
 
@@ -1014,6 +1025,7 @@ WINDOW *wp;
  * and column "col". The row and column arguments are origin 0. Optimize out
  * random calls. Update "ttrow" and "ttcol".
  */
+void
 movecursor(row, col)
 int row, col;
 {
@@ -1030,6 +1042,7 @@ int row, col;
  * is not considered to be part of the virtual screen. It always works
  * immediately; the terminal buffer is flushed via a call to the flusher.
  */
+void
 mlerase()
 {
     int i;
@@ -1055,6 +1068,7 @@ mlerase()
  * with a ^G. if d >= 0, d is the default answer returned. Otherwise there
  * is no default.
  */
+int
 mlyesno(prompt, dflt)
 char  *prompt;
 int   dflt;
@@ -1122,6 +1136,7 @@ int   dflt;
  * lets macros run at full speed. The reply is always terminated by a carriage
  * return. Handle erase, kill, and abort keys.
  */
+int
 mlreply(prompt, buf, nbuf, flg)
 char  *prompt, *buf;
 int    nbuf, flg;
@@ -1157,6 +1172,7 @@ static int rfkm[12][2] = {
  *            and ff means for-file which checks that all chars are allowed
  *            in file names.
  */
+int
 mlreplyd(prompt, buf, nbuf, flg)
 char  *prompt;
 char  *buf;
@@ -1324,9 +1340,7 @@ int    nbuf, flg;
  *              the text.
  */
 void
-emlwrite(message, arg) 
-char	*message;
-void	*arg;
+emlwrite(char *message, void* arg) 
 {
     register char *bufp = message;
     register char *ap;
@@ -1420,6 +1434,7 @@ void	*arg;
  * stack grows down; this assumption is made by the "++" in the argument scan
  * loop. Set the "message line" flag TRUE.
  */
+void
 mlwrite(fmt, arg)
 char *fmt;
 void *arg;
@@ -1490,6 +1505,7 @@ void *arg;
  * Write out an integer, in the specified radix. Update the physical cursor
  * position. This will not handle any negative numbers; maybe it should.
  */
+void
 mlputi(i, r)
 int i, r;
 {
@@ -1513,6 +1529,7 @@ int i, r;
 /*
  * do the same except as a long integer.
  */
+void
 mlputli(l, r)
 long l;
 int  r;
@@ -1542,6 +1559,7 @@ int  r;
  *        r  is the row at which to begin scrolling
  *        n  is the number of lines to scrol
  */
+void
 scrolldown(wp, r, n)
 WINDOW *wp;
 int     r, n;
@@ -1584,6 +1602,7 @@ int     r, n;
  *            display, and update the pscreen array to reflect those
  *            moves...
  */
+void
 scrollup(wp, r, n)
 WINDOW *wp;
 int     r, n;
@@ -1627,6 +1646,7 @@ int     r, n;
  * print spaces in the physical screen starting from row abs(n) working in
  * either the positive or negative direction (depending on sign of n).
  */
+void
 pprints(x, y)
 int x, y;
 {
@@ -1659,6 +1679,7 @@ int x, y;
  * doton - return the physical line number that the dot is on in the
  *         current window, and by side effect the number of lines remaining
  */
+int
 doton(r, chs)
 int       *r;
 unsigned  *chs;
@@ -1688,6 +1709,7 @@ unsigned  *chs;
 /*
  * resize_pico - given new window dimensions, allocate new resources
  */
+int
 resize_pico(row, col)
 int  row, col;
 {
@@ -1784,6 +1806,7 @@ int  row, col;
 /*
  * showCompTitle - display the anchor line passed in from pine
  */
+int
 showCompTitle()
 {
     if(Pmaster){
@@ -1812,6 +1835,7 @@ showCompTitle()
 /*
  * zotdisplay - blast malloc'd space created for display maps
  */
+void
 zotdisplay()
 {
     register int i;
@@ -1830,6 +1854,7 @@ zotdisplay()
 /*
  * nlforw() - returns the number of lines from the top to the dot
  */
+int
 nlforw()
 {
     register int  i = 0;
@@ -1848,6 +1873,7 @@ nlforw()
  * pputc - output the given char, keep track of it on the physical screen
  *	   array, and keep track of the cursor
  */
+void
 pputc(c, a)
 int   c;				/* char to write */
 int   a;				/* and its attribute */
@@ -1866,6 +1892,7 @@ int   a;				/* and its attribute */
 /*
  * pputs - print a string and keep track of the cursor
  */
+void
 pputs(s, a)
 register char *s;			/* string to write */
 register int   a;			/* and its attribute */
@@ -1879,6 +1906,7 @@ register int   a;			/* and its attribute */
  * peeol - physical screen array erase to end of the line.  remember to
  *	   track the cursor.
  */
+void
 peeol()
 {
     register int r = ttrow;
@@ -1911,6 +1939,7 @@ int l, o;
 /*
  * pclear() - clear the physical screen from row x through row y
  */
+void
 pclear(x, y)
 register int x;
 register int y;
@@ -1927,6 +1956,7 @@ register int y;
 /*
  * dumbroot - just get close 
  */
+int
 dumbroot(x, b)
 int x, b;
 {
@@ -1940,6 +1970,7 @@ int x, b;
 /*
  * dumblroot - just get close 
  */
+long
 dumblroot(x, b)
 long x;
 int  b;
@@ -1955,6 +1986,7 @@ int  b;
  * pinsertc - use optimized insert, fixing physical screen map.
  *            returns true if char written, false otherwise
  */
+int
 pinsert(c)
 CELL c;
 {
@@ -1979,6 +2011,7 @@ CELL c;
  *        fix the physical screen array.
  *        returns true if optimized the delete, false otherwise
  */
+int
 pdel()
 {
     register int   i;
@@ -2061,6 +2094,7 @@ int      key;
  *  wkeyhelp - paint list of possible commands on the bottom
  *             of the display (yet another pine clone)
  */
+void
 wkeyhelp(keys, helptxt)
 char	*keys;
 char	*helptxt;

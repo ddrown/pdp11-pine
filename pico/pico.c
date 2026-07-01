@@ -135,6 +135,7 @@ char    *pico_anchor = NULL;
  * pico - the main routine for Pine's composer.
  *
  */
+int
 pico(pm)
 PICO *pm;
 {
@@ -321,6 +322,7 @@ char    bname[];
  * and arranges to move it to the "lastflag", so that the next command can
  * look at it. Return the status of command.
  */
+int
 execute(c, f, n)
 int c, f, n;
 {

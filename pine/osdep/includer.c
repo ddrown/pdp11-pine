@@ -2,6 +2,7 @@
 static char rcsid[] = "$Id: includer.c,v 5.3 1993/07/20 21:24:07 hubert Exp $";
 #endif
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /*
@@ -12,11 +13,16 @@ static char rcsid[] = "$Id: includer.c,v 5.3 1993/07/20 21:24:07 hubert Exp $";
  *
  * This probably ought to just be a script that uses "cat".
  */
+int
+readfile(FILE *fpin, FILE *fpout);
+
+int
 main() {
     readfile(stdin, stdout);
     exit(0);
 }
 
+int
 readfile(fpin, fpout)
 FILE *fpin, *fpout;
 {

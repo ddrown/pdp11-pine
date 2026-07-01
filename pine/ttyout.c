@@ -91,6 +91,7 @@ now assumes it dosn't know where the cursor is after outputing in the
 
 #ifdef HAVE_TERMIOS
 #include <termios.h>
+#include <sys/ioctl.h>
 #else
 #ifdef HAVE_TERMIO
 #include <termio.h>

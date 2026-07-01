@@ -46,6 +46,8 @@ static char rcsid[] = "$Id: attach.c,v 4.8 1993/11/08 23:08:56 mikes Exp $";
 #include <stdio.h>
 #include <ctype.h>
 #include <math.h>
+#include <unistd.h>
+#include <stdlib.h>
 #include "osdep.h"
 #include "pico.h"
 #include "estruct.h"
@@ -59,12 +61,12 @@ static char rcsid[] = "$Id: attach.c,v 4.8 1993/11/08 23:08:56 mikes Exp $";
     int    ParseAttach(struct hdr_line **,int *,char *,char *,char *,int *);
     PATMT *NewAttach(char *, long, char *);
     void   ZotAttach(struct pico_atmt *);
-    int    sinserts(char *, int, char *, int);
+    void   sinserts(char *, int, char *, int);
 #else
-    int    ParseAttach();
-    PATMT *NewAttach();
-    void   ZotAttach();
-    int    sinserts();
+    int    ParseAttach(struct hdr_line **,int *,char *,char *,char *,int *);
+    PATMT *NewAttach(char *, long, char *);
+    void   ZotAttach(struct pico_atmt *);
+    void   sinserts(char *, int, char *, int);
 #endif
 
 
@@ -176,7 +178,7 @@ int AskAttach(char *fn, char *sz, char *cmnt)
  *              delete any attachments in list of structs that's not on 
  *              the display, and add any that aren't in list but on display.
  */
-SyncAttach()
+int SyncAttach()
 {
     int offset = 0,				/* the offset to begin       */
         rv = 0,
@@ -328,11 +330,7 @@ SyncAttach()
  *                       0 nothing changed
  *                      -1 on error
  */
-ParseAttach(lp, off, fn, sz, cmnt, no)
-struct hdr_line **lp;				/* current header line      */
-int  *off;					/* offset into that line    */
-char *fn, *sz, *cmnt;				/* places to return fields  */
-int  *no;					/* attachment number        */
+int ParseAttach(struct hdr_line **lp, int *off, char *fn, char *sz, char *cmnt, int *no)
 {
     int  j, status,				/* various return codes     */
          rv = 0,				/* return value             */
@@ -686,10 +684,7 @@ int  *no;					/* attachment number        */
 /*
  * NewAttach - given a filename (assumed to accessible) and comment, creat
  */
-PATMT *NewAttach(f, l, c)
-char *f;
-long l;
-char *c;
+PATMT *NewAttach(char *f, long l, char *c)
 {
     PATMT  *tp;
 
@@ -763,8 +758,7 @@ AttachError()
 
 
 
-void ZotAttach(p)
-PATMT *p;
+void ZotAttach(PATMT *p)
 {
     if(!p)
       return;
@@ -785,9 +779,7 @@ PATMT *p;
  * intag - return TRUE if i is in a column that makes up an
  *         attachment line number
  */
-intag(s, i)
-char *s;
-int   i;
+int intag(char *s, int i)
 {
     char *p = s;
     int n = 0;
@@ -811,21 +803,20 @@ int   i;
 /*
  * prettysz - return pointer to string containing nice
  */
-char *prettysz(l)
-long l;
+char *prettysz(long l)
 {
     static char b[32];
 
     if(l < 1000)
-      sprintf(b, "%d  B", l);			/* xxx B */
+      sprintf(b, "%ld  B", l);			/* xxx B */
     else if(l < 10000)
       sprintf(b, "%1.1f KB", (float)l/1000);    /* x.x KB */
     else if(l < 1000000)
-      sprintf(b, "%d KB", l/1000);		/* xxx KB */
+      sprintf(b, "%ld KB", l/1000);		/* xxx KB */
     else if(l < 10000000)
       sprintf(b, "%1.1f MB", (float)l/1000000); /* x.x MB */
     else
-      sprintf(b, "%d MB", l/1000000);		/* xxx MB */
+      sprintf(b, "%ld MB", l/1000000);		/* xxx MB */
     return(b);
 }
 
@@ -833,9 +824,9 @@ long l;
 /*
  * sinserts - s insert into another string
  */
-sinserts(ds, dl, ss, sl)
-char *ds, *ss;					/* dest. and source strings */
-int  dl, sl;					/* their lengths */
+void sinserts(char *ds, int dl, char *ss, int sl)
+/* char *ds, *ss;				dest. and source strings */
+/* int  dl, sl;					their lengths */
 {
     char *dp, *edp;				/* pointers into dest. */
     int  j;					/* jump difference */

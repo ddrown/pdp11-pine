@@ -47,6 +47,7 @@ static char rcsid[] = "$Id: fileio.c,v 4.4 1993/11/17 01:03:50 mikes Exp $";
 #include        <stdio.h>
 #include	"estruct.h"
 #include        "edef.h"
+#include	"efunc.h"
 
 
 FILE    *ffp;                           /* File pointer, all functions. */
@@ -54,6 +55,7 @@ FILE    *ffp;                           /* File pointer, all functions. */
 /*
  * Open a file for reading.
  */
+int
 ffropen(fn)
   char    *fn;
 {
@@ -69,8 +71,8 @@ ffropen(fn)
  * and the "nbuf" is its length, less the free newline. Return the status.
  * Check only at the newline.
  */
-ffputline(buf, nbuf)
-    CELL  buf[];
+int
+ffputline(CELL buf[], int nbuf)
 {
     register int    i;
 
@@ -80,7 +82,7 @@ ffputline(buf, nbuf)
     fputc('\n', ffp);
 
     if (ferror(ffp)) {
-        emlwrite("Write I/O error");
+        emlwrite("Write I/O error", NULL);
         return (FIOERR);
     }
 
@@ -95,8 +97,8 @@ ffputline(buf, nbuf)
  * at the end of the file that don't have a newline present. Check for I/O
  * errors too. Return status.
  */
-ffgetline(buf, nbuf)
-  register char   buf[];
+int
+ffgetline(char buf[], int nbuf)
 {
     register int    c;
     register int    i;
@@ -120,7 +122,7 @@ ffgetline(buf, nbuf)
         if (i >= nbuf-2) {
 	    buf[nbuf - 2] = c;	/* store last char read */
 	    buf[nbuf - 1] = 0;	/* and terminate it */
-            emlwrite("File has long line");
+            emlwrite("File has long line", NULL);
             return (FIOLNG);
         }
         buf[i++] = c;
@@ -128,7 +130,7 @@ ffgetline(buf, nbuf)
 
     if (c == EOF) {
         if (ferror(ffp)) {
-            emlwrite("File read error");
+            emlwrite("File read error", NULL);
             return (FIOERR);
         }
 

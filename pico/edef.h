@@ -144,10 +144,6 @@ extern  BUFFER  *blistp;                /* Buffer for C-X C-B           */
 extern  short   *kbdmip;                /* Input pointer for above      */
 extern  short   *kbdmop;                /* Output pointer for above     */
 
-extern  BUFFER  *bfind();               /* Lookup a buffer by name      */
-extern  WINDOW  *wpopup();              /* Pop up window creation       */
-extern  LINE    *lalloc();              /* Allocate a line              */
-
 #endif
 
 /* terminal table defined only in TERM.C */

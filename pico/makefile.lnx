@@ -9,7 +9,7 @@ DASHO=		-g
 #DASHO=		-O
 
 
-CFLAGS=	 	-Dbsd -DLINUX -DPOSIX -DJOB_CONTROL \
+CFLAGS=	 	-Dbsd -DLINUX -DPOSIX -DJOB_CONTROL -DANSI \
 		-I/usr/include/bsd
 
 

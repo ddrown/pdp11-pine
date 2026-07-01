@@ -47,10 +47,12 @@ static char rcsid[] = "$Id: buffer.c,v 4.5 1993/08/02 20:27:19 mikes Exp $";
  * for the display system.
  */
 #include        <stdio.h>
+#include	<stdlib.h>
 #include	"osdep.h"
 #include	"estruct.h"
 #include        "pico.h"
 #include        "edef.h"
+#include	"efunc.h"
 
 #ifdef	ANSI
 int zotbuf(struct BUFFER *);
@@ -61,6 +63,7 @@ int sgetline();
 #endif
 
 
+int
 zotbuf(bp)	/* kill the buffer pointed to by bp */
   register BUFFER *bp;
 {
@@ -69,7 +72,7 @@ zotbuf(bp)	/* kill the buffer pointed to by bp */
     register int    s;
 
         if (bp->b_nwnd != 0) {                  /* Error if on screen.  */
-                mlwrite("Buffer is being displayed");
+                mlwrite("Buffer is being displayed", NULL);
                 return (FALSE);
         }
         if ((s=bclear(bp)) != TRUE)             /* Blow text away.      */
@@ -102,6 +105,7 @@ zotbuf(bp)	/* kill the buffer pointed to by bp */
  * Return FALSE if no buffers
  * have been changed.
  */
+int
 anycb()
 {
         register BUFFER *bp;
@@ -124,8 +128,7 @@ anycb()
  * the settings for the flags in in buffer.
  */
 BUFFER  *
-bfind(bname, cflag, bflag)
-register char   *bname;
+bfind(char *bname, int cflag, int bflag)
 {
         register BUFFER *bp;
 	register BUFFER *sb;	/* buffer to insert after */
@@ -135,7 +138,7 @@ register char   *bname;
         while (bp != NULL) {
                 if (strcmp(bname, bp->b_bname) == 0) {
                         if ((bp->b_flag&BFTEMP) != 0) {
-                                mlwrite("Cannot select builtin buffer");
+                                mlwrite("Cannot select builtin buffer", NULL);
                                 return (NULL);
                         }
                         return (bp);
@@ -195,6 +198,7 @@ register char   *bname;
  * that are required. Return TRUE if everything
  * looks good.
  */
+int
 bclear(bp)
 register BUFFER *bp;
 {
@@ -204,7 +208,7 @@ register BUFFER *bp;
 	if(Pmaster){
 	    if ((bp->b_flag&BFTEMP) == 0 	/* Not scratch buffer.  */
 		&& (bp->b_flag&BFCHG) != 0){	/* Something changed    */
-		emlwrite("buffer lines not freed.");
+		emlwrite("buffer lines not freed.", NULL);
 		return (s);
 	    }
 	}
@@ -234,6 +238,7 @@ register BUFFER *bp;
  *           will also free the memory associated with the editor
  *           buffer, by calling zotedit.
  */
+int
 packbuf(buf, blen, lcrlf)
 char	**buf;
 int	*blen;
@@ -317,8 +322,8 @@ int	lcrlf;				/* EOLs are local or CRLF */
 /*
  * readbuf - reads in a buffer.
  */
-readbuf(buf)
-char	**buf;
+int
+readbuf(char **buf)
 {
         register LINE   *lp1;
         register LINE   *lp2;
@@ -377,6 +382,7 @@ char	**buf;
  *            newline.  return with ibuf pointing to first char after
  *            newline.
  */
+int
 sgetline(ibuf, nchars, obuf, blen)
 char	**ibuf;
 int	*nchars;

@@ -325,7 +325,7 @@ markregion(attr)
  * clear all the attributes of all the characters in the buffer?
  * this is real dumb.  Movement with mark set needs to be smarter!
  */
-unmarkbuffer()
+void unmarkbuffer()
 {
     register LINE   *linep;
     register int     n;

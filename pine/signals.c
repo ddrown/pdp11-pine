@@ -99,7 +99,9 @@ init_signals()
           signal(SIGILL,  auger_in_signal); 
           signal(SIGTRAP, auger_in_signal);
           signal(SIGIOT,  auger_in_signal); 
+#ifdef SIGEMT
           signal(SIGEMT,  auger_in_signal);
+#endif
           signal(SIGBUS,  auger_in_signal);
           signal(SIGSEGV, auger_in_signal);
           signal(SIGSYS,  auger_in_signal);
@@ -155,7 +157,9 @@ end_signals()
     }
     signal(SIGTRAP, SIG_DFL);
     signal(SIGIOT,  SIG_DFL);
+#ifdef SIGEMT
     signal(SIGEMT,  SIG_DFL);
+#endif
     signal(SIGFPE,  SIG_DFL);
     signal(SIGBUS,  SIG_DFL);
     signal(SIGSEGV, SIG_DFL);

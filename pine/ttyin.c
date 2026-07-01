@@ -72,7 +72,6 @@ void   line_paint();
 #ifndef DOS  /* Beginning of giant switch between UNIX and DOS input driver */
 
 #ifdef USE_POLL
-#include <stropts.h>
 #include <poll.h>
 #endif
 

@@ -49,6 +49,7 @@ static char rcsid[] = "$Id: bind.c,v 4.2 1993/04/15 00:20:08 mikes Exp $";
 #include	"estruct.h"
 #include	"edef.h"
 #include	"pico.h"
+#include	"efunc.h"
 
 #ifdef	ANSI
     int arraylen(char **);
@@ -133,8 +134,8 @@ static char *helptext[] = {
 /*
  * arraylen - return the number of bytes in an array of char
  */
-arraylen(array)
-char **array;
+int
+arraylen(char **array)
 {
     register int i=0;
 
@@ -146,14 +147,14 @@ char **array;
 /*
  * whelp - display help text for the composer and pico
  */
-whelp(f, n)
+void whelp(int f, int n)
 {
     if(Pmaster){
 	(*Pmaster->helper)(Pmaster->composer_help, "Help on the Pine Composer", 1);
 	curwp->w_flag |= WFMODE;
     }
     else
-      pico_help(helptext);
+      pico_help(helptext, NULL, 0);
 
         sgarbf = TRUE;
 }
@@ -171,6 +172,7 @@ whelp(f, n)
  *     01/11/89 - added stripe call if 1st char is tilde - '~'
  *
  */
+int
 wscrollw(begrow, endrow, textp, textlen)
 int	begrow, endrow;
 char	*textp[];
@@ -281,7 +283,7 @@ int	textlen;
 	    case  NODATA :
 	        break;
 	    default :
-		emlwrite("Unknown Command.");
+		emlwrite("Unknown Command.", NULL);
 		(*term.t_beep)();
 		break;
 	}
@@ -299,6 +301,7 @@ int	textlen;
  *          rules:  1. if c not in table (either fkey or command), let it thru
  *                  2. if c matches, but in other mode, punt it
  */
+int
 normal(c, list, sc)
 int c, sc;
 int list[][2];
@@ -327,8 +330,9 @@ int list[][2];
 /*
  * rebind - replace the first function with the second
  */
+void
 rebindfunc(a, b)
-int (*a)(), (*b)();
+int (*a)(int, int), (*b)(int, int);
 {
     KEYTAB *kp;
 

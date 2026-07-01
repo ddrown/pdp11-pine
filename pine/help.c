@@ -320,10 +320,8 @@ the first line in the text.
 void
 #ifdef	DOS
 
-helper(index, title, from_composer)
-     short  index;
-     char   *title;
-     int    from_composer;
+void
+helper(short index, char *title, int from_composer)
 {
     char **text;
     int  pages[100];
@@ -341,9 +339,8 @@ helper(index, title, from_composer)
     free_help_text(text);
 #else
 
-helper(text, title, from_composer)
-     char  *text[], *title;
-     int    from_composer;
+void
+helper(char *text[], char *title, int from_composer)
 {
     register char **t, **t2;
     char          **new_text;

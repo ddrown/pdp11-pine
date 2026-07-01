@@ -67,6 +67,8 @@ static char rcsid[] = "$Id: composer.c,v 4.10 1993/11/09 00:42:24 mikes Exp $";
  */
 #include <stdio.h>
 #include <ctype.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include "osdep.h"
 #include "pico.h"
 #include "estruct.h"
@@ -80,9 +82,9 @@ static char rcsid[] = "$Id: composer.c,v 4.10 1993/11/09 00:42:24 mikes Exp $";
     int HeaderFocus(int, int);
     int LineEdit(int);
     int FormatLines(struct hdr_line *, char *, int, int);
-    int PaintBody(int);
+    void PaintBody(int);
     int ComposerHelp(int);
-    int NewTop(void);
+    void NewTop(void);
     void display_delimiter(int);
     int InvertPrompt(int, int);
     int partial_entries(void);
@@ -90,11 +92,11 @@ static char rcsid[] = "$Id: composer.c,v 4.10 1993/11/09 00:42:24 mikes Exp $";
     int strend(char *, int);
     char *strqchr(char *, int);
     int KillHeaderLine(struct hdr_line *, int);
-    int SaveHeaderLines(void);
+    unsigned int SaveHeaderLines(void);
     char *break_point(char *, int, int);
     int hldelete(struct hdr_line *);
     int is_blank(int, int, int);
-    int zotentry(struct hdr_line *);
+    void zotentry(struct hdr_line *);
     void zotcomma(char *);
 #else
     int InitEntryText();
@@ -174,6 +176,7 @@ static int ckm[12][2] = {
  *                  (entry, line, offset) will describe the current cursor 
  *                  position in the header.
  */
+void
 InitMailHeader(mp)
 PICO  *mp;
 {
@@ -304,6 +307,7 @@ PICO  *mp;
  * InitEntryText - Add the given header text into the header entry 
  *		   line structure.
  */
+int
 InitEntryText(address, h)
 char	*address;
 int	h;
@@ -339,6 +343,7 @@ int	h;
  *		works OK, but needs thorough testing
  *		  
  */
+int
 ResizeHeader()
 {
     register int i;
@@ -375,6 +380,7 @@ ResizeHeader()
 /*
  * HeaderOffset - return the character offset into the given header
  */
+int
 HeaderOffset(h)
 int	h;
 {
@@ -395,6 +401,7 @@ int	h;
 /*
  * HeaderFocus - put the dot at the given offset into the given header
  */
+int
 HeaderFocus(h, offset)
 int	h, offset;
 {
@@ -438,6 +445,7 @@ int	h, offset;
  *		FALSE if editing is cancelled
  *		TRUE  if editing is finished
  */
+int
 HeaderEditor(f, n)
 int f, n;
 {
@@ -845,6 +853,7 @@ int f, n;
  *		then pputc will have to be taught to check the line buffer
  *		length, and HALLOC() will probably have to become a func.
  */
+int
 LineEdit(allowedit)
 int	allowedit;
 {
@@ -1203,6 +1212,7 @@ int	allowedit;
  *		FALSE if only this line is changed
  *		TRUE  if text below the first line is changed
  */
+int
 FormatLines(h, instr, maxlen, entry)
 struct  hdr_line  *h;				/* where to begin formatting */
 char	*instr;					/* input string */
@@ -1540,6 +1550,7 @@ int	clear;					/* clear before painting */
  *		The header redrawing in a level 0 body paint gets done
  *		in update()
  */
+void
 PaintBody(level)
 int	level;
 {
@@ -1561,6 +1572,7 @@ int	level;
  * ArrangeHeader - set up display parm such that header is reasonably 
  *                 displayed
  */
+void
 ArrangeHeader()
 {
     int      e;
@@ -1582,6 +1594,7 @@ ArrangeHeader()
  * ComposerHelp() - display mail help in a context sensitive way
  *                  based on the level passed ...
  */
+int
 ComposerHelp(level)
 int	level;
 {
@@ -1603,6 +1616,7 @@ int	level;
  * ToggleHeader() - set or unset pico values to the full screen size
  *                  painting header if need be.
  */
+int
 ToggleHeader(show)
 int show;
 {
@@ -1629,6 +1643,7 @@ int show;
  * HeaderLen() - return the length in lines of the exposed portion of the
  *               header
  */
+int
 HeaderLen()
 {
     register struct hdr_line *lp;
@@ -1730,6 +1745,7 @@ struct hdr_line *line;
  *             FALSE if nothing changed 
  *             
  */
+int
 UpdateHeader()
 {
     register struct	hdr_line	*lp;
@@ -1801,6 +1817,7 @@ UpdateHeader()
  *		with ods.top_l and top_e pointing at a reasonable line
  *		entry
  */
+void
 NewTop()
 {
     register struct hdr_line *lp;
@@ -1875,6 +1892,7 @@ int	state;
  *		come to think of it, this func and the one above could
  *		easily be combined
  */
+int
 InvertPrompt(entry, state)
 int	entry, state;
 {
@@ -1930,6 +1948,7 @@ int	entry, state;
  *		TRUE if there are partial entries on the display
  *		FALSE otherwise.
  */
+int
 partial_entries()
 {
     register int   i = 0, rv = 0;
@@ -1958,6 +1977,7 @@ partial_entries()
  *             1) physical line number of entry
  *             2) -1 if entry currently not on display
  */
+int
 entry_line(entry, lastchar)
 int	entry, lastchar;
 {
@@ -1993,6 +2013,7 @@ int	entry, lastchar;
  *             1) physical line number of entry
  *             2) -1 if entry currently not on display
  */
+int
 physical_line(l)
 struct hdr_line *l;
 {
@@ -2044,6 +2065,7 @@ struct hdr_line *l;
  *              FALSE if not, or
  *		-1 on error
  */
+int
 resolve_niks(entry)
 int	entry;
 {
@@ -2118,6 +2140,7 @@ int	entry;
  * strend - neglecting white space, returns TRUE if c is at the
  *          end of the given line.  otherwise FALSE.
  */
+int
 strend(s, ch)
 char *s;
 int   ch;
@@ -2184,6 +2207,7 @@ int   ch;
  *		TRUE if hldelete worked
  *		FALSE otherwise
  */
+int
 KillHeaderLine(l, append)
 struct	hdr_line    *l;
 int     append;
@@ -2216,6 +2240,7 @@ int     append;
  *		TRUE if something good happend
  *		FALSE otherwise
  */
+unsigned int
 SaveHeaderLines()
 {
     extern   unsigned	kused;			/* length of kill buffer */
@@ -2324,6 +2349,7 @@ int  l, ch;
  *		TRUE if it worked 
  *		FALSE otherwise
  */
+int
 hldelete(l)
 struct hdr_line  *l;
 {
@@ -2363,6 +2389,7 @@ struct hdr_line  *l;
  * is_blank - returns true if the next n chars from coordinates row, col
  *           on display are spaces
  */
+int
 is_blank(row, col, n)
 int row, col, n;
 {
@@ -2378,6 +2405,7 @@ int row, col, n;
 /*
  * ShowPrompt - display key help corresponding to the current header entry
  */
+void
 ShowPrompt()
 {
     switch(ods.cur_e){
@@ -2415,6 +2443,7 @@ ShowPrompt()
  *                    of the pointer to each string is contained in the
  *                    header entry array "headents".
  */
+int
 packheader()
 {
     register int	i = 0;		/* array index */
@@ -2486,6 +2515,7 @@ packheader()
 /*
  * zotheader - free all malloc'd lines associated with the header structs
  */
+void
 zotheader()
 {
     register int i;
@@ -2499,6 +2529,7 @@ zotheader()
 /*
  * zotentry - free malloc'd space associated with the given linked list
  */
+void
 zotentry(l)
 register struct hdr_line *l;
 {

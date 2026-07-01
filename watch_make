@@ -1,0 +1,54 @@
+#!/usr/bin/env python
+
+import sys
+import time
+import subprocess
+from watchdog.observers import Observer
+from watchdog.events import PatternMatchingEventHandler
+
+class DebouncedHandler(PatternMatchingEventHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.last_run = 0
+
+    def run_make(self,event):
+        print(f"Triggered by: {event.src_path}")
+        if time.time() - self.last_run < 1:
+            print("waiting")
+            return
+
+        self.last_run = time.time()
+        try:
+            # Runs 'make' in the current working directory
+            subprocess.run(["make", "libpico.a"], check=True)
+            print("Make completed successfully.\n")
+        except subprocess.CalledProcessError:
+            print("Make failed.\n")
+
+    def on_modified(self, event):
+        self.run_make(event)
+
+    def on_created(self, event):
+        self.run_make(event)
+
+def main():
+    # Define the handler with filters
+    handler = DebouncedHandler(
+        patterns=["*.c", "*.h", "*.cpp", "Makefile"], # Only watch source files
+        ignore_patterns=["*/.git/*", "*/build/*"],    # Ignore build artifacts/git
+        ignore_directories=True
+    )
+
+    observer = Observer()
+    observer.schedule(handler, path=".", recursive=True)    
+    observer.start()
+    
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
+
+if __name__ == "__main__":
+    main()

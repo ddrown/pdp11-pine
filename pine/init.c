@@ -75,6 +75,7 @@ static char rcsid[] = "$Id: init.c,v 4.102 1993/11/23 00:04:05 mikes Exp $";
 
 
 #include "headers.h"
+#include <time.h>
 
 
 extern char version_buff[];
@@ -1343,7 +1344,7 @@ read_pinerc(filename, vars, which_vars)
         return(-1);
     }
 
-    dprint(1, (debugfile, "Read %d characters\n", strlen(file)));
+    dprint(1, (debugfile, "Read %ld characters\n", (long)strlen(file)));
 
     /*--- Count up lines and allocate structures */
     for(line_count = 0, p = file; *p != '\0'; p++)

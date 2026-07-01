@@ -53,6 +53,7 @@ static char rcsid[] = "$Id: line.c,v 4.4 1993/09/29 16:46:45 mikes Exp $";
  */
 
 #include        <stdio.h>
+#include	<stdlib.h>
 #include	"estruct.h"
 #include	"pico.h"
 #include        "edef.h"
@@ -60,7 +61,7 @@ static char rcsid[] = "$Id: line.c,v 4.4 1993/09/29 16:46:45 mikes Exp $";
 
 
 #ifdef	ANSI
-    int insspace(int, int);
+    void insspace(int, int);
     int ldelnewline(void);
 #else
     int insspace();
@@ -87,7 +88,6 @@ register int    used;
 {
     register LINE   *lp;
     register int    size;
-    char *malloc();
 
     size = (used+NBLOCK-1) & ~(NBLOCK-1);
     if (size == 0)                          /* Assume that an empty */
@@ -109,6 +109,7 @@ register int    used;
  * might be in. Release the memory. The buffers are updated too; the magic
  * conditions described in the above comments don't hold here.
  */
+void
 lfree(lp)
 register LINE   *lp;
 {
@@ -163,6 +164,7 @@ register LINE   *lp;
  * displayed in more than 1 window we change EDIT t HARD. Set MODE if the
  * mode line needs to be updated (the "*" has to be set).
  */
+void
 lchange(flag)
 register int    flag;
 {
@@ -190,6 +192,7 @@ register int    flag;
  * insert spaces forward into text
  * default flag and numeric argument 
  */
+void
 insspace(f, n)	
 int f, n;
 {
@@ -206,6 +209,7 @@ int f, n;
  * greater than the place where you did the insert. Return TRUE if all is
  * well, and FALSE on errors.
  */
+int
 linsert(n, c)
 int n, c;
 {
@@ -331,6 +335,7 @@ int    c, attb, n;
  * update of dot and mark is a bit easier then in the above case, because the
  * split forces more updating.
  */
+int
 lnewline()
 {
     register CELL   *cp1;
@@ -401,6 +406,7 @@ lnewline()
  * deleted, and FALSE if they were not (because dot ran into the end of the
  * buffer. The "kflag" is TRUE if the text should be put in the kill buffer.
  */
+int
 ldelete(n, kflag)
 int n, kflag;
 {
@@ -484,6 +490,7 @@ int n, kflag;
  * about in memory. Return FALSE on error and TRUE if all looks ok. Called by
  * "ldelete" only.
  */
+int
 ldelnewline()
 {
     register CELL   *cp1;
@@ -576,6 +583,7 @@ ldelnewline()
  * new kill context is being created. The kill buffer array is released, just
  * in case the buffer has grown to immense size. No errors.
  */
+void
 kdelete()
 {
     if (kbufp != NULL) {
@@ -592,13 +600,11 @@ kdelete()
  * put something in the kill buffer you are going to put more stuff there too
  * later. Return TRUE if all is well, and FALSE on errors.
  */
-
+int
 kinsert(c)
     int c;
 {
     register char   *nbufp;
-    char *realloc();
-    char *malloc();
 
     if (kused == ksize) {
 	if (ksize == 0)	/* first time through? */
@@ -620,6 +626,7 @@ kinsert(c)
  * "n" is off the end, it returns "-1". This lets the caller just scan along
  * until it gets a "-1" back.
  */
+int
 kremove(n)
 int n;
 {

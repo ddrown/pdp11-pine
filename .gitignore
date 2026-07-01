@@ -10,3 +10,8 @@ pine/os.h
 *.o
 pine/helptext.c
 .nanocoder
+pine/osdep/includer
+pine/os.c
+pico/makefile
+pine/makefile
+.*.swp

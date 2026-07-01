@@ -50,6 +50,7 @@ static char rcsid[] = "$Id: ansi.c,v 4.3 1993/04/15 00:18:07 mikes Exp $";
 #include	"estruct.h"
 #include        "edef.h"
 #include        "osdep.h"
+#include	"efunc.h"
 
 #if     ANSI_DRIVER
 
@@ -144,7 +145,7 @@ register int    n;
 
 #endif
 
-ansiopen()
+void ansiopen()
 {
 #if     V7
         register char *cp;

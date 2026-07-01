@@ -164,15 +164,15 @@ typedef struct pico_struct {
     char  *alt_ed;			/* name of alternate editor or NULL */
     PATMT *attachments;			/* linked list of attachments */
     unsigned pine_flags;		/* entry mode flags */
-    void  (*helper)();			/* Pine's help function  */
-    void  (*showmsg)();			/* Pine's display_message */
-    void  (*clearcur)();		/* Pine's clear cursor position func */
-    void  (*keybinit)();		/* Pine's keyboard initializer  */
-    int   (*raw_io)();			/* Pine's Raw() */
-    int   (*folders)();			/* Pine's folders_for_fcc */
-    int   (*buildaddr)();		/* Pine's build_address */
-    long  (*newmail)();			/* Pine's report_new_mail */
-    char  *(*addrbook)();		/* Pine's addr_book */
+    void (*helper)(char *text[], char *title, int from_composer); /* Pine's help function  */
+    void  (*showmsg)(int);			/* Pine's display_message */
+    void  (*clearcur)(void);		/* Pine's clear cursor position func */
+    void  (*keybinit)(int);		/* Pine's keyboard initializer  */
+    int   (*raw_io)(int);			/* Pine's Raw() */
+    int   (*folders)(char *);			/* Pine's folders_for_fcc */
+    int   (*buildaddr)(char *, char *, char **);		/* Pine's build_address */
+    long  (*newmail)(int *, int, int);			/* Pine's report_new_mail */
+    char  *(*addrbook)(int);		/* Pine's addr_book */
 #ifdef	DOS
     short to_help;			/* various pine help text arrays */
     short cc_help;

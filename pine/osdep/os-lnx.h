@@ -217,10 +217,6 @@ int fgetpos(); int fsetpos();
 #include <signal.h>      /* sometimes both required, sometimes */
 /* #include <sys/signal.h>  /* only one or the other */
 
-#define SIGSYS SIGUNUSED
-#define SIGBUS SIGUNUSED
-#define SIGEMT SIGUNUSED
-
 #define SigType void     /* value returned by signal() is void * */
 /* #define SigType int      /* value returned by signal() is int * */
 
@@ -245,8 +241,8 @@ int fgetpos(); int fsetpos();
 
 /*--------- System V terminal driver -----------------------------------*/
 /* #define HAVE_TERMIO     /* this is for pure System V */
-/* #define HAVE_TERMIOS    /* this is an alternative */
-/* #define USE_POLL        /* use the poll() system call instead of select() */
+#define HAVE_TERMIOS    /* this is an alternative */
+#define USE_POLL        /* use the poll() system call instead of select() */
 /* #define USE_TERMINFO    /* use terminfo instead of termcap */
 /* #include <sys/stream.h> /* for ptem.h */
 /* #include <sys/ptem.h>   /* for struct winsize */

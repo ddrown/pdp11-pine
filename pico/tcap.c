@@ -438,9 +438,8 @@ tcapdelete()
  *                use either region scrolling or deleteline/insertline
  *                to open a new line.
  */
-o_scrolldown(row, n)
-register int row;
-register int n;
+void
+o_scrolldown(int row, int n)
 {
     register int i;
 
@@ -482,9 +481,8 @@ register int n;
  *              use either region scrolling or deleteline/insertline
  *              to open a new line.
  */
-o_scrollup(row, n)
-register int row;
-register int n;
+void
+o_scrollup(int row, int n)
 {
     register int i;
 

@@ -64,6 +64,7 @@ static char rcsid[] = "$Id: browse.c,v 4.10 1993/10/20 23:06:57 mikes Exp $";
 #include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
+#include <stdlib.h>
 #include "osdep.h"
 #include "pico.h"
 #include "estruct.h"
@@ -111,7 +112,7 @@ static struct bmaster {
     int    zotmaster(struct bmaster **);
     struct fcell *FindCell(struct bmaster *, char *);
     int    sisin(char *, char *);
-    int    BrowserAnchor(char *);
+    void    BrowserAnchor(char *);
 #else
     struct bmaster *getfcells();
     int    PaintCell();
@@ -123,7 +124,7 @@ static struct bmaster {
     int    zotmaster();
     struct fcell *FindCell();
     int    sisin();
-    int    BrowserAnchor();
+    void    BrowserAnchor();
 #endif
 
 
@@ -173,6 +174,8 @@ NULL
 
 
 
+#include <unistd.h>
+
 /*
  * FileBrowse - display contents of given directory dir
  *
@@ -184,13 +187,14 @@ NULL
  *                   0 if no files seleted
  *                  -1 if there where problems
  */
+int
 FileBrowse(dir, fn, sz)
 char *dir, *fn, *sz;			/* dir, name and optional size */
 {
     int status, i, j, c;
     int row, col;
     char *p, child[NLINE];
-    struct bmaster *mp, *getfcells();
+    struct bmaster *mp;
     struct fcell *tp;
 
     child[0] = '\0';
@@ -1230,6 +1234,7 @@ char *dname;
  *
  *                       "<fname>       <size>  "
  */
+int
 PaintCell(x, y, l, cell, inverted)
 struct fcell *cell;
 int    x, y, l, inverted;
@@ -1284,6 +1289,7 @@ int    x, y, l, inverted;
  *               paint the whole thing, if level == 1 just paint the cells
  *               themselves
  */
+int
 PaintBrowser(mp, level)
 struct bmaster *mp;
 int level;
@@ -1336,6 +1342,7 @@ int level;
 /*
  * BrowserKeys - just paints the keyhelp at the bottom of the display
  */
+int
 BrowserKeys()
 {
     char *oldkeys;
@@ -1361,6 +1368,7 @@ BrowserKeys()
  * layoutcells - figure out max length of cell and how many cells can 
  *               go on a line of the display
  */
+int
 layoutcells(mp)
 struct bmaster *mp;
 {
@@ -1383,6 +1391,7 @@ struct bmaster *mp;
  *             return 0 if otherwise (same page)
  *             return -1 on error
  */
+int
 PlaceCell(mp, cp, x, y)
 struct bmaster *mp;
 struct fcell *cp;
@@ -1441,6 +1450,7 @@ int    *x, *y;
 /*
  * zotfcells - clean up malloc'd cells of file names
  */
+int
 zotfcells(hp)
 struct fcell *hp;
 {
@@ -1458,6 +1468,7 @@ struct fcell *hp;
 /*
  * zotmaster - blast the browser master struct
  */
+int
 zotmaster(mp)
 struct bmaster **mp;
 {
@@ -1506,6 +1517,7 @@ char   *string;
 /*
  * sisin - case insensitive substring matching function
  */
+int
 sisin(s1, s2)
 char *s1, *s2;
 {
@@ -1526,6 +1538,7 @@ char *s1, *s2;
 /*
  * BrowserAnchor - draw the browser's anchor line.
  */
+void
 BrowserAnchor(dir)
 char *dir;
 {
@@ -1588,6 +1601,7 @@ char *dir;
 /*
  * ResizeBrowser - handle a resize event
  */
+int
 ResizeBrowser()
 {
     if(gmp){

@@ -47,6 +47,7 @@ static char rcsid[] = "$Id: file.c,v 4.3 1993/08/20 02:01:43 mikes Exp $";
  * in "fileio.c".
  */
 #include        <stdio.h>
+#include	<unistd.h>
 #include	"osdep.h"
 #include        "pico.h"
 #include	"estruct.h"
@@ -68,6 +69,7 @@ static char rcsid[] = "$Id: file.c,v 4.3 1993/08/20 02:01:43 mikes Exp $";
  * "read a file into the current buffer" code.
  * Bound to "C-X C-R".
  */
+int
 fileread(f, n)
 int f, n;
 {
@@ -122,6 +124,7 @@ static char *writehelp[] = {
  * "insert a file into the current buffer" code.
  * Bound to "C-X C-I".
  */
+int
 insfile(f, n)
 int f, n;
 {
@@ -215,6 +218,7 @@ int f, n;
  * an argument. If the filename ends in a ".c", CMODE is
  * set for the current buffer.
  */
+int
 readin(fname, lockfl)
 char    fname[];	/* name of file to read */
 int	lockfl;		/* check for file locks? */
@@ -307,6 +311,7 @@ out:
  * is more compatable with Gosling EMACS than
  * with ITS EMACS. Bound to "C-X C-W".
  */
+int
 filewrite(f, n)
 int f, n;
 {
@@ -423,6 +428,7 @@ int f, n;
  * name for the buffer. Bound to "C-X C-S". May
  * get called by "C-Z".
  */
+int
 filesave(f, n)
 int f, n;
 {
@@ -468,6 +474,7 @@ int f, n;
  *
  * CHANGES: 1 Aug 91: returns number of lines written or -1 on error, MSS
  */
+int
 writeout(fn)
 char    *fn;
 {
@@ -502,8 +509,7 @@ char    *fn;
  *	      access restrictions and included text.  If n is true, include
  *	      lines that indicated included message text, otw forget them
  */
-char *writetmp(f, n)
-int f, n;
+char *writetmp(int f, int n)
 {
         static   char	fn[NFILEN];
         register int    s;
@@ -547,6 +553,7 @@ int f, n;
  * as needing an update. You can type a blank line at the
  * prompt if you wish.
  */
+int
 filename(f, n)
 int f, n;
 {
@@ -576,6 +583,7 @@ int f, n;
  * buffer, Called by insert file command. Return the final
  * status of the read.
  */
+int
 ifile(fname)
 char    fname[];
 {

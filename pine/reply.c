@@ -71,6 +71,7 @@ lots of things that could be done better that will evolve over time.
 
 
 #include "headers.h"
+#include <time.h>
 
 
 #ifdef ANSI
