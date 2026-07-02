@@ -8,6 +8,7 @@ from watchdog.events import PatternMatchingEventHandler
 
 class DebouncedHandler(PatternMatchingEventHandler):
     def __init__(self, *args, **kwargs):
+        self.run = kwargs.pop("run")
         super().__init__(*args, **kwargs)
         self.last_run = 0
 
@@ -20,7 +21,7 @@ class DebouncedHandler(PatternMatchingEventHandler):
         self.last_run = time.time()
         try:
             # Runs 'make' in the current working directory
-            subprocess.run(["make", "libpico.a"], check=True)
+            subprocess.run(self.run, check=True)
             print("Make completed successfully.\n")
         except subprocess.CalledProcessError:
             print("Make failed.\n")
@@ -32,8 +33,10 @@ class DebouncedHandler(PatternMatchingEventHandler):
         self.run_make(event)
 
 def main():
+    run = sys.argv[1:]
     # Define the handler with filters
     handler = DebouncedHandler(
+        run=run,
         patterns=["*.c", "*.h", "*.cpp", "Makefile"], # Only watch source files
         ignore_patterns=["*/.git/*", "*/build/*"],    # Ignore build artifacts/git
         ignore_directories=True
