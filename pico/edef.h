@@ -93,9 +93,9 @@ BUFFER  *blistp;                /* Buffer for C-X C-B           */
 short   *kbdmip;                /* Input pointer for above      */
 short   *kbdmop;                /* Output pointer for above     */
 
-BUFFER  *bfind();               /* Lookup a buffer by name      */
+BUFFER *bfind(char *, int, int); /* Lookup a buffer by name      */
 WINDOW  *wpopup();              /* Pop up window creation       */
-LINE    *lalloc();              /* Allocate a line              */
+LINE    *lalloc(int);              /* Allocate a line              */
 
 #else
 

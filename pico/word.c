@@ -51,6 +51,7 @@ static char rcsid[] = "$Id: word.c,v 4.3 1993/11/08 20:22:47 mikes Exp $";
 #include        <ctype.h>
 #include	"edef.h"
 #include	"osdep.h"
+#include	"efunc.h"
 
 
 /* Word wrap on n-spaces. Back-over whatever precedes the point on the current
@@ -60,6 +61,7 @@ static char rcsid[] = "$Id: word.c,v 4.3 1993/11/08 20:22:47 mikes Exp $";
  * back to the end of the word.
  * Returns TRUE on success, FALSE on errors.
  */
+int
 wrapword()
 {
     register int   cnt = 0;	/* size of word wrapped to next line */
@@ -137,7 +139,8 @@ wrapword()
  * performed by the "backchar" and "forwchar" routines. Error if you try to
  * move beyond the buffers.
  */
-backword(f, n)
+int
+backword(int f, int n)
 {
         if (n < 0)
                 return (forwword(f, -n));
@@ -160,7 +163,8 @@ backword(f, n)
  * Move the cursor forward by the specified number of words. All of the motion
  * is done by "forwchar". Error if you try and move beyond the buffer's end.
  */
-forwword(f, n)
+int
+forwword(int f, int n)
 {
         if (n < 0)
                 return (backword(f, -n));
@@ -191,7 +195,8 @@ forwword(f, n)
  * convert any characters to upper case. Error if you try and move beyond the
  * end of the buffer. Bound to "M-U".
  */
-upperword(f, n)
+int
+upperword(int f, int n)
 {
         register int    c;
 	CELL            ac;
@@ -225,7 +230,8 @@ upperword(f, n)
  * convert characters to lower case. Error if you try and move over the end of
  * the buffer. Bound to "M-L".
  */
-lowerword(f, n)
+int
+lowerword(int f, int n)
 {
         register int    c;
 	CELL            ac;
@@ -260,7 +266,8 @@ lowerword(f, n)
  * characters to lower case. Error if you try and move past the end of the
  * buffer. Bound to "M-C".
  */
-capword(f, n)
+int
+capword(int f, int n)
 {
         register int    c;
 	CELL	        ac;
@@ -304,7 +311,8 @@ capword(f, n)
  * the right number of words. Put dot back where it was and issue the kill
  * command for the right number of characters. Bound to "M-D".
  */
-delfword(f, n)
+int
+delfword(int f, int n)
 {
         register int    size;
         register LINE   *dotp;
@@ -348,7 +356,8 @@ delfword(f, n)
  * counting the characters. When dot is finally moved to its resting place,
  * fire off the kill command. Bound to "M-Rubout" and to "M-Backspace".
  */
-delbword(f, n)
+int
+delbword(int f, int n)
 {
         register int    size;
 
@@ -381,6 +390,7 @@ delbword(f, n)
  * Return TRUE if the character at dot is a character that is considered to be
  * part of a word. The word character list is hard coded. Should be setable.
  */
+int
 inword()
 {
         register int    c;
@@ -398,6 +408,7 @@ inword()
         return (FALSE);
 }
 
+int
 fillpara(f, n)	/* Fill the current paragraph according to the current
 		   fill column						*/
 
@@ -419,7 +430,7 @@ int f, n;	/* deFault flag and Numeric argument */
 	if (curbp->b_mode&MDVIEW)	/* don't allow this command if	*/
 		return(rdonly());	/* we are in read only mode	*/
 	if (fillcol == 0) {	/* no fill column set */
-		mlwrite("No fill column set");
+		mlwrite("No fill column set", NULL);
 		return(FALSE);
 	}
 

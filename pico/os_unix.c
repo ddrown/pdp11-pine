@@ -60,6 +60,8 @@ static char rcsid[] = "$Id: os_unix.c,v 4.37 1993/11/23 05:40:11 mikes Exp $";
 #include	<setjmp.h>
 #include	<time.h>
 #include	<pwd.h>
+#include	<stdlib.h>
+#include	<unistd.h>
 #if	defined(sv4) || defined(ptx)
 #include	<stropts.h>
 #include	<poll.h>
@@ -147,8 +149,8 @@ int	errno;					/* ya, I know... */
 
 #ifdef	ANSI
     int      kbseq(int *);
-    SIGTYPE  do_hup_signal();
-    SIGTYPE  rtfrmshell();
+    SIGTYPE  do_hup_signal(int);
+    SIGTYPE  rtfrmshell(int);
 #ifdef	TIOCGWINSZ
     SIGTYPE  winch_handler();
 #endif
@@ -172,6 +174,7 @@ int	errno;					/* ya, I know... */
  *          streams.  if called as pine composer, don't mess with
  *          tty modes, but set signal handlers.
  */
+int
 ttopen()
 {
     if(Pmaster == NULL){
@@ -230,6 +233,7 @@ ttopen()
  *           worry about modes, but set signals to default, pine will 
  *           rewire things as needed.
  */
+int
 ttclose()
 {
     if(Pmaster){
@@ -275,6 +279,7 @@ ttclose()
 /*
  * ttspeed - return TRUE if tty line speed < 9600 else return FALSE
  */
+int
 ttisslow()
 {
 #if	defined(POSIX)
@@ -298,6 +303,7 @@ ttisslow()
 /*
  * ttgetwinsz - set global rows and columns values and return
  */
+void
 ttgetwinsz()
 {
 #ifdef TIOCGWINSZ
@@ -314,7 +320,8 @@ ttgetwinsz()
 /*
  * ttputc - Write a character to the display. 
  */
-ttputc(c)
+int
+ttputc(char c)
 {
     return(putc(c, stdout));
 }
@@ -325,6 +332,7 @@ ttputc(c)
  *           output is buffered up. A no-operation on systems where byte 
  *           at a time terminal I/O is done.
  */
+int
 ttflush()
 {
     return(fflush(stdout));
@@ -335,6 +343,7 @@ ttflush()
  * ttgetc - Read a character from the terminal, performing no editing 
  *          and doing no echo at all.
  */
+int
 ttgetc()
 {
     unsigned char c;
@@ -356,6 +365,7 @@ ttgetc()
  * typahead - Check to see if any characters are already in the
  *	      keyboard buffer
  */
+int
 typahead()
 {
     int x;	/* holds # of pending chars */
@@ -371,6 +381,7 @@ typahead()
  * character set.  Resolves escape sequences and returns no-op if global
  * timeout value exceeded.
  */
+int
 GetKey()
 {
     int    c;
@@ -472,6 +483,7 @@ GetKey()
  * 
  *         returns: BADESC, the escaped function, or 0 if not found.
  */
+int
 kbseq(c)
 int	*c;
 {
@@ -512,13 +524,13 @@ int	*c;
  *              ask for the editor if advanced user flag is set, and 
  *              suggest environment's EDITOR value as default.
  */
-alt_editor(f, n)
+int
+alt_editor(int f, int n)
 {
     char   eb[NLINE];				/* buf holding edit command */
     char   *fn;					/* tmp holder for file name */
     char   *cp;
     char   *args[MAXARGS];			/* ptrs into edit command */
-    char   *writetmp();
     int	   child, pid, i, done = 0;
     long   l;
 #if	defined(POSIX) || defined(sv3) || defined(COHERENT) || defined(isc)
@@ -527,20 +539,20 @@ alt_editor(f, n)
     union  wait stat;
 #endif
     FILE   *p;
-    SIGTYPE (*ohup)(), (*oint)(), (*osize)(), (*ostop)(), (*ostart)();
+    SIGTYPE (*ohup)(int), (*oint)(int), (*osize)(int), (*ostop)(int), (*ostart)(int);
 
     if(Pmaster == NULL)
-      return;
+      return -1;
 
     if(gmode&MDSCUR){
 	emlwrite("Alternate editor not available in restricted mode", NULL);
-	return;
+	return -1;
     }
 
     if(Pmaster->alt_ed == NULL){
 	if(!(gmode&MDADVN)){
 	    emlwrite("\007Unknown Command",NULL);
-	    return;
+	    return -1;
 	}
 
 	if(getenv("EDITOR"))
@@ -671,14 +683,15 @@ alt_editor(f, n)
 /*
  *  bktoshell - suspend and wait to be woken up
  */
-bktoshell()		/* suspend MicroEMACS and wait to wake up */
+int
+bktoshell(int f, int n)		/* suspend MicroEMACS and wait to wake up */
 {
 #ifdef	SIGTSTP
     int pid;
 
     if(!(gmode&MDSSPD)){
 	emlwrite("\007Unknown command: ^Z", NULL);
-	return;
+	return 0;
     }
 
     if(Pmaster){
@@ -706,7 +719,7 @@ bktoshell()		/* suspend MicroEMACS and wait to wake up */
  * rtfrmshell - back from shell, fix modes and return
  */
 SIGTYPE
-rtfrmshell()
+rtfrmshell(int s)
 {
 #ifdef	SIGCONT
     signal(SIGCONT, SIG_DFL);
@@ -745,7 +758,7 @@ rtfrmshell()
  * do_hup_signal - jump back in the stack to where we can handle this
  */
 SIGTYPE
-do_hup_signal()
+do_hup_signal(int s)
 {
     if(Pmaster){
 	extern jmp_buf finstate;
@@ -798,6 +811,7 @@ unsigned char okinfname[32] = {
 /*
  * fallowc - returns TRUE if c is allowable in filenames, FALSE otw
  */
+int
 fallowc(c)
 char c;
 {
@@ -809,6 +823,7 @@ char c;
  * fexist - returns TRUE if the file exists with mode passed in m, 
  *          FALSE otherwise.  By side effect returns length of file in l
  */
+int
 fexist(file, m, l)
 char *file;
 char *m;					/* files mode: r, w or rw */
@@ -852,6 +867,7 @@ long *l;
  * isdir - returns true if fn is a readable directory, false otherwise
  *         silent on errors (we'll let someone else notice the problem;)).
  */
+int
 isdir(fn, l)
 char *fn;
 long *l;
@@ -868,22 +884,6 @@ long *l;
       *l = sbuf.st_size;
     return((sbuf.st_mode&S_IFMT) == S_IFDIR);
 }
-
-
-#if	defined(bsd) || defined(nxt) || defined(dyn)
-/*
- * getcwd - NeXT uses getwd()
- */
-char *
-getcwd(pth, len)
-char *pth;
-int   len;
-{
-    extern char *getwd();
-
-    return(getwd(pth));
-}
-#endif
 
 
 /*
@@ -919,6 +919,7 @@ int *l;
  * homeless - returns true if given file does not reside in the current
  *            user's home directory tree. 
  */
+int
 homeless(f)
 char *f;
 {
@@ -940,10 +941,7 @@ char *
 errstr(err)
 int err;
 {
-    extern char *sys_errlist[];
-    extern int  sys_nerr;
-
-    return((err >= 0 && err < sys_nerr) ? sys_errlist[err] : NULL);
+    return strerror(err);
 }
 
 
@@ -1115,6 +1113,7 @@ int  len;
 /*
  * fixpath - make the given pathname into an absolute path
  */
+void
 fixpath(name, len)
 char *name;
 int  len;
@@ -1145,6 +1144,7 @@ int  len;
  *                         0 if there's a problem
  *                         new path, by side effect, if things went OK
  */
+int
 compresspath(base, path, len)
 char *base, *path;
 int  len;
@@ -1250,6 +1250,7 @@ char    fname[];
  * copy - copy contents of file 'a' into a file named 'b'.  Return error
  *        if either isn't accessible or is a directory
  */
+int
 copy(a, b)
 char *a, *b;
 {
@@ -1345,6 +1346,7 @@ char *a, *b;
  * Open a file for writing. Return TRUE if all is well, and FALSE on error
  * (cannot create).
  */
+int
 ffwopen(fn)
 char    *fn;
 {
@@ -1362,6 +1364,7 @@ char    *fn;
 /*
  * Close a file. Should look at the status in all systems.
  */
+int
 ffclose()
 {
     extern FILE *ffp;
@@ -1396,6 +1399,7 @@ char *s;
  * P_close - close the given descriptor
  *
  */
+int
 P_close(fp)
 FILE *fp;
 {
@@ -1411,6 +1415,7 @@ FILE *fp;
  * note:
  *	returns the line on the screen, l, that the dot is currently on
  */
+int
 worthit(l)
 int *l;
 {
@@ -1429,6 +1434,7 @@ int *l;
  * pico_new_mail - just checks mtime and atime of mail file and notifies user 
  *	           if it's possible that they have new mail.
  */
+int
 pico_new_mail()
 {
     int ret = 0;
@@ -1439,7 +1445,7 @@ pico_new_mail()
     if(p = (char *)getenv("MAIL"))
       sprintf(inbox, p);
     else
-      sprintf(inbox,"%s/%s", MAILDIR, getlogin());
+      sprintf(inbox,"%s/%s", MAILDIR, getenv("USER"));
 
     if(stat(inbox, &sbuf) == 0){
 	ret = sbuf.st_atime <= sbuf.st_mtime &&
@@ -1457,6 +1463,7 @@ pico_new_mail()
  * time_to_check - checks the current time against the last time called 
  *                 and returns true if the elapsed time is > timeout
  */
+int
 time_to_check()
 {
     static time_t lasttime = 0L;
@@ -1476,8 +1483,8 @@ time_to_check()
 /*
  * sstrcasecmp - compare two pointers to strings case independently
  */
-sstrcasecmp(s1, s2)
-QcompType *s1, *s2;
+int
+sstrcasecmp(const void *s1, const void *s2)
 {
     register char *a, *b;
 
@@ -1508,24 +1515,3 @@ SIGTYPE winch_handler()
     }
 }
 #endif	/* TIOCGWINSZ */
-
-
-#if	defined(sv3) || defined(ct)
-/* Placed by rll to handle the rename function not found in AT&T */
-rename(oldname, newname)
-    char *oldname;
-    char *newname;
-{
-    int rtn;
-
-    if ((rtn = link(oldname, newname)) != 0) {
-	perror("Was not able to rename file.");
-	return(rtn);
-    }
-
-    if ((rtn = unlink(oldname)) != 0)
-      perror("Was not able to unlink file.");
-
-    return(rtn);
-}
-#endif

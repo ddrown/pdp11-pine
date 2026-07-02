@@ -573,7 +573,7 @@ int f, n;
 	    break;
 	  case (CTRL|'Z') :			/* Suspend compose */
 	    if(gmode&MDSSPD){			/* is it allowed? */
-		bktoshell();
+		bktoshell(0,0);
 		PaintBody(0);
 	    }
 	    else{

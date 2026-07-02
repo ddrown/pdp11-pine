@@ -79,7 +79,7 @@ extern int      tput();
 extern char     *tgoto();
 
 static int      kpinsert();
-static int      putpad();
+static int putpad(char *str);
 
 static char *UP, PC, *CM, *CE, *CL, *SO, *SE;
 /* 
@@ -590,8 +590,7 @@ static tinfobeep()
 }
 
 
-static putpad(str)
-char    *str;
+static int putpad(char *str)
 {
     tputs(str, 1, ttputc);
 }

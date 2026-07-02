@@ -55,6 +55,7 @@ static char rcsid[] = "$Id: window.c,v 4.2 1993/04/15 00:34:26 mikes Exp $";
  * Refresh the screen. With no argument, it just does the refresh. With an
  * argument it recenters "." in the current window. Bound to "C-L".
  */
+int
 refresh(f, n)
   int f, n;
 {

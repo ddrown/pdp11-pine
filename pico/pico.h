@@ -296,7 +296,7 @@ extern char *HelpKeyNames;
  * useful function definitions
  */
 #ifdef	ANSI
-int   pico(PICO *);
+int   pico(struct pico_struct *);
 void *pico_get(void);
 void  pico_give(void *);
 int   pico_readc(void *, unsigned char *);

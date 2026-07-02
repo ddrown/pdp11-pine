@@ -1061,7 +1061,7 @@ char *dir, *fn, *sz;			/* dir, name and optional size */
 
 	  case (CTRL|'Z'):
 	    if(gmode&MDSSPD){
-		bktoshell();
+		bktoshell(0,0);
 		PaintBrowser(gmp,0);
 		break;
 	    }					/* fall thru with error! */

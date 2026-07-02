@@ -41,11 +41,14 @@ static char rcsid[] = "$Id: spell.c,v 4.5 1993/11/09 00:41:53 mikes Exp $";
  */
 
 #include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
 #include "osdep.h"
 #include "estruct.h"
 #ifdef	SPELLER
 #include "edef.h"
 #include "pico.h"
+#include "efunc.h"
 
 #ifdef	ANSI
     void chword(char *, char *);
@@ -99,20 +102,19 @@ static char *pinespellhelp[] = {
  * spell() - check for potentially missspelled words and offer them for
  *           correction
  */
-spell(f, n)
+int
+spell(int f, int n)
 {
     int    status, next, khelp = 0, ret;
     FILE   *p;
     char   *b, *sp, *fn;
     char   wb[NLINE], cb[NLINE];
-    char   *writetmp();
-    FILE   *P_open();
 
     setimark(0, 1);
-    emlwrite("Checking spelling..."); 		/* greetings */
+    emlwrite("Checking spelling...", NULL); 		/* greetings */
 
     if((fn = writetmp(0, 0)) == NULL){
-	emlwrite("Can't write temp file for spell checker");
+	emlwrite("Can't write temp file for spell checker", NULL);
 	return(-1);
     }
     if((sp = (char *)getenv("SPELL")) == NULL)
@@ -121,7 +123,7 @@ spell(f, n)
 
     if((p=P_open(s)) == NULL){			/* read output from command */
 	unlink(fn);
-	emlwrite("Can't fork spell checker");
+	emlwrite("Can't fork spell checker", NULL);
 	return(-1);
     }
 
@@ -190,7 +192,7 @@ spell(f, n)
 		status = TRUE;
 		continue;
 	      default:
-		emlwrite("Huh?");		/* shouldn't get here, but.. */
+		emlwrite("Huh?", NULL);		/* shouldn't get here, but.. */
 		status = TRUE;
 		sleep(1);
 		break;
@@ -207,7 +209,7 @@ spell(f, n)
       sgarbk = TRUE;
 
     if(ret)
-      emlwrite("Done checking spelling");
+      emlwrite("Done checking spelling", NULL);
     return(ret);
 }
 
@@ -240,6 +242,7 @@ chword(wb, cb)
  *		TRUE upon success
  *		FALSE otherwise
  */
+int
 movetoword(w)
   char *w;
 {

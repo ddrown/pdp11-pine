@@ -83,7 +83,7 @@ extern	int setimark(int, int);
 extern	int swapimark(int, int);
 
 /* bind.c */
-extern	void whelp(int, int);
+extern	int whelp(int, int);
 extern	int wscrollw(int, int, char **,int);
 extern	int normal(int, int (*)[2],int);
 extern	void rebindfunc(int (*a)(int, int),int (*)(int, int));
@@ -182,7 +182,7 @@ extern	void ttgetwinsz();
 extern	int GetKey(void);
 #ifdef	JOB_CONTROL
 extern	int alt_editor(int, int);
-extern	void bktoshell();
+extern	int bktoshell(int, int);
 #endif
 extern	int fallowc(int);
 extern	int fexist(char *, char *, long *);

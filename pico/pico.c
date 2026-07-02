@@ -77,6 +77,7 @@ static char rcsid[] = "$Id: pico.c,v 4.19 1993/12/02 16:44:31 mikes Exp $";
 
 #include        <stdio.h>
 #include	<setjmp.h>
+#include	<stdlib.h>
 
 /* make global definitions not external */
 #define	maindef
@@ -269,6 +270,7 @@ PICO *pm;
  * for editing.  the first some odd lines are to be used for message 
  * header information editing.
  */
+int
 edinit(bname)
 char    bname[];
 {
@@ -406,6 +408,7 @@ int c, f, n;
  * Fancy quit command, as implemented by Norm. If the any buffer has
  * changed do a write on that buffer and exit emacs, otherwise simply exit.
  */
+int
 quickexit(f, n)
 int f, n;
 {
@@ -429,6 +432,7 @@ int f, n;
  * abort_composer - ask the question here, then go quit or 
  *                  return FALSE
  */
+int
 abort_composer(f, n)
 int f, n;
 {
@@ -452,6 +456,7 @@ int f, n;
 /*
  * suspend_composer - return to pine with what's been edited so far
  */
+int
 suspend_composer(f, n)
 int f, n;
 {
@@ -464,6 +469,7 @@ int f, n;
  * Quit command. If an argument, always quit. Otherwise confirm if a buffer
  * has been changed and not written out. Normally bound to "C-X C-C".
  */
+int
 wquit(f, n)
 int f, n;
 {
@@ -532,6 +538,7 @@ int f, n;
  * Beep the beeper. Kill off any keyboard macro, etc., that is in progress.
  * Sometimes called as a routine, to do general aborting of stuff.
  */
+int
 ctrlg(f, n)
 int f, n;
 {
@@ -548,6 +555,7 @@ int f, n;
 /* tell the user that this command is illegal while we are in
  *  VIEW (read-only) mode
  */
+int
 rdonly()
 {
     (*term.t_beep)();
@@ -560,6 +568,7 @@ rdonly()
 /*
  * reset all globals to their initial values
  */
+int
 func_init()
 {
     extern int    vtrow;
@@ -592,6 +601,7 @@ func_init()
 /*
  * pico_help - help function for standalone composer
  */
+int
 pico_help(text, title, i)
 char *text[], *title;
 int i;
@@ -613,6 +623,7 @@ int i;
  * zottree() - kills the key pad function key search tree
  *                and frees all lines associated with it!!!
  */
+int
 zottree(nodeptr)
 struct	KBSTREE	*nodeptr;
 {
@@ -628,6 +639,7 @@ struct	KBSTREE	*nodeptr;
 /*
  * zotedit() - kills the buffer and frees all lines associated with it!!!
  */
+int
 zotedit()
 {
 #ifdef	OLDWAY
@@ -910,6 +922,7 @@ void *w;
 /*
  * generic line insert function.
  */
+int
 insline(dotp, doto)
 LINE **dotp;
 short *doto;

@@ -52,6 +52,7 @@ static char rcsid[] = "$Id: search.c,v 4.3 1993/06/15 21:14:23 erez Exp $";
 #include	"estruct.h"
 #include	"pico.h"
 #include        "edef.h"
+#include	"efunc.h"
 
 #ifdef	ANSI
     int eq(int, int);
@@ -106,6 +107,7 @@ NULL
  * Compare two characters. The "bc" comes from the buffer. It has it's case
  * folded out. The "pc" is from the pattern.
  */
+int
 eq(bc, pc)
 int bc;
 int pc;
@@ -122,7 +124,8 @@ int pc;
 }
 
 
-forwsearch(f, n)
+int
+forwsearch(int f, int n)
 {
     register int status;
     int wrapt = FALSE;
@@ -223,10 +226,10 @@ forwsearch(f, n)
 	emlwrite("\"%s\" not found", show);
     } 
     else if(wrapt == TRUE){
-	emlwrite("Search Wrapped");
+	emlwrite("Search Wrapped", NULL);
     }
     else if(status == TRUE)
-      emlwrite("");
+      emlwrite("", NULL);
 
     return(status);
 }
@@ -240,6 +243,7 @@ forwsearch(f, n)
  * change to using <ESC> to delemit the end-of-pattern to allow <NL>s in
  * the search string.
  */
+int
 readpattern(prompt)
 char *prompt;
 {
@@ -265,6 +269,7 @@ char *prompt;
 }
 
 
+int
 forscan(wrapt,patrn,leavep)	/*	search forward for a <patrn>	*/
 int	*wrapt;		/* boolean indicating search wrapped */
 char *patrn;		/* string to scan for */
@@ -381,6 +386,7 @@ fail:;			/* continue to search */
 
 /* 	expandp:	expand control key sequences for output		*/
 
+int
 expandp(srcstr, deststr, maxlength)
 
 char *srcstr;	/* string to expand */

@@ -147,7 +147,7 @@ arraylen(char **array)
 /*
  * whelp - display help text for the composer and pico
  */
-void whelp(int f, int n)
+int whelp(int f, int n)
 {
     if(Pmaster){
 	(*Pmaster->helper)(Pmaster->composer_help, "Help on the Pine Composer", 1);

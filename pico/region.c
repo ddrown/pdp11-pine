@@ -50,6 +50,9 @@ static char rcsid[] = "$Id: region.c,v 4.8 1993/10/05 22:20:34 mikes Exp $";
 #include	"estruct.h"
 #include	"pico.h"
 #include        "edef.h"
+#include	"efunc.h"
+
+int getregion(REGION *rp);
 
 /*
  * Kill the region. Ask "getregion"
@@ -57,7 +60,8 @@ static char rcsid[] = "$Id: region.c,v 4.8 1993/10/05 22:20:34 mikes Exp $";
  * Move "." to the start, and kill the characters.
  * Bound to "C-W".
  */
-killregion(f, n)
+int
+killregion(int f, int n)
 {
     REGION          region;
     static long     times = 1L;
@@ -97,7 +101,8 @@ killregion(f, n)
  * at all. This is a bit like a kill region followed
  * by a yank. Bound to "M-W".
  */
-copyregion(f, n)
+int
+copyregion(int f, int n)
 {
     register LINE   *linep;
     register int    loffs;
@@ -138,7 +143,8 @@ copyregion(f, n)
  * redisplay is done in all buffers. Bound to
  * "C-X C-L".
  */
-lowerregion(f, n)
+int
+lowerregion(int f, int n)
 {
     register LINE   *linep;
     register int    loffs;
@@ -182,7 +188,8 @@ lowerregion(f, n)
  * redisplay is done in all buffers. Bound to
  * "C-X C-L".
  */
-upperregion(f, n)
+int
+upperregion(int f, int n)
 {
     register LINE   *linep;
     register int    loffs;
@@ -229,6 +236,7 @@ upperregion(f, n)
  * an "ABORT" status; we might make this have the
  * conform thing later.
  */
+int
 getregion(rp)
 register REGION *rp;
 {
@@ -290,6 +298,7 @@ register REGION *rp;
 /*
  * set the highlight attribute accordingly on all characters in region
  */
+int
 markregion(attr)
     int attr;
 {

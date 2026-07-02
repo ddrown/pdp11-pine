@@ -45,9 +45,11 @@ static char rcsid[] = "$Id: random.c,v 4.3 1993/07/08 00:00:13 dlm Exp $";
  */
 
 #include        <stdio.h>
+#include	<stdlib.h>
 #include	"estruct.h"
 #include	"pico.h"
 #include        "edef.h"
+#include	"efunc.h"
 
 #ifdef	ANSI
     int getccol(int);
@@ -60,6 +62,7 @@ int     tabsize;                        /* Tab size (0: use real tabs)  */
 /*
  * Set fill column to n.
  */
+int
 setfillcol(f, n)
 int f, n;
 {
@@ -80,6 +83,7 @@ int f, n;
  * column, but the column that would be used on an infinite width display.
  * Normally this is bound to "C-X =".
  */
+int
 showcpos(f, n)
 int f, n;
 {
@@ -123,6 +127,7 @@ int f, n;
 /*
  * Return current column.  Stop at first non-blank given TRUE argument.
  */
+int
 getccol(bflg)
 int bflg;
 {
@@ -154,7 +159,8 @@ int bflg;
  * done in this slightly funny way because the tab (in ASCII) has been turned
  * into "C-I" (in 10 bit code) already. Bound to "C-I".
  */
-tab(f, n)
+int
+tab(int f, int n)
 {
     if (n < 0)
       return (FALSE);
@@ -175,7 +181,8 @@ tab(f, n)
  * Insert a newline. Bound to "C-M". If we are in CMODE, do automatic
  * indentation as specified.
  */
-newline(f, n)
+int
+newline(int f, int n)
 {
     register int    s;
 
@@ -214,7 +221,8 @@ newline(f, n)
  * If any argument is present, it kills rather than deletes, to prevent loss
  * of text if typed with a big argument. Normally bound to "C-D".
  */
-forwdel(f, n)
+int
+forwdel(int f, int n)
 {
     if (curbp->b_mode&MDVIEW)	/* don't allow this command if	*/
       return(rdonly());	/* we are in read only mode	*/
@@ -246,7 +254,8 @@ forwdel(f, n)
  * forward, this actually does a kill if presented with an argument. Bound to
  * both "RUBOUT" and "C-H".
  */
-backdel(f, n)
+int
+backdel(int f, int n)
 {
     register int    s;
 
@@ -289,6 +298,7 @@ backdel(f, n)
  * killtext - delete the line that the cursor is currently in.
  *	      a greatly pared down version of its former self.
  */
+int
 killtext(f, n)
 int f, n;
 {
@@ -319,6 +329,7 @@ int f, n;
  * is done by the standard insert routines. All you do is run the loop, and
  * check for errors. Bound to "C-Y".
  */
+int
 yank(f, n)
 int f, n;
 {
@@ -355,7 +366,7 @@ int f, n;
 	i = 0;
 	while ((c=kremove(i)) >= 0) {
 	    if (c == '\n') {
-		if (lnewline(FALSE, 1) == FALSE)
+		if (lnewline() == FALSE)
 		  return (FALSE);
 	    } else {
 		if (linsert(1, c) == FALSE)
@@ -388,7 +399,7 @@ int f, n;
 	
 	if(Pmaster == NULL){
 	    sgarbk = TRUE;
-	    emlwrite("");
+	    emlwrite("", NULL);
 	}
     }
 

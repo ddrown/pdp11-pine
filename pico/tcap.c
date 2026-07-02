@@ -47,12 +47,15 @@ static char rcsid[] = "$Id: tcap.c,v 4.11 1993/11/22 19:33:47 mikes Exp $";
 
 #include	<stdio.h>
 #include        <signal.h>
+#include	<termcap.h>
+#include	<stdlib.h>
 #include	"osdep.h"
 #include	"estruct.h"
 #include        "edef.h"
 
 #if TERMCAP
 #include        "pico.h"
+#include	"efunc.h"
 
 #define NROW    24
 #define NCOL    80
@@ -60,21 +63,6 @@ static char rcsid[] = "$Id: tcap.c,v 4.11 1993/11/22 19:33:47 mikes Exp $";
 #define	SCRSIZ	64
 #define BEL     0x07
 #define ESC     0x1B
-
-extern int      ttopen();
-extern int      ttgetc();
-extern int      ttputc();
-extern int      ttflush();
-extern int      ttclose();
-extern int      tcapmove();
-extern int      tcapeeol();
-extern int      tcapeeop();
-extern int      tcapbeep();
-extern int	tcaprev();
-extern int      tcapopen();
-extern int      tcapclose();
-extern int      tput();
-extern char     *tgoto();
 
 #define TCAPSLEN 315
 char tcapbuf[TCAPSLEN];
@@ -101,6 +89,16 @@ char *KPPU, *KPPD, *KPHOME, *KPEND;
 
 struct KBSTREE *kpadseqs = NULL;
 
+int tcapmove(int row, int col);
+int putpad(char *str);
+int kpinsert(char *kstr, int kval);
+int tcapbeep();
+int tcaprev(int state);
+int tcapeeop();
+int tcapeeol();
+int tcapclose();
+int tcapopen();
+
 TERM term = {
         NROW-1,
         NCOL,
@@ -119,13 +117,13 @@ TERM term = {
 };
 
 
+int
 tcapopen()
 {
-    char   *t, *p, *tgetstr();
+    char   *t, *p;
     char    tcbuf[1024];
     char   *tv_stype;
     char    err_str[72];
-    char   *getenv();
 
     ttgetwinsz();
 
@@ -319,6 +317,7 @@ tcapopen()
 }
 
 
+int
 tcapclose()
 {
     if(!Pmaster){
@@ -339,16 +338,15 @@ tcapclose()
  * kbinsert - insert a keystroke escape sequence into the global search
  *	      structure.
  */
-kpinsert(kstr, kval)
-char	*kstr;
-int	kval;
+int
+kpinsert(char *kstr, int kval)
 {
     register	char	*buf;
     register	struct KBSTREE *temp;
     register	struct KBSTREE *trail;
 
     if(kstr == NULL)
-      return;
+      return 0;
 
     temp = trail = kpadseqs;
     if(kstr[0] == '\033')
@@ -403,6 +401,7 @@ int	kval;
  * tcapinsert - insert a character at the current character position.
  *              IC takes precedence.
  */
+int
 tcapinsert(ch)
 register char	ch;
 {
@@ -421,6 +420,7 @@ register char	ch;
 /*
  * tcapdelete - delete a character at the current character position.
  */
+int
 tcapdelete()
 {
     if(DM == NULL && ED == NULL)
@@ -519,6 +519,7 @@ o_scrollup(int row, int n)
  * o_insert - use termcap info to optimized character insert
  *            returns: true if it optimized output, false otherwise
  */
+int
 o_insert(c)
 char c;
 {
@@ -535,6 +536,7 @@ char c;
  * o_delete - use termcap info to optimized character insert
  *            returns true if it optimized output, false otherwise
  */
+int
 o_delete()
 {
     if(delchar){
@@ -546,25 +548,28 @@ o_delete()
 }
 
 
-tcapmove(row, col)
-register int row, col;
+int
+tcapmove(int row, int col)
 {
     putpad(tgoto(CM, col, row));
 }
 
 
+int
 tcapeeol()
 {
     putpad(CE);
 }
 
 
+int
 tcapeeop()
 {
     putpad(CL);
 }
 
 
+int
 tcaprev(state)		/* change reverse video status */
 int state;	        /* FALSE = normal video, TRUE = reverse video */
 {
@@ -584,27 +589,35 @@ int state;	        /* FALSE = normal video, TRUE = reverse video */
 }
 
 
+int
 tcapbeep()
 {
     ttputc(BEL);
 }
 
-
-putpad(str)
-char    *str;
+int
+ttputc_i(int c)
 {
-    tputs(str, 1, ttputc);
+    ttputc(c);
 }
 
 
-putnpad(str, n)
-char    *str;
+int
+putpad(char *str)
 {
-    tputs(str, n, ttputc);
+    tputs(str, 1, ttputc_i);
+}
+
+
+int
+putnpad(char *str, int n)
+{
+    tputs(str, n, ttputc_i);
 }
 
 #else
 
+int
 hello()
 {
 }
