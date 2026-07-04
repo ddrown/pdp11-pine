@@ -18,3 +18,4 @@ pine/makefile
 pico/libpico.a
 pico/pico
 pine/date.c
+pine/pine
