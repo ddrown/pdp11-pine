@@ -808,8 +808,6 @@ stop_process()
 
 
 
-extern char *sys_errlist[];
-
 /*----------------------------------------------------------------------
        Return string describing the error
 
@@ -823,7 +821,7 @@ error_description(errnumber)
 {
     static char buffer[50];
 
-    strcpy(buffer, sys_errlist[errnumber]);
+    strncpy(buffer, strerror(errnumber), sizeof(buffer));
 
     return ( (char *) buffer);
 }

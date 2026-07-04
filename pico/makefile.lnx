@@ -18,7 +18,7 @@ LIBCMD=		ar
 LIBARGS=	ru
 RANLIB=		ranlib
 
-LIBS=		-ltermcap -lbsd -lc
+LIBS=		-ltermcap -lc
 
 OFILES=		attach.o ansi.o basic.o bind.o browse.o buffer.o \
 		composer.o display.o file.o fileio.o line.o osdep.o \

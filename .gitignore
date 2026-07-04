@@ -16,3 +16,5 @@ pico/makefile
 pine/makefile
 .*.swp
 pico/libpico.a
+pico/pico
+pine/date.c

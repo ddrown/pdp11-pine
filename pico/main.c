@@ -49,6 +49,8 @@ static char rcsid[] = "$Id: main.c,v 4.4 1993/10/06 17:09:24 mikes Exp $";
 
 #include        <stdio.h>
 #include	<setjmp.h>
+#include	<stdlib.h>
+#include	<unistd.h>
 #include	"osdep.h"	/* operating system dependent includes */
 #include	"pico.h"	/* pine composer definitions */
 #include        "estruct.h"	/* global structures and defines */
@@ -88,8 +90,8 @@ static int fkm[12][2] = {
 /*
  * main standalone pico routine
  */
-main(argc, argv)
-char    *argv[];
+int
+main(int argc, char *argv[])
 {
     register int    c;
     register int    f;

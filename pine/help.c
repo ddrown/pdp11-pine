@@ -317,7 +317,6 @@ the text. Page 1 is in the 0th element of the array.
 The list is ended with a page line number of -1. Line number 0 is also
 the first line in the text.
   -----*/
-void
 #ifdef	DOS
 
 void
