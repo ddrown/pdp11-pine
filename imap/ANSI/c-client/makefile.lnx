@@ -50,10 +50,10 @@ clean:
 mtest.o: mail.h misc.h osdep.h
 
 c-client.a: mail.o bezerk.o mbox.o \
-	phile.o dummy.o smtp.o rfc822.o misc.o osdep.o sm_unix.o
+	phile.o dummy.o rfc822.o misc.o osdep.o sm_unix.o
 	rm -f c-client.a
 	ar rc c-client.a mail.o bezerk.o mbox.o \
-	phile.o dummy.o smtp.o rfc822.o misc.o osdep.o \
+	phile.o dummy.o rfc822.o misc.o osdep.o \
 	sm_unix.o
 	ranlib c-client.a
 
@@ -78,8 +78,6 @@ nntpclient.o: mail.h nntp.h nntpclient.h misc.h rfc822.h news.h smtp.h osdep.h
 phile.o: mail.h phile.h misc.h osdep.h
 
 dummy.o: mail.h dummy.h misc.h osdep.h
-
-smtp.o: mail.h smtp.h rfc822.h misc.h osdep.h
 
 nntp.o: mail.h nntp.h smtp.h rfc822.h misc.h osdep.h
 

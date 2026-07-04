@@ -57,7 +57,6 @@ static char rcsid[] = "$Id: send.c,v 4.75 1993/12/07 01:42:03 mikes Exp $";
  ====*/
 
 #include "headers.h"
-#include "../c-client/smtp.h"
 #include "../pico/pico.h"
 
 #ifndef TCPSTREAM
@@ -87,13 +86,11 @@ void      pine_encode_body(ENVELOPE *, BODY *);
 void      pine_rfc822_header(char *, ENVELOPE *, BODY *);
 long      pine_rfc822_output(char *,ENVELOPE *,BODY *,soutr_t,TCPSTREAM *);
 long      pine_rfc822_output_body(BODY *,soutr_t,TCPSTREAM *);
-long      pine_smtp_mail(SMTPSTREAM *,char *,ENVELOPE *,BODY *);
 void      pine_free_body(BODY **);
 void      pine_free_body_data(BODY *);
 void      pine_free_body_part(PART **);
 void      set_mime_types(BODY *);
 int       call_mailer(char *, ENVELOPE *, BODY *);
-char     *tidy_smtp_mess(char *);
 FileTypes file_type(void *, long);
 char     *mime_stats(BODY *);
 void      mime_recur(BODY *);
@@ -115,13 +112,11 @@ void      pine_encode_body();
 void      pine_rfc822_header();
 long      pine_rfc822_output();
 long      pine_rfc822_output_body();
-long      pine_smtp_mail();
 void      pine_free_body();
 void      pine_free_body_data();
 void      pine_free_body_part();
 void      set_mime_types();
 int       call_mailer();
-char     *tidy_smtp_mess();
 FileTypes file_type();
 char     *mime_stats();
 void      mime_recur();
@@ -636,49 +631,6 @@ dos_valid_from()
 	}
     }
 
-    /* check for smtp server */
-    if(!ps_global->VAR_SMTP_SERVER || !ps_global->VAR_SMTP_SERVER[0]){
-	char **list;
-
-	if(ps_global->inbox_name[0] == '{'){
-	    for(i=0;ps_global->inbox_name[i+1] != '}'; i++)
-	      answer[i] = ps_global->inbox_name[i+1];
-	    answer[i] = '\0';
-	}
-	else
-          answer[0] = '\0';
-
-        sprintf(prompt,"SMTP server to forward message : "); 
-
-	help = NO_HELP;
-        while(1) {
-            rc = optionally_enter(answer,-3,0,79,1,0,prompt,NULL,help,0);
-            if(rc == 2)
-                  continue;
-
-	    if(rc == 3){
-		help = (help == NO_HELP) ? h_sticky_smtp : NO_HELP;
-		continue;
-	    }
-
-            if(rc != 4)
-                  break;
-        }
-
-        if(rc == 1 || (rc == 0 && answer[0] == '\0')) {
-            q_status_message(0, 0,2 ,"\007Send message cancelled");
-            return(0);
-        }
-
-	/* save the name */
-        list    = (char **) fs_get(2 * sizeof(char *));
-	list[0] = cpystr(answer);
-	list[1] = NULL;
-	set_variable_list(V_SMTP_SERVER, list);
-	fs_give((void *)&list[0]);
-	fs_give((void *)list);
-    }
-
     return(1);
 }
 #endif
@@ -898,7 +850,7 @@ pine_send(outgoing, body, editor_title, fcc, are_replying, att)
 #ifdef	DOS
     if(!dos_valid_from()){
         q_status_message(1, 2, 4,
-             "Must provide Username and SMTP-server for sending!");
+             "Must provide Username for sending!");
         return;
     }
 #endif
@@ -1211,13 +1163,9 @@ call_mailer(fcc, envelope, body)
     ENVELOPE *envelope;
     BODY     *body;
 {
-    SMTPSTREAM  *sstream;
     char         error_buf[100], *error_mess = NULL;
-    ADDRESS     *a;
-    int          addr_error_count, rv = 1, rrv = 1, real_send = 0;
+    int          rv = 1, rrv = 1, real_send = 0;
     CONTEXT_S   *fcc_cntxt = NULL;
-
-#define MAX_ADDR_ERROR 2  /* Only display 2 address errors */
 
     q_status_message(0, 2, 4, "Sending mail.....");
     display_message('x'); 
@@ -1313,95 +1261,8 @@ call_mailer(fcc, envelope, body)
     if(envelope->to || envelope->cc || envelope->bcc){
 	real_send++;
 
-	if(ps_global->VAR_SMTP_SERVER && ps_global->VAR_SMTP_SERVER[0]
-	   && ps_global->VAR_SMTP_SERVER[0][0]){
-	    /*---------- SMTP ----------*/
-
-	    ps_global->noshow_error = 1;
-#ifdef DEBUG
-	    sstream = smtp_open(ps_global->VAR_SMTP_SERVER, debug);
-#else
-	    sstream = smtp_open(ps_global->VAR_SMTP_SERVER, 0L);
-#endif
-	    ps_global->noshow_error = 0;
-	    if(sstream) {
-		dprint(1, (debugfile, "Got SMTP server %s open\n",
-			   tcp_host(sstream->tcpstream)));
-		if(pine_smtp_mail(sstream, "MAIL", envelope, body) != 1) {
-		    sprintf(error_buf,
-			   "\007Mail not sent. Transfer protocol error: %.40s",
-			    sstream->reply == NULL ? "" :
-			    sstream->reply);
-		    dprint(1, (debugfile, error_buf));
-		    addr_error_count = 0;
-		    for(a = envelope->to; a != NULL; a = a->next){
-			if(a->error != NULL) {
-			    if(addr_error_count++ < MAX_ADDR_ERROR) {
-				if(error_mess)
-				  q_status_message(1, 4, 7, error_mess);
-
-				sprintf(error_buf, "\007Mail not sent: %.60s",
-					tidy_smtp_mess(a->error));
-				error_mess = error_buf;
-			    }
-			    dprint(1,(debugfile,"Send Error: \"%s\"\n",
-				      a->error));
-			}
-		    }
-
-		    for(a = envelope->cc; a != NULL; a = a->next){
-			if(a->error != NULL) {
-			    if(addr_error_count++ < MAX_ADDR_ERROR) {
-				if(error_mess)
-				  q_status_message(1, 4, 7, error_mess);
-
-				sprintf(error_buf, "\007Mail not sent: %.60s",
-					tidy_smtp_mess(a->error));
-				error_mess = error_buf;
-			    }
-
-			    dprint(1,(debugfile,"Send Error: \"%s\"\n",
-				      a->error));
-			}
-		    }
-
-		    for(a = envelope->bcc; a != NULL; a = a->next){
-			if(a->error != NULL) {
-			    if(addr_error_count++ < MAX_ADDR_ERROR) {
-				if(error_mess)
-				  q_status_message(1, 4, 7, error_mess);
-
-				sprintf(error_buf, "\007Mail not sent: %.60s",
-					tidy_smtp_mess(a->error));
-				error_mess = error_buf;
-			    }
-
-			    dprint(1,(debugfile,"Send Error: \"%s\"\n",
-				      a->error));
-			}
-		    }
-
-		    if(!error_mess)
-		      error_mess = error_buf;
-		} 
-
-		smtp_close(sstream);
-	    }
-	    else {
-		sprintf(error_buf,"\007Error connecting to mail server: %.60s",
-			ps_global->c_client_error);
-		dprint(1, (debugfile, error_buf));
-		error_mess = error_buf;
-	    }
-	} 
-	else {
-#ifdef	DOS
-	    error_mess = "Can't send, SMTP-server must be defined!";
-#else
-	    /*----- Send mail ------*/
-	    error_mess = call_sendmail(envelope, body);
-#endif
-	}
+	/*----- Send mail ------*/
+	error_mess = call_sendmail(envelope, body);
     }
     else if(fcc_so){
 	/*
@@ -1588,27 +1449,6 @@ call_system(command)
 #endif	/* !DOS */
 
 
-/*----------------------------------------------------------------------
-    Remove the leading digits from SMTP error messages
- -----*/
-char *
-tidy_smtp_mess(error)
-    char *error;
-{
-    static char mess[200];
-
-    while(isdigit(*error))
-      error++;
-    while(isspace(*error))
-      error++;
-
-    strncpy(mess, error, sizeof(mess) - 1);
-    mess[sizeof(mess)] = '\0';
-    return(mess);
-}
-
-        
-    
 /*----------------------------------------------------------------------
     Set up fields for passing to pico.  Assumes first text part is
     intended to be passed along for editing, and is in the form of
@@ -2570,51 +2410,6 @@ set_mime_types(body)
 
 
 /*
- * pine_smtp_mail - pine version of c-client call to deal with 
- *                  somewhat novel way pine deals with text internally
- */
-long 
-pine_smtp_mail (stream,type,env,body)
-    SMTPSTREAM *stream;
-    char *type;
-    ENVELOPE *env;
-    BODY *body;
-{
-  char tmp[8*MAILTMPLEN];
-  long error = NIL;
-  if (!(env->to || env->cc || env->bcc)) {
-  				/* no recipients in request */
-    smtp_fake (stream,SMTPHARDERROR,"No recipients specified");
-    return NIL;
-  }
-  				/* make sure stream is in good shape */
-  smtp_send (stream,"RSET",NIL);
-  strcpy (tmp,"FROM:<");	/* compose "MAIL FROM:<return-path>" */
-  rfc822_address (tmp,env->return_path);
-  strcat (tmp,">");
-				/* send "MAIL FROM" command */
-  if (!(smtp_send (stream,type,tmp) == SMTPOK)) return NIL;
-				/* negotiate the recipients */
-  if (env->to) smtp_rcpt (stream,env->to,&error);
-  if (env->cc) smtp_rcpt (stream,env->cc,&error);
-  if (env->bcc) smtp_rcpt (stream,env->bcc,&error);
-  if (error) {			/* any recipients failed? */
-      				/* reset the stream */
-    smtp_send (stream,"RSET",NIL);
-    smtp_fake (stream,SMTPHARDERROR,"One or more recipients failed");
-    return NIL;
-  }
-				/* negotiate data command */
-  if (!(smtp_send (stream,"DATA",NIL) == SMTPREADY)) return NIL;
-				/* set up error in case failure */
-  smtp_fake (stream,SMTPSOFTFATAL,"SMTP connection went away!");
-				/* output data, return success status */
-  return pine_rfc822_output (tmp,env,body,smtp_soutr,stream->tcpstream) &&
-    (smtp_send (stream,".",NIL) == SMTPOK);
-}
-
-
-/*
  * pine version of c-client's rfc822_header() function.  Same
  * function, actually, except pine's body_header write function
  * is called, because encoding is delayed until output_body() is
@@ -2760,7 +2555,8 @@ l_flush_net()
 
 
 /*
- * l_putc - gf_io terminal function that calls smtp's soutr_t function.
+ * l_putc - gf_io terminal function that calls the soutr_t output function
+ *          (e.g. unix_puts for call_sendmail).
  *
  */
 int

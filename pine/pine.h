@@ -287,7 +287,7 @@
 #define V_PERSONAL_NAME            0
 #define V_USER_ID                  1
 #define V_USER_DOMAIN              2
-#define V_SMTP_SERVER              3
+#define V_SMTP_SERVER              3  /* disabled, always sends via local sendmail */
 #define V_INBOX_PATH               4
 #define V_INCOMING_FOLDERS         5
 #define V_FOLDER_SPEC              6
@@ -325,7 +325,6 @@
 #define VAR_PERSONAL_NAME            vars[V_PERSONAL_NAME].current_val.p
 #define VAR_USER_ID                  vars[V_USER_ID].current_val.p
 #define VAR_USER_DOMAIN              vars[V_USER_DOMAIN].current_val.p
-#define VAR_SMTP_SERVER              vars[V_SMTP_SERVER].current_val.l
 #define VAR_INBOX_PATH               vars[V_INBOX_PATH].current_val.p
 #define VAR_INCOMING_FOLDERS         vars[V_INCOMING_FOLDERS].current_val.l
 #define VAR_FOLDER_SPEC              vars[V_FOLDER_SPEC].current_val.l

@@ -114,7 +114,7 @@ pine.o:		pine.c      $(HEADERS)
 print.o:	print.c     $(HEADERS)
 reply.o:	reply.c     $(HEADERS)
 screen.o:	screen.c    $(HEADERS)
-send.o:	        send.c      $(HEADERS) ../c-client/smtp.h ../pico/pico.h
+send.o:	        send.c      $(HEADERS) ../pico/pico.h
 signals.o:	signals.c   $(HEADERS)
 status.o:	status.c    $(HEADERS)
 strings.o:	strings.c   $(HEADERS)

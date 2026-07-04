@@ -190,11 +190,6 @@ personal-name=
 \043 local user.  If unset, Unix Pine will obtain the domain from the system.
 user-domain=
 
-\043 List of SMTP servers for sending mail.  You must have an SMTP server   ___----
-\043 for use with PC-Pine.  Example: smtp-server=mailhost.u.washington.edu
-\043 If blank on Unix, sendmail will be used.
-smtp-server=
-
 \043 inbox-path specifies the name/path/location of your INBOX.  Example:
 \043 inbox-path={carson.u.washington.edu}inbox (INBOX on a remote computer)
 \043 Normal Unix default is the local INBOX (usually /user/spool/mail/$USER)
@@ -3360,9 +3355,6 @@ be saved into your Pine configuration file.
 ========== h_sticky_inbox ============
 INBOX syntax is usually {{:{}complete.machine.name}INBOX
 This entry will be saved into your Pine configuration file.
-========== h_sticky_smtp ============
-The name of the computer on your campus which relays your outgoing email to 
-the Internet.  This entry will be saved into your Pine configuration file.
 ========== h_sticky_user_id ==========
 The username or login-id part of your email address.  This entry will be 
 saved into your Pine configuration file.

@@ -118,7 +118,6 @@ be \"\".  You can override system defaults by setting a variable to the\n# empty
 
 #define USER_DOMAIN_TEXT   "user-domain specifies the domain part of your return address on outgoing\n# email and is also used as the default domain for email composed to a\n# local user.  If unset, Unix Pine will obtain the domain from the system."
 
-#define	SMTP_TEXT	"List of SMTP servers for sending mail. You must have an SMTP server\n# for use with PC-Pine.  Example: smtp-server=mailhost.u.washington.edu\n# If blank on Unix, sendmail will be used."
 
 #define	INBOX_TEXT	"inbox-path specifies the name/path/location of your INBOX.  Example:\n# inbox-path={carson.u.washington.edu}inbox (INBOX on a remote computer)\n# Normal Unix default is the local INBOX (usually /user/spool/mail/$USER)"
 
@@ -187,8 +186,8 @@ static struct variable variables[] = {
   "Your login/e-mail user name"},
 {"user-domain",                0, 1, 0, 1, 1, 0,
   USER_DOMAIN_TEXT},
-{"smtp-server",                0, 1, 0, 1, 1, 1,
-  SMTP_TEXT},
+{"smtp-server",                1, 1, 0, 1, 1, 1,
+  "Smtp-server is disabled, outgoing mail is always sent via local sendmail"},
 {"inbox-path",                 0, 1, 0, 1, 1, 0, 
   INBOX_TEXT},
 {"incoming-folders",           0, 1, 0, 1, 1, 1,
@@ -421,20 +420,6 @@ init_vars(ps)
     set_current_val(vars,V_READ_MESSAGE_FOLDER, TRUE);
     set_current_val(vars,V_EDITOR, TRUE);
     set_current_val(vars,V_IMAGE_VIEWER, TRUE);
-    set_current_val(vars,V_SMTP_SERVER, TRUE);
-
-    /* strip any quotes from names in the list */
-    if(vars[V_SMTP_SERVER].current_val.l){
-	char **p = vars[V_SMTP_SERVER].current_val.l, *c, *t;
-
-	while(c = t = *p++){
-	    for(; *t; t++)
-	      if(*t != '\"')
-		*c++ = (*t == '\\') ? *++t : *t;
-
-	    *c = '\0';
-	}
-    }
 
     /* obsolete, backwards compatibility */
     set_current_val(vars, V_FEATURE_LEVEL, TRUE);
