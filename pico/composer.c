@@ -453,7 +453,6 @@ int f, n;
     register  int	i;
     register  int	ch;
     register  int	status;			/* return status of something*/
-    register  char	*bufp;
 
     ComposerEditing = TRUE;
     display_delimiter(0);			/* provide feedback */
@@ -763,20 +762,6 @@ int f, n;
 	    if(ods.cur_e == FCCHDR){
 		if((*Pmaster->folders)(s))		/* pine call */
 		  strcpy(headents[FCCHDR].hd_text->text, s);
-	    }
-	    else if(ods.cur_e==BCCHDR || ods.cur_e==TOHDR || ods.cur_e==CCHDR){
-		if((bufp = (*Pmaster->addrbook)(1)) != NULL){	/* pine call */
-		    if(ods.cur_l->text[0] != '\0')
-		      strcat(bufp, ", ");
-		    if(FormatLines(ods.cur_l, bufp,
-				   (term.t_ncol-headents[ods.cur_e].prlen), 
-				   ods.cur_e) == -1){
-			emlwrite("Problem adding address to header !", NULL);
-			(*term.t_beep)();
-			break;
-		    }
-		    UpdateHeader();
-		}
 	    }
 #ifdef	ATTACHMENTS
 	    else if(ods.cur_e == ATTCHDR){
@@ -2413,7 +2398,7 @@ ShowPrompt()
       case CCHDR:
       case BCCHDR:
 #ifdef	ATTACHMENTS
-	wkeyhelp("GCR0KOXDJ0UT", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,Attach,UnDel Line,To AddrBk");
+	wkeyhelp("GCR0KOXDJ0U0", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,Attach,UnDel Line");
 	break;
       case FCCHDR:
 	wkeyhelp("GCR0KOXDJ0UT", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,Attach,UnDel Line,To Fldrs");
@@ -2424,7 +2409,7 @@ ShowPrompt()
       default:
 	wkeyhelp("GCR0KOXDJ0U0", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,Attach,UnDel Line");
 #else
-	wkeyhelp("GCR0KOXD00UT", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,UnDel Line,To AddrBk");
+	wkeyhelp("GCR0KOXD00U0", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,UnDel Line");
 	break;
       case FCCHDR:
 	wkeyhelp("GCR0KOXD00UT", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,UnDel Line,To Fldrs");

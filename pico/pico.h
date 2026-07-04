@@ -172,7 +172,6 @@ typedef struct pico_struct {
     int   (*folders)(char *);			/* Pine's folders_for_fcc */
     int   (*buildaddr)(char *, char *, char **);		/* Pine's build_address */
     long  (*newmail)(int *, int, int);			/* Pine's report_new_mail */
-    char  *(*addrbook)(int);		/* Pine's addr_book */
 #ifdef	DOS
     short to_help;			/* various pine help text arrays */
     short cc_help;

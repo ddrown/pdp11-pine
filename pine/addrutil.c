@@ -58,17 +58,14 @@ static char rcsid[] = "$Id: addrutil.c,v 4.7 1993/10/18 23:34:58 mikes Exp $";
  ====*/
 
 #include "headers.h"
-#include "adrbklib.h"
 
 
 #ifdef ANSI
-ADDRESS *expand_address(char *, char *, char *, AdrBk *);
-AdrBk       *get_adrbk();
+ADDRESS *expand_address(char *, char *, char *);
 
 #else
 
 ADDRESS *expand_address();
-AdrBk       *get_adrbk();
 #endif
 
 
@@ -100,8 +97,7 @@ build_address(to , full_to, error)
     a = expand_address(to, ps_global->maildomain,
                          !ps_global->do_local_lookup ? NULL :
                         ps_global->use_full_hostname ? ps_global->hostname :
-                           ps_global->localdomain,
-                       get_adrbk());
+                           ps_global->localdomain);
 
     if(ps_global->c_client_error[0] != '\0') {
         /*-- Parse error occured. Return string as is and error message --*/
@@ -287,36 +283,31 @@ address_is_us(a, ps)
     
 
 ADDRESS *mtp_parse_address();
-	      
 
-static char  *fakedomain;
-static int    recursing = 0;       
+
 /*----------------------------------------------------------------------
-     Expand an address string against the address book, local names, and domain
+     Expand an address string against local names and domain
 
    Input:  The address string to parse and expand
            The domain the user considers himself to be in
            The domain of the local password file (usually as above)
-           The open address book
 
-   Result: A list of fully qualified, expanded addresses is returned
+   Result: A list of fully qualified addresses is returned
 
 Use mtp_parse_address to turn the string into data structures on which
 the expansion is then done. This assures all quoting and other formatting
-proceeds according to the standard. 
+proceeds according to the standard.
 
 If the localdomain is NULL then no lookup against the password file will
 be done.
   ----------------------------------------------------------------------*/
-ADDRESS *        
-expand_address(a_string, userdomain, localdomain, ab)
+ADDRESS *
+expand_address(a_string, userdomain, localdomain)
      char   *userdomain, *localdomain, *a_string;
-     AdrBk  *ab;
 {
-    int          domain_length, length;
-    ADDRESS     *adr, *a, *a_tail, *adr2, *a2, *a_temp;
-    AdrBk_Entry *abe;
-    char        *list, *l1, **l2;
+    int          domain_length;
+    ADDRESS     *adr, *a;
+    char        *fakedomain;
 
     /*-----
         create a fake domain name '@@@@', the same length as the real domain
@@ -324,157 +315,35 @@ expand_address(a_string, userdomain, localdomain, ab)
       the right storage is already allocated. We also use the @@@ to detect
       an unqualified address
       -----*/
-    if(!recursing) {
-        domain_length = max(localdomain != NULL ? strlen(localdomain) : 0,
-                             userdomain != NULL ? strlen(userdomain)  : 0);
-        fakedomain = fs_get(domain_length + 1);
-        memset(fakedomain, '@', domain_length);
-        fakedomain[domain_length] = '\0';
-    }
+    domain_length = max(localdomain != NULL ? strlen(localdomain) : 0,
+                         userdomain != NULL ? strlen(userdomain)  : 0);
+    fakedomain = fs_get(domain_length + 1);
+    memset(fakedomain, '@', domain_length);
+    fakedomain[domain_length] = '\0';
 
     adr = NULL;
     rfc822_parse_adrlist(&adr, a_string, fakedomain);
 
-    for(a = adr, a_tail = adr; a != NULL;) {
-
-        if(!recursing)
-          adrbk_clearrefs(ab);
-
+    for(a = adr; a != NULL; a = a->next) {
         if(a->host && a->host[0] == '@'){
             /*-----------
                  Hostname is  '@@@@...' indicating name wasn't qualified.
-                 Need to look up in address book, and the password file.
+                 Look up in the password file for the local full name.
                  If no match then fill in the local domain for host
               -----------*/
-            abe = adrbk_lookup(ab, a->mailbox);
+            if(localdomain != NULL && a->personal == NULL) {
+                /*---- lookup in passwd file for local full name ---*/
+                a->personal = cpystr(local_name_lookup(a->mailbox));
 
-            if(abe == NULL) {
-                if(localdomain != NULL && a->personal == NULL) {
-                    /*---- lookup in passwd file for local full name ---*/
-                    a->personal = cpystr(local_name_lookup(a->mailbox)); 
-
-                    strcpy(a->host, a->personal == NULL ? userdomain :
-                                                          localdomain);
-                } else {
-                    strcpy(a->host, userdomain);
-                }
-
-                /*--- Move to next address in list -----*/
-                a_tail = a;
-                a = a->next;
-
+                strcpy(a->host, a->personal == NULL ? userdomain :
+                                                      localdomain);
             } else {
-                /*---------
-                  There was a match in the address book. We have to do a lot
-                  here because the item from the address book might be a 
-                  distribution list. Treat the string just like an address
-                  passed in to parse and recurse on it. Then combine
-                  the personal names from address book. Lastly splice
-                  result into address list being processed
-                  ---------*/
-                if(recursing && abe->referenced) {
-                     /*---- caught an address loop! ----*/
-                    fs_give(((void **)&a->host));
-                    a->host = cpystr("***address-loop***");
-                    continue;
-                }
-                abe->referenced++;   /* For address loop detection */
-                if(abe->tag == List) {
-                    length = 0;
-                    for(l2 = abe->addr.list; *l2 != NULL; l2++)
-                      length += strlen(*l2) + 1;
-                    list = fs_get(length + 1);
-                    l1 = list;
-                    for(l2 = abe->addr.list; *l2 != NULL; l2++) {
-                        if(l1 != list)
-                          *l1++ = ',';
-                        strcpy(l1, *l2);
-                        l1 += strlen(l1);
-                    }
-                    recursing++;
-                    adr2 = expand_address(list, userdomain, localdomain, ab);
-                    recursing--;
-                    fs_give((void **)&list);
-                } else {
-                    if(strcmp(abe->addr.addr, a->mailbox)) {
-                        recursing++;
-                        adr2 = expand_address(abe->addr.addr, userdomain,
-                                              localdomain, ab);
-                        recursing--;
-                    } else {
-                        /*--- A loop within plain single entry is ignored */
-                        /*- set up so later code thinks we expanded -*/
-                        adr2 = mail_newaddr();
-                        adr2->mailbox = cpystr(a->mailbox);
-                        adr2->host = cpystr(userdomain);
-                        adr2->adl  = cpystr(a->adl);
-                    }
-                }
-                if(adr2 == NULL) {
-                    /*-- expanded to nothing, hack out of list --*/
-                    a_temp = a;
-                    if(a == adr) {
-                        adr    = a->next;
-                        a      = adr;
-                        a_tail = adr;
-                    } else {
-                        a_tail->next = a->next;
-                        a = a->next;
-                    }
-                    mail_free_address(&a_temp);
-                    continue;
-                }
-                /*-----
-                  Personal names: If the expanded address has a personal
-                  tack the full name from the address book on in front.
-                  This mainly occurs with a distribution list where the
-                  list has a full name, as well as the first person in the
-                  list. Also avoid the case where a name might get doubled
-                  by getting expanded against the address book and against
-                  the passwd file. This happens if the address in the entry
-                  is just the unqualified login in the passwd file.
-                  -----*/
-                if(adr2->personal != NULL && abe->fullname != NULL &&
-                   strcmp(adr2->mailbox, abe->addr.addr)) {
-                    /* combine list name and personal name */
-                    char *name = fs_get(strlen(adr2->personal) +
-                                      strlen(abe->fullname) + 10);
-                    sprintf(name, "%s -- %s", abe->fullname, adr2->personal);
-                    fs_give((void **)&adr2->personal);
-                    adr2->personal = name;
-                } else {
-                    adr2->personal =cpystr(adrbk_formatname(abe->fullname));
-                }
-
-                /*------ splice new list into old list ------*/
-                for(a2 = adr2; a2->next != NULL; a2 = a2->next);
-                a2->next = a->next;
-                if(a == adr) {
-                    adr = adr2;
-                    a_tail = a2;
-                } else {
-                    a_tail->next = adr2;
-                }
-                /*---- advance to next item, and free replaced ADDRESS ----*/
-                a_tail = a2;
-                a_temp = a;
-                a = a->next;
-                a_temp->next = NULL;  /* So free won't do whole list */
-                mail_free_address(&a_temp);
+                strcpy(a->host, userdomain);
             }
-
-
-        } else {
-            /*------
-               Already fully qualified hostname -- nothing to do
-              ------*/
-            a_tail = a;
-            a = a->next;
         }
     }
 
-    if(!recursing)
-      fs_give((void **)&fakedomain);
+    fs_give((void **)&fakedomain);
 
     return(adr);
 }

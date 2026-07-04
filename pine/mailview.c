@@ -1077,7 +1077,7 @@ static struct key view_keys[] =
         {"?","Help",0},        {"O","OTHER CMDS",0},    {"Q","Quit",0},
         {"C","Compose",0},     {"L","ListFldrs",0},     {"G","GotoFldr",0},
         {"I","Index",0},       {"W","WhereIs",0},       {"Y","Print",0},
-        {"T","TakeAddr",0},    {"S","Save",0},          {"E","Export",0},
+        {NULL,NULL,0},         {"S","Save",0},          {"E","Export",0},
 
         {"?","Help",0},        {"O","OTHER CMDS",0},    {NULL,NULL,0},
         {NULL,NULL,0},         {NULL,NULL,0},           {NULL,NULL,0}, 

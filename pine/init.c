@@ -134,8 +134,6 @@ be \"\".  You can override system defaults by setting a variable to the\n# empty
 
 #define	SIG_FILE_TEXT "signature-file specifies the name or path of a file containing text that\n# will automatically be inserted in outgoing mail."
 
-#define	ADDR_BOOK_TEXT "address-book specifies the filename or path name of Pine's addressbook.\n# Unix Pine default is normally ~/.addressbook\n# PC-Pine default is \\PINE\\ADDRBOOK"
-
 #define	FEATURE_LIST_TEXT	"feature-list= comma-separated list of features from the following set:\n# Note: the value \"old-growth\" is shorthand for the indicated features...\n# enable-full-header-cmd        (included in old-growth set)\n# enable-unix-pipe-cmd          (included in old-growth set)\n# enable-bounce-cmd             (included in old-growth set)\n# enable-alternate-editor-cmd   (included in old-growth set)\n# enable-suspend                (included in old-growth set)\n# \
 enable-tab-completion         (included in old-growth set)\n# enable-jump-shortcut          (included in old-growth set)\n# quit-without-confirm          (included in old-growth set)\n# enable-apply-cmd              (included in old-growth set)\n# enable-flag-cmd               (included in old-growth set)\n# enable-zoom-cmd               (included in old-growth set)\n# expanded-view-of-folders\n# use-function-keys\n# include-header-in-reply\n# signature-at-bottom\n# delete-skips-deleted\n# expunge-without-confirm\n# auto-move-read-msgs\n# e.g.\n# feature-list= old-growth, signature-at-bottom\n# \
 The feature-list that is in effect when you are running Pine is the\n# combination of the feature-list set by the system manager in the pine.conf\n# file plus the feature-list set by you here.  (PC-Pine doesn't have a\n# pine.conf so this doesn't apply in that case.)  The feature-list is additive\n# and the order is significant.  First the system-wide pine.conf values are\n# read, then yours.  Any of the features listed above may also have the\n# \
@@ -207,8 +205,8 @@ static struct variable variables[] = {
   READ_MSG_TEXT},
 {"signature-file",             0, 1, 0, 1, 1, 0,
   SIG_FILE_TEXT},
-{"address-book",               0, 1, 0, 1, 1, 0,
-  ADDR_BOOK_TEXT},
+{"address-book",               1, 1, 0, 1, 1, 0,
+  "Address-book is disabled, address book support has been removed"},
 {"feature-list",               0, 1, 0, 1, 1, 1,
   FEATURE_LIST_TEXT},
 {"initial-keystroke-list",     0, 1, 0, 1, 1, 1,
@@ -330,7 +328,6 @@ init_vars(ps)
 #endif
     vars[V_SIGNATURE_FILE].global_val.p   = cpystr(DF_SIGNATURE_FILE);
     vars[V_MAIL_DIRECTORY].global_val.p   = cpystr(DF_MAIL_DIRECTORY);
-    vars[V_ADDRESSBOOK].global_val.p = cpystr(DF_ADDRESSBOOK);
 
 #ifdef	DOS
     /*
@@ -634,8 +631,6 @@ init_vars(ps)
         set_current_val(vars, V_INIT_CMD_LIST, FALSE);
     if (VAR_INIT_CMD_LIST)
         process_init_cmds(ps, VAR_INIT_CMD_LIST);
-
-    set_current_val(vars, V_ADDRESSBOOK, TRUE);
 
 #ifdef DEBUG
 #define STRING(vv) ((vv) ? (vv) : "<unset>")

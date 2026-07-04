@@ -1383,12 +1383,12 @@ attachment is plain text.  You can only view one attachment at a time.
 {F2  Toggle to see more commands         F2  Toggle to see more commands        : N   Move to the next message            R  Reply to message     F  Forward}
 {F3  MAIN MENU Screen                    F3  Quit Pine                          : -   Show previous screen of messages    D  Mark for deletion      }
 {F4  View current message                F4  Compose a message                  :Spc  Show next screen of messages        U  Undelete (remove deletion mark)}
-{F5  Move to previous message            F5  FOLDER LIST screen                 : J   Jump to a specific message          T  Take Address into Address Book}
+{F5  Move to previous message            F5  FOLDER LIST screen                 : J   Jump to a specific message          }
 {F6  Move to next message                F6  Goto a specified folder            : W   Whereis -- search for a             S  Save into an email folder} 
 {F7  Show previous screen of messages    F7  Zoom                               :       specific message                  E  Export as a plain text file}
 {F8  Show next screen of messages        F8  Whereis                            :                                         |  Pipe to a Unix Command}
 {F9  Mark message for deletion           F9  Print message                      :FOLDER INDEX Screen Commands             B  Bounce               * Flag}
-{F10 Undelete (remove delete mark)       F10 Take address into address book     :----------------------------}
+{F10 Undelete (remove delete mark)                                             :----------------------------}
 {F11 Reply to message                    F11 Save message into an email folder  :  G  Goto a specified folder     General Pine Commands }
 {F12 Forward                             F12 Export message into a plain file   :  $  Sort order of index         --------------------- }
 {                                                                               :  H  Full header mode            O  Show all other available commands }
@@ -1488,12 +1488,12 @@ the next one which you have not yet deleted.
 {F2  Toggle to see more commands         F2  Toggle to see more commands        : N   Display next message                R  Reply to message     F  Forward}
 {F3  MAIN MENU Screen                    F3  Quit Pine                          : -   Show previous page of this message  D  Mark for deletion      }
 {F4  View attachment                     F4  Compose a message                  :Spc  Show next page of this message      U  Undelete (remove deletion mark)}
-{F5  Display previous message            F5  FOLDER LIST screen                 : J   Jump to a specific message          T  Take Address into Address Book}
+{F5  Display previous message            F5  FOLDER LIST screen                 : J   Jump to a specific message          }
 {F6  Display next message                F6  Goto a specified folder            : W   Whereis -- search for a             S  Save into an email folder}
 {F7  Previous screen of this message     F7  FOLDER INDEX screen                :       specific word in message          E  Export as a plain text file}
 {F8  Next screen of this message         F8  Whereis                            :                                         |  Pipe to a Unix Command}
 {F9  Mark message for deletion           F9  Print message                      :MESSAGE TEXT Screen Commands             B  Bounce               * Flag}
-{F10 Undelete (remove delete mark)       F10 Take address into address book     :----------------------------}
+{F10 Undelete (remove delete mark)                                             :----------------------------}
 {F11 Reply to message                    F11 Save message into an email folder  :  G  Goto a specified folder     General Pine Commands }
 {F12 Forward                             F12 Export message into a plain file   :  H  Full Header Mode            --------------------- } 
 {                                                                               : TAB Next New                    O  Show all other available commands }
@@ -1604,11 +1604,11 @@ messages to be \"US-ASCII\".
 {F2  Show all other available commands    F2  Show other commands         :C  Compose a message       P  Select previous command up on menu}
 {                                         F3  Quit Pine                   :I  FOLDER INDEX screen     N  Select next command down on menu}
 {F4  Execute current MAIN MENU command    F4  Compose a message           :L  FOLDER LIST screen      R  Display complete Pine release notes}
-{F5  Select previous command up on menu   F5  FOLDER LIST screen          :A  ADDRESS BOOK screen     K  Lock keyboard (Unix Pine Only)}
+{F5  Select previous command up on menu   F5  FOLDER LIST screen          :K  Lock keyboard (Unix Pine Only)}
 {F6  Select next command down on menu     F6  Goto a specified folder     :S  SETUP functions         G  Goto a specified folder}
 {                                         F7  FOLDER INDEX screen         :Q  Quit Pine}
 {F9  Display complete Pine release notes  F9  SETUP functions             :}
-{F10 Lock keyboard                        F10 ADDRESS BOOK screen         :}
+{F10 Lock keyboard                                                       :}
 
   Contents:                                                              ___----
       Local Contact Information
@@ -2496,172 +2496,6 @@ command on the view message or folder index screens.
 
       End of Help on Fcc: Folder Select
    ---------------------------------------
-===== h_address_book =====
-      ADDRESS BOOK COMMANDS                                              ___----
-
-{Available  Commands -- Screen 1      Available Commands -- Screen 2           :Address Book Navigation                General Pine Commands}
-{-------------------------------      ------------------------------           :-----------------------                ---------------------}
-{F1  Show Help Text                   F1  Show Help Text                       : P  Prev Address                       ?  Display this help text}
-{F2  Toggle to see more commands      F2  Toggle to see more commands          : N  Next Address                       O  Show all other available commands}
-{F3  MAIN MENU Screen                 F3  Quit Pine                            : -  Previous page of address book      M  MAIN MENU screen}
-{F4  Edit selected entry              F4  Compose a message to selected addr   :Spc Next page of address book          Q  Quit Pine}
-{F5  Move to previous entry           F5  FOLDER LIST screen                   : W  Where is (search for word/         C  Compose a message to selected addr}
-{F6  Move to next entry               F6  Specify a folder to go to            :       name in address book)           L  FOLDER LIST screen}
-{F7  Previous page of address book    F7  FOLDER INDEX screen                  :                                       G  Specify a folder to go to}
-{F8  Next page of address book        F8  Whereis (search through address book):Address Book Commands                  I  FOLDER INDEX screen}
-{F9  Delete selected entry            F9  Print address book                   :---------------------}
-{F10 Add a simple entry                                                        : E  Edit selected entry}
-{F11 Create an entry for a list                                                : D  Delete selected entry}
-{F12 Add to a list entry                                                       : A  Add a simple entry}
-{: S  Create an entry for a list}
-{: Z  Add to a list entry}
-{: Y  Print address book}
-
-                                                                         ___----
-      2. General Description of the Address Book
-
-The address book helps you keep a list of addresses you send mail to so you
-do not have to remember addresses that are often complex.  Each entry in the
-address book has three parts.  The nickname is short, usually less than eight
-letters, and easy to remember.  You type this nickname in as you are
-addressing the message in the composer and the address will be taken from the
-address book.  The name is a longer field where you can put the full name of
-the person and other information to clearly identify the address.  Usually the
-full names are put in last name first so they sort nicely in alphabetical
-order.  The third part is the address itself.  The addresses are sorted
-alphabetically on the full name with distribution lists sorted to the end.
-                                                                         ___----
-Pine also allows distribution lists so you can have one nickname that refers
-to a list of addresses to send mail to.  Each distribution list has a
-nickname, a full name and a list of addresses.  The addresses may be actual
-addresses or they may be other nicknames in your address book.  They may even
-refer to other distribution lists.  The command to create a distribution list
-is {F4:\"S\"} and the command to add entries to an existing list is {F5:\"Z\"}. 
-Use {F11:\"D\"} to delete entries, placing the cursor on the address if an 
-address is to be deleted, or on the nickname or full name of the list to 
-delete the whole list.
-
-The distribution lists in Pine are private distribution lists as is the rest
-of the address book and can't be shared among several users.  One reason for
-this is that any shared distribution list set up would be only available to
-Pine users and therefore would preclude others using other mailers from using
-the list even though they might be in the list.
-
-
-      3. Notes on Address formats                                        ___----
-
-There are a number of different formats for e-mail addresses, depending on the
-kind of network the recipient is on.  The Internet style is preferred and
-hopefully the world is moving toward it.  Also, it is often necessary to
-combine address formats to get mail to some sites.
-
-The standard format for the Internet address is:
-
-                User Name <user@dept.org.domain>
-                           or
-                User Name <user@computer.dept.org.domain>
-
-The number of segments on the right of the \"@\" sign can vary depending on
-how the address is structured for the particular host.  Therefore, the above
-examples are not absolute.  If you are sending to someone on the same system
-as you are, you can leave the \"@\" and all the information to its right off
-of the address, and Pine will fill it in automatically.  Sometimes you can also
-abbreviate the right part of the address if you are at the same site.  So if
-                                                                         ___----
-your address is \"You <you@admin.washington.edu>\" and you're sending mail to
-\"Them <them@purchase.washington.edu>\" then the address \"Them <them@purchase>\"
-is often sufficient.  You may also leave off the user name and the angle
-brackets and use just the plain address.
-
-   Examples:    Dan Green <dang@cac>
-                The Flying Legume <wingbean@laxvax.math.washington.edu>
-                dizzy@deegee.com
-                Joe Jackson <joe>
-
-Another common Internet format is:
-
-                dang@cac.washington.edu (Dan Green)
-
-This is an older, unofficial format that will hopefully fall into disuse.
-Pine understands both formats, but generates the official Internet style
-addresses.
-                                                                         ___----
-When sending messages across gateways to other networks, the address gets
-more complicated because they often have an Internet part and a part for the
-other network.  One example of this is:
-
-                joe%uwavm@gate.upitt.edu
-
-First the message goes to the gateway gate.upitt.com and the gateway
-deletes its name from the address and turns the % into an @.  The gateway
-then figures out what to do with the address joe@uwavm.  
-                                                                         ___----
-You may see an email address which looks like this:
-
-                host1!host2!host3!user
-
-This is an address on the UUCP network.  \"host1,\" and \"host2,\" are the
-names of computers between you and the computer, \"host3,\" that \"user\"
-to whom you want to send mail to has an account on.  In many cases, there 
-will be a UUCP gateway, so you can just send your email to:
-                
-                user@host3.uucp
-                                                                         ___----
-BITNET sites use a format that is similar to the Internet:
-   
-                host@site
-
-If you are sending mail from an Internet site to a BITNET site a local
-gateway may have been setup so you can send mail to:
-         
-                host@site.bitnet
-
-This will automatically forward the mail through to BITNET rather than you
-having to explicitly route it through a gateway.
-
-
-      End of Help for the Address Book
-   ------------------------------------------------------------
-===== h_use_address_book =====
-      COMPOSER: ADDRESS SELECT COMMANDS                                  ___----
-
-{F1 : ? }  Show this help text
-{F3 : E }  Exit the Address Select (without selecting an address)
-{F4 : S }  Select the currently highlighted entry
-{F5 : P }  Move to previous entry
-{F6 : N }  Move to next entry
-{F7 : - }  Previous page of the address book listing
-{F8 :Spc}  Next page of the address book listing
-{F12: W }  WhereIs (search through address book)
-
-                                                                         ___----
-      GENERAL DESCRIPTION OF THE ADDRESS BOOK
-
-The address book helps you keep a list of addresses you send mail to so you
-do not have to remember addresses that are often complex.  Each entry in the
-address book has three parts.  The nickname is short, usually less than eight
-letters, and easy to remember.  You type this nickname in as you are
-addressing the message in the composer and the address will be taken from the
-address book.  The name is a longer field where you can put the full name of
-the person and other information to clearly identify the address.  Usually the
-full names are put in last name first so they sort nicely in alphabetical
-order.  The third part is the address itself.  The addresses are sorted
-alphabetically on the full name with distribution lists sorted to the end.
-                                                                         ___----
-Pine also allows distribution lists so you can have one nickname that refers
-to a list of addresses to send mail to.  Each distribution list has a
-nickname, a full name and a list of addresses.  The addresses may be actual
-addresses or they may be other nicknames in your address book.  They may even
-refer to other distribution lists. 
-
-The distribution lists in Pine are private distribution lists as is the rest
-of the address book and can't be shared among several users.  One reason for
-this is that any shared distribution list set up would be only available to
-Pine users and therefore would preclude others using other mailers from using
-the list even though they might be in the list.
-
-      End of Help for Composer: Address Select
-   ------------------------------------------------------------
 ===== h_composer =====
       COMPOSER COMMANDS             ** May not be available              ___----
                                     depending on configuration and hardware 
@@ -2708,7 +2542,7 @@ the menu displayed at the bottom of your Pine compose screen.
 When in the header, the following keys have these meanings:
          ^J   Attach file
          ^R   Rich Header
-         ^T   To Address Book or Files
+         ^T   To Files (in the Fcc: field)
 The following keys are not active in the header:  ^W, ^_ and ^^
 
       4. About Marking, Cutting and Pasting                              ___----
@@ -2857,18 +2691,16 @@ as it is sent, usually \"sent-mail\" (Unix) or \"sentmail\" (PC-Pine).
       1. The To: field in general                                        ___----
 
 Type in the electronic addresses you want to send mail to.  You may type a
-full name and address, just the local address, the nickname of someone in your
-address book, or a local mail alias defined by your system administrator.
-When you move the cursor out of the To: field, the nicknames will be expanded
-to the addresses in your address book, and the local names will be expanded to
-include the addressee's full name.  The To: field may be several lines long,
-and have many addresses in it separated by commas.  You can move around the
-To: field and/or the header with the arrow keys.
+full name and address, just the local address, or a local mail alias defined
+by your system administrator.  When you move the cursor out of the To: field,
+the local names will be expanded to include the addressee's full name.  The
+To: field may be several lines long, and have many addresses in it separated
+by commas.  You can move around the To: field and/or the header with the
+arrow keys.
 
 Examples:
    Full address           spiff@cs.washington.edu
    local address          spiff
-   address book nickname  spf   (expands to spiff@cs.washington.edu)
    local alias            ndc-tech   (a mailing list maintained by the
                           system administrator)
 
@@ -2939,13 +2771,6 @@ Examples:
  ______                message.  You may resume composing the previously postponed
  ______                message later. 
                                                                          ___----
-{F12: ^T}  To AddrBk   Go into the address book so you can browse through your
- ______                addresses.  Put the cursor on the entry you want to send
- ______                mail to and give the command to select the address
- ______                ({F2:\"S\"} Select).  You will return to the To: field,and
- ______                the address will be filled in.  You may go into the address
- ______                book several times to pick several addresses. 
-
 
       3. Address formats                                                 ___----
 
@@ -3039,18 +2864,15 @@ only difference the recipients see is that their name is in the Cc: field,
 rather than the To: field.
 
 As in the To: field you may type a full name and address, just the local
-address, the nickname of someone in your address book, or a local mail alias
-defined by your system administrator.  When you move the cursor out of the Cc:
-field, the nicknames will be expanded to the addresses in your address book,
-and the local names will be expanded to include the actual user name.  The To:
-field may be several lines long, and have many addresses in it separated by
-commas.  You can move around the Cc: field and/or the header with the arrow
-keys.
+address, or a local mail alias defined by your system administrator.  When you
+move the cursor out of the Cc: field, the local names will be expanded to
+include the actual user name.  The To: field may be several lines long, and
+have many addresses in it separated by commas.  You can move around the Cc:
+field and/or the header with the arrow keys.
                                                                          ___----
 Examples:
    Full address           spiff@cs.washington.edu
    local address          spiff
-   address book nickname  spf   (expands to spiff@cs.washington.edu)
    local alias            ndc-tech   (a mailing list maintained by the
                           system administrator)
 
@@ -3122,12 +2944,6 @@ Examples:
  ______                message.  You may resume composing the previously postponed
  ______                message later. 
                                                                          ___----
-{F12: ^T}  To AddrBk   Go into the address book so you can browse through your
- ______                addresses.  Put the cursor on the entry you want to send
- ______                mail to and give the command to select the address
- ______                ({F2:\"S\"} Select).  You will return to the Cc: field,and
- ______                the address will be filled in.  You may go into the address
- ______                book several times to pick several addresses. 
 
 
       3. Address formats                                                 ___----
@@ -3222,18 +3038,15 @@ sent.  The To: and Cc: recipients will not know a copy was sent to the Bcc:
 recipients.
 
 As in the To: field you may type a full name and address, just a local
-address, the nickname of someone in your address book, or a local mail alias
-defined by your system administrator.  When you move the cursor out of the
-Bcc: field, the nicknames will be expanded to the addresses in your address
-book, and the local names will be expanded to include the actual user name.
-The To: field may be several lines long, and have many addresses in it
-separated by commas.  You can move around the Bcc: field and/or the header
-with the arrow keys.
+address, or a local mail alias defined by your system administrator.  When you
+move the cursor out of the Bcc: field, the local names will be expanded to
+include the actual user name.  The To: field may be several lines long, and
+have many addresses in it separated by commas.  You can move around the Bcc:
+field and/or the header with the arrow keys.
                                                                          ___----
 Examples:
    Full address           spiff@cs.washington.edu
    local address          spiff
-   address book nickname  spf   (expands to spiff@cs.washington.edu)
    local alias            ndc-tech   (a mailing list maintained by the
                           system administrator)
 
@@ -3305,12 +3118,6 @@ Examples:
  ______                message.  You may resume composing the previously postponed
  ______                message later. 
                                                                          ___----
-{F12: ^T}  To AddrBk   Go into the address book so you can browse through your
- ______                addresses.  Put the cursor on the entry you want to send
- ______                mail to and give the command to select the address
- ______                ({F2:\"S\"} Select).  You will return to the Bcc: field,
- ______                and the address will be filled in.  You may go into the 
- ______                address book several times to pick several addresses. 
 
 
       3. Address formats                                                 ___----
@@ -3493,57 +3300,9 @@ and then just press RETURN to accept the previous search string shown in
 square brackets rather than entering a new search string.
 
       End help for search in message composer
-=========== h_oe_add_full ==================
-Type the full name of the person being added and press the RETURN key.  Press ^C
-to cancel addition. 
-=========== h_oe_add_nick ==================
-Type a short nickname and press RETURN.  A nickname is a short easy-to- 
-remember word, name or initials like \"joe\", or \"wcfields.\" Press ^C to cancel.
-========== h_oe_add_addr ================
-Type the e-mail address and press RETURN.  Press ^T to get a list of addresses
-from your current inbox.  Press ^C to cancel addition.
-========== h_oe_crlst_full ==============
-Type a long name (up to 50 chars) or description for the list that you are
-creating and press RETURN.  Press ^C to cancel creation of list.
-=========== h_oe_crlst_nick =============
-Type a nickname (short, easy-to-remember name or single word) for the list 
-you are creating and press RETURN.  Press ^C to cancel.
-========== h_oe_crlst_addr ==============
-Type an e-mail address, or a nickname already in the address book that you want
-to be part of this list and press RETURN. 
-========== h_oe_adlst_addr =============
-Type an e-mail address or a nickname already in the address book that you want
-to add to this list and press RETURN. ^T to get addresses from incoming mail.
-========== h_oe_editab_nick ============
-Edit the nickname to be correct using the arrow keys and delete key.  Press
-RETURN when done.  Press ^C to cancel editing and leave the nickname as it was.
-========== h_oe_editab_full ============
-Edit the full name to be correct using the arrow keys and delete key.  Press
-RETURN when done.  Press ^C to cancel editing and leave the full name as it was.
-========== h_oe_editab_addr ============
-Edit the address to be correct using the arrow keys and delete key.  Press
-RETURN when done.  Press ^C to cancel editing and leave the address as it was.
-========== h_oe_editab_al ============
-Edit the address to be correct using the arrow keys and delete key.  Press
-RETURN when done.  Press ^C to cancel editing and leave the address as it was.
-========== h_oe_searchab ===============
-Type the word or name you want to search for and press RETURN.  If you press
-RETURN with out entering anything the word in [] will be searched for.
-========== h_oe_searchrl ==========
-Type the word, name or address you want to search for and press RETURN.  If you
-press RETURN without entering anything the word in [] will be searched for.
 ========== h_oe_save ==========
 Type the name of the folder you want to save the message in and press RETURN.  
 Press ^T to get a list of your folders.  Press ^C to cancel saving this mail.
-========== h_oe_takeaddr ==========
-Edit the e-mail address using the arrow and delete keys.  Press RETURN when 
-done.  Press ^C to cancel adding this entry to the address book.
-========== h_oe_takename ==========
-Edit the full name to be correct using the arrow and delete keys.  Press RETURN
-when done.  Press ^C to cancel adding this entry to the address book.
-========== h_oe_takenick ==========
-Type a nickname (short easy-to-remember name, initials or single word) for
-this entry in the address book and press RETURN.  Press ^C to cancel addition.
 ========== h_oe_jump ==========
 Type the number of the message number you want to jump to and press
 RETURN.  Press ^C if you want to cancel jumping to another message.

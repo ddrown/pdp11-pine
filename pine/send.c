@@ -949,7 +949,6 @@ pine_send(outgoing, body, editor_title, fcc, are_replying, att)
 	pbuf.showmsg = display_message;
 	pbuf.clearcur = clear_cursor_pos;
 	pbuf.newmail = new_mail;
-	pbuf.addrbook = addr_book;
 	pbuf.folders = folders_for_fcc;
 	pbuf.buildaddr = build_address;
 	pbuf.keybinit = init_keyboard;

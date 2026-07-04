@@ -67,8 +67,6 @@ int          timeout = NEW_MAIL_TIME; /* referenced in weemacs */
     compose_mail:    while parsing header of postponed message
     append_message2: while writing header into folder
     q_status_messageX: while doing printf formatting
-    addr_book: Used to return expanded address in. (Can only use here 
-               because mm_log doesn't q_status on PARSE errors !)
     pine.c: When address specified on command line
     init.c: When expanding variable values
 
@@ -166,7 +164,7 @@ static struct key main_keys[] =
 	{"?","Help",0},        {"O","OTHER CMDS",0},  {"Q","Quit",0},
         {"C","Compose",0},     {"L","ListFldrs",0},   {"G","GotoFldr",0},
 	{"I","Index",0},       {NULL,NULL,0},         {"S","Setup",0},
-	{"A","AddrBook",0},    {NULL,NULL,0},         {NULL,NULL,0}};
+	{NULL,NULL,0},         {NULL,NULL,0},         {NULL,NULL,0}};
 static struct key_menu main_keymenu =
 	{sizeof(main_keys)/(sizeof(main_keys[0])*12), 0, 0,0,0,0, main_keys};
 #define HELP_KEY         0
@@ -180,7 +178,6 @@ static struct key_menu main_keymenu =
 #define FOLDER_KEY       16
 #define INDEX_KEY        18
 #define SETUP_KEY        20
-#define ADDRESS_KEY      21
 /*
  * length of longest label from keymenu, of labels corresponding to
  * commands in the middle of the screen.  9 is length of ListFldrs
@@ -454,7 +451,6 @@ main(argc, argv)
             
                 clear_index_cache();
                 end_scroll_text();
-                end_adrbk();
                 printf("\n\nUnable to open %s \"%s\". Pine finished\n\n",
                        pine_state->nr_mode ? "news messages" : "folder",
                        folder_to_open);
@@ -623,7 +619,7 @@ main(argc, argv)
 
 /* this default is from the array of structs below */
 #define DEFAULT_MENU_ITEM 6  /* LIST FOLDERS */
-#define MAX_DEFAULT_MENU_ITEM 12
+#define MAX_DEFAULT_MENU_ITEM 10
 #define UNUSED 0
 static unsigned char current_default_menu_item = DEFAULT_MENU_ITEM;
 /*
@@ -646,13 +642,10 @@ static struct menu_key mkeys[] = {
   {"   %s     FOLDER INDEX       -  View messages in current folder", 
             OPF7, 'I', INDEX_KEY},
   {"", UNUSED, UNUSED, UNUSED},
-  {"   %s     FOLDER LIST        -  Select a folder to view", 
+  {"   %s     FOLDER LIST        -  Select a folder to view",
             OPF5, 'L', FOLDER_KEY},
   {"", UNUSED, UNUSED, UNUSED},
-  {"   %s     ADDRESS BOOK       -  Update address book", 
-            OPF10, 'A', ADDRESS_KEY},
-  {"", UNUSED, UNUSED, UNUSED},
-  {"   %s     SETUP              -  Configure or update Pine", 
+  {"   %s     SETUP              -  Configure or update Pine",
             OPF9, 'S',SETUP_KEY},
   {"", UNUSED, UNUSED, UNUSED},
   {"   %s     QUIT               -  Exit the Pine program", 
@@ -991,12 +984,6 @@ main_menu_screen(pine_state)
 	      return;
 	    break;
 
-          /*---------- Go to address book ----------*/
-	  case OPF10 :
-	  case 'a':
-	    pine_state->next_screen = addr_book_screen;
-	    return;
-  
 	  case 'z':  /* hidden function */
 	    print_all_help();
 	    break;
@@ -1554,7 +1541,6 @@ quit_screen(pine_state)
 
     clear_index_cache();
     end_scroll_text();
-    end_adrbk();
 
     if(pine_state->hostname != NULL)
       fs_give((void **)&pine_state->hostname);

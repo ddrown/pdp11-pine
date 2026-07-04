@@ -296,7 +296,7 @@
 #define V_MAIL_DIRECTORY           9
 #define V_READ_MESSAGE_FOLDER      10
 #define V_SIGNATURE_FILE           11
-#define V_ADDRESSBOOK              12
+#define V_ADDRESSBOOK              12  /* disabled, address book removed */
 #define V_FEATURE_LIST             13
 #define V_INIT_CMD_LIST            14
 #define V_SAVED_MSG_NAME_RULE      15
@@ -334,7 +334,6 @@
 #define VAR_MAIL_DIRECTORY           vars[V_MAIL_DIRECTORY].current_val.p
 #define VAR_READ_MESSAGE_FOLDER      vars[V_READ_MESSAGE_FOLDER].current_val.p
 #define VAR_SIGNATURE_FILE           vars[V_SIGNATURE_FILE].current_val.p
-#define VAR_ADDRESSBOOK              vars[V_ADDRESSBOOK].current_val.p
 #define VAR_FEATURE_LIST             vars[V_FEATURE_LIST].current_val.l
 #define VAR_INIT_CMD_LIST            vars[V_INIT_CMD_LIST].current_val.l
 #define VAR_SAVED_MSG_NAME_RULE      vars[V_SAVED_MSG_NAME_RULE].current_val.p
@@ -828,13 +827,6 @@ typedef struct store_object {
 /*-- standard libraries --*/
 FILE *popen(const char *, const char *);
 
-/*-- addrbook.c --*/
-char        *addr_book(int);
-void         addr_book_screen(struct pine *);
-char        *addr_lookup(char *);
-int          addr_add(char *, char *, char *);
-/*AdrBk       *get_adrbk(); */
-
 /*-- addrutil.c --*/
 int  build_address(char *, char *, char **);
 char *addr_list_string(ADDRESS *, int);
@@ -930,7 +922,6 @@ void init_debug(void);
 /*---- mailcmd.c ----*/
 int   process_cmd(int, int, int, int *);
 int   save_msg(int, MESSAGECACHE *, int *, long);
-int   grab_addr_cmd(ENVELOPE *, int);
 char *detach(long, BODY *, char *, long *, gf_io_t, filter_t *);
 long  jump_to(int, int);
 char *broach_folder(int, int, CONTEXT_S **);
@@ -1183,13 +1174,6 @@ char *cpystr(char *);
 
 #else
 
-/*-- addrbook.c --*/
-char        *addr_book();
-void         addr_book_screen();
-char        *addr_lookup();
-int          addr_add();
-/*AdrBk       *get_adrbk(); */
-
 /*-- addrutil.c --*/
 int  build_address();
 char *addr_list_string();
@@ -1274,7 +1258,6 @@ void init_debug();
 /*---- mailcmd.c ----*/
 int process_cmd();
 int save_msg();
-int grab_addr_cmd();
 char *detach();
 long jump_to();
 char *broach_folder();
