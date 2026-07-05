@@ -455,8 +455,7 @@ format_text_header(env, pc, prefix)
     /*---- The From: field ----*/
     tmp_20k_buf[0] = '\0';
     if (!env->from) {
-	if(!ps_global->anonymous)
-	  sprintf(tmp_20k_buf,"%sFrom:     (Sender of message unknown)%s",
+	sprintf(tmp_20k_buf,"%sFrom:     (Sender of message unknown)%s",
 		  pfx, NEWLINE);
     } else if(env->from->personal) {
         sprintf(tmp_20k_buf, "%sFrom: %s <%s%s%s>%s",pfx,
@@ -590,9 +589,9 @@ forward(pine_state, msgno, env, body)
 	     already '(fwd)' before we tack another on */
         dprint(9, (debugfile, "checking subject: \"%s\"\n",
                    env->subject + strlen(env->subject) - 5));
-	if (!ps_global->anonymous && (strlen(outgoing->subject) < 6 ||
+	if (strlen(outgoing->subject) < 6 ||
                   (strcmp(outgoing->subject + strlen(outgoing->subject) - 5,
-                      "(fwd)") != 0)))
+                      "(fwd)") != 0))
 	    strcat(outgoing->subject, " (fwd)");
     }
 
@@ -704,13 +703,11 @@ forward(pine_state, msgno, env, body)
             body                  = mail_newbody();
             body->type            = TYPETEXT;
             body->contents.binary = msgtext;
-    	    if(!ps_global->anonymous){
-		so_puts((STORE_S *)msgtext, NEWLINE);
-		so_puts((STORE_S *)msgtext, forward_delimiter());
-		so_puts((STORE_S *)msgtext, NEWLINE);
-		format_text_header(env, pc, "");
-	    }
-	    get_body_part_text(orig_body, msgno, "1", pc, 
+	    so_puts((STORE_S *)msgtext, NEWLINE);
+	    so_puts((STORE_S *)msgtext, forward_delimiter());
+	    so_puts((STORE_S *)msgtext, NEWLINE);
+	    format_text_header(env, pc, "");
+	    get_body_part_text(orig_body, msgno, "1", pc,
 				    "", ". Text not included");
 /* BUG: ? matter that we're not setting body.size.bytes */
         } else if(orig_body->type == TYPEMULTIPART) {
@@ -724,12 +721,10 @@ forward(pine_state, msgno, env, body)
                 /*--- The first part is text ----*/
                 text_body                  = &body->contents.part->body;
 		text_body->contents.binary = msgtext;
-    		if(!ps_global->anonymous){
-		    so_puts((STORE_S *)msgtext, NEWLINE);
-		    so_puts((STORE_S *)msgtext, forward_delimiter());
-		    so_puts((STORE_S *)msgtext, NEWLINE);
-		    format_text_header(env, pc, "");
-		}
+		so_puts((STORE_S *)msgtext, NEWLINE);
+		so_puts((STORE_S *)msgtext, forward_delimiter());
+		so_puts((STORE_S *)msgtext, NEWLINE);
+		format_text_header(env, pc, "");
 		get_body_part_text(&orig_body->contents.part->body,
 				   msgno, "1", pc, "", ". Text not included");
 /* BUG: ? matter that we're not setting body.size.bytes */
@@ -797,13 +792,10 @@ forward(pine_state, msgno, env, body)
 #ifdef	DOS
     free((void *)reserve);
 #endif
-    if(ps_global->anonymous)
-      pine_simple_send(outgoing, &body, NULL, NULL);
-    else
-      pine_send(outgoing,      /* partially formatted outgoing message */
+    pine_send(outgoing,      /* partially formatted outgoing message */
 		&body,
-		ps_global->nr_mode ? "SEND MESSAGE" : "FORWARD MESSAGE",
-		NULL, 
+		"FORWARD MESSAGE",
+		NULL,
 		0L,
 		NULL);
 
@@ -876,8 +868,7 @@ get_body_part_text(body, msg_no, part_no, pc, prefix, hmm)
 	mc = mail_elt(ps_global->mail_stream,  msg_no);
 
 #ifdef	DOS
-	if(mc->rfc822_size > MAX_MSG_INCORE
-	  || (ps_global->context_current->type & FTYPE_BBOARD)){
+	if(mc->rfc822_size > MAX_MSG_INCORE){
 	    src = FileStar;
 	    mailgets = dos_gets;	/* write fetched text to disk */
 	}

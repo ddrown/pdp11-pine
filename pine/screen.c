@@ -420,7 +420,7 @@ redraw_keymenu()
 
 #define	BAR_STATUS(X)	(((X) & MS_DEL) ? "DEL"   \
 			 : ((X) & MS_ANS) ? "ANS"   \
-		           : (!IS_NEWS && ((X) & MS_NEW)) ? "NEW" : "   ")
+		           : ((X) & MS_NEW) ? "NEW" : "   ")
 
 
 
@@ -463,14 +463,9 @@ status_string(message_cache)
 
      string[1] = '\0';
 
-     if(ps_global->nr_mode) {
-         string[0] = ' ';
-         return(string);
-     } 
-
      string[0] = 'N';
 
-     if(message_cache == NULL || message_cache->seen || IS_NEWS)
+     if(message_cache == NULL || message_cache->seen)
        string[0] = ' ';
 
      if(message_cache->answered)
@@ -709,7 +704,7 @@ format_titlebar()
     is_context        = strlen(as.context_name);
     sprintf(version, "PINE %s", version_buff); 
     ss_string         = as.stream_status == Closed ? "(CLOSED)" :
-                        (as.stream_status == ReadOnly && !IS_NEWS)
+                        (as.stream_status == ReadOnly)
                            ? "(READONLY)" : "";
     ss_len            = strlen(ss_string);
 

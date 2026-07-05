@@ -176,19 +176,8 @@
 				froms += (bmap == 0x3f ? 1 : 0);	\
 			     }
 
-/*
- * Useful macro to test if current folder is a bboard type (meaning
- * netnews for now) collection...
- */
-#define	IS_NEWS	(ps_global->nr_mode					     \
-		 || (context_isambig(ps_global->cur_folder)                  \
-		     && ps_global->context_current                           \
-		     && (ps_global->context_current->type&FTYPE_BBOARD))     \
-		 || (!context_isambig(ps_global->cur_folder)                 \
-		     && ps_global->cur_folder[0] == '*'))
-
 #define	READONLY_FOLDER  (ps_global->mail_stream 			     \
-			  && ((ps_global->mail_stream->readonly && !IS_NEWS) \
+			  && (ps_global->mail_stream->readonly 	     \
 			      || ps_global->mail_stream->anonymous))
 
 /*
@@ -291,7 +280,7 @@
 #define V_INBOX_PATH               4
 #define V_INCOMING_FOLDERS         5
 #define V_FOLDER_SPEC              6
-#define V_NEWS_SPEC                7
+#define V_NEWS_SPEC                7  /* disabled, news reading removed */
 #define V_DEFAULT_FCC              8
 #define V_MAIL_DIRECTORY           9
 #define V_READ_MESSAGE_FOLDER      10
@@ -328,7 +317,6 @@
 #define VAR_INBOX_PATH               vars[V_INBOX_PATH].current_val.p
 #define VAR_INCOMING_FOLDERS         vars[V_INCOMING_FOLDERS].current_val.l
 #define VAR_FOLDER_SPEC              vars[V_FOLDER_SPEC].current_val.l
-#define VAR_NEWS_SPEC                vars[V_NEWS_SPEC].current_val.l
 #define VAR_DEFAULT_FCC              vars[V_DEFAULT_FCC].current_val.p
 #define VAR_MAIL_DIRECTORY           vars[V_MAIL_DIRECTORY].current_val.p
 #define VAR_READ_MESSAGE_FOLDER      vars[V_READ_MESSAGE_FOLDER].current_val.p
@@ -443,7 +431,6 @@ struct ttyo {
  */
 #define	CNTXT_PRIME	0x01			/* primary collection	    */
 #define	CNTXT_SECOND	0x02			/* secondary collection     */
-#define	CNTXT_NEWS	0x04			/* news group collection    */
 #define	CNTXT_PSEUDO	0x08			/* fake folder entry exists */
 #define	CNTXT_INCMNG	0x10			/* inbox collection	    */
 #define	CNTXT_SAVEDFLT	0x20			/* default save collection  */
@@ -457,7 +444,6 @@ struct ttyo {
 #define	FTYPE_LOCAL	0x01			/* Local folders	  */
 #define	FTYPE_REMOTE	0x02			/* Remote folders	  */
 #define	FTYPE_SHARED	0x04			/* Shared folders	  */
-#define FTYPE_BBOARD    0x08			/* Bulletin Board folders */
 #define	FTYPE_OLDTECH	0x10			/* Not accessed via IMAP  */
 #define	FTYPE_ANON	0x20			/* anonymous access       */
 
@@ -671,8 +657,6 @@ struct pine {
     unsigned     restricted:1;
     unsigned     reverse_sort:1;
     unsigned     current_reverse_sort:1;
-    unsigned     nr_mode:1;
-    unsigned     anonymous:1;           /* for now implys nr_mode */
     unsigned     save_by_from:1;
     unsigned     save_by_sender:1;
     unsigned     save_by_recipient:1;

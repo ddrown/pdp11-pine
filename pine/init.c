@@ -125,8 +125,6 @@ be \"\".  You can override system defaults by setting a variable to the\n# empty
 
 #define	FOLDER_TEXT	"folder-collections specifies a list of folder collections wherein saved\n# messages are stored. The first collection is the default for saves.\n# Collection syntax: optnl-label {optnl-imap-hostname}optnl-directory-path[]\n# Example:\n# folder-collections=Saved-Email    {foo.bar.edu}mail/[],\n#                    Widget-Project widget/[],  <-- Valid only in Unix Pine\n#                    Local-PC       mail\\[]     <-- Valid only in PC-Pine"
 
-#define	NEWS_TEXT	"news-collections specifies one or more collections of news groups.\n# News collection syntax: optnl-label *{news-host/protocol}[]\n# Examples:\n# news-collections=News *[]   <-- if your login host carries news\n# news-collections=Subscribed-Groups *{news.u.washington.edu/nntp}[]"
-
 #define	DEFAULT_FCC_TEXT "default-fcc specifies where a copy of outgoing mail is saved.  If this is\n# not a path name, it will be in the the default collection for saves.\n# Unix Pine default is normally \"sent-mail\" in the default folder collection.\n# PC-Pine default is \"SENTMAIL\" (stored as SENTMAIL.MTX)\n# Example of remote case: {carson.u.washington.edu}sent-mail\n# To suppress saving of outgoing mail, set: default-fcc=\"\""
 
 #define	READ_MSG_TEXT "read-message-folder specifies where already-read messages will be stored.\n# If set, you will be asked when you quit Pine if you want read messages\n# to be moved to this folder and deleted from your INBOX."
@@ -194,8 +192,8 @@ static struct variable variables[] = {
   INCOMING_TEXT},
 {"folder-collections",         0, 1, 0, 1, 1, 1,
   FOLDER_TEXT},
-{"news-collections",           0, 1, 0, 1, 1, 1,
-  NEWS_TEXT},
+{"news-collections",           1, 1, 0, 1, 1, 1,
+  "News-collections is disabled, news reading support has been removed"},
 {"default-fcc",                0, 1, 0, 1, 1, 0,
   DEFAULT_FCC_TEXT},
 {"mail-directory",             0, 1, 0, 1, 1, 0,
@@ -570,7 +568,6 @@ init_vars(ps)
     }
 
     set_current_val(vars, V_INCOMING_FOLDERS, TRUE);
-    set_current_val(vars, V_NEWS_SPEC, TRUE);
 
     set_current_val(vars, V_SORT_KEY, TRUE);
     if(decode_sort(ps, VAR_SORT_KEY) == -1) {

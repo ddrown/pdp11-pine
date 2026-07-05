@@ -141,7 +141,6 @@ void      *find_folder_names(char *, char *);
 void       free_folders_in_context(CONTEXT_S *);
 FOLDER_S  *new_folder(char *);
 void       folder_delete(int, void *);
-void       update_news_prefix(MAILSTREAM *,  struct folder *);
 
 
 #else  /* ANSI */
@@ -171,7 +170,6 @@ void      *find_folder_names();
 void       free_folders_in_context();
 FOLDER_S  *new_folder();
 void       folder_delete();
-void       update_news_prefix();
 
 #endif  /* ANSI */
 
@@ -700,13 +698,6 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
                 break;
             } else {
                 /*-- save message --- */
-                if((do_what == GetFcc || do_what == SaveMessage)
-		   && (fs.context->type & FTYPE_BBOARD)) {
-                    q_status_message(1, 2, 4,
-		"\007Can't save messages to bulletin boards or news groups!");
-                    break;
-                }
-
 	        if(cur_name == NULL){
 		    rv = 0;
 	        } else {
@@ -1064,15 +1055,8 @@ paint_folder_name(hilite, fd, index, context)
     if(hilite)
       StartInverse();
 
-    if(context->type&FTYPE_BBOARD){
-	sprintf(tmp_20k_buf, "%s%s", f->prefix, 
-		f->nickname ? f->nickname : f->name);
-	PutLine0(FIRST_DLINE + (f->d_line - fd->top_row),
-		 f->d_col, tmp_20k_buf);
-    }
-    else
-      PutLine0(FIRST_DLINE + (f->d_line - fd->top_row),
-	      f->d_col, f->nickname ? f->nickname : f->name);
+    PutLine0(FIRST_DLINE + (f->d_line - fd->top_row),
+	    f->d_col, f->nickname ? f->nickname : f->name);
 
     if(hilite)
       EndInverse();
@@ -1130,10 +1114,9 @@ folder_list_entry(fd, goal_row, index, context)
 			   fd->display_cols * sizeof(char));
 		    tmp_20k_buf[fd->display_cols] = '\0';
 
-		    sprintf(tmp_20k_buf + fd->display_cols + 2, 
-			    "%s-collection <%s>  %s", 
-			    ((*context)->type & FTYPE_BBOARD) ? "News"
-			    				      : "Folder",
+		    sprintf(tmp_20k_buf + fd->display_cols + 2,
+			    "%s-collection <%s>  %s",
+			    "Folder",
 			    (*context)->label[0], 
 			    ((*context)->use & CNTXT_SAVEDFLT)
 			        ? "** Default for Saves **" : "");
@@ -1250,17 +1233,7 @@ add_new_folder(quest_line, cntxt)
 
     dprint(4, (debugfile, "\n - add_new_folder - \n"));
 
-/*
- * Be prepared to deal with news group subscription!  If asked, go
- * off and find_all in the current context removing what we already 
- * know about.  Then display the list to the luser for perusal...
- */
-    if(cntxt->type & FTYPE_BBOARD){
-	q_status_message(0,2,3, 
-	      "\007News subscribe and selection screen not ready yet!");
-	return(NULL);
-    }
-    else if(cntxt->use & CNTXT_INCMNG){
+    if(cntxt->use & CNTXT_INCMNG){
 	q_status_message1(0,2,3, 
 	      "\007Can't add new folder to <%s>.", cntxt->label[0]);
 	return(NULL);
@@ -1351,12 +1324,7 @@ rename_folder(q_line, index, cntxt)
 
     dprint(4, (debugfile, "\n - rename folder -\n"));
 
-    if(cntxt->type & FTYPE_BBOARD){
-	q_status_message(0,2,3, 
-			 "\007Can't rename bulletin boards or news groups!");
-	return(NULL);
-    }
-    else if(!ALL_FOUND(cntxt) || (cntxt->use & CNTXT_PSEUDO)){
+    if(!ALL_FOUND(cntxt) || (cntxt->use & CNTXT_PSEUDO)){
 	q_status_message1(0,1,3, 
 			 "\007No folder selected to rename.  %s list.",
 			  (ALL_FOUND(cntxt)) ? "Empty" : "Expand");
@@ -1494,12 +1462,7 @@ delete_folder(index, cntxt, mangled_header)
     FOLDER_S   *fp;
     int         ret, close_opened = 0;
 
-    if(cntxt->type & FTYPE_BBOARD){
-	q_status_message(1,2,4,
-		       "\007Delete/Unsubscribe news groups not working yet.");
-	return(0);
-    }
-    else if(cntxt->use & CNTXT_INCMNG){
+    if(cntxt->use & CNTXT_INCMNG){
 	q_status_message1(1,2,4, "\007Can't delete folders in <%s> yet.",
 			 cntxt->label[0]);
 	return(0);
@@ -1623,7 +1586,7 @@ print_folders(display)
 	else{
 	    sprintf(tmp_20k_buf + 80 + 2, 
 		    " %s-collection <%s>  %s", 
-		    (context->type & FTYPE_BBOARD) ? "News" : "Mail",
+		    "Mail",
 		    context->label[0], 
 		    (context->use & CNTXT_SAVEDFLT)
 		                   ? "** Default for Saves **" : "");
@@ -1660,14 +1623,8 @@ print_folders(display)
 	    }
 
 	    l = strlen(tmp_20k_buf);
-	    if(context->type & FTYPE_BBOARD)
-	      sprintf(buf, "%*s%s", 
-		      strlen(f->prefix) + max(0,((int)f->d_col - l)),
-		      f->prefix,
-		      f->name);
-	    else
-	      sprintf(buf, "%*s", f->name_len + max(0,((int)f->d_col - l)),
-		      (f->nickname) ? f->nickname : f->name);
+	    sprintf(buf, "%*s", f->name_len + max(0,((int)f->d_col - l)),
+		    (f->nickname) ? f->nickname : f->name);
 	    strcat(tmp_20k_buf, buf);
 	}
 
@@ -2000,15 +1957,7 @@ pretty_fn(folder)
 #endif
        *folder == '{' || *folder == '\0' 
        || !strucmp(folder, ps_global->inbox_name))  {
-        if(ps_global->nr_mode) {
-            if((p = strindex(folder, '}')) != NULL)
-              return(p +1);
-            else if((p = strindex(folder, '/')) != NULL) 
-              return(p+1);
-	    else
-              return(folder);
-        }
-	else if(!strucmp(folder, ps_global->inbox_name)){
+	if(!strucmp(folder, ps_global->inbox_name)){
 	    strcpy(pfn, ps_global->inbox_name);
 	    return(pfn);
 	}
@@ -2244,26 +2193,6 @@ init_folders()
 	}
     }
 
-    /*
-     * If news groups, loop thru list adding to collection list
-     */
-    if(ps_global->VAR_NEWS_SPEC){
-	for(i = 0; ps_global->VAR_NEWS_SPEC[i] ; i++){
-	    if(tc = new_context(ps_global->VAR_NEWS_SPEC[i])){
-		tc->use    |= CNTXT_NEWS;
-		tc->proto   = default_driver(tc->context);
-		tc->num     = num++;
-		tc->folders = new_folder_list();
-		if(top)
-		  trailing->next = tc;
-		else
-		  top = tc;
-	    }
-
-	    trailing = tc;
-	}
-    }
-
     ps_global->context_list    = top;	/* init pointers */
     ps_global->context_current = 
       (ps_global->VAR_INCOMING_FOLDERS && ps_global->VAR_INCOMING_FOLDERS[0]) ?
@@ -2308,7 +2237,6 @@ dump_contexts(fp)
  *          This is based on our understanding of c-client naming 
  *	    conventions:
  *
- *		leading '*' means local or remote bboard (news)
  *		leading '{' means remote access
  *		{XXX/nntp}  means remote nntp access
  *		{XXX/imap}  means remote imap access
@@ -2328,19 +2256,15 @@ set_ftype(context, flags)
     if(!context || *context == '\0')
       return;
 
-    if(*context == '*'){
-	*flags |= FTYPE_BBOARD;
+    if(*context == '*')
 	context++;
-    }
 
-    if(*context == '{' && context[1] && context[1] != '}' 
+    if(*context == '{' && context[1] && context[1] != '}'
        && (p = strindex(context, '}'))){
 	*flags |= FTYPE_REMOTE;
 	i = p - context;
 	strncpy(tmp, context, (int)i);
 	tmp[i] = '\0';
-	if(*p == '*')
-	  *flags |= FTYPE_BBOARD;
 
 	if((p = strindex(tmp, '/')) && strucmp(p+1, "nntp") == 0)
 	  *flags |= FTYPE_OLDTECH;
@@ -2417,7 +2341,7 @@ new_context(cntxt_string)
     if(c->label[0] == NULL){
 	if(!nickname){			/* make one up! */
 	    sprintf(tmp_20k_buf, "%s%s%s",
-		    (c->type & FTYPE_BBOARD) ? "News" : rcontext, 
+		    rcontext,
 		    (c->type & FTYPE_REMOTE) ? " on " : "",
 		    (c->type & FTYPE_REMOTE) ? host : "");
 	    c->label[0]   = cpystr(tmp_20k_buf);
@@ -2429,11 +2353,10 @@ new_context(cntxt_string)
     c->context        = cpystr(cntxt_string);
     c->use            = CNTXT_NOFIND;		/* do find later! */
 
-    dprint(2, (debugfile, "Context %s type:%s%s%s%s%s%s\n", c->context,
+    dprint(2, (debugfile, "Context %s type:%s%s%s%s%s\n", c->context,
 	       (c->type&FTYPE_LOCAL)   ? " LOCAL"   : "",
 	       (c->type&FTYPE_REMOTE)  ? " REMOTE"  : "",
 	       (c->type&FTYPE_SHARED)  ? " SHARED"  : "",
-	       (c->type&FTYPE_BBOARD)  ? " BBOARD"  : "",
 	       (c->type&FTYPE_OLDTECH) ? " OLDTECH"  : "",
 	       (c->type&FTYPE_ANON)    ? " ANON" : ""));
 
@@ -2482,7 +2405,7 @@ find_folders_in_context(context, search_string)
     /* let context_mailbox know context! */
     current_context   = context->context;
     find_folder_list  = context->folders;
-    sort_folder_entry = !(context->type&FTYPE_BBOARD);
+    sort_folder_entry = 1;
 
     dprint(7, (debugfile, "find_folders_in_context: %s\n",
 	       context->context));
@@ -2508,7 +2431,7 @@ find_folders_in_context(context, search_string)
     if((context->type)&FTYPE_REMOTE){
 	search_context = rcontext;
 	sprintf(tmp_20k_buf, "%s{%s%s%s}", 
-		(context->type&FTYPE_BBOARD)  ? "*"          : "", host, 
+		"", host,
 		(context->type&FTYPE_OLDTECH) ? "/nntp"      : "",
 		(context->type&FTYPE_ANON)    ? "/anonymous" : ""); 
 
@@ -2537,40 +2460,31 @@ find_folders_in_context(context, search_string)
 	search_context = rcontext;
     }
 
-    if(context->type & FTYPE_BBOARD){			/* get the list */
-	/*
-	 * only concerned about subscribed bboards here.  Find_all
-	 * is handled nicely in folder.c 
-	 */
-	context_find_bboards(search_context,find_folder_stream,search_string);
-    }
-    else{
-	/*
-	 * For now use find_all as there's no distinguishing in pine
-	 * between subscribed and not with regard to mailboxes.  At some
-	 * point we may want to use the subscription mechanism to help 
-	 * performance, but implicit subscription needs to be added and 
-	 * folders created outside pine won't be automatically visible
-	 *
-	 * THOUGHT: the first find as pine starts does a find_all and then  
-	 * a find then reconciles the two automatically subscribing
-	 * any new folders.  We can then easily rebuild folder list on 
-	 * every folder menu access much cheaper (locally anyway) 
-	 * (probably only necessary to rebuild the section that has
-	 * to do with the current context)
-	 */
+    /*
+     * For now use find_all as there's no distinguishing in pine
+     * between subscribed and not with regard to mailboxes.  At some
+     * point we may want to use the subscription mechanism to help
+     * performance, but implicit subscription needs to be added and
+     * folders created outside pine won't be automatically visible
+     *
+     * THOUGHT: the first find as pine starts does a find_all and then
+     * a find then reconciles the two automatically subscribing
+     * any new folders.  We can then easily rebuild folder list on
+     * every folder menu access much cheaper (locally anyway)
+     * (probably only necessary to rebuild the section that has
+     * to do with the current context)
+     */
 #ifndef	OLDWAY
-	context_find_all(search_context, find_folder_stream, search_string);
+    context_find_all(search_context, find_folder_stream, search_string);
 #else
-	/*
-	 * c-client's been modified to do basically an "ls" if there's
-	 * no .mailboxlist and a context_find is requested.  Find_all
-	 * still does the laborious open to validate each folder, but
-	 * this is a nice compromise for now...
-	 */
-	context_find(search_context, find_folder_stream, search_string);
+    /*
+     * c-client's been modified to do basically an "ls" if there's
+     * no .mailboxlist and a context_find is requested.  Find_all
+     * still does the laborious open to validate each folder, but
+     * this is a nice compromise for now...
+     */
+    context_find(search_context, find_folder_stream, search_string);
 #endif
-    }
 
     if(local_open)
       mail_close(find_folder_stream);
@@ -2627,34 +2541,6 @@ default_save_context(cntxt)
 	cntxt = cntxt->next;
 
     return(NULL);
-}
-
-
-
-/*----------------------------------------------------------------------
-    Update the folder display structure for the number of unread
- messages for a news group
- 
-Args: stream   -- open mail stream to count unread messages on
-      f_struct -- pointer to the structure to update
-
-This is called when going into the folders screen or when closing a
-news group to update the string that is displayed showing the number
-of unread messages. The stream and f_struct passed in better be for
-the same folder or things will get a little confused. 
-
-This can also be a little slow because count_unseen() can be slow because
-of the current performance of the news driver.
- ----*/
-void
-update_news_prefix(stream, f_struct)
-     MAILSTREAM *stream;
-     struct folder *f_struct;
-{
-   int n;
-
-   n = count_unseen(stream);
-   sprintf(f_struct->prefix, "%4.4s ",  n ? int2string(n)  : "");
 }
 
 

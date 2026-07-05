@@ -965,7 +965,7 @@ format_envelope(e, pc)
     if(e->bcc)
       pretty_addr_string("Bcc: ", e->bcc, "", pc);
 
-    if(e->newsgroups && !ps_global->nr_mode) {
+    if(e->newsgroups) {
         gf_puts("Newsgroups: ", pc);
         gf_puts(e->newsgroups, pc);
 	gf_puts(NEWLINE, pc);
@@ -1090,28 +1090,6 @@ static struct key_menu view_keymenu =
 #define FLAG_KEY 34
 #define VIEW_PIPE_KEY 35
 
-static struct key nr_anon_view_keys[] = 
-       {{"?","Help",0},       {"W","WhereIs",0},       {"Q", "Quit", 0},
-        {"V","ViewAttch",0},  {"P","PrevMsg",0},       {"N","NextMsg",0},
-        {"-","PrevPage",0},   {"Spc","NextPage",0},    {"F","Fwd Email",0},
-        {"J","Jump",0},       {"I", "Index",0},        {NULL, NULL, 0}};
-static struct key_menu nr_anon_view_keymenu =
-     {sizeof(nr_anon_view_keys)/(sizeof(nr_anon_view_keys[0])*12), 0, 0,0,0,0,
-							nr_anon_view_keys};
-
-static struct key nr_view_keys[] = 
-       {{"?","Help",0},       {"O","OTHER CMDS",0},    {"Q","Quit",0},
-        {"V","ViewAttch",0},  {"P","PrevMsg",0},       {"N","NextMsg",0},
-        {"-","PrevPage",0},   {"Spc","NextPage",0},    {"F","Fwd Email",0},
-        {"J","Jump",0},       {"Y","Print",0},         {"S","Save",0}, 
-
-        {"?","Help",0},       {"O","OTHER CMDS",0},    {"E","Export",0},
-        {"C","Compose",0},    {NULL,NULL,0},           {NULL,NULL,0},
-        {"I","Index",0},      {"W","WhereIs",0},       {NULL,NULL,0},
-        {NULL,NULL,0},        {NULL,NULL,0},           {NULL,NULL,0}}; 
-static struct key_menu nr_view_keymenu =
-  {sizeof(nr_view_keys)/(sizeof(nr_view_keys[0])*12), 0, 0,0,0,0, nr_view_keys};
-
 static struct key text_att_view_keys[] =
        {{"?","Help",0},       {NULL,NULL,0},           {"E","Exit Viewer",0},
         {NULL,NULL,0},        {NULL,NULL,0},           {NULL,NULL,0},        
@@ -1201,10 +1179,6 @@ scrolltool(text, title, pages, style, source, att)
     setbitmap(bitmap);
     if(style == AttachText) {
       km = &text_att_view_keymenu;
-    }else if(ps_global->anonymous) {
-      km = &nr_anon_view_keymenu;
-    }else if(ps_global->nr_mode) {
-      km = &nr_view_keymenu;
     }else if(style == MessageText) {
       km = &view_keymenu;
 #ifndef DOS
@@ -1339,10 +1313,6 @@ scrolltool(text, title, pages, style, source, att)
           case OOPF1:
           case '?':
           case ctrl('G'):
-            if(ps_global->nr_mode) {
-                q_status_message(1, 3, 5, "No help text currently available");
-                break;
-            }
             if(ch == PF1) {
 	        if(style == HelpText)
                   goto df;
@@ -1379,8 +1349,6 @@ scrolltool(text, title, pages, style, source, att)
           case OPF2:
           case OOPF2:
 	  case 'o':
-	    if(ps_global->anonymous && ch == PF2)
-	      goto whereis;
 	    if(km->how_many == 1)
 	      goto unknown;
             if (ch == 'o')
@@ -1600,17 +1568,14 @@ whereis:
 		}
 
             }else {
-		if(!ps_global->nr_mode &&
-		  ((ch == 'm' || ch == PF1) && style == HelpText)) {
+		if((ch == 'm' || ch == PF1) && style == HelpText) {
     	            /*---------- Main menu -----------*/
                     ps_global->next_screen = main_menu_screen;
                     done = 1;
-    	        }else if(!ps_global->nr_mode && (ch == PF3 || ch == 'e')) {
+    	        }else if(ch == PF3 || ch == 'e') {
     	            /*----------- Done -----------*/
                     done = 1;
-                }else if((ch == 'y' && !ps_global->anonymous) ||
-		 (ch == PF9 && !ps_global->nr_mode) ||
-		 (ch == PF11 && ps_global->nr_mode)) {
+                }else if(ch == 'y' || ch == PF9) {
     	            /*----------- Print ------------*/
 		    char message[12];
 		    if(style == AttachText)

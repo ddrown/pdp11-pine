@@ -86,26 +86,6 @@ static struct key_menu index_keymenu =
 #define FLAG_KEY 34
 #define VIEW_PIPE_KEY 35
 
-static struct key nr_anon_index_keys[] = 
-       {{"?","Help",0},      {"W","WhereIs", 0},      {"Q","Quit",0},
-        {"V","[ViewMsg]",0}, {"P","PrevMsg",0},       {"N","NextMsg",0},
-        {"-","PrevPage",0},  {"Spc","NextPage",0},    {"F","Fwd Email",0},
-        {"J","Jump",0},      {"$","SortIndex",0},     {NULL,NULL,0}}; 
-static struct key_menu nr_anon_index_keymenu = {sizeof(nr_anon_index_keys)/(sizeof(nr_anon_index_keys[0])*12), 0, 0,0,0,0, nr_anon_index_keys};
-
-static struct key nr_index_keys[] = 
-       {{"?","Help",0},      {"O","OTHER CMDS",0},    {"Q","Quit",0},
-        {"V","[ViewMsg]",0}, {"P","PrevMsg",0},       {"N","NextMsg",0},
-        {"-","PrevPage",0},  {"Spc","NextPage",0},    {"F","Fwd Email",0},
-        {"J","Jump",0},      {"Y","Print",0},         {"S","Save",0}, 
-
-        {"?","Help",0},      {"O","OTHER CMDS",0},    {"E","Export",0},
-        {"C","Compose",0},   {"$","SortIndex",0},     {NULL,NULL,0},
-        {NULL,NULL,0},       {"W","WhereIs",0},       {NULL,NULL,0},
-        {NULL,NULL,0},       {NULL,NULL,0},           {NULL,NULL,0}};
-static struct key_menu nr_index_keymenu = {sizeof(nr_index_keys)/(sizeof(nr_index_keys[0])*12), 0, 0,0,0,0, nr_index_keys};
-  
-
 static OtherMenu what_keymenu = FirstMenu;
 
 #ifdef ANSI
@@ -169,11 +149,7 @@ do_index_border(do_header, do_footer, do_clear, which_keys)
 	BITMAP bitmap;
 
 	setbitmap(bitmap);
-	if(ps_global->anonymous)
-	  km = &nr_anon_index_keymenu;
-	else if(ps_global->nr_mode)
-          km = &nr_index_keymenu;
-	else{
+	{
           km = &index_keymenu;
 #ifndef DOS
           if(F_OFF(F_ENABLE_PIPE,ps_global))
@@ -189,12 +165,8 @@ do_index_border(do_header, do_footer, do_clear, which_keys)
             clrbitn(ZOOM_KEY, bitmap);
           if(F_OFF(F_ENABLE_APPLY,ps_global))
 	    clrbitn(APPLY_KEY, bitmap);
-	  if(IS_NEWS)
-	    index_keys[EXCLUDE_KEY].label = "eXclude";
-	  else {
-            clrbitn(UNEXCLUDE_KEY, bitmap);
-	    index_keys[EXCLUDE_KEY].label = "eXpunge";
-	  }
+          clrbitn(UNEXCLUDE_KEY, bitmap);
+	  index_keys[EXCLUDE_KEY].label = "eXpunge";
 	}
         draw_keymenu(km, bitmap, ps_global->ttyo->screen_cols,
 						-2, 0, what_keymenu, 0);
@@ -458,11 +430,6 @@ mail_index_screen(state)
           case OPF2:
           case OOPF2:
 	  case 'o':
-            if(ps_global->anonymous) {
-	      if(ch == PF2)
-		ch = 'w';
-              goto df;
-	    }
             if(ch == 'o')
 	      warn_other_cmds();
 	    what_keymenu = NextTwelve;
@@ -729,33 +696,29 @@ build_header_line(message_number)
     status_length = strlen(status);
 
     /*--- from ---*/
-    if(!ps_global->nr_mode) {
-        from_length = 18 + max(0, ps_global->ttyo->screen_cols - 80 + 1)/2;
-        if(envelope->from==NULL || address_is_us(envelope->from, ps_global)) {
-            ADDRESS *addr;
-            char    *a_string;
-            addr = envelope->to != NULL ? envelope->to :
-                     envelope->cc != NULL ? envelope->cc : NULL;
-            if(addr == NULL) {
-                sprintf(from, "%*.*s", from_length, from_length,
-                      "                                        ");
-            } else {
-                a_string =  addr_list_string(addr, 0);
-                sprintf(from, "To: %-*.*s", from_length - 4, from_length - 4,
-                    a_string);
-                fs_give((void **)&a_string);
-            }
+    from_length = 18 + max(0, ps_global->ttyo->screen_cols - 80 + 1)/2;
+    if(envelope->from==NULL || address_is_us(envelope->from, ps_global)) {
+        ADDRESS *addr;
+        char    *a_string;
+        addr = envelope->to != NULL ? envelope->to :
+                 envelope->cc != NULL ? envelope->cc : NULL;
+        if(addr == NULL) {
+            sprintf(from, "%*.*s", from_length, from_length,
+                  "                                        ");
         } else {
-            mail_fetchfrom(from, ps_global->mail_stream,
-                           ps_global->sort[message_number], (long)from_length);
+            a_string =  addr_list_string(addr, 0);
+            sprintf(from, "To: %-*.*s", from_length - 4, from_length - 4,
+                a_string);
+            fs_give((void **)&a_string);
         }
     } else {
-        from[0] = '\0';
+        mail_fetchfrom(from, ps_global->mail_stream,
+                       ps_global->sort[message_number], (long)from_length);
     }
     from_length = strlen(from);
 
     /*--- size ---*/
-    if(!ps_global->nr_mode && ps_global->mail_stream->mailbox[0] != '*'){
+    if(ps_global->mail_stream->mailbox[0] != '*'){
         if(cache->rfc822_size < 100000) {
             s_tmp = comatose(cache->rfc822_size);
             sprintf(size, " %-*.*s(%s) ", 6 - strlen(s_tmp),

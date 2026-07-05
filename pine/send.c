@@ -210,18 +210,17 @@ compose_mail(given_to)
     file_path[0] = '\0';
     attachments = NULL;
 
-    /* ignore postponed and interrupted messages in nr mode */
-    if(!ps_global->anonymous){
+    {
 	int ret=0;
 	build_path(file_path, ps_global->folders_dir, INTERRUPTED_MAIL);
 	if(given_to != NULL || can_access(file_path, ACCESS_EXISTS) != 0 ||
-	   (ret=want_to("Continue interrupted composition (answering \"n\" won't erase it)", 'y', 'x', NO_HELP, 0)) == 'n') 
+	   (ret=want_to("Continue interrupted composition (answering \"n\" won't erase it)", 'y', 'x', NO_HELP, 0)) == 'n')
 	  file_path[0] = '\0';
- 
+
 	if(file_path[0] == '\0') {
 	    build_path(file_path, ps_global->folders_dir, POSTPONED_MAIL);
 	    if(given_to != NULL || can_access(file_path, ACCESS_EXISTS) != 0 ||
-	       (ret=want_to("Continue postponed composition (answering \"No\" won't erase it)", 'y', 'x', NO_HELP, 0)) == 'n') 
+	       (ret=want_to("Continue postponed composition (answering \"No\" won't erase it)", 'y', 'x', NO_HELP, 0)) == 'n')
 	      file_path[0] = '\0';
 	}
 	if(ret == 'x') {
@@ -634,137 +633,6 @@ dos_valid_from()
     return(1);
 }
 #endif
-
-
-/*----------------------------------------------------------------------
-     Get addressee for message, then post message
-
-  Args:  outgoing -- Partially formatted outgoing ENVELOPE
-         textbuf  -- Address of text of outgoing message
-         fcc      -- The file carbon copy field
-         att      -- Possible list of attachment references
-                     (declared void * so we don't have to include
-                      pico.h everywhere else in Pine)
-
-  Result: message "To: " field is provided and sent, or cancelled.
-
-  Fields:
-     remail                -
-     return_path           -
-     date                 added here
-     from                 added here
-     sender                -
-     reply_to              -
-     subject              passed in, NOT edited but maybe cannonized here
-     to                   possibly passed in, edited and cannonized here
-     cc                    -
-     bcc                   -
-     in_reply_to           -
-     message_id            -
-  
- Storage for these fields comes from anywhere outside. It is remalloced
- here so the composer can realloc them if needed. The copies here are also 
- freed here.
-
-
-Can only deal with message bodies that are either TYPETEXT or TYPEMULTIPART
-with the first part TYPETEXT! All newlines in the text here also end with
-CRLF.
-  ----*/
-
-void
-pine_simple_send(outgoing, body, fcc, att)
-    ENVELOPE  *outgoing;  /* envelope for outgoing message */
-    BODY     **body;   
-    char      *fcc;
-    void      *att;
-{
-    char   *tobuf, *ccbuf, *bccbuf, *fccbuf;
-    void   *messagebuf;
-    PATMT  *attachments = (PATMT *)att;
-    int     done = 0;
-
-    dprint(1, (debugfile,"\n === simple send called === \n"));
-
-    /*----- Fill in a few general parts of the envelope ----*/
-    if(!outgoing->date){
-	rfc822_date(tmp_20k_buf);		/* format and copy new date */
-	outgoing->date = cpystr(tmp_20k_buf);
-    }
-
-    if(!outgoing->subject)
-      outgoing->subject = cpystr("");
-
-    fccbuf = cpystr(fcc ? fcc : ps_global->VAR_DEFAULT_FCC);
-
-    if(!outgoing->from) {
-        outgoing->from             = mail_newaddr();
-        outgoing->from->personal   = cpystr(ps_global->VAR_PERSONAL_NAME);
-        outgoing->from->adl        = NULL;
-        outgoing->from->mailbox    = cpystr(ps_global->VAR_USER_ID);
-        outgoing->from->host       = cpystr(ps_global->maildomain);
-        outgoing->from->error      = NULL;
-        outgoing->from->next       = NULL;
-    }
-
-    outgoing->return_path      = rfc822_cpy_adr(outgoing->from);
-
-    /*----------------------------------------------------------------------
-       Loop editing the "To: " field until everything goes well
-     ----*/
-    while(!done){
-	flush_status_messages();
-	outgoing2strings(outgoing, *body, &tobuf, &ccbuf,
-                         &bccbuf, &messagebuf, &attachments);
-	fs_resize((void **)&tobuf, MAXPATH+1);
-	switch(optionally_enter(tobuf, -3, 0, MAXPATH, 1, 0,
-				"Forward as e-mail to : ", NULL, NO_HELP, 0)){
-	  case -1 :
-	    q_status_message(0,2,2 ,"\007Internal problem encountered");
-	    done++;
-	    break;
-
-	  case 0 :
-	    if(*tobuf != '\0'){
-		strings2outgoing(outgoing, body, tobuf, ccbuf,
-				 bccbuf, attachments);
-
-		if(check_addresses(outgoing)) {
-		    /*--- Addresses didn't check out---*/
-		    display_message('x');
-		    sleep(3);
-		    continue;
-		}
-
-		if(!call_mailer(fccbuf, outgoing, *body))
-		  continue;
-	    }
-	    else
-		q_status_message(0,2,2 ,"\007No addressee!  No e-mail sent.");
-	    done++;
-	    break;
-
-	  case 1 :
-	    q_status_message(0,2,2 ,"\007Send cancelled");
-	    done++;
-	    break;
-
-	  case 2 :				/* no place to escape to */
-	  case 3 :				/* no help yet   */
-	  case 4 :				/* can't suspend */
-	  default :
-	    break;
-	}
-    }
-
-    fs_give((void **)&tobuf);
-    fs_give((void **)&ccbuf);
-    fs_give((void **)&bccbuf);
-    fs_give((void **)&fccbuf);
-    display_message('\0');
-}
-
-
 
 
 

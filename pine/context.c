@@ -316,30 +316,6 @@ char *context;MAILSTREAM *stream;char *pat;
 }
 
 
-/* Context Manager find list of subscribed bboards
- * Accepts: context
- *	    mail stream
- *	    pattern to search
- */
-
-void context_find_bboards (context, stream, pat)
-char *context;MAILSTREAM *stream;char *pat;
-{
-  char tmp[MAILTMPLEN];
-				/* must be within context */
-  if (!context_isambig (pat)) {
-    sprintf (tmp,"Find of bboard outside context: %s",pat);
-    mm_log (tmp,(long) NIL);
-    strcpy(tmp, pat);		/* allow find for now */
-  }
-  else{
-    current_context = context;	/* note current context */
-    context_apply (tmp,context,pat); /* build fully-qualified name */
-  }
-
-  mail_find_bboards (stream,tmp);
-}
-
 /* Context Manager find list of all mailboxes
  * Accepts: context
  *	    mail stream
@@ -365,30 +341,6 @@ char *context;MAILSTREAM *stream;char *pat;
 }
 
 
-/* Context Manager find list of all bboards
- * Accepts: context
- *	    mail stream
- *	    pattern to search
- */
-
-void context_find_all_bboard (context, stream, pat)
-char *context;MAILSTREAM *stream;char *pat;
-{
-  char tmp[MAILTMPLEN];
-				/* must be within context */
-  if (!context_isambig (pat)) {
-    sprintf (tmp,"Find of bboard outside context: %s",pat);
-    mm_log (tmp,(long) NIL);
-    strcpy(tmp, pat);		/* allow find for now */
-  }
-  else{
-    current_context = context;	/* note current context */
-    context_apply (tmp,context,pat); /* build fully-qualified name */
-  }
-				/* try to do the find */
-  mail_find_all_bboard (stream,tmp);
-}
-
 /* Context Manager create mailbox
  * Accepts: context
  *	    mail stream

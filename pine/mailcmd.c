@@ -149,10 +149,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
         case OOPF1:
         case '?':
         case ctrl('G'):
-          if(ps_global->nr_mode) {
-              q_status_message(1, 3, 5, "No help text currently available");
-              break;
-          }
 	  /*
 	   * We're not using the h_mail_view portion of this right now because
 	   * that call is being handled in scrolltool() before it gets
@@ -166,12 +162,8 @@ process_cmd(command, in_index, orig_command, force_mailchk)
 
 
           /*--------- Return to main menu ------------*/
-        case PF3: 
+        case PF3:
         case 'm':
-          if(ps_global->nr_mode && command == 'm')
-            goto bogus;
-          if(ps_global->nr_mode && command == PF3)
-	    goto do_quit;
           ps_global->next_screen = main_menu_screen;
 #ifdef	DOS
 	  flush_index_cache();		/* save room on PC */
@@ -266,8 +258,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
 		      (ps_global->max_msgno > 0) ? "ore messages" 
 						 : "essages in folder");
 
-	      if(!ps_global->nr_mode &&
-		 (IS_NEWS || (ps_global->context_current->use&CNTXT_INCMNG))){
+	      if(ps_global->context_current->use&CNTXT_INCMNG){
 		  char nextfolder[MAXPATH];
 
 		  strcpy(nextfolder, ps_global->cur_folder);
@@ -280,7 +271,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
 
 	      q_status_message(0, 0, 1, prompt);
 
-	      if(!IS_NEWS && bump_end_count++ > 3) {
+	      if(bump_end_count++ > 3) {
 		  *force_mailchk = 1;
 		  bump_end_count = 0;
 	      }
@@ -291,13 +282,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
           /*---------- Delete message ----------*/
         case PF9: 
         case 'd':
-        case KEY_DEL: 
-          if(ps_global->nr_mode) {
-	    if(command == PF9)
-	      goto do_forward;
-	    else
-              goto bogus;
-	  }
+        case KEY_DEL:
           dprint(4, (debugfile, "\n - delete message -\n"));
           if(ps_global->max_msgno <= 0L) {
               q_status_message(0, 1, 3,"\007No message in folder");
@@ -350,7 +335,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
 
 	  is_unread = 1;
 	  if(F_ON(F_DEL_SKIPS_DEL,ps_global)
-	     || (IS_NEWS || (ps_global->context_current->use & CNTXT_INCMNG)))
+	     || (ps_global->context_current->use & CNTXT_INCMNG))
 	    new_sorted_mess_num = next_sorted_un(ps_global->mail_stream,
 						 current_sorted_msgno + 1,
 						 &is_unread, 1);
@@ -369,8 +354,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
 	  if(prompt[0])
 	    strcat(prompt, "deleted");
 
-	  if(!ps_global->nr_mode 
-	     && (IS_NEWS || (ps_global->context_current->use & CNTXT_INCMNG))
+	  if((ps_global->context_current->use & CNTXT_INCMNG)
 	     && !is_unread){
 	      char nextfolder[MAXPATH];
 
@@ -393,12 +377,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
           /*---------- Undelete message ----------*/
         case PF10:
         case 'u':
-          if(ps_global->nr_mode) {
-	    if(command == PF10)
-	      goto do_jump;
-	    else
-              goto bogus;
-	  }
           dprint(4, (debugfile, "\n - undelete -\n"));
           if(ps_global->max_msgno == 0) {
               q_status_message(0, 1, 3, "\007No message in folder");
@@ -445,18 +423,8 @@ process_cmd(command, in_index, orig_command, force_mailchk)
 
 
           /*---------- Reply to message ----------*/
-        case PF11: 
+        case PF11:
         case 'r':
-          if(ps_global->anonymous && command == PF11) {
-	    if(in_index)
-	      goto do_sortindex;
-	    else
-	      goto do_index;
-	  }
-          if(ps_global->nr_mode && command == PF11)
-	    goto do_print;
-          if(ps_global->nr_mode)
-            goto bogus;
           if(ps_global->max_msgno == 0) {
               q_status_message(0, 0, 2, "\007No message in folder");
               break;
@@ -487,12 +455,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
         case PF12: 
         case 'f':
 do_forward:
-          if(command == PF12) {
-	    if(ps_global->anonymous)
-              goto bogus;
-	    if(ps_global->nr_mode)
-	      goto do_save;
-	  }
           if(ps_global->max_msgno == 0) {
               q_status_message(0, 0, 2, "\007No message in folder to forward");
               break;
@@ -515,10 +477,7 @@ do_forward:
 	      flush_index_cache();		/* save room on PC */
 #endif
               forward(ps_global, mc->msgno, e, b);
-              if(ps_global->anonymous)
-                ps_global->mangled_footer = 1;
-              else
-                ps_global->mangled_screen = 1;
+              ps_global->mangled_screen = 1;
           }
           break;
 
@@ -526,8 +485,6 @@ do_forward:
           /*---------- Quit pine ------------*/
         case 'q':
         case OPF3:
-          if(ps_global->nr_mode && command == OPF3)
-            goto do_export;
 do_quit:
 	  ps_global->next_screen = quit_screen;
 	  dprint(1, (debugfile,"MAIL_CMD: quit\n"));		    
@@ -535,10 +492,8 @@ do_quit:
 
 
           /*---------- Compose message ----------*/
-        case OPF4:		    
+        case OPF4:
         case 'c':
-          if(ps_global->anonymous)
-            goto bogus;
           ps_global->prev_screen = in_index ? mail_index_screen :
                                         mail_view_screen;
 #ifdef	DOS
@@ -550,15 +505,8 @@ do_quit:
 
 
           /*--------- Folders menu ------------*/
-	case OPF5: 
+	case OPF5:
         case 'l':
-          if(ps_global->anonymous)
-	    goto bogus;
-          if(ps_global->nr_mode) {
-	    if(command == OPF5)
-	      goto do_sortindex;
-	    goto bogus;
-	  }
           ps_global->next_screen = folder_screen;
 #ifdef	DOS
 	  flush_index_cache();		/* save room on PC */
@@ -570,12 +518,8 @@ do_quit:
           /*---------- Open specific new folder ----------*/
         case OPF6:
         case 'g':
-          if(ps_global->nr_mode)
-            goto bogus;
-
-	  tc = (ps_global->context_last
-		      && !(ps_global->context_current->type & FTYPE_BBOARD)) 
-                       ? ps_global->context_last : ps_global->context_current;
+	  tc = ps_global->context_last
+			? ps_global->context_last : ps_global->context_current;
 
           new_folder = broach_folder(question_line, 1, &tc);
 #ifdef	DOS
@@ -669,8 +613,6 @@ do_jump:
         case OPF9:
         case 'y':
 do_print:
-          if(ps_global->anonymous || (ps_global->nr_mode && command == OPF9))
-            goto bogus;
           if(ps_global->max_msgno == 0)
               q_status_message(0, 1, 3, "\007No message in folder");
           else
@@ -681,8 +623,6 @@ do_print:
           /*---------- Save Message ----------*/
         case OPF11: 
         case 's':
-          if(ps_global->anonymous || (ps_global->nr_mode && command == OPF11))
-            goto bogus;
 do_save:
           if(ps_global->max_msgno == 0) {
               q_status_message(0, 0, 2, "\007No message in folder");
@@ -731,8 +671,6 @@ do_save:
           /*---------- Export message ----------*/
         case OPF12:
         case 'e':
-          if(ps_global->anonymous || (ps_global->nr_mode && command == OPF12))
-            goto bogus;
 do_export:
           if(ps_global->max_msgno == 0) {
               q_status_message(0, 0, 2, "\007No message in folder");
@@ -746,14 +684,10 @@ do_export:
           /*---------- Expunge ----------*/
         case OOPF3:
         case 'x':
-          if(ps_global->nr_mode || !in_index)
+          if(!in_index)
             goto bogus;
           dprint(2, (debugfile, "\n - expunge -\n"));
-	  if(IS_NEWS){
-              q_status_message(1, 2, 4,
-	                      "eXclude of deleted news not implemented yet.");
-              break;
-	  } else if(READONLY_FOLDER){
+	  if(READONLY_FOLDER){
               q_status_message(1, 2, 4, "Can't expunge. Folder is read-only");
               break;
           }
@@ -843,8 +777,7 @@ do_export:
 	    goto bogus;
 	  else
             q_status_message(1, 2, 3,
-		IS_NEWS ? "\007Unexclude command not implemented yet"
-			: "\007Unexclude not available for mail folders");
+			"\007Unexclude not available for mail folders");
           break;
 
 
@@ -884,7 +817,7 @@ do_sortindex:
           if(ps_global->max_msgno > 0) {
               new_sorted_mess_num = next_sorted_un(ps_global->mail_stream,
                                                    current_sorted_msgno+1,
-                                                   &is_unread, IS_NEWS);
+                                                   &is_unread, 0);
               if(is_unread){
                   if(new_sorted_mess_num > 0){
                       ps_global->current_sorted_msgno = new_sorted_mess_num;
@@ -901,8 +834,7 @@ do_sortindex:
 	  if(!is_unread || ps_global->max_msgno <= 0){
 	      char ret = 'n';
 
-	      if(!ps_global->nr_mode
-		 && (IS_NEWS || (ps_global->context_current->use&CNTXT_INCMNG))
+	      if((ps_global->context_current->use&CNTXT_INCMNG)
 		 && context_isambig(ps_global->cur_folder)){
 		  char nextfolder[MAXPATH];
 		  int  another = 0;
@@ -913,7 +845,7 @@ do_sortindex:
 
 		      sprintf(prompt, "%sView next %s \"%s\"",
 			      (another++) ? "" : "No more messages.  ",
-			      (IS_NEWS) ? "news group" : "folder",
+			      "folder",
 			      nextfolder);
 
 		      if((ret=want_to(prompt,'y','x',NO_HELP,0)) == 'y'){
@@ -930,13 +862,11 @@ do_sortindex:
 		  }
 
 		  if(another == 0 || ret == 'n')
-		    q_status_message1(0, 0, 1, "No more %ss",
-				      IS_NEWS ? "news group" : "folder");
+		    q_status_message1(0, 0, 1, "No more %ss", "folder");
 	      }
 	      else{
 		  if(ps_global->max_msgno > 0)
-		    q_status_message1(0, 0, 1, "No more %s messages",
-				    IS_NEWS ? "undeleted" : "new");
+		    q_status_message1(0, 0, 1, "No more %s messages", "new");
 		  else
 		    q_status_message(0, 1, 3, "\007No message in folder");
 	      }
@@ -1057,9 +987,7 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
 	  folder_name = env->sender ? env->sender->mailbox
 				    : env->from ? env->from->mailbox : NULL;
 	else
-	  folder_name = env->to ? env->to->mailbox
-			    : (ps_global->context_current->type&FTYPE_BBOARD)
-	                    ? ps_global->cur_folder : NULL;
+	  folder_name = env->to ? env->to->mailbox : NULL;
 
 	/*
 	 * Now fish out the user's name from the mailbox portion of the
@@ -1092,8 +1020,7 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
 
     /* how many context's can be saved to... */
     for(tc = ps_global->context_list; tc; tc = tc->next)
-      if(!(tc->type&FTYPE_BBOARD))
-        saveable_count++;
+      saveable_count++;
 
     /* set up extra command option keys */
     rc = 0;
@@ -1171,17 +1098,14 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
 		if(tc == start)
 		  break;
 
-		if((tc->type&FTYPE_BBOARD) == 0)
-		  cntxt = tc;
+		cntxt = tc;
 	    }
 	}
 	else if(rc == 11){			/* Next collection */
 	    tc = cntxt;
 
-	    do
-	      if((cntxt = cntxt->next) == NULL)
-		cntxt = ps_global->context_list;
-	    while((cntxt->type&FTYPE_BBOARD) && cntxt != tc);
+	    if((cntxt = cntxt->next) == NULL)
+	      cntxt = ps_global->context_list;
 	}
 	else if(rc == 12){			/* file name completion! */
 	    if(!folder_complete(cntxt, new_folder))
@@ -1723,8 +1647,7 @@ broach_folder(qline, allow_list, context)
 
 	/* only show collection number if more than one available */
 	if(ps_global->context_list->next){
-	    sprintf(prompt, "GOTO %s in <%.20s> %s%s: ",
-		    (tc->type&FTYPE_BBOARD) ? "news group" : "folder",
+	    sprintf(prompt, "GOTO folder in <%.20s> %s%s: ",
 		    tc->label[0], expanded, *expanded ? " " : "");
 	}
 	else
@@ -1969,19 +1892,6 @@ do_broach_folder(new_folder, new_context)
 		     "Close - saved inbox state: real %ld, max %ld\n",
 		     ps_global->inbox_raw_msgno, ps_global->inbox_max_msgno));
 	} else {
-#ifdef	LATER
-	    /*
-	     * Folder count prefix is turned off for now as it's too
-	     * costly to open each newsgroup to get the unread count.
-	     * See context_bboard().
-	     */
-
-            if(ps_global->context_current &&
-               (ps_global->context_current->type & FTYPE_BBOARD))
-              update_news_prefix(ps_global->mail_stream,
-				 folder_entry(ps_global->context_index,
-					 ps_global->context_current->folders));
-#endif
             expunge_and_close(ps_global->mail_stream, ps_global->cur_folder);
 	}
     }
@@ -1997,20 +1907,10 @@ do_broach_folder(new_folder, new_context)
 	ps_global->open_readonly_on_startup = 0 ;
     }
 
-    /*
-     * The name "inbox" is special, so treat it so 
-     * (used to by handled by expand_folder)...
-     */
-    if(ps_global->nr_mode)
-      ps_global->noshow_warn = 1;
-
     m = context_open((new_context && !open_inbox) ? new_context->context:NULL,
-		     NULL, 
+		     NULL,
 		     (open_inbox) ? ps_global->VAR_INBOX_PATH : expanded_file,
 		     openmode);
-
-    if(ps_global->nr_mode)
-      ps_global->noshow_warn = 0;
 
     dprint(8, (debugfile, "Opened folder %x \"%s\" (context: \"%s\")\n", m,
                m != NULL ? m->mailbox : "nil", 
@@ -2135,23 +2035,13 @@ do_broach_folder(new_folder, new_context)
      * ambiguous names typed at a save prompt are to be associated
      * with)...
      */
-    if(new_context && (new_context->type & FTYPE_BBOARD)){
-	for(tc = ps_global->context_list; tc; tc = tc->next){
-	    if(tc->use & CNTXT_PRIME){
-		ps_global->context_write = new_context;
-		break;
-	    }
-	}
-    }
-    else if(new_context)
+    if(new_context)
       ps_global->context_write = new_context;
 
     reset_check_point();
 
-    /* UWIN doesn't want to see this message */
-    if(!ps_global->nr_mode)
-      q_status_message7(0, 2, 4, "%s \"%s\" opened with %s message%s%s",
-                      IS_NEWS ? "News group" : "Folder",
+    q_status_message7(0, 2, 4, "%s \"%s\" opened with %s message%s%s",
+                      "Folder",
                       pretty_fn(new_folder),
                       comatose(ps_global->max_msgno),
                       plural(ps_global->max_msgno),
@@ -2329,14 +2219,9 @@ expunge_and_close(stream, folder)
                 display_message('q'); /* So they see the message */	
             }
         } else {
-            if(ps_global->context_current->type & FTYPE_BBOARD)
-              q_status_message1(0, 2, 3,
-                       "Closing news group \"%s\" and saving status.",
-                              pretty_fn(folder));
-            else
-              q_status_message1(0, 2, 3,
-                       "Closing read-only folder \"%s\". No changes to save",
-                              pretty_fn(folder));
+            q_status_message1(0, 2, 3,
+                     "Closing read-only folder \"%s\". No changes to save",
+                            pretty_fn(folder));
             display_message('q');
         }
     }

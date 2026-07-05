@@ -58,11 +58,64 @@ is still ~970KB, way over budget.
       Did NOT do a live compose-and-send test — no MTA installed on this dev
       box, so that's unverified beyond static/link-level checks.
 
-### 2. Strip vestigial NNTP/news UI (drivers already unlinked, so this is dead code)
-- [ ] Remove `CNTXT_NEWS` context type and news-collection branches in
-      `pine/folder.c`.
-- [ ] Remove `h_news` and other news-only help text from `pine/helptext.c`.
-- [ ] Grep pine/*.c for other `news`/`nntp` conditionals tied to the dead driver.
+### 2. Strip vestigial NNTP/news UI (drivers already unlinked, so this is dead code) — DONE
+- [x] Removed `CNTXT_NEWS`/`FTYPE_BBOARD` context-type bits and `IS_NEWS` macro
+      from `pine/pine.h`; removed the `CNTXT_NEWS`-setting loop in
+      `folder.c:init_folders()` and every `FTYPE_BBOARD`-conditioned branch in
+      `folder.c` (folder listing/painting, add/rename/delete-folder "not
+      implemented for bboards" stubs, find-list bboard-vs-mailbox split, sort
+      hints, remote-mailbox-spec formatting). Removed now-dead
+      `update_news_prefix()` (folder.c) and its two prototypes — its only
+      caller was itself inside a permanently-`#ifdef LATER`'d-out block.
+      Removed `context_find_bboards()` and `context_find_all_bboard()`
+      (`context.c`) — zero callers anywhere in pine once the folder.c branch
+      was gone — and their prototypes in `context.h`. Left `context_bboard()`/
+      `mm_bboard()` (`mailbox.c`/`context.c`) alone: they're c-client callback
+      glue referenced by the *linked* `dummy.c` driver's function-pointer
+      table (`dummy_find_bboards`/`dummy_find_all_bboards`), so removing them
+      would break the link even though pine itself never calls the code path
+      that would invoke them. Confirmed `pine/imap.c` isn't even compiled
+      (only `pine/mailbox.c` is, per `makefile.lnx`) so its duplicate/stale
+      `context_bboard()` and `ps_global->anonymous` reference don't matter.
+- [x] Removed the `nr_mode:1` and `anonymous:1` bitfields from `struct pine`
+      (`pine.h`) and the `-nr`/`-a` command-line flags that set them
+      (`args.c`) — this was Univ. of Washington's UWIN/clarinet kiosk
+      "anonymous news-reader" mode, gated entirely behind a CLI flag with no
+      other trigger, so it was all dead weight once news reading is gone.
+      Swept every `ps_global->nr_mode` / `ps_global->anonymous` /
+      `IS_NEWS` conditional across `mailcmd.c`, `mailindx.c`, `mailview.c`,
+      `screen.c`, `reply.c`, `pine.c`, `send.c` and collapsed each to its
+      permanently-false dead branch (removed dead `goto`s, dead keymenu
+      arrays `nr_index_keymenu`/`nr_anon_index_keymenu`/`nr_view_keymenu`/
+      `nr_anon_view_keymenu`, and the now-unreachable `pine_simple_send()` in
+      `send.c`, whose only caller was the anonymous-mode forward-as-email
+      path in `reply.c`). Note: `ps_global->mail_stream->anonymous` (a
+      genuine c-client `MAILSTREAM` field for anonymous IMAP login) and
+      `FTYPE_ANON`/`/anonymous` collection syntax (also real, unrelated IMAP
+      anonymous-login support) were NOT touched — same name, different
+      feature, still fully supported.
+- [x] Trimmed news/bboard help text from `pine/pine.hlp`: the `news-collections`
+      sample-pinerc block, the "You can also define collections for news..."
+      paragraph and its `*`/`\"/nntp\"` bullet points, the bboard/`/nntp`
+      lines in the folder COLLECTION SYNTAX list, and the `NEWS *{...}`
+      example (all four near-duplicate copies across `h_folder_maint`,
+      `h_folder_open`, `h_folder_save`, `h_folder_fcc`). Removed the whole
+      "IV. READING NEWS" subsection of `h_news` (the release-notes screen),
+      per the constraint to trim it but keep `h_news` itself since it's the
+      general release-notes/getting-started screen. Left the historical
+      changelog mentions of NNTP/newsgroups alone (they describe past
+      releases, same policy as the earlier smtp-server changelog cleanup). A
+      couple of minor stray "Bulletin Board"/"newsgroups" mentions remain
+      in unrelated help topics (signature-file doc, PC-Pine auto-update doc)
+      — low value, not touched.
+      Regenerated `helptext.c`/`helptext.h` via `./cmplhelp.sh`/`./cmplhlp2.sh`.
+- [x] Verified: clean rebuild with no errors/undefined references; grepped
+      whole `pine/*.c` tree for leftover `nr_mode`/`IS_NEWS`/`FTYPE_BBOARD`/
+      `CNTXT_NEWS`/`ps_global->anonymous` — none remain outside historical
+      changelog text. Smoke-tested via a scripted pty session (open a
+      hand-built local mbox folder, main menu, folder index, message view,
+      both `?` help screens, back to main menu, quit-with-close) — no
+      crashes. text+data+bss dropped from 901522 to 874402 bytes.
 
 ### 3. Cut down inline help system
 - [ ] `pine/helptext.c` (3833 lines / ~204KB source) — replace full-screen

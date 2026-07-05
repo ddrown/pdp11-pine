@@ -216,13 +216,6 @@ incoming-folders=
 \043                    Local-PC       mail\\[]     <-- Valid only in PC-Pine
 folder-collections=mail/[]
 
-\043 news-collections specifies one or more collections of news groups.
-\043 News collection syntax: optnl-label *{news-host/protocol}[]
-\043 Examples:
-\043 news-collections=News *[]   <-- if your login host carries news
-\043 news-collections=Subscribed-Groups *{news.u.washington.edu/nntp}[]
-news-collections=
-
 \043 default-fcc specifies where a copy of outgoing mail is saved.  If this is
 \043 not a path name, it will be in the default collection for saves.
 \043 Unix Pine default is normally \"sent-mail\" in the default folder collection.
@@ -384,101 +377,6 @@ sent-mail file as for Unix Pine, you *must* set \"default-fcc=sent-mail\"
 and make sure that the Unix sent-mail file is in the directory defined as 
 your primary folder-collection; that is, the first one in the 
 folder-collection list.
-
-
-IV. READING NEWS                                                         ___----
-
-Background.  
-
-Pine can read Internet news (NetNews or Usenet) groups, using the same
-commands as for mail.  This capability is still \"work in progress\", so
-some obvious capabilities are missing.  For example, Pine does not yet
-know how to post messages to a news group, nor does it have commands to
-subscribe to or unsubscribe newsgroups.  The consequence of this is that,
-for now, you must already have a \"newsrc\" file in order to permit Pine
-to read news.  Any Unix newsreader (e.g. rn, trn, nn) can be used to
-create a suitable .newsrc file.  Pine will update the .newsrc file in a
-way that is compatible with other news readers, although Pine uses the
-information in the file in a slightly different way than other news readers.
-
-Configuring Pine for news access.                                        ___----
-
-Pine can access news folders in any one of three different ways: 
-
- -Using the Network News Transport Protocol (NNTP) to access news on
-  a remote news server.  In this case the newsrc file is stored on 
-  the machine where Pine is running.  Put a line similar to the following
-  in your .pinerc to use this mode of access:  
-
-      news-collections=News *{news.wherever.edu/nntp}[]
-
- -Using the Internet Message Access Protocol (IMAP) to access news       ___----
-  on a remote news server.  In this case, your newsrc file is stored
-  on the news server, in your home directory, so you must have an
-  account on the news server, but you would be running Pine on a 
-  different machine.  The news server must be running an IMAPd server
-  process.  Put a line similar to the following in your .pinerc
-  to use this mode of access: 
-
-      news-collections=News *{news.wherever.edu}[]
-
- -Using local file access to the news database.  In this case, your newsrc
-  file is stored on the news server, in your home directory, so you must
-  have an account on the news server, and you would be running Pine on the
-  same machine.  Put a line similar to the following in your .pinerc to
-  use this mode of access: 
-
-      news-collections=News *[]
-
-
-In the first two examples, the hostname \"news.wherever.edu\" should be  ___----
-replaced with the domain name of your local news server.  For Unix Pine,
-these entries can be placed in either the system-wide or your personal
-configuration file.
-
-If you are a PC-Pine user, either option 1 (NNTP) or option 2 (IMAP) is
-possible.  If you don't have an account on the news server, or if the news
-server is not running an IMAP daemon, then you must use NNTP.  In this
-case, a Unix .newsrc file can be transferred to your PC.  It should be
-named \\NEWSRC.  A future version of PC-Pine will be able to access and
-update a newsrc file stored on a Unix host, so that it will be possible to
-alternate between PC-Pine and Unix-based news readers. 
-
-Using Pine to read news.                                                 ___----
-
-Once defined in the .pinerc (or the global pine.conf) file, the news
-folder collection can be accessed either via the FOLDER LIST screen,
-of via the GOTO command.
-
-Once a news folder has been opened, Pine currently positions you at the
-last message.  (In the future, this is expected to change.)  Pine uses the
-same commands for manipulating news folders as for mail folders.  This
-means, for example, that when you are done with a message, you would use
-\"D\" to mark it as Deleted (or Dismissed, if you prefer.)
-
-This \"mail like\" behavior differs from that of most newsreaders, wherein
-a message is implicitly dismissed after you have looked at it once. We
-strongly believe that Pine should offer as much consistency as possible
-between mail and news, so the mail paradigm --wherein a message does not
-magically disappear without explicit action by the user-- is used for
-news as well.
-
-News folders are actually Read-Only, but the newsrc file allows Pine to  ___----
-keep track of which messages you have dismissed (marked as Deleted) just
-as in a regular mail folder. The difference is that, although messages
-marked as Deleted will show up in the Index (just as mail messages do
-until an eXpunge), you cannot expunge news messages.  However, in the
-future there will be a way to \"hide\" (or \"eXclude\") messages that are
-so marked from the Folder Index.
-
-If you answer a message in a news folder, the index view will show the
-\"A\" flag as usual; but the newsrc file has no way of storing this flag,
-so it will not be preserved across sessions.  The Deleted flag is the only
-one that is preserved between sessions. 
-
-NOTE: full NetNews functionality is not yet available in Pine; there
-is still much to be done in this area.  Stay tuned...
-
 
 V. CHANGES SINCE PINE 3.07                                               ___----
 
@@ -2084,18 +1982,6 @@ Pine configuration file.  Your INBOX is presented in this collection if
 you have multiple collections defined.  Pine knows that it should not save
 messages into that area. 
 
-You can also define collections for news.  This is specified with the
-\"news-collections\" variable in Pine's configuration file.  A typical
-news collection would be specified as \"*{{:{}news.u.washington.edu/nntp}[]\". 
-That would translate as \"all the newsgroups I am subscribed to which    ___----
-appear on the campus news server\".  The syntax for news collections is
-special: 
-      \"*\"     tells Pine that this is a bulletin board (with shared,
-                  read-only news groups)
-      \"/nntp\" says that Pine should use the NNTP protocol to get to these
-                  folders, thus permitting use of a local .newsrc 
-      \"[]\"    means that this is a collection, not a folder
-
 The final, and probably most important special collection is the one which
 you specify at the first item of the configuration for \"folder-collections\".
 This is the default collection for your saved and sent messages folders.
@@ -2111,9 +1997,7 @@ Pine has a special syntax that allows you to tell Pine everything it needs
 to know about the collection:
 
   label               The single-word name you give to the collection
-  *                   Collections starting with a \"*\" are bulletin boards
   {{:{}host.name      The computer where the files reside.
-  /nntp               Add this to use the NNTP protocol to access the file
   /anonymous          Add this for anonymous IMAP access to the folder
   }           
   /path/to/directory/ Full path to the directory where the files are
@@ -2134,10 +2018,6 @@ Below are some examples of collection syntax:
                       An IMAP connection to all the files in the \"mail\" 
                        directory of my home directory on a computer called 
                        Carson.
-
-  NEWS  *{{:{}news.u.washington.edu/nntp}[]
-                      An NNTP connection to the server \"news\".  The 
-                       collection includes all subscribed newsgroups.
 
                                                                          ___----
       ADVANCED NOTES ON FOLDERS
@@ -2232,18 +2112,6 @@ incoming mail folders.  The \"incoming-folders\" variable is set in your
 Pine configuration file.  Your INBOX is presented in this collection if
 you have multiple collections defined.  Pine knows that it should not save
 messages into that area.
-
-You can also define collections for news.  This is specified with the  
-\"news-collections\" variable in Pine's configuration file.  A typical
-news collection would be specified as \"*{{:{}news.u.washington.edu/nntp}[]\".
-That would translate as \"all the newsgroups I am subscribed to which    ___----
-appear on the campus news server\".  The syntax for news collections is
-special:
-      \"*\"     tells Pine that this is a bulletin board (with shared,
-                  read-only news groups)
-      \"/nntp\" says that Pine should use the NNTP protocol to get to these
-                  folders, thus permitting use of a local .newsrc
-      \"[]\"    means that this is a collection, not a folder
 
 The final, and probably most important special collection is the one which
 you specify at the first item of the configuration for \"folder-collections\".
@@ -2351,18 +2219,6 @@ Pine configuration file.  Your INBOX is presented in this collection if
 you have multiple collections defined.  Pine knows that it should not save
 messages into that area.
 
-You can also define collections for news.  This is specified with the  
-\"news-collections\" variable in Pine's configuration file.  A typical
-news collection would be specified as \"*{{:{}news.u.washington.edu/nntp}[]\".
-That would translate as \"all the newsgroups I am subscribed to which    ___----
-appear on the campus news server\".  The syntax for news collections is
-special:
-      \"*\"     tells Pine that this is a bulletin board (with shared,
-                  read-only news groups)
-      \"/nntp\" says that Pine should use the NNTP protocol to get to these
-                  folders, thus permitting use of a local .newsrc
-      \"[]\"    means that this is a collection, not a folder
-
 The final, and probably most important special collection is the one which
 you specify at the first item of the configuration for \"folder-collections\".
 This is the default collection for your saved and sent messages folders.
@@ -2457,18 +2313,6 @@ incoming mail folders.  The \"incoming-folders\" variable is set in your
 Pine configuration file.  Your INBOX is presented in this collection if
 you have multiple collections defined.  Pine knows that it should not save
 messages into that area.
-
-You can also define collections for news.  This is specified with the  
-\"news-collections\" variable in Pine's configuration file.  A typical
-news collection would be specified as \"*{{:{}news.u.washington.edu/nntp}[]\".
-That would translate as \"all the newsgroups I am subscribed to which    ___----
-appear on the campus news server\".  The syntax for news collections is
-special:
-      \"*\"     tells Pine that this is a bulletin board (with shared,
-                  read-only news groups)
-      \"/nntp\" says that Pine should use the NNTP protocol to get to these
-                  folders, thus permitting use of a local .newsrc
-      \"[]\"    means that this is a collection, not a folder
 
 The final, and probably most important special collection is the one which
 you specify at the first item of the configuration for \"folder-collections\".

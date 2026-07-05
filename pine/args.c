@@ -90,7 +90,6 @@ pine_args(pine_state, argc, argv, addrs)
     char *sort            = NULL;
     int   do_help         = 0;
     int   do_conf         = 0;
-    int   anonymous       = 0;
     int   usage           = 0;
     struct variable *vars = pine_state->vars;
 
@@ -110,9 +109,6 @@ Loop: while(--ac > 0 && **++av == '-') {
 	    if(strcmp(*av, "conf") == 0) {
 	       do_conf = 1;
 	       goto Loop;  /* done with this arg, go to next */
-	    }else if(strcmp(*av, "nr") == 0) {
-	       pine_state->nr_mode = 1;
-	       goto Loop;
 	    }else if(strcmp(*av, "sort") == 0) {
 	       sort = --ac ? *++av : "<missing arg>";
 	       vars[V_SORT_KEY].command_line_val.p = cpystr(sort);
@@ -126,9 +122,6 @@ Loop: while(--ac > 0 && **++av == '-') {
 		   break;  /* break back to inner-while */
 		 case 'k':
 		   F_TURN_ON(F_USE_FK,pine_state);
-		   break;
-		 case 'a':
-		   anonymous = 1;
 		   break;
 		 case 'z':
 		   F_TURN_ON(F_CAN_SUSPEND,pine_state);
@@ -238,16 +231,7 @@ Loop: while(--ac > 0 && **++av == '-') {
     if(a0_len >= PINEF_LEN && strcmp(argv[0]+a0_len-PINEF_LEN, "pinef") == 0)
         F_TURN_ON(F_USE_FK,pine_state);
 
-    if(anonymous) {
-      if(pine_state->nr_mode) {
-        pine_state->anonymous = 1;
-      }else {
-	fprintf(stderr, "Can't currently use -a without -nr\n");
-	exit(-1);
-      }
-    }
-
-    if(do_help || usage) 
+    if(do_help || usage)
       args_help(); 
     if(usage)
       exit(-1);
@@ -300,8 +284,6 @@ args_help()
 #ifndef DOS
         printf("\t -P <pine.conf>\tSpecify alternate pine.conf file\n");
 #endif
-        printf("\t -nr\t\tSpecial mode for UWIN\n");
-        printf("\t -a\t\tSpecial anonymous mode for UWIN\n");
 /* WHILE TESTING FOLDERS */
 printf("\t -l\t\tList - Expand List of folder collections by default\n");
 	printf("\n");

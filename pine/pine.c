@@ -434,7 +434,7 @@ main(argc, argv)
             do_index_border(1, 1, 1, NULL);
 	    pine_state->painted_footer_on_startup = 1;
             PutLine1(4, 0, "           Please wait, opening %s......",
-                     pine_state->nr_mode ? "news messages" : "mail folder");
+                     "mail folder");
         }
         fflush(stdout);
 
@@ -452,7 +452,7 @@ main(argc, argv)
                 clear_index_cache();
                 end_scroll_text();
                 printf("\n\nUnable to open %s \"%s\". Pine finished\n\n",
-                       pine_state->nr_mode ? "news messages" : "folder",
+                       "folder",
                        folder_to_open);
                 exit(-1);
             }
@@ -528,9 +528,8 @@ main(argc, argv)
         if(pine_state->mangled_footer)
 	  pine_state->painted_footer_on_startup = 0;
 
-        if(!pine_state->nr_mode)
-          if(expire_sent_mail())
-	    pine_state->painted_footer_on_startup = 0;
+        if(expire_sent_mail())
+	  pine_state->painted_footer_on_startup = 0;
 
 	/*
 	 * Initialize the defaults.  Initializing here means that
@@ -542,7 +541,7 @@ main(argc, argv)
 	  init_save_defaults();	/* initialize default save folders */
 
         build_path(int_mail, pine_state->folders_dir, INTERRUPTED_MAIL);
-        if(!pine_state->nr_mode && can_access(int_mail, ACCESS_EXISTS) == 0) {
+        if(can_access(int_mail, ACCESS_EXISTS) == 0) {
             q_status_message(1, 4, 5, "\007Use compose command to continue composing last message. It was interrupted.");
         }
 
@@ -1516,7 +1515,7 @@ quit_screen(pine_state)
 
     dprint(1, (debugfile, "\n\n    ---- QUIT SCREEN ----\n"));    
 
-    if(!pine_state->nr_mode && F_OFF(F_QUIT_WO_CONFIRM,pine_state) &&
+    if(F_OFF(F_QUIT_WO_CONFIRM,pine_state) &&
        (ret=want_to("Really quit pine", 'y', 'x', h_oe_export, 0)) != 'y') {
 	if(ret == 'x')
 	  Writechar('\007', 0);
