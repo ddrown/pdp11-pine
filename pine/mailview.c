@@ -401,34 +401,7 @@ type_desc(type, subtype, params, full)
         while(params != NULL && strucmp(params->attribute,"charset") != 0)
           params = params->next;
         if(params != NULL) {
-            if(strucmp(params->value, "iso-8859-1") == 0){
-                strcpy(type_d, full ? "Latin 1 text (ISO-8859-1)" :
-                                      "Latin 1 text");
-            } else if(strucmp(params->value, "iso-8859-2") == 0){
-                strcpy(type_d, full ? "Latin 2 text (ISO-8859-2)" :
-                                      "Latin 2 text");
-            } else if(strucmp(params->value, "iso-8859-3") == 0){
-                strcpy(type_d, full ? "Latin 3 text (ISO-8859-3)" :
-                                      "Latin 3 text");
-            } else if(strucmp(params->value, "iso-8859-4") == 0){
-                strcpy(type_d, full ? "Latin 4 text (ISO-8859-4)" :
-                                      "Lating 4 text");
-            } else if(strucmp(params->value, "iso-8859-5") == 0){
-                strcpy(type_d, full ? "Latin & Cyrillic text (ISO-8859-5)" :
-                                      "Latin & Cyrillic text");
-            } else if(strucmp(params->value, "iso-8859-6") == 0){
-                strcpy(type_d, full ? "Latin & Arabic text (ISO-8859-6)" :
-                                      "Latin & Arabic text");
-            } else if(strucmp(params->value, "iso-8859-7") == 0){
-                strcpy(type_d, full ? "Latin & Greek text (ISO-8859-7)" :
-                                      "Latin & Greek text");
-            } else if(strucmp(params->value, "iso-8859-8") == 0){
-                strcpy(type_d, full ? "Latin 5 text (ISO-8859-8)" :
-                                      "Latin 5 text");
-            } else if(strucmp(params->value, "iso-8859-9") == 0){
-                strcpy(type_d, full ? "Latin & Hebrew text (ISO-8859-9)" :
-                                      "Latin & Hebrew text");
-            } else if(strucmp(params->value, "us-ascii") == 0){
+            if(strucmp(params->value, "us-ascii") == 0){
                 strcpy(type_d, "Text");
             } else {
                 strcpy(type_d, "Unknown text");
@@ -816,18 +789,14 @@ decode_text(att, msgno, pc, style, display_bound)
 		param = param->next)
 	;
 
-    match =  match_charset(param != NULL ? param->value : NULL,
-				   ps_global->VAR_CHAR_SET);
+    match =  match_charset(param != NULL ? param->value : NULL);
 
     if(match == 1) {
 	strcpy(tmp_20k_buf, "    [The following text is in the \"");
 	strcat(tmp_20k_buf, param != NULL ? param->value : NULL);
 	strcat(tmp_20k_buf, "\" character set]");
 	strcat(tmp_20k_buf, NEWLINE);
-	strcat(tmp_20k_buf, "    [Your display is set for the \"");
-	strcat(tmp_20k_buf, (ps_global->VAR_CHAR_SET) ?  
-			       ps_global->VAR_CHAR_SET : "US-ASCII");
-	strcat(tmp_20k_buf, "\" character set]");
+	strcat(tmp_20k_buf, "    [Your display is set for the \"US-ASCII\" character set]");
 	strcat(tmp_20k_buf, NEWLINE);
 	if(!gf_puts(tmp_20k_buf, pc)
 	   || !gf_puts("    [Some characters may be displayed incorrectly]",pc)
@@ -882,15 +851,10 @@ decode_text(att, msgno, pc, style, display_bound)
 		 The problem was that we were sometimes preventing people
 		 from seeing text which they could at least read partially.)
   ----*/
-match_charset(text_char_set, device_char_set)
-     char *text_char_set, *device_char_set;
+match_charset(text_char_set)
+     char *text_char_set;
 {
-    int text_is_ascii;
-
-    text_is_ascii = !text_char_set || (strucmp(text_char_set, "us-ascii") == 0);
-
-    if(text_is_ascii || (device_char_set &&
-       (strucmp(text_char_set, device_char_set) == 0)))
+    if(!text_char_set || strucmp(text_char_set, "us-ascii") == 0)
       return(0);
 
     return(1);

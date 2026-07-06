@@ -166,14 +166,67 @@ is still ~970KB, way over budget.
       generated `helptext.c` string data alone shrank from ~204KB to
       near nothing).
 
-### 4. Drop filter/scoring rule engine
-- [ ] Remove `pine/filter.c` (~43KB) pattern-matching filter/score language
-      and its config vars/menu entries.
+### 4. Drop filter/scoring rule engine — N/A, item was based on a wrong premise
+- [x] Investigated `pine/filter.c` (~43KB) expecting a pattern-matching
+      filter/score rule language (the incoming-mail scoring/filtering
+      feature from later Pine/Alpine versions). That feature does not
+      exist anywhere in this Pine 3.89 tree — it was added upstream well
+      after this version. `pine/filter.c` is actually the generic
+      character-filter-pipe library (`so_*`/`gf_*`: `gf_pipe`,
+      `gf_link_filter`, `gf_binary_b64`/`gf_b64_binary`, `gf_qp_8bit`/
+      `gf_8bit_qp`, `gf_rich2plain`, `gf_iso_filter`, `gf_wrap`, etc.) —
+      core plumbing that MIME decoding, quoted-printable, base64,
+      richtext-to-plain conversion, ISO-8859 stripping, and line-wrapping
+      all run through, called from `mailview.c`, `reply.c`, `mailcmd.c`,
+      and `send.c`. Nothing here is a removable feature; leaving it in
+      place. No code changed for this item.
 
-### 5. Restrict to US-ASCII (drop multi-charset MIME conversion)
-- [ ] Find and remove non-ASCII charset conversion tables (ISO-8859-*, KOI8,
-      etc.) — likely in strings.c / mailview.c MIME text handling.
-- [ ] Remove `V_CHAR_SET` config option, hardcode US-ASCII.
+### 5. Restrict to US-ASCII (drop multi-charset MIME conversion) — DONE
+- [x] There were no active ISO-8859-*/KOI8 conversion tables to remove: this
+      pre-IMAP4rev1-era c-client has no charset-transcoding machinery at all
+      (`imap/ANSI/c-client/*.c` only ever sets the literal string
+      `"US-ASCII"`/`"CHARSET"` as a MIME parameter name/value), and pine's own
+      "charset" handling was always just string labeling/comparison, never
+      byte conversion. The only real table-based charset code was
+      `pine/osdep/dosextra` (994 lines / 34.5KB of DOS codepage↔Latin-1
+      lookup tables), entirely `#ifdef DOS`-gated and not built by
+      `makefile.lnx` — deleted the file outright (only referenced by the
+      DOS-only `makefile.msc`/`makefile.dos`/`osdep/makefile.dos`, which per
+      the established precedent — see `helpindx.c` removal in item 3 — aren't
+      kept in sync since DOS isn't a build target).
+- [x] Removed `V_CHAR_SET` config option: marked the `character-set` pinerc
+      variable disabled (same obsolete-slot pattern as `smtp-server`/
+      `address-book` — numeric index kept stable rather than renumbering),
+      removed the `VAR_CHAR_SET` macro and `CHAR_SET_TEXT` help text, and
+      the `#ifdef DOS` codepage-table-selection block in `init.c` that used
+      it (dead on this target; along with it, deleted the DOS-only
+      `xlate_to_codepage`/`xlate_from_codepage` globals and their `#ifdef
+      DOS` usage sites in `mailcmd.c`/`send.c`, which only ever fed from
+      that block).
+      Hardcoded the remaining live call sites to US-ASCII: `send.c`'s
+      outgoing-MIME charset tagging now always writes `"US-ASCII"` instead
+      of `ps_global->VAR_CHAR_SET`; `mailview.c`'s `type_desc()` dropped the
+      nine `iso-8859-*` attachment-type-label branches (kept the
+      `us-ascii`/"Unknown text" cases); `mailview.c`'s `match_charset()`
+      dropped its now-always-"US-ASCII" `device_char_set` parameter, reduced
+      to "is this text non-ASCII" (the incoming-text charset-mismatch
+      warning banner is kept — an attachment can still *arrive* tagged as a
+      non-ASCII charset even though we no longer let the user configure a
+      matching display charset); `ttyin.c`'s two raw-mode setup blocks that
+      conditionally enabled 8-bit passthrough (`ISTRIP`/`LPASS8`) based on
+      `VAR_CHAR_SET` were simplified to always leave 8-bit stripping on.
+      Also deleted the dead `#ifdef OLDWAY` block in `os.c`/`osdep/os-lnx.c`'s
+      `mime_can_display()` (unreachable regardless of `OLDWAY` — it followed
+      an unconditional `return 1`) since it was the last caller of the old
+      two-charset-argument `match_charset()` signature.
+- [x] Verified: clean rebuild with no new warnings; `nm bin/pine` shows no
+      `dos_codepage`/`dos_version`/`read_xtable`/`cp437`-family symbols; full
+      smoketest suite (5/5) still passes. text+data+bss dropped from 583162
+      to 581554 bytes — a small win since almost none of this was live code
+      on the Unix/PDP-11 target to begin with; the real value was closing
+      out a TODO item whose premise (large removable conversion tables)
+      didn't hold, and shedding the DOS-only dead weight that had built up
+      around `V_CHAR_SET`.
 
 ### 6. Drop color + mouse support
 - [ ] Remove ANSI color config screens and color escape-sequence logic in

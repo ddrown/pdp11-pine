@@ -140,8 +140,6 @@ characters \"no-\" prepended to it, to cancel its effect.  So, for example,\n# y
 
 #define	SORT_TEXT	"sort-key= order in which messages will be presented...\n# Choose one: subject, from, arrival, date, size.\n# Normal default is \"arrival\""
 
-#define	CHAR_SET_TEXT	"character-set should reflect the capabilities of the display you have.\n# Normal default is US-ASCII.  Typical alternatives include ISO-8859-x,\n# where x is a number between 1 and 9."
-
 #define	EDITOR_TEXT	"editor specifies the program invoked by ^_ in the Composer.\n# This is normally an alternative to Pine's internal composer (Pico)"
 
 #define ONLY_DOMAIN_TEXT     "Used if \"user-domain\" not set.  Strips hostname from user\'s return address.\n# Not applicable for PC-Pine",
@@ -212,8 +210,8 @@ static struct variable variables[] = {
   SAVE_MSG_TEXT},
 {"sort-key",                   0, 1, 0, 1, 1, 0,
   SORT_TEXT},
-{"character-set",              0, 1, 0, 1, 1, 0,
-  CHAR_SET_TEXT},
+{"character-set",              1, 1, 0, 1, 1, 0,
+  "Character-set is disabled, this build only supports US-ASCII"},
 {"editor",                     0, 1, 0, 1, 1, 0,
   EDITOR_TEXT},
 {"image-viewer",               0, 1, 0, 1, 1, 0,
@@ -253,15 +251,6 @@ static struct variable variables[] = {
 {NULL,                         0, 0, 0, 0, 0, 0,
    NULL}
 };
-
-
-#ifdef	DOS
-/*
- * Table containing Code Page value to external charset value mappings
- */
-unsigned char *xlate_to_codepage   = NULL;
-unsigned char *xlate_from_codepage = NULL;
-#endif
 
 
 static struct pinerc_line {
@@ -433,103 +422,6 @@ init_vars(ps)
     obs_old_style_reply = !strucmp(VAR_OLD_STYLE_REPLY, "yes");
 
     set_current_val(vars, V_SIGNATURE_FILE, TRUE);
-    set_current_val(vars, V_CHAR_SET, TRUE);
-#ifdef	DOS
-    /*
-     * Handle setting up page table IF running DOS 3.30 or greater
-     */
-    if(strucmp(ps_global->VAR_CHAR_SET, "us-ascii") != 0){
-	unsigned long ver;
-        extern unsigned int dos_version();
-        extern          int dos_codepage();
-	extern unsigned char *read_xtable();
-	extern unsigned char  cp437L1[], cp850L1[], cp860L1[], cp863L1[],
-			      cp865L1[], cp866L5[];
-	extern unsigned char  L1cp437[], L1cp850[], L1cp860[], L1cp863[],
-			      L1cp865[], L5cp866[];
-
-	/* suck in the translation table */
-	if(((ver = dos_version()) & 0x00ff) > 3 
-	   || ((ver & 0x00ff) == 3 && (ver >> 8) >= 30)){
-	    char *in_table  = getenv("ISO_TO_CP"),
-	         *out_table = getenv("CP_TO_ISO");
-
-	    if(out_table)
-	      xlate_from_codepage = read_xtable(out_table);
-
-	    if(in_table)
-	      xlate_to_codepage = read_xtable(in_table);
-
-	    /*
-	     * if tables not already set, do the best we can...
-	     */
-	    switch(dos_codepage()){
-	      case 437: /* latin-1 */
-		if(strucmp(ps_global->VAR_CHAR_SET, "iso-8859-1") == 0){
-		    if(!xlate_from_codepage)
-		      xlate_from_codepage = cp437L1;
-
-		    if(!xlate_to_codepage)
-		      xlate_to_codepage   = L1cp437;
-		}
-
-		break;
-	      case 850: /* latin-1 */
-		if(strucmp(ps_global->VAR_CHAR_SET, "iso-8859-1") == 0){
-		    if(!xlate_from_codepage)
-		      xlate_from_codepage = cp850L1;
-
-		    if(!xlate_to_codepage)
-		      xlate_to_codepage = L1cp850;
-		}
-
-		break;
-	      case 860: /* latin-1 */
-		if(strucmp(ps_global->VAR_CHAR_SET, "iso-8859-1") == 0){
-		    if(!xlate_from_codepage)
-		      xlate_from_codepage = cp860L1;
-
-		    if(!xlate_to_codepage)
-		      xlate_to_codepage   = L1cp860;
-		}
-
-		break;
-	      case 863: /* latin-1 */
-		if(strucmp(ps_global->VAR_CHAR_SET, "iso-8859-1") == 0){
-		    if(!xlate_from_codepage)
-		      xlate_from_codepage = cp863L1;
-
-		    if(!xlate_to_codepage)
-		      xlate_to_codepage   = L1cp863;
-		}
-
-		break;
-	      case 865: /* latin-1 */
-		if(strucmp(ps_global->VAR_CHAR_SET, "iso-8859-1") == 0){
-		    if(!xlate_from_codepage)
-		      xlate_from_codepage = cp865L1;
-
-		    if(!xlate_to_codepage)
-		      xlate_to_codepage   = L1cp865;
-		}
-
-		break;
-	      case 866: /* latin-5 */
-		if(strucmp(ps_global->VAR_CHAR_SET, "iso-8859-5") == 0){
-		    if(!xlate_from_codepage)
-		      xlate_from_codepage = cp866L5;
-
-		    if(!xlate_to_codepage)
-		      xlate_to_codepage   = L5cp866;
-		}
-
-		break;
-	      default:
-		break;
-	    }
-	}
-    }
-#endif
 
     set_current_val(vars, V_LAST_VERS_USED, TRUE);
     if(VAR_LAST_VERS_USED && strcmp(VAR_LAST_VERS_USED, version_buff) == 0)

@@ -290,7 +290,7 @@
 #define V_INIT_CMD_LIST            14
 #define V_SAVED_MSG_NAME_RULE      15
 #define V_SORT_KEY                 16
-#define V_CHAR_SET                 17
+#define V_CHAR_SET                 17  /* disabled, this build is US-ASCII only */
 #define V_EDITOR                   18
 #define V_IMAGE_VIEWER             19
 #define V_USE_ONLY_DOMAIN_NAME     20
@@ -325,7 +325,6 @@
 #define VAR_INIT_CMD_LIST            vars[V_INIT_CMD_LIST].current_val.l
 #define VAR_SAVED_MSG_NAME_RULE      vars[V_SAVED_MSG_NAME_RULE].current_val.p
 #define VAR_SORT_KEY                 vars[V_SORT_KEY].current_val.p
-#define VAR_CHAR_SET                 vars[V_CHAR_SET].current_val.p
 #define VAR_EDITOR                   vars[V_EDITOR].current_val.p
 #define VAR_IMAGE_VIEWER             vars[V_IMAGE_VIEWER].current_val.p
 #define VAR_USE_ONLY_DOMAIN_NAME     vars[V_USE_ONLY_DOMAIN_NAME].current_val.p

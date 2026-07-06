@@ -190,14 +190,7 @@ int state;
  	_raw_tty.c_oflag &= ~ONLCR;           /* turn off NL->CR on output */
  	_raw_tty.c_oflag &= ~OPOST;
 
-	/* Only go into 8 bit mode if we are doing something other
-	 * than plain ASCII. This will save the folks that have
-	 * their parity on their serial lines wrong thr trouble of
-	 * getting it right
-	 */
-        if(ps_global->VAR_CHAR_SET && ps_global->VAR_CHAR_SET[0] &&
-	   strucmp(ps_global->VAR_CHAR_SET, "us-ascii"))
-	  _raw_tty.c_iflag &= ~ISTRIP; 	       /* turn off hi bit stripping */
+	/* This build is US-ASCII only, so leave ISTRIP (hi bit stripping) on. */
 
 	_raw_tty.c_cc[VMIN]  = '\01'; /* minimum # of chars to queue  */
 	_raw_tty.c_cc[VTIME] = '\0';  /* minimum time to wait for input */
@@ -246,19 +239,8 @@ int state;
 	_raw_ltchars.t_rprntc = -1;   /* Turn off ^R reprint line */
         _raw_ltchars.t_flushc = -1;   /* Turn off ^O output flush */
 
-	/* Only go into 8 bit mode if we are doing something other
-	 * than plain ASCII. This will save the folks that have
-	 * their parity on their serial lines wrong thr trouble of
-	 * getting it right
-	 */
-        if(ps_global->VAR_CHAR_SET && ps_global->VAR_CHAR_SET[0] &&
-	   strucmp(ps_global->VAR_CHAR_SET, "us-ascii")) {
-	    _raw_lmode |= LPASS8;
-#ifdef NXT  /* Hope there aren't many specific like this! */
-            _raw_lmode |= LPASS8OUT;
-#endif
-	}
-            
+	/* This build is US-ASCII only, so leave 8-bit passthrough off. */
+
 	(void) ioctl(STDIN_FD, TIOCSETP, &_raw_tty);
 	(void) ioctl(STDIN_FD, TIOCSLTC, &_raw_ltchars);
         (void) ioctl(STDIN_FD, TIOCSETC, &_raw_tchars);

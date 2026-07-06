@@ -2543,9 +2543,6 @@ detach(msg_no, body, part_no, len, pc, aux_filters)
     gf_io_t        gc;
     SourceType     src = CharStar;
     static char    err_string[100];
-#ifdef	DOS
-    extern unsigned char  *xlate_to_codepage;
-#endif
 
     err_string[0] = '\0';
 
@@ -2604,18 +2601,6 @@ detach(msg_no, body, part_no, len, pc, aux_filters)
      */
     if(body->type == TYPETEXT){
 	gf_link_filter(gf_nvtnl_local);
-#ifdef	DOS
-	/*
-	 * When detaching a text part AND it's US-ASCII OR it
-	 * matches what the user's defined as our charset,
-	 * translate it...
-	 */
-	if(mime_can_display(body->type, body->subtype, body->parameter)
-	   && xlate_to_codepage){
-	    gf_translate_opt(xlate_to_codepage, 256);
-	    gf_link_filter(gf_translate);
-	}
-#endif
     }
 
 #ifdef	LATER

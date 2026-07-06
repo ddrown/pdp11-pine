@@ -233,8 +233,6 @@ compose_mail(given_to)
     if(file_path[0] != '\0') {
         /*============== Continue postponed compostion ==============*/
 #ifdef	DOS
-	extern unsigned char  *xlate_to_codepage;
-
 	if((fp=fopen(file_path, "rb")) == NULL){
 #else
 	if((fp=fopen(file_path, "r")) == NULL){
@@ -295,14 +293,6 @@ compose_mail(given_to)
 	  gf_link_filter(gf_b64_binary);
 	else if(body->encoding == ENCQUOTEDPRINTABLE)
 	  gf_link_filter(gf_qp_8bit);
-
-#ifdef	DOS
-	if(body->encoding == ENCBASE64 || body->encoding == ENCQUOTEDPRINTABLE
-	   && xlate_to_codepage){
-	    gf_translate_opt(xlate_to_codepage, 256);
-	    gf_link_filter(gf_translate);
-	}
-#endif
 
 	if(enc_error = gf_pipe(gc, pc)){
 	    q_status_message1(1, 3, 4, "\007Decoding Error \"%s\"", enc_error);
@@ -2236,7 +2226,7 @@ set_mime_types(body)
 	body->subtype = cpystr("PLAIN");
 
 	/* need to add charset */
-	if(can_be_ascii > 0 || ps_global->VAR_CHAR_SET) {
+	if(can_be_ascii > 0) {
 	    if(body->parameter == NULL) {
 	        pm = body->parameter = mail_newbody_parameter();
 	        pm->attribute = cpystr("charset");
@@ -2253,10 +2243,7 @@ set_mime_types(body)
 		}
 	    }
 
-	    if(can_be_ascii > 0)
-	        pm->value = cpystr("US-ASCII");
-	    else
-	        pm->value = cpystr(ps_global->VAR_CHAR_SET);
+	    pm->value = cpystr("US-ASCII");
 	}
     }
 
@@ -2462,9 +2449,6 @@ pine_rfc822_output_body(body, f, s)
     char *cookie = NIL, *t, *encode_error;
     char tmp[MAILTMPLEN];
     gf_io_t            gc, pc;
-#ifdef	DOS
-    extern unsigned char  *xlate_from_codepage;
-#endif
 
     if(body->type == TYPEMULTIPART) {   /* multipart gets special handling */
 	part = body->contents.part;	/* first body part */
@@ -2523,13 +2507,6 @@ pine_rfc822_output_body(body, f, s)
 	 */
 	if(body->type == TYPETEXT){
 	    gf_link_filter(gf_local_nvtnl);
-
-#ifdef	DOS
-	    if(xlate_from_codepage){
-		gf_translate_opt(xlate_from_codepage, 256);
-		gf_link_filter(gf_translate);
-	    }
-#endif
 	}
 
 	switch (body->encoding) {	/* all else needs filtering */
