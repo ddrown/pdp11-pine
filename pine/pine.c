@@ -983,10 +983,6 @@ main_menu_screen(pine_state)
 	      return;
 	    break;
 
-	  case 'z':  /* hidden function */
-	    print_all_help();
-	    break;
-
 	  case 'm':
 	    q_status_message(0, 1, 3, "\007Already in Main");
 	    break;

@@ -149,13 +149,17 @@ typedef struct
 #endif	/* dyn */
 
 extern struct KBSTREE *kpadseqs;
+#ifdef	ANSI
+extern int kbseq(int *);
+#else
 extern int kbseq();
+#endif
 
 #if	TERMCAP
 extern struct KBSTREE *kpadseqs;
 #endif	/* TERMCAP */
 
-#if	defined(bsd) || defined(nxt) || defined(dyn)
+#if	(defined(bsd) || defined(nxt) || defined(dyn)) && !defined(LINUX)
 #ifdef	ANSI
 extern char *getcwd(char *, int);
 #else

@@ -117,11 +117,54 @@ is still ~970KB, way over budget.
       both `?` help screens, back to main menu, quit-with-close) — no
       crashes. text+data+bss dropped from 901522 to 874402 bytes.
 
-### 3. Cut down inline help system
-- [ ] `pine/helptext.c` (3833 lines / ~204KB source) — replace full-screen
-      context help with short one-line prompts, or drop context help
-      entirely in favor of doc/pine.1.
-- [ ] Remove/trim `pine/helpindx.c`, `pine/help.c` accordingly.
+### 3. Cut down inline help system — DONE
+- [x] Dropped full-screen context help entirely rather than just shrinking it.
+      `pine/helptext.c` (the gitignored build product) is generated from
+      `pine/pine.hlp` via `./cmplhelp.sh`/`./cmplhlp2.sh`; trimmed
+      `pine.hlp` from 3207 lines down to 170 by emptying the 19 sections
+      that fed full-screen help screens (`main_menu_tx`, `h_news`,
+      `h_mail_text_att_view`, `h_mail_index`, `h_mail_view`,
+      `h_folder_maint/open/save/fcc`, and all ten
+      `h_composer`/`h_composer_to/cc/bcc/fcc/subject/attachment/browse/ins/search`
+      arrays) down to just their `====` header markers (kept the header
+      lines since ~15 call sites across `pine.c`/`folder.c`/`mailcmd.c`/
+      `mailview.c`/`send.c`/`pico/*.c` still reference these symbols by
+      name; deleting the symbols outright would've meant touching every
+      call site for no extra byte savings, since the arrays are cheap
+      pointers regardless of what's in them).
+      Left the ~15 tiny `h_oe_*`/`h_wt_*`/`h_sticky_*`/`h_select_sort`/
+      `h_mini_setup` topics alone (~60 lines total) — those aren't shown
+      via the full-screen `helper()`/scrolltool path at all, they're
+      2-line inline hints that `optionally_enter()`/`want_to()` print
+      directly above the prompt line (`ttyin.c: help_text[0]`/`[1]`),
+      already exactly the "short one-line prompt" style and cheap
+      enough not to bother touching.
+      Rewrote `pine/help.c`'s `helper()` (the function every one of
+      those ~15 call sites still invokes) to ignore its `text[]`
+      argument and just queue "No help screens in this build -- see the
+      pine(1) man page" via `q_status_message()`, instead of running
+      the old paging/`___include`/scrolltool machinery. Deleted
+      `print_all_help()` (walked all topics to send them to a printer;
+      pointless once topics are empty) and its sole caller, a hidden
+      debug key (`'z'`) on the Main Menu in `pine.c`. Also deleted the
+      DOS-only `get_help_text()`/`free_help_text()`/
+      `close_help_reference()` functions from `help.c` (dead code for
+      this non-DOS target, same rationale as earlier DOS-only removals)
+      and the now-unused `copy_fix_keys()` helper they and the old
+      `helper()` were the only callers of.
+      Deleted `pine/helpindx.c` outright: it's a standalone DOS-only
+      tool (only referenced by `makefile.msc`) that built a help-index
+      file for content that no longer exists; left `makefile.msc`'s
+      other already-stale references (e.g. `addrbook.obj` from the
+      address-book removal) alone, matching the precedent that DOS
+      makefiles aren't kept in sync since DOS isn't a build target.
+- [x] Verified: clean `./build lnx` rebuild with no new warnings from
+      `help.c`; scripted pty session opening a local mbox folder,
+      pressing `?` in the Folder Index and Message Text screens (both
+      showed the new one-line status message), then quitting — no
+      crashes. text+data+bss dropped from 874402 to 642298 bytes (the
+      generated `helptext.c` string data alone shrank from ~204KB to
+      near nothing).
 
 ### 4. Drop filter/scoring rule engine
 - [ ] Remove `pine/filter.c` (~43KB) pattern-matching filter/score language
@@ -161,3 +204,58 @@ Shrink these to sizes appropriate for realistic PDP-11 line/terminal widths
 ## After each cut
 - [ ] Rebuild on Linux, confirm `size pine/pine` text+data+bss shrinks.
 - [ ] Re-run `nm -S --size-sort` to check for newly-dead large symbols.
+
+## Build process issues
+- [ ] `pine/osdep/os-lnx.c` is a generated file (assembled by
+      `pine/osdep/includer` from `os-lnx.ic` + fragment files, per the
+      rule at `pine/makefile.lnx:140-149`), but the fixes needed to
+      make it build with a modern glibc were committed directly into
+      the generated `os-lnx.c` instead of into the fragments/template
+      it's generated from. A `./build clean && ./build lnx` regenerates
+      `os-lnx.c` from source and silently reintroduces the bugs,
+      clobbering the checked-in fixes (this happened this session;
+      reverted `os-lnx.c` by hand rather than fix it properly).
+      The generation inputs that actually need the fixes (confirmed by
+      diffing a from-scratch regeneration against the committed,
+      working `os-lnx.c`):
+        - `pine/osdep/os-lnx.ic:117` includes `fgetpos.non` (a
+          non-ANSI ftell/fseek-based emulation of fgetpos/fsetpos,
+          whose fseek/ftell-as-long assumption doesn't hold for
+          glibc's opaque `fpos_t`) — should include the plain
+          `fgetpos` fragment instead, which just calls the real ANSI
+          `fgetpos()`/`fsetpos()` that glibc actually provides.
+        - `pine/osdep/err_desc` references the removed-from-glibc
+          `sys_errlist[]` array directly — should call `strerror()`
+          instead (this fragment is `include()`'d by most/all `os-*.ic`
+          platform manifests, not just Linux's, so check it doesn't
+          regress a real non-glibc target).
+        - `pine/osdep/tempnam` and `pine/osdep/writ_dir` test
+          `st_mode & S_IFDIR`/`(st_mode & S_IFMT) == S_IFDIR` directly
+          instead of using the portable `S_ISDIR()` macro, and
+          `tempnam` declares a `u_int` (BSD-ism, not always defined)
+          instead of `unsigned int`.
+      Fix these four generation inputs, then regenerate `os-lnx.c` from
+      scratch (`cd pine/osdep && rm -f os-lnx.c && cd .. && make -f
+      makefile.lnx osdep/os-lnx.c`) and confirm the regenerated file
+      now matches (or improves on) the currently-committed one, so a
+      clean rebuild is no longer destructive.
+- [x] Hit the same class of bug in `pico/osdep.h`/`osdep.c`, which
+      `pico/makefile.lnx:41-47` generates as a plain `cp` of
+      `pico/os_unix.h`/`os_unix.c` (no fragment assembly, unlike
+      `os-lnx.c`) — but those two files are gitignored, so the
+      previously-working copies (evidently hand-patched at some point,
+      same as `os-lnx.c`) had no git history and were unrecoverable
+      once `./build clean` deleted them this session. Unlike the
+      `os-lnx.c` case, this one *is* fixed at the true source now:
+      `pico/os_unix.h` had an unguarded `extern int kbseq();` that
+      conflicted with `os_unix.c`'s `#ifdef ANSI` prototype
+      `int kbseq(int *);` (now wrapped in the same `#ifdef ANSI` as the
+      rest of the file), and an `extern char *getcwd(char *, int);`
+      that conflicts with glibc's own `getcwd(char *, size_t)` on Linux
+      (now excluded via `&& !defined(LINUX)`, matching the `-Dbsd
+      -DLINUX` flags `makefile.lnx` builds pico with). A clean
+      `./build clean && ./build lnx` now regenerates both `os-lnx.c`
+      (still needs the fixes above, since that one's fixes live in the
+      untracked generated file) and `pico/osdep.[ch]` (now genuinely
+      fixed at the source) and produces the same binary sizes as
+      before.

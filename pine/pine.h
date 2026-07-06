@@ -877,13 +877,7 @@ char       *folder_is_nick(char *, void *);
 char       *next_folder(char *, char *, CONTEXT_S *);
 
 /*-- help.c --*/
-#ifdef	DOS
-void helper(short, char *title, int); 
-char **get_help_text(short, int *lines); 
-#else
-void helper(char *text[], char *title, int); 
-#endif
-void print_all_help(void);
+void helper(char *text[], char *title, int);
 
 /*-- init.c --*/
 void init_vars(struct pine *);
@@ -1218,8 +1212,7 @@ char       *folder_is_nick();
 char       *next_folder();
 
 /*-- help.c --*/
-void helper(); 
-void print_all_help();
+void helper();
 
 /*-- init.c --*/
 void init_vars();

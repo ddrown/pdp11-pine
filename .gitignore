@@ -19,3 +19,4 @@ pico/libpico.a
 pico/pico
 pine/date.c
 pine/pine
+bin/
