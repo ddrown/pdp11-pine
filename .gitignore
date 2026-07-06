@@ -20,3 +20,7 @@ pico/pico
 pine/date.c
 pine/pine
 bin/
+__pycache__/
+*.gcno
+*.gcda
+*.gcov
