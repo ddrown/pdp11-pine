@@ -291,7 +291,7 @@
 #define V_SAVED_MSG_NAME_RULE      15
 #define V_SORT_KEY                 16
 #define V_CHAR_SET                 17  /* disabled, this build is US-ASCII only */
-#define V_EDITOR                   18
+#define V_EDITOR                   18  /* disabled, alternate editor not supported */
 #define V_IMAGE_VIEWER             19
 #define V_USE_ONLY_DOMAIN_NAME     20
 #define V_PRINTER                  21
@@ -325,7 +325,6 @@
 #define VAR_INIT_CMD_LIST            vars[V_INIT_CMD_LIST].current_val.l
 #define VAR_SAVED_MSG_NAME_RULE      vars[V_SAVED_MSG_NAME_RULE].current_val.p
 #define VAR_SORT_KEY                 vars[V_SORT_KEY].current_val.p
-#define VAR_EDITOR                   vars[V_EDITOR].current_val.p
 #define VAR_IMAGE_VIEWER             vars[V_IMAGE_VIEWER].current_val.p
 #define VAR_USE_ONLY_DOMAIN_NAME     vars[V_USE_ONLY_DOMAIN_NAME].current_val.p
 #define VAR_PRINTER                  vars[V_PRINTER].current_val.p
@@ -368,7 +367,6 @@
 #define F_ENABLE_TAB_COMPLETE       3
 #define F_QUIT_WO_CONFIRM           4
 #define F_ENABLE_JUMP               5
-#define F_ENABLE_ALT_ED             6
 #define F_ENABLE_BOUNCE             7
 #define F_ENABLE_APPLY              8
 #define F_ENABLE_FLAG               9

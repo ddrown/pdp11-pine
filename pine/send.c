@@ -763,7 +763,6 @@ pine_send(outgoing, body, editor_title, fcc, are_replying, att)
 	pbuf.buildaddr = build_address;
 	pbuf.keybinit = init_keyboard;
 	pbuf.helper = helper;
-	pbuf.alt_ed = ps_global->VAR_EDITOR;
 	pbuf.ins_help = h_composer_ins;
 	pbuf.search_help = h_composer_search;
 	pbuf.to_help = h_composer_to;
@@ -782,7 +781,6 @@ pine_send(outgoing, body, editor_title, fcc, are_replying, att)
 	pbuf.pine_flags |= (ps_global->restricted ? P_SECURE :
                                                                    0);
 	pbuf.pine_flags |= (are_replying || second_time) ? P_BODY : 0;
-        pbuf.pine_flags |= F_ON(F_ENABLE_ALT_ED,ps_global) ? P_ADVANCED : 0;
 
         dprint(9, (debugfile, "flags: %x\n", pbuf.pine_flags));
 

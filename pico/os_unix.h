@@ -121,16 +121,6 @@ typedef struct
 #endif
 
 
-/*
- * What and where the tool that checks spelling is located.  If this is
- * undefined, then the spelling checker is not compiled into pico.
- */
-#if	defined(COHERENT) || defined(AUX)
-#define SPELLER         "/bin/spell"
-#else
-#define	SPELLER		"/usr/bin/spell"
-#endif
-
 /* memcpy() is no good for overlapping blocks.  If that's a problem, use
  * the memmove() in ../c-client
  */

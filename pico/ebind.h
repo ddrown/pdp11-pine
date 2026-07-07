@@ -99,9 +99,6 @@ KEYTAB  keytab[NBINDS] = {
 	{CTRL|'O',		suspend_composer},
 	{CTRL|'P',		backline},
 	{CTRL|'R',		insfile},
-#ifdef	SPELLER
-	{CTRL|'T',		spell},
-#endif	/* SPELLER */
 	{CTRL|'U',		yank},
 	{CTRL|'V',		forwpage},
 	{CTRL|'W',		forwsearch},
@@ -112,9 +109,6 @@ KEYTAB  keytab[NBINDS] = {
 #endif
 	{CTRL|'@',		forwword},
 	{CTRL|'^',		setmark},
-#ifdef	JOB_CONTROL
-	{CTRL|'_',		alt_editor},
-#endif
 	{0x7F,			backdel},
 	{0,			NULL}
 };
@@ -157,9 +151,6 @@ KEYTAB  pkeytab[NBINDS] = {
 	{CTRL|'O',		filewrite},
 	{CTRL|'P',		backline},
 	{CTRL|'R',		insfile},
-#ifdef	SPELLER
-	{CTRL|'T',		spell},
-#endif	/* SPELLER */
 	{CTRL|'U',		yank},
 	{CTRL|'V',		forwpage},
 	{CTRL|'W',		forwsearch},

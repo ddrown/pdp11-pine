@@ -79,11 +79,7 @@ static int fkm[12][2] = {
     { F9,  (CTRL|'K')},
     { F10, (CTRL|'U')},
     { F11, (CTRL|'C')},
-#ifdef	SPELLER
-    { F12, (CTRL|'T')}
-#else
     { F12, (CTRL|'D')}
-#endif
 };
 
 

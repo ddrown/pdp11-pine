@@ -114,7 +114,6 @@ static char *helptext[] = {
     " ",
     "~\t~^~J (~F~4)   Format (justify) the current paragraph.",
     "\t\t  Note: paragraphs delimited by blank lines or indentation.",
-    "~\t~^~T (~F~1~2)  To invoke the spelling checker",
     "~\t~^~C (~F~1~1)  Report current cursor position",
     " ",
     "~\t~^~R (~F~5)   Insert an external file at the current cursor position.",

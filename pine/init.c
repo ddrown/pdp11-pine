@@ -131,7 +131,7 @@ be \"\".  You can override system defaults by setting a variable to the\n# empty
 
 #define	SIG_FILE_TEXT "signature-file specifies the name or path of a file containing text that\n# will automatically be inserted in outgoing mail."
 
-#define	FEATURE_LIST_TEXT	"feature-list= comma-separated list of features from the following set:\n# Note: the value \"old-growth\" is shorthand for the indicated features...\n# enable-full-header-cmd        (included in old-growth set)\n# enable-unix-pipe-cmd          (included in old-growth set)\n# enable-bounce-cmd             (included in old-growth set)\n# enable-alternate-editor-cmd   (included in old-growth set)\n# enable-suspend                (included in old-growth set)\n# \
+#define	FEATURE_LIST_TEXT	"feature-list= comma-separated list of features from the following set:\n# Note: the value \"old-growth\" is shorthand for the indicated features...\n# enable-full-header-cmd        (included in old-growth set)\n# enable-unix-pipe-cmd          (included in old-growth set)\n# enable-bounce-cmd             (included in old-growth set)\n# enable-suspend                (included in old-growth set)\n# \
 enable-tab-completion         (included in old-growth set)\n# enable-jump-shortcut          (included in old-growth set)\n# quit-without-confirm          (included in old-growth set)\n# enable-apply-cmd              (included in old-growth set)\n# enable-flag-cmd               (included in old-growth set)\n# enable-zoom-cmd               (included in old-growth set)\n# expanded-view-of-folders\n# use-function-keys\n# include-header-in-reply\n# signature-at-bottom\n# delete-skips-deleted\n# expunge-without-confirm\n# auto-move-read-msgs\n# e.g.\n# feature-list= old-growth, signature-at-bottom\n# \
 The feature-list that is in effect when you are running Pine is the\n# combination of the feature-list set by the system manager in the pine.conf\n# file plus the feature-list set by you here.  (PC-Pine doesn't have a\n# pine.conf so this doesn't apply in that case.)  The feature-list is additive\n# and the order is significant.  First the system-wide pine.conf values are\n# read, then yours.  Any of the features listed above may also have the\n# \
 characters \"no-\" prepended to it, to cancel its effect.  So, for example,\n# you could set \"feature-list= old-growth, no-quit-without-confirm\" if you\n# wanted to have all of the old-growth features except for that one.  Or,\n# if the system manager has set \"old-growth\" in the pine.conf file, you\n# can cancel that with \"no-old-growth\".  The default condition for all\n# of the features is no-, that is, off."
@@ -140,7 +140,6 @@ characters \"no-\" prepended to it, to cancel its effect.  So, for example,\n# y
 
 #define	SORT_TEXT	"sort-key= order in which messages will be presented...\n# Choose one: subject, from, arrival, date, size.\n# Normal default is \"arrival\""
 
-#define	EDITOR_TEXT	"editor specifies the program invoked by ^_ in the Composer.\n# This is normally an alternative to Pine's internal composer (Pico)"
 
 #define ONLY_DOMAIN_TEXT     "Used if \"user-domain\" not set.  Strips hostname from user\'s return address.\n# Not applicable for PC-Pine",
 
@@ -212,8 +211,8 @@ static struct variable variables[] = {
   SORT_TEXT},
 {"character-set",              1, 1, 0, 1, 1, 0,
   "Character-set is disabled, this build only supports US-ASCII"},
-{"editor",                     0, 1, 0, 1, 1, 0,
-  EDITOR_TEXT},
+{"editor",                     1, 1, 0, 1, 1, 0,
+  "Alternate editor is disabled, this build only supports the built-in composer"},
 {"image-viewer",               0, 1, 0, 1, 1, 0,
   "Program to view images if format such as GIF and TIFF"},
 {"use-only-domain-name",       0, 1, 0, 1, 1, 0,
@@ -405,7 +404,6 @@ init_vars(ps)
     set_current_val(vars,V_BUGS_ADDRESS, TRUE);
     set_current_val(vars,V_DEFAULT_FCC, TRUE);
     set_current_val(vars,V_READ_MESSAGE_FOLDER, TRUE);
-    set_current_val(vars,V_EDITOR, TRUE);
     set_current_val(vars,V_IMAGE_VIEWER, TRUE);
 
     /* obsolete, backwards compatibility */
@@ -534,7 +532,6 @@ static struct features feat_list[] = {
     {"enable-tab-completion", F_ENABLE_TAB_COMPLETE},
     {"quit-without-confirm", F_QUIT_WO_CONFIRM},
     {"enable-jump-shortcut", F_ENABLE_JUMP},
-    {"enable-alternate-editor-cmd", F_ENABLE_ALT_ED},
     {"enable-bounce-cmd", F_ENABLE_BOUNCE},
     {"enable-apply-cmd", F_ENABLE_APPLY},
     {"enable-flag-cmd", F_ENABLE_FLAG},
@@ -583,7 +580,6 @@ process_feature_list(ps, list, old_growth, hir, osr)
 	F_TURN_ON(F_ENABLE_TAB_COMPLETE, ps);
 	F_TURN_ON(F_QUIT_WO_CONFIRM, ps);
 	F_TURN_ON(F_ENABLE_JUMP, ps);
-	F_TURN_ON(F_ENABLE_ALT_ED, ps);
 	F_TURN_ON(F_ENABLE_BOUNCE, ps);
 	F_TURN_ON(F_ENABLE_APPLY, ps);
 	F_TURN_ON(F_ENABLE_FLAG, ps);
@@ -610,7 +606,6 @@ process_feature_list(ps, list, old_growth, hir, osr)
 	      F_SET(F_ENABLE_TAB_COMPLETE, ps, yorn);
 	      F_SET(F_QUIT_WO_CONFIRM, ps, yorn);
 	      F_SET(F_ENABLE_JUMP, ps, yorn);
-	      F_SET(F_ENABLE_ALT_ED, ps, yorn);
 	      F_SET(F_ENABLE_BOUNCE, ps, yorn);
 	      F_SET(F_ENABLE_APPLY, ps, yorn);
 	      F_SET(F_ENABLE_FLAG, ps, yorn);

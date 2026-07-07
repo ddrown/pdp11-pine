@@ -161,7 +161,6 @@ typedef struct pico_struct {
     int    fcclen;
     char  *pine_anchor;			/* ptr to pine anchor line */
     char  *pine_version;		/* string containing Pine's version */
-    char  *alt_ed;			/* name of alternate editor or NULL */
     PATMT *attachments;			/* linked list of attachments */
     unsigned pine_flags;		/* entry mode flags */
     void (*helper)(char *text[], char *title, int from_composer); /* Pine's help function  */
@@ -205,7 +204,6 @@ typedef struct pico_struct {
 #define	P_FKEYS		MDFKEY		/* run in function key mode 	 */
 #define	P_SECURE	MDSCUR		/* run in restricted (demo) mode */
 #define	P_SUSPEND	MDSSPD		/* allow ^Z suspension		 */
-#define	P_ADVANCED	MDADVN		/* enable advanced features	 */
 
 
 /*
@@ -220,7 +218,6 @@ typedef struct pico_struct {
 #define MDFKEY		0x0040		/* function key  mode		*/
 #define MDSCUR		0x0080		/* secure (for demo) mode	*/
 #define MDSSPD		0x0100		/* suspendable mode		*/
-#define MDADVN		0x0200		/* Pico's advanced mode		*/
 #define MDTOOL		0x0400		/* "tool" mode (quick exit)	*/
 #define MDBRONLY	0x0800		/* indicates standalone browser	*/
 

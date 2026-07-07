@@ -696,27 +696,16 @@ out:
 	    movecursor(term.t_nrow, 0);
 	    peeol();
 	    if(lastflag&CFFILL){
-#ifdef	SPELLER
-		wkeyhelp("GORYKCXJWVUT",
-		         "Get Help,WriteOut,Read File,Prev Pg,Cut Text,Cur Pos,Exit,Justify,Where is,Next Pg,UnJustify,To Spell");
-
-#else
 		wkeyhelp("GORYKCXJWVUD",
                          "Get Help,WriteOut,Read File,Prev Pg,Cut Text,Cur Pos,Exit,Justify,Where is,Next Pg,UnJustify,Del Char");
 
-#endif
 		emlwrite("Can now UnJustify!", NULL);
 		mpresf = HUGE;	/* remove this after next keystroke! */
 	    }
 	    else{
-#ifdef SPELLER
-		wkeyhelp("GORYKCXJWVUT",
-		         "Get Help,WriteOut,Read File,Prev Pg,Cut Text,Cur Pos,Exit,Justify,Where is,Next Pg,UnCut Text,To Spell");
-#else
 		wkeyhelp("GORYKCXJWVUD",
 		         "Get Help,WriteOut,Read File,Prev Pg,Cut Text,Cur Pos,Exit,Justify,Where is,Next Pg,UnCut Text,Del Char");
 
-#endif
 	    }
 	    sgarbk = FALSE;
         }
@@ -899,16 +888,8 @@ WINDOW *wp;
         if(ComposerEditing)
 	  ShowPrompt();
 	else{
-#ifdef	SPELLER
-	    sprintf(keys, "GCRYKOXJ%cVUT", 
-		    (Pmaster->alt_ed != NULL) ? '_' : 'W');
-	    sprintf(labels, "Get Help,Cancel,Read File,Prev Pg,Cut Text,Postpone,Send,Justify,%s,Next Pg,%s,To Spell",  
-#else
-	    sprintf(keys, "GCRYKOXJ%cVUD", 
-		    (Pmaster->alt_ed != NULL) ? '_' : 'W');
-	    sprintf(labels, "Get Help,Cancel,Read File,Prev Pg,Cut Text,Postpone,Send,Justify,%s,Next Pg,%s,Del Char",  
-#endif
-		    (Pmaster->alt_ed) ? "Alt Edit" : "Where is",
+	    sprintf(keys, "GCRYKOXJWVUD");
+	    sprintf(labels, "Get Help,Cancel,Read File,Prev Pg,Cut Text,Postpone,Send,Justify,Where is,Next Pg,%s,Del Char",
 		    (thisflag&CFFILL) ? "UnFill" : "UnCut Text");
 	    wkeyhelp(keys, labels);
 	}

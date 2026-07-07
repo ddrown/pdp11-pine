@@ -181,7 +181,6 @@ extern	int ttgetc(void);
 extern	void ttgetwinsz();
 extern	int GetKey(void);
 #ifdef	JOB_CONTROL
-extern	int alt_editor(int, int);
 extern	int bktoshell(int, int);
 #endif
 extern	int fallowc(int);
@@ -245,11 +244,6 @@ extern	int markregion(int);
 extern	int forwsearch(int, int);
 extern	int readpattern(char *);
 extern	int forscan(int *, char *, int);
-
-/* spell.c */
-#ifdef	SPELLER
-extern	int spell(int, int);
-#endif
 
 /* window.c */
 extern	int refresh(int, int);
@@ -394,7 +388,6 @@ extern	int ttgetc();
 extern	int ttgetwinsz();
 extern	int GetKey();
 #ifdef	JOB_CONTROL
-extern	int alt_editor();
 extern	int bktoshell();
 #endif
 extern	int fallowc(int);
@@ -457,11 +450,6 @@ extern	int markregion();
 extern	int forwsearch();
 extern	int readpattern();
 extern	int forscan();
-
-/* spell.c */
-#ifdef	SPELLER
-extern	int spell();
-#endif
 
 /* window.c */
 extern	int refresh(int, int);

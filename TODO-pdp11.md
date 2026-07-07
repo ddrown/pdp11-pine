@@ -297,10 +297,55 @@ is still ~970KB, way over budget.
       c-client + osdep + ttyin/ttyout) and reduced confusion for future
       passes over these files, not runtime footprint.
 
-### 7. Drop external editor + spell-check hooks
-- [ ] Remove `F_ENABLE_ALT_ED` / alternate editor exec logic; force built-in
-      pico as the only composer.
-- [ ] Remove `spell()` ispell integration.
+### 7. Drop external editor + spell-check hooks — DONE
+- [x] Removed the alternate-editor feature: deleted `alt_editor()`
+      (`pico/os_unix.c`, the true source — `pico/osdep.c`/`.h` are gitignored
+      generated copies) and its now-dead `MAXARGS` macro, the `^_` key
+      binding (`pico/ebind.h`, guarded by `JOB_CONTROL`) and its prototypes
+      (`pico/efunc.h`, both `ANSI`/K&R variants). Removed the `alt_ed` field
+      from the `PICO` struct and the `P_ADVANCED`/`MDADVN` mode bit
+      (`pico/pico.h`) that gated it — both were used solely by this feature.
+      Simplified `pico/display.c`'s `modeline()`, which used to swap a
+      key-help slot between "Alt Edit"/'_' and "Where is"/'W' depending on
+      whether an alternate editor was configured, to always show "Where is".
+      In `pine/send.c`, removed the `pbuf.alt_ed = ps_global->VAR_EDITOR;`
+      and `pbuf.pine_flags |= F_ON(F_ENABLE_ALT_ED,...) ? P_ADVANCED : 0;`
+      lines that wired it up from Pine's side. Removed the `F_ENABLE_ALT_ED`
+      bit (`pine/pine.h`) and its `enable-alternate-editor-cmd` feature-list
+      entry/old-growth-bundle references (`pine/init.c`) — feature bits are
+      an in-memory bitmask, never serialized raw (feature-list is saved as
+      names), so no obsolete-slot shim was needed; an old pinerc naming this
+      feature just logs "unrecognized feature" at debug level, same as any
+      other unknown name. Marked the `editor` pinerc variable disabled via
+      the established obsolete-slot pattern (numeric `V_EDITOR` index kept
+      stable) and removed `VAR_EDITOR`/`EDITOR_TEXT` and the
+      `set_current_val(vars, V_EDITOR, TRUE)` call, since nothing reads it
+      anymore.
+- [x] Removed the `spell()` ispell/spell(1) integration: deleted
+      `pico/spell.c` outright and dropped `spell.o`/`spell.c` from
+      `pico/makefile.lnx`'s `OFILES`/`CFILES` (this actually removes linked
+      code, unlike the DOS-only dead code removed in earlier items — spell.c
+      was always compiled in). Removed the `SPELLER` macro
+      (`pico/os_unix.h`, unconditionally defined to `/usr/bin/spell` for
+      every non-COHERENT/AUX target including Linux) and every `#ifdef
+      SPELLER`/`#else` pair gating it: the `^T` key binding (`pico/ebind.h`,
+      two identical copies in the two keymap tables), the `spell()`
+      prototype (`pico/efunc.h`, both variants), the F12 function-key
+      mapping in the two standalone-pico `pfkm[]`/`fkm[]` tables
+      (`pico/pico.c`, `pico/main.c` — collapsed to the permanent `#else`
+      case, `CTRL|'D'`), and the "To Spell" vs. "Del Char" key-help label
+      pairs in `pico/display.c`'s `modeline()` (collapsed to "Del Char").
+      Removed the one-line "To invoke the spelling checker" entry from
+      `pico/bind.c`'s standalone `^G` help-text array (Pine's own help
+      screens were already gutted in item 3; this is pico's separate
+      built-in help).
+- [x] Verified: clean rebuild (`./build lnx`, without `./build clean` — see
+      "Build process issues" below) with no new warnings; `nm bin/pine`
+      shows no `spell`/`alt_editor` symbols. Full smoketest suite (6/6)
+      passes. text+data+bss dropped from 581554 to 576617 bytes (497977 +
+      18944 + 59696) — a real, if modest, win: unlike most earlier DOS-only
+      removals, `spell.c` was genuinely linked into the Linux binary before
+      this change.
 
 ### 8. Drop printer support
 - [ ] Remove `pine/print.c` (~11KB): `open_printer`, `select_printer`,
