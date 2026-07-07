@@ -228,10 +228,74 @@ is still ~970KB, way over budget.
       didn't hold, and shedding the DOS-only dead weight that had built up
       around `V_CHAR_SET`.
 
-### 6. Drop color + mouse support
-- [ ] Remove ANSI color config screens and color escape-sequence logic in
-      `pine/screen.c` / `pine/ttyout.c`.
-- [ ] Remove xterm mouse tracking support.
+### 6. Drop color + mouse support — DONE (premise mostly didn't hold either)
+- [x] Neither ANSI/xterm color nor xterm mouse-tracking exist in this Pine
+      3.89 tree — both are later Pine/Alpine additions. There's no
+      `pine/color.c`, no `V_*COLOR*` pinerc variable, no color escape-sequence
+      (SGR `\033[...m`) generation anywhere in `pine/*.c`/`pico/*.c`, and no
+      xterm mouse-reporting escapes (`\033[?1000h/l` or similar) either.
+      Every "color"/"mouse" hit in the tree is MS-DOS-only: `pine/ttyout.c`'s
+      DOS-only `ClearScreen()` (BIOS `int86(0x10,...)` video interrupt, not
+      ANSI), `pico/ibmpc.c` (EGA/VGA text-attribute routines for pico's IBM-PC
+      screen driver), and a handful of `#if defined(DOS) && defined(MOUSE)`/
+      `#ifdef MOUSE` blocks in `pine/ttyin.c`, `pine/mailindx.c`,
+      `pine/screen.c`, `pico/display.c`, `pico/pico.c`, `pico/main.c` that
+      wrap calls into the DOS INT 33h mouse driver
+      (`pico/os_dos.c`/`os_dos.h`). None of this compiles on the Unix/PDP-11
+      target — `DOS` is never defined by `makefile.lnx`/`pico/makefile.lnx` —
+      so there was no color/mouse-specific branch-stripping to do in the
+      shared screen-painting code (no color/mouse parameter is threaded
+      through `output_keymenu()`, `Write_to_screen`, etc.).
+      Deleted the three files that exist solely to implement DOS color/mouse
+      and are referenced only by the DOS-only `pico/makefile.msc` (same
+      "DOS makefiles aren't kept in sync" precedent as `dosextra`/
+      `helpindx.c` in items 3/5): `pico/os_dos.c` (1459 lines), `pico/os_dos.h`
+      (109 lines), `pico/ibmpc.c` (407 lines).
+- [x] Verified: clean rebuild, no errors/warnings change, full smoketest
+      suite (6/6) passes. text+data+bss unchanged (581554 bytes) — expected,
+      since none of the deleted code was ever compiled into the Linux
+      binary; the value here was closing out a TODO item whose premise
+      (color/mouse support needing removal) didn't apply to this old a Pine
+      version, while still shedding ~2000 lines of DOS-only dead source.
+
+### Follow-up: broader MS-DOS dead-code sweep (not a numbered cut, general cleanup)
+- [x] Surveyed the whole tree for remaining DOS-only material beyond item 6's
+      color/mouse scope and removed the largest, safest chunks (~200KB
+      identified total; skipped the long tail of scattered 2-15 line
+      `#ifdef DOS` scraps in `send.c`/`pine.c`/`mailcmd.c`/`reply.c`/`init.c`/
+      etc. as low-value for the effort):
+      - Deleted c-client's five MS-DOS network-stack `osdep` variants
+        (B&W/PC-NFS/Novell/PC-TCP/Waterloo TCP) and their DOS-only makefiles,
+        confirmed unreferenced by `imap/ANSI/c-client/makefile.lnx`:
+        `os_dbw.c/.h`, `os_dnf.c/.h`, `os_dnv.c/.h`, `os_dpc.c/.h`,
+        `os_dwa.c/.h`, `dummydos.c`, `sm_dos.c`, and
+        `makefile.dbw/.dnf/.dnv/.dpc/.dwa` (~75KB C source + 5 makefiles).
+      - Deleted 16 `pine/osdep/*.dos` fragment files plus `os-dos.h`,
+        `os-dos.ic`, and `pine/osdep/makefile.dos` (~39KB) — confirmed via
+        `os-lnx.ic` that none of these fragments are ever `include()`'d for
+        the Linux build (every other platform's `.ic` manifest only
+        *mentions* them in comments, describing alternatives; only
+        `os-dos.ic` actually `include()`s them). Left `pine/osdep/makefile`'s
+        stale generic `os-dos.c:` rule alone (same "DOS makefiles/rules
+        aren't kept in sync" precedent as elsewhere).
+      - Removed the two giant, explicitly-labeled `#ifndef DOS ... #else
+        /* DOS */ ... #endif` halves that switch entire files between Unix
+        and DOS implementations: `pine/ttyout.c` (was 2189 lines, DOS half
+        was lines 1374-2189, 816 lines) and `pine/ttyin.c` (was 1710 lines,
+        DOS half was lines 846-1113, 268 lines) — removed each `#else`
+        branch plus its now-redundant opening `#ifndef DOS`, leaving the
+        Unix implementation unconditional. Left the ~15 smaller/scattered
+        `#ifdef DOS` blocks in `ttyin.c` (mouse/DOS-keyboard bits past the
+        giant switch) and in other files alone.
+- [x] Verified: clean rebuild, `ttyout.c`/`ttyin.c` compile standalone with
+      `gcc -fsyntax-only` producing no new warnings (confirms the `#ifndef
+      DOS`/`#else`/`#endif` triples were correctly matched, not some inner
+      nested conditional), full smoketest suite (6/6) passes. text+data+bss
+      unchanged at 581554 bytes, as expected — every byte removed here was
+      already dead-on-Linux code, never compiled into the binary. Value is
+      source-tree size (~1084 lines / ~114KB of source deleted across
+      c-client + osdep + ttyin/ttyout) and reduced confusion for future
+      passes over these files, not runtime footprint.
 
 ### 7. Drop external editor + spell-check hooks
 - [ ] Remove `F_ENABLE_ALT_ED` / alternate editor exec logic; force built-in
