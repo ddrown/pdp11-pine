@@ -609,17 +609,6 @@ do_jump:
           break;
 
 
-          /*---------- print message on paper ----------*/
-        case OPF9:
-        case 'y':
-do_print:
-          if(ps_global->max_msgno == 0)
-              q_status_message(0, 1, 3, "\007No message in folder");
-          else
-              print_message(ps_global->current_sorted_msgno);
-          break;
-
-
           /*---------- Save Message ----------*/
         case OPF11: 
         case 's':
@@ -2354,39 +2343,6 @@ search_headers(command_line, sorted_msg, max_msg)
     return(i);
 }
     
-
-/*----------------------------------------------------------------------
-    Print message number "m"
-
-  Args:  m - Message number to print.
-
- Filters the original header and sends stuff to printer
-  ---*/
-print_message(sorted_m)
-     long sorted_m;
-{
-    char           prompt[30];
-    ENVELOPE      *e;
-    BODY	  *b;
-
-    sprintf(prompt, "message %ld ", sorted_m);
-    if(open_printer(prompt) == 0) {
-        e    = mail_fetchstructure(ps_global->mail_stream,
-                                  ps_global->sort[sorted_m],
-				  &b);
-
-        if(!format_message(ps_global->sort[sorted_m], e, b,
-			   (FM_NEW_MESS|FM_DO_PRINT), print_char)){
-	    q_status_message(0, 1, 3, "\007Error printing message");
-	    return(0);
-	}
-
-        close_printer();
-    }
-
-    return(1);
-}
-
 
 
 /*----------------------------------------------------------------------

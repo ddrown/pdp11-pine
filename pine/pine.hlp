@@ -126,12 +126,6 @@ RETURN to use your login from this host as is, or edit it with delete key.
 ========== h_oe_passwd ==========
 Type your password for the host and login shown as part of the prompt.  Press 
 ^C to cancel opening folder.
-========== h_oe_choosep ==========
-Enter the number associated with the printer you want to select.  Press ^C to
-cancel the printer selection.  The current selection is shown high lit.
-========== h_oe_customp ==========
-Type the name of the Unix print command and press RETURN.  Press ^C to cancel
-the printer selection.
 ========== h_oe_searchview ==========
 Type the word or name you want to search for and press RETURN.  If you press
 RETURN without entering anything the word in [] will be searched for.

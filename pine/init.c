@@ -217,12 +217,12 @@ static struct variable variables[] = {
   "Program to view images if format such as GIF and TIFF"},
 {"use-only-domain-name",       0, 1, 0, 1, 1, 0,
   ONLY_DOMAIN_TEXT},
-{"printer",                    0, 1, 0, 1, 1, 0,
-  "Your printer selection"},
-{"personal-print-command",     0, 1, 0, 1, 0, 0,
-  "Special print command if it isn't one of the standard printers"},
-{"standard-printer",           0, 1, 0, 0, 1, 0,
-  "The system wide standard printer"},
+{"printer",                    1, 1, 0, 1, 1, 0,
+  "Printing is disabled, this build has no printer support"},
+{"personal-print-command",     1, 1, 0, 1, 0, 0,
+  "Printing is disabled, this build has no printer support"},
+{"standard-printer",           1, 1, 0, 0, 1, 0,
+  "Printing is disabled, this build has no printer support"},
 {"last-time-prune-questioned" ,0, 1, 0, 1, 0, 0,
   "Date last time you were asked about deleting old sent-mail (automatic)"},
 {"last-version-used",          0, 1, 0, 1, 0, 0,
@@ -296,8 +296,6 @@ init_vars(ps)
 
     /*--- The defaults here are defined in os-xxx.h so they can vary
           per machine ---*/
-    vars[V_PRINTER].global_val.p          = cpystr(DF_DEFAULT_PRINTER);
-    vars[V_STANDARD_PRINTER].global_val.p = cpystr(DF_STANDARD_PRINTER);
     vars[V_ELM_STYLE_SAVE].global_val.p   = cpystr(DF_ELM_STYLE_SAVE);
     vars[V_SAVE_BY_SENDER].global_val.p   = cpystr(DF_SAVE_BY_SENDER);
     vars[V_HEADER_IN_REPLY].global_val.p  = cpystr(DF_HEADER_IN_REPLY);
@@ -372,10 +370,6 @@ init_vars(ps)
     /* obsolete, backwards compatibility */
     set_current_val(vars,V_HEADER_IN_REPLY, TRUE);
     obs_header_in_reply=!strucmp(VAR_HEADER_IN_REPLY, "yes");
-
-    set_current_val(vars,V_PRINTER, TRUE);
-    set_current_val(vars, V_PERSONAL_PRINT_COMMAND, TRUE);
-    set_current_val(vars, V_STANDARD_PRINTER, TRUE);
 
     set_current_val(vars, V_LAST_TIME_PRUNE_QUESTION, TRUE);
     if(VAR_LAST_TIME_PRUNE_QUESTION != NULL) {
@@ -1707,7 +1701,7 @@ write_pinerc(ps)
            }else if(var == &variables[V_FEATURE_LIST]) {
              if(fprintf(f, "\n%s\n", EXTRA_BEFORE_FEATURE_LIST) == EOF)
                goto io_err;
-           }else if(var == &variables[V_PRINTER]) {
+           }else if(var == &variables[V_LAST_TIME_PRUNE_QUESTION]) {
              if(fprintf(f, "\n%s\n", EXTRA_BEFORE_PRINTER) == EOF)
                goto io_err;
            }

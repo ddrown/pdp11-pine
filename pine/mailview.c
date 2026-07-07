@@ -66,7 +66,6 @@ static char rcsid[] = "$Id: mailview.c,v 4.71 1993/12/06 20:09:20 mikes Exp $";
 #ifdef ANSI
 void       format_envelope(ENVELOPE *, gf_io_t);
 void	   set_scroll_text(void *, int, int, int, SourceType);
-static int print_to_printer(void *, SourceType, char *);
 void       describe_mime(BODY *, char *, int, int);
 void       format_mime_size(char *, BODY *);
 void       zero_atmts(struct attachment *);
@@ -84,7 +83,6 @@ char      *display_parameters(PARAMETER *);
 void       format_envelope();
 void	   set_scroll_text();
 void       scroll_scroll_text();
-static int print_to_printer();
 int        search_scroll_text();
 void       describe_mime();
 char      *type_desc();
@@ -1018,7 +1016,7 @@ part_desc(number, body, type)
 static struct key help_keys[] =
        {{"M","Main Menu",0},  {NULL,NULL,0},            {"E","Exit Help",0},
         {NULL,NULL,0},        {NULL,NULL,0},            {NULL,NULL,0},
-        {"-","PrevPage",0},   {"Spc","NextPage",0},     {"Y","Print",0},
+        {"-","PrevPage",0},   {"Spc","NextPage",0},     {NULL,NULL,0},
         {NULL,NULL,0},        {NULL,NULL,0},            {"W", "WhereIs",0}};
 static struct key_menu help_keymenu =
 	{sizeof(help_keys)/(sizeof(help_keys[0])*12), 0, 0,0,0,0, help_keys};
@@ -1026,7 +1024,7 @@ static struct key_menu help_keymenu =
 static struct key composer_help_keys[] =
        {{NULL,NULL,0},        {NULL,NULL,0},            {"E","Exit Help",0},
         {NULL,NULL,0},        {NULL,NULL,0},            {NULL,NULL,0},
-        {"-","PrevPage",0},   {"Spc","NextPage",0},     {"Y","Print",0},
+        {"-","PrevPage",0},   {"Spc","NextPage",0},     {NULL,NULL,0},
         {NULL,NULL,0},        {NULL,NULL,0},            {"W", "WhereIs",0}};
 static struct key_menu composer_help_keymenu =
     {sizeof(composer_help_keys)/(sizeof(composer_help_keys[0])*12), 0, 0,0,0,0,
@@ -1040,7 +1038,7 @@ static struct key view_keys[] =
 
         {"?","Help",0},        {"O","OTHER CMDS",0},    {"Q","Quit",0},
         {"C","Compose",0},     {"L","ListFldrs",0},     {"G","GotoFldr",0},
-        {"I","Index",0},       {"W","WhereIs",0},       {"Y","Print",0},
+        {"I","Index",0},       {"W","WhereIs",0},       {NULL,NULL,0},
         {NULL,NULL,0},         {"S","Save",0},          {"E","Export",0},
 
         {"?","Help",0},        {"O","OTHER CMDS",0},    {NULL,NULL,0},
@@ -1056,8 +1054,8 @@ static struct key_menu view_keymenu =
 
 static struct key text_att_view_keys[] =
        {{"?","Help",0},       {NULL,NULL,0},           {"E","Exit Viewer",0},
-        {NULL,NULL,0},        {NULL,NULL,0},           {NULL,NULL,0},        
-        {"-","PrevPage",0},   {"Spc","NextPage",0},    {"Y","Print",0},
+        {NULL,NULL,0},        {NULL,NULL,0},           {NULL,NULL,0},
+        {"-","PrevPage",0},   {"Spc","NextPage",0},    {NULL,NULL,0},
         {NULL,NULL,0},        {"S","Save",0},          {"W", "WhereIs",0}};
 static struct key_menu text_att_view_keymenu =
      {sizeof(text_att_view_keys)/(sizeof(text_att_view_keys[0])*12), 0, 0,0,0,0,
@@ -1539,14 +1537,6 @@ whereis:
     	        }else if(ch == PF3 || ch == 'e') {
     	            /*----------- Done -----------*/
                     done = 1;
-                }else if(ch == 'y' || ch == PF9) {
-    	            /*----------- Print ------------*/
-		    char message[12];
-		    if(style == AttachText)
-			strcpy(message, "attachment ");
-		    else
-			strcpy(message, "help text ");
-		    print_to_printer(text, source, message);
                 }else {
 unknown:
     	            /*----------- Unknown command -------*/
@@ -1569,51 +1559,6 @@ unknown:
       zero_scroll_text();	/* very important to zero out on return!!! */
 
     return;
-}
-
-
-/*----------------------------------------------------------------------
-      Print text on paper
-
-    Args:  text -- The text to print out
-	   source -- What type of source text is
-	   message -- Message for open_printer()
-    Handling of error conditions is very poor.
-
-  ----*/
-static int
-print_to_printer(text, source, message)
-     void		*text;		/* the data to be printed */
-     SourceType		 source;	/* char **, char * or FILE * */
-     char		*message;
-{
-    register char **t;
-
-    if(open_printer(message) != 0)
-      return(-1);
-
-    if(source == CharStar && text != (char *)NULL) {
-        print_text((char *)text);
-
-    } else if(source == CharStarStar && text != (char **)NULL) {
-        for(t = text; *t != NULL; t++) {
-            print_text(*t);
-	    print_text(NEWLINE);
-        }
-
-    } else if(source == FileStar && text != (FILE *)NULL) {
-	size_t n;
-	int i;
-	fseek((FILE *)text, 0L, 0);
-	n = 20480 - 1;
-	while(i=fread((void *)tmp_20k_buf, sizeof(char), n, (FILE *)text)) {
-	    tmp_20k_buf[i] = '\0';
-	    print_text(tmp_20k_buf);
-	}
-    }
-
-    close_printer();
-    return(0);
 }
 
 

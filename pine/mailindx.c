@@ -68,7 +68,7 @@ static struct key index_keys[] =
 
       {"?","Help",0},         {"O","OTHER CMDS",0},  {"Q","Quit",0},
       {"C","Compose",0},      {"L","ListFldrs",0},   {"G","GotoFldr",0},
-      {"Z","Zoom",0},         {"W","WhereIs",0},     {"Y","Print",0},
+      {"Z","Zoom",0},         {"W","WhereIs",0},     {NULL,NULL,0},
       {NULL,NULL,0},          {"S","Save",0},        {"E","Export",0},
 
       {"?","Help",0},         {"O","OTHER CMDS",0},  {"X",NULL,0},

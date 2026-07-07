@@ -294,9 +294,9 @@
 #define V_EDITOR                   18  /* disabled, alternate editor not supported */
 #define V_IMAGE_VIEWER             19
 #define V_USE_ONLY_DOMAIN_NAME     20
-#define V_PRINTER                  21
-#define V_PERSONAL_PRINT_COMMAND   22
-#define V_STANDARD_PRINTER         23
+#define V_PRINTER                  21  /* disabled, printing not supported */
+#define V_PERSONAL_PRINT_COMMAND   22  /* disabled, printing not supported */
+#define V_STANDARD_PRINTER         23  /* disabled, printing not supported */
 #define V_LAST_TIME_PRUNE_QUESTION 24
 #define V_LAST_VERS_USED           25
 #define V_BUGS_NICKNAME            26
@@ -327,9 +327,6 @@
 #define VAR_SORT_KEY                 vars[V_SORT_KEY].current_val.p
 #define VAR_IMAGE_VIEWER             vars[V_IMAGE_VIEWER].current_val.p
 #define VAR_USE_ONLY_DOMAIN_NAME     vars[V_USE_ONLY_DOMAIN_NAME].current_val.p
-#define VAR_PRINTER                  vars[V_PRINTER].current_val.p
-#define VAR_PERSONAL_PRINT_COMMAND   vars[V_PERSONAL_PRINT_COMMAND].current_val.p
-#define VAR_STANDARD_PRINTER         vars[V_STANDARD_PRINTER].current_val.p
 #define VAR_LAST_TIME_PRUNE_QUESTION vars[V_LAST_TIME_PRUNE_QUESTION].current_val.p
 #define VAR_LAST_VERS_USED           vars[V_LAST_VERS_USED].current_val.p
 #define VAR_BUGS_NICKNAME            vars[V_BUGS_NICKNAME].current_val.p
@@ -902,7 +899,6 @@ char *broach_folder(int, int, CONTEXT_S **);
 int   do_broach_folder(char *, CONTEXT_S *);
 void  expunge_and_close(MAILSTREAM *, char *);
 int   export_message(int, long);
-int   print_message(long);
 long  search_headers(int, long, long);
 
 /*--- mailindx.c ---*/
@@ -1001,15 +997,6 @@ MsgNo       next_sorted_un(MAILSTREAM *, long, int *, int);
 MsgNo       sorted_msgno(struct pine *, MsgNo);
 void warn_other_cmds();
 
-/*-- print.c --*/
-int  open_printer(char *);
-void close_printer(void);
-int  print_char(int);
-void print_text(char *);
-void print_text1(char *, char *);
-void print_text2(char *, char *, char *);
-void print_text3(char *, char *, char *, char *);
-     
 /*-- reply.c --*/
 void     reply(struct pine *, long, ENVELOPE *, BODY *);
 void     forward(struct pine *, long, ENVELOPE *, BODY *);
@@ -1237,7 +1224,6 @@ char *broach_folder();
 int do_broach_folder();
 void expunge_and_close();
 int  export_message();
-int  print_message();
 int  save_msg();
 long search_headers();
 
@@ -1333,15 +1319,6 @@ MsgNo       next_sorted_un();
 MsgNo       sorted_msgno();
 void warn_other_cmds();
 
-/*-- print.c --*/
-int  open_printer();
-void close_printer();
-int  print_char();
-void print_text();
-void print_text1();
-void print_text2();
-void print_text3();
-     
 /*-- reply.c --*/
 void  reply();
 void  forward();

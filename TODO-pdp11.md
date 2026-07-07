@@ -347,9 +347,61 @@ is still ~970KB, way over budget.
       removals, `spell.c` was genuinely linked into the Linux binary before
       this change.
 
-### 8. Drop printer support
-- [ ] Remove `pine/print.c` (~11KB): `open_printer`, `select_printer`,
-      personal print command config.
+### 8. Drop printer support — DONE
+- [x] Deleted `pine/print.c` outright (`open_printer`/`close_printer`/
+      `print_char`/`print_text*`/`send_printer`/`printer_ready`/
+      `p_printer_error`) and dropped it from `pine/makefile.lnx`'s
+      obj/cfiles lists and build rule (this removes real linked code, same
+      as `spell.c` in item 7 -- not a DOS-only no-op removal).
+      Removed every entry point that fed it: `print_message()`
+      (`pine/mailcmd.c`, called from the index/message-view `'y'`/`OPF9`
+      command, shared via `process_cmd()`), `print_folders()`
+      (`pine/folder.c`, called from the folder-list screen's own `'y'`/
+      `OPF9` case), and `print_to_printer()` (`pine/mailview.c`, called
+      from the generic scroll-text viewer's `'y'`/`PF9` handling for
+      attachment/help-text display). Removed the three now-dead command
+      dispatch sites and blanked the six `"Y","Print"` key-menu label
+      slots across `pine/folder.c`, `pine/mailindx.c`, and
+      `pine/mailview.c` (kept the slot position as `{NULL,NULL,0}` rather
+      than deleting it outright, since these are fixed 12-slot
+      function-key grids shared with unrelated keys).
+      Note: `FM_DO_PRINT` (`pine/pine.h`) and its handling inside
+      `format_message()` (`pine/mailview.c`) were deliberately kept --
+      despite the name, that flag is shared between printing and the
+      Export command's flattened-text mode (`export_message()` in
+      `pine/mailcmd.c` passes `FM_NEW_MESS|FM_DO_PRINT` to get plain,
+      non-interactive formatting), and Export is an unrelated, still-live
+      feature.
+      Removed the printer-selection UI: `select_printer()`/
+      `redraw_printer_select()` (`pine/pine.c`), the Setup mini-menu's
+      `'p'`/"Printer" option (dropped from `setup_names[]` and the
+      `radio_buttons()` letter string), and the now-orphaned
+      `h_oe_choosep`/`h_oe_customp` help topics (`pine/pine.hlp`,
+      regenerated `helptext.c`/`helptext.h` via `cmplhelp.sh`/
+      `cmplhlp2.sh` -- gitignored build products).
+      Marked the `printer`, `personal-print-command`, and
+      `standard-printer` pinerc variables disabled via the established
+      obsolete-slot pattern (numeric `V_*` indices kept stable), removed
+      the now-dead `VAR_PRINTER`/`VAR_PERSONAL_PRINT_COMMAND`/
+      `VAR_STANDARD_PRINTER` macros and their `global_val`/
+      `set_current_val()` setup in `init.c`, and moved the
+      `EXTRA_BEFORE_PRINTER` pinerc-section-divider anchor in
+      `write_pinerc()` off of the now-obsolete (and thus skipped)
+      `V_PRINTER` slot onto the next surviving variable,
+      `V_LAST_TIME_PRUNE_QUESTION`, so freshly-written pinercs keep the
+      "system-managed, don't edit below" divider in the right place.
+      Left the unused `ANSI_PRINTER`/`DF_DEFAULT_PRINTER`/
+      `DF_STANDARD_PRINTER` macros in `pine/osdep/os-lnx.h` alone --
+      harmless dead defines, consistent with leaving similar unused
+      per-platform-header constants in place elsewhere.
+- [x] Verified: clean rebuild (`./build lnx`) with no new warnings (the
+      three pre-existing warnings in `folder.c`/`mailcmd.c` just shifted
+      line numbers). `nm bin/pine` shows no `print_message`/
+      `print_folders`/`open_printer`/`close_printer`/`select_printer`/
+      `print_char`/`print_text` symbols. Full smoketest suite (6/6)
+      passes. text+data+bss dropped from 576617 to 567448 bytes (489080 +
+      18768 + 59600) -- a real reduction, like item 7, since `print.c` was
+      genuinely linked in.
 
 ### 9. Drop `phile` driver
 - [ ] Remove `phile.o` from c-client build once address book/news are gone

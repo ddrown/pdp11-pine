@@ -89,10 +89,6 @@ void show_main_screen();
 void new_user_or_version();
 #endif
 static void do_setup_task();
-#ifndef DOS
-void select_printer();
-void redraw_printer_select();
-#endif
 
 static char *first_time_message[] = {
 #ifdef DOS
@@ -1176,8 +1172,7 @@ do_menu(quick_draw)
 }
 
 
-char *setup_names[] =	{"Printer",
-			 "Newpassword",
+char *setup_names[] =	{"Newpassword",
 			 "Options",
 			 "Update",
 			 "Exit",
@@ -1197,10 +1192,10 @@ setup_mini_menu(ql)
     HelpType  help;
 
     (void)strcpy(prompt,
-         "SETUP (Printer,Newpassword,Options,Update,[Exit]; type PNOU or E): ");
+         "SETUP (Newpassword,Options,Update,[Exit]; type NOU or E): ");
 
     help = h_mini_setup;
-    s = radio_buttons(prompt, ql, 0, "pnoue", setup_names, 'e', 'x', help, 0);
+    s = radio_buttons(prompt, ql, 0, "noue", setup_names, 'e', 'x', help, 0);
     /* ^C */
     if(s == 'x') {
 	Writechar('\007', 0);
@@ -1267,201 +1262,9 @@ do_setup_task(command)
 #endif	/* DOS */
         break;
 
-        /*----- CHOOSE PRINTER ------*/
-      case 'p':
-#ifdef	DOS
-	q_status_message(1, 3, 5,
-	    "Printer configuration not available in the DOS version of Pine.");
-	display_message('x');
-        sleep(3);
-#else
-        select_printer(); 
-	ClearScreen();
-	ps_global->mangled_screen = 1;
-#endif
-        break;
     }
 }
 
-#ifndef	DOS
-/*----------------------------------------------------------------------
-    The printer selection screen
-
-   Draws the screen and prompts for the printer number and the custom
-   command if so selected.
-
- ----*/
-
-void
-select_printer() 
-{
-    char           *prompt, pnum_string[80], *j, **help;
-    int             rc, pnum, printer_count, qline;
-
-    printer_count = 3;
-
-    ClearScreen();
-
-    set_titlebar("SELECT PRINTER",1, FolderName, 0, 0, 0);
-    redraw_printer_select();
-
-    ps_global->redrawer = redraw_printer_select;
-
-    blank_keymenu(ps_global->ttyo->screen_rows - 2, 0);
-
-    display_message('x');
-
-    qline          = -3;
-    pnum_string[0] = '\0';
-    prompt         = "Enter printer number from above (1-3): ";
-    help           = NO_HELP;
-    while (1) {
-        rc = optionally_enter(pnum_string, qline, 0,
-                              sizeof(pnum_string) - 1, 1, 0, prompt,
-                              NULL, help, 0);
-        if(rc == 3) {
-            help = help == NO_HELP ? h_oe_choosep : NO_HELP;
-            continue;
-        } 
-
-        if(rc == 0 && *pnum_string != '\0') {
-            for(j = pnum_string; isdigit(*j) || *j == '-'; j++);
-	    if(*j != '\0') {
-	        q_status_message(0, 2,2,
-                           "\007Invalid number entered. Use only digits 0-9");
-            } else {
-                pnum = atoi(pnum_string);
-                if(pnum < 1) {
-	            q_status_message1(0, 2,2,
-                               "\007Printer number %s must be greater than 0",
-                                      int2string(pnum));
-                } else if(pnum > printer_count) {
-                    q_status_message1(0, 2, 2,
-                                      "\007Printer number must be %s or less",
-                                      int2string(printer_count));
-                } else {
-                    break;
-                }
-            }
-            pnum_string[0] = '\0';
-            display_message(NO_OP_COMMAND);
-            sleep (3);
-            continue;
-	}
-
-        if(rc != 4) {
-            q_status_message(0, 0, 3, "\007Printer selection cancelled");
-            return;
-        }
-    }
-
-    if(pnum) {
-        if(pnum == 1) {
-            rc = set_variable(V_PRINTER, ANSI_PRINTER);
-        } else if(pnum == 2) {
-            rc = set_variable(V_PRINTER,ps_global->VAR_STANDARD_PRINTER);
-        } else if(pnum == 3) {
-            char custom_command[100];
-            strcpy(custom_command,
-                   ps_global->VAR_PERSONAL_PRINT_COMMAND == NULL ? "" :
-                                      ps_global->VAR_PERSONAL_PRINT_COMMAND);
-            help = NO_HELP;
-            do {
-                rc = optionally_enter(custom_command, -3, 0,
-                                      sizeof(custom_command) - 1, 1, 0,
-                                      "Command for custom printer: ", NULL,
-                                      help, 0);
-                if(rc == 3) {
-                    help = help == NO_HELP ? h_oe_customp : NO_HELP;
-                }
-            } while(rc == 3 || rc == 4);
-            if(ps_global->restricted) {
-                q_status_message(1, 2, 4,
-                            "\007Can select custom printer in Pine demo");
-                return;
-            }
-            if(rc == 1) {
-                q_status_message(0, 0,2, "\007Printer selection cancelled");
-                return;
-            }
-            set_variable(V_PRINTER, custom_command);
-            rc = set_variable(V_PERSONAL_PRINT_COMMAND, custom_command);
-        }
-        if(rc == 0)
-          q_status_message1(0,1,3,"Printer set to \"%s\"; configuration saved",
-                            ps_global->VAR_PRINTER);
-    }
-}
-
-
-/*----------------------------------------------------------------------
-    Paint the printer selection menu body on the screen
-
-   No arguments or return value
- ----*/
-void
-redraw_printer_select()
-{
-    int   l, matched_printer = 0;
-
-    l = 2;
-    PutLine0(l++, 3, "1. Printer attached to IBM PC or compatible, MacIntosh");
-    PutLine0(l++, 6,
-     "This may not work with all attached printers, and will depend on the");
-    PutLine0(l++, 6, 
-     "terminal emulation/communications software in use. It is known to work");
-    PutLine0(l++, 6,
-     "with Kermit and the latest UW version of NCSA telnet on Macs and PCs,");
-    PutLine0(l++, 6,
-     "Versaterm Pro on Macs, and WRQ Reflections on PCs.");
-    PutLine0(l, 10, "Command:");
-    if(strcmp(ps_global->VAR_PRINTER, ANSI_PRINTER) == 0) {
-        matched_printer = 1;
-        StartInverse();
-    }
-    PutLine0(l++, 19, ANSI_PRINTER);
-    if(strcmp(ps_global->VAR_PRINTER, ANSI_PRINTER) == 0)
-      EndInverse();
-
-    l++;
-    PutLine0(l++, 3, "2. Standard UNIX print command");
-    PutLine0(l++,6,
-       "Using this option may require setting your \"PRINTER\" or \"LPDEST\"");
-    PutLine0(l++, 6,    
-       "environment variable using the standard UNIX utilities.");
-    PutLine0(l, 10 , "Command: ");
-    if(ps_global->VAR_STANDARD_PRINTER != NULL &&
-       strcmp(ps_global->VAR_PRINTER, ps_global->VAR_STANDARD_PRINTER) == 0) {
-        matched_printer = 1;
-        StartInverse();
-    }
-    PutLine0(l++, 19, ps_global->VAR_STANDARD_PRINTER != NULL ?
-             ps_global->VAR_STANDARD_PRINTER : "");
-    if(ps_global->VAR_STANDARD_PRINTER != NULL &&
-       strcmp(ps_global->VAR_PRINTER, ps_global->VAR_STANDARD_PRINTER) == 0) 
-      EndInverse();
-
-
-    l++;
-    PutLine0(l++, 3, "3. Personally selected print command");
-    PutLine0(l++, 6,
-      "The text to be printed will be piped into the command given here. Some");
-    PutLine0(l++, 6,
-      "examples are: \"prt\", \"lpr\", \"lp\", or \"enscript\". The command may be given");
-    PutLine0(l++, 6,
-      "with options, for example \"enscript -2 -r\" or \"lpr -Plpacc170\". The");
-    PutLine0(l++, 6,
-      "commands and options on your system may be different from these examples.");
-    PutLine0(l, 10,  "Command: ");
-    if(!matched_printer)  
-      StartInverse();
-    PutLine0(l, 19, ps_global->VAR_PERSONAL_PRINT_COMMAND == NULL ? "" :
-                   ps_global->VAR_PERSONAL_PRINT_COMMAND);
-    if(!matched_printer)
-      EndInverse();
-    fflush(stdout);
-}
-#endif	/* !DOS */
 
 
 /*

@@ -129,7 +129,6 @@ int        off_folder_display(FSTATE_S *, int, CONTEXT_S *);
 char      *add_new_folder(int, CONTEXT_S *);
 char      *rename_folder(int, int, CONTEXT_S *);
 int        delete_folder(int, CONTEXT_S *, int *);
-void       print_folders(FSTATE_S *);
 int        search_folders(FSTATE_S *, int);
 int        compare_names(QSType *, QSType *);
 int        compare_sizes(QSType *, QSType *);
@@ -158,7 +157,6 @@ int        off_folder_display();
 char      *add_new_folder();
 char      *rename_folder();
 int        delete_folder();
-void       print_folders();
 int        search_folders();
 int        compare_names();
 int        compare_sizes();
@@ -184,7 +182,7 @@ static struct key folder_keys[] =
 
      {"?","Help",0},      {"O","OTHER CMDS",0},    {"Q","Quit",0},
      {"C","Compose",0},   {NULL,NULL,0},           {"G","GotoFldr",0},
-     {"I","CurIndex",0},  {"W","WhereIs",0},       {"Y","Print",0},
+     {"I","CurIndex",0},  {"W","WhereIs",0},       {NULL,NULL,0},
      {NULL,NULL,0},       {NULL,NULL,0},           {NULL,NULL,0}};
 static struct key_menu folder_keymenu =
   {sizeof(folder_keys)/(sizeof(folder_keys[0])*12), 0, 0,0,0,0,folder_keys};
@@ -842,16 +840,6 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
             }
 
             mangled_footer++;
-	    break;
-
-
-             /*------------- Print list of folders ---------*/
-          case OPF9:
-	  case 'y':
-	    if(do_what != FolderMaint)
-	      goto bleep;
-
-            print_folders(&fs);
 	    break;
 
 
@@ -1536,107 +1524,6 @@ delete_folder(index, cntxt, mangled_header)
 
 
 
-/*----------------------------------------------------------------------
-      Print the list of folders on paper
-
-   Args: list    --  The current list of folders
-         lens    --  The list of lengths of the current folders
-         display --  The current folder display structure
-
- Result: list printed on paper
-
-If the display list was created for 80 columns it is used, otherwise
-a new list is created for 80 columns
-
-  ----*/
-
-void
-print_folders(display)
-    FSTATE_S  *display;
-{
-    int i, index, l;
-    CONTEXT_S *context;
-    FOLDER_S  *f;
-    char       buf[256];
-
-    if(ps_global->ttyo->screen_cols != 80)
-      create_folder_display(display, 80);
-
-    if(open_printer("folder list ") != 0)
-      return;
-
-    context = display->context_list;
-    index   = i = 0;
-    while(context){
-	for(;i < context->d_line;i++) /* leading spaces */
-	  print_text(NEWLINE);
-
-	memset((void *)tmp_20k_buf,'-', 80 * sizeof(char));
-	tmp_20k_buf[80] = '\0';
-	print_text(tmp_20k_buf);
-	print_text(NEWLINE);
-	i++;
-
-	memset((void *)tmp_20k_buf,' ', 80 * sizeof(char));
-	tmp_20k_buf[80] = '\0';
-	if(context->use & CNTXT_INCMNG){
-	    i = strlen(context->label[0]);
-	    strncpy(tmp_20k_buf + max(40 - (i/2), 0), context->label[0], i);
-	}
-	else{
-	    sprintf(tmp_20k_buf + 80 + 2, 
-		    " %s-collection <%s>  %s", 
-		    "Mail",
-		    context->label[0], 
-		    (context->use & CNTXT_SAVEDFLT)
-		                   ? "** Default for Saves **" : "");
-	    strncpy(tmp_20k_buf, 
-		    tmp_20k_buf + 80 + 2, 
-		    strlen(tmp_20k_buf + 80 + 2));
-	    strncpy(tmp_20k_buf + 80
-		               - ((context->type & FTYPE_REMOTE) ? 9 : 8),
-		    (context->type & FTYPE_REMOTE)?"(Remote)":"(Local)",
-		    (context->type & FTYPE_REMOTE) ? 8 : 7);
-	}
-	    print_text(tmp_20k_buf);
-	    print_text(NEWLINE);
-	    i++;
-
-	memset((void *)tmp_20k_buf,'-',80 * sizeof(char));
-	tmp_20k_buf[80] = '\0';
-	print_text(tmp_20k_buf);
-	print_text(NEWLINE);
-	i++;
-
-	for(i++; folder_total(context->folders) 
-	    && i < (int)folder_entry(0, context->folders)->d_line ; i++)
-	  print_text(NEWLINE);
-
-	*tmp_20k_buf = '\0';
-	for(index=0; index < folder_total(context->folders); index++){
-	    f = folder_entry(index, context->folders);
-	    if(f->d_col == 0){
-		i++;
-		strcat(tmp_20k_buf, NEWLINE);
-		print_text(tmp_20k_buf);
-		tmp_20k_buf[0] = '\0';
-	    }
-
-	    l = strlen(tmp_20k_buf);
-	    sprintf(buf, "%*s", f->name_len + max(0,((int)f->d_col - l)),
-		    (f->nickname) ? f->nickname : f->name);
-	    strcat(tmp_20k_buf, buf);
-	}
-
-	print_text(tmp_20k_buf);
-	print_text(NEWLINE);
-	context = context->next;
-    }
-
-    close_printer();
-    if(ps_global->ttyo->screen_cols != 80)
-      create_folder_display(display, ps_global->ttyo->screen_cols);
-}
 
                      
 
