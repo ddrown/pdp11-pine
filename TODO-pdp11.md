@@ -403,9 +403,39 @@ is still ~970KB, way over budget.
       18768 + 59600) -- a real reduction, like item 7, since `print.c` was
       genuinely linked in.
 
-### 9. Drop `phile` driver
-- [ ] Remove `phile.o` from c-client build once address book/news are gone
-      (lets arbitrary Unix files be opened as folders — narrow use case).
+### 9. Drop `phile` driver — DONE
+- [x] Removed `phile.o` from `imap/ANSI/c-client/makefile.lnx` (dropped from
+      the `c-client.a` archive member list, the `ar rc` command, and its
+      build rule), same pattern as item 1's `smtp.o` removal. Left
+      `phile.c`/`phile.h` themselves untouched (same precedent as
+      `smtp.c`/`smtp.h`  — these are upstream c-client driver sources, only
+      dropped from the build, not deleted).
+- [x] Investigated first: `phile` (arbitrary Unix files as folders) was
+      *never* linked into `bin/pine` in the first place — `pine/pine.c` only
+      calls `mail_link()` for `bezerkdriver` and `dummydriver`; the only
+      other reference to `philedriver` anywhere in the tree was
+      `imap/ANSI/c-client/mtest.c` (the c-client diagnostic tool, not part of
+      the pine build). Since `c-client.a` is a static archive, the linker
+      was already excluding `phile.o` from `bin/pine` — confirmed via `nm`
+      showing zero `phile_*`/`philedriver` symbols both before and after
+      this change.
+- [x] `mtest`'s build was already broken before this change (per item 1,
+      `smtp.c` calls in `mtest.c`); removing `phile.o` adds another reason
+      it won't link, left as-is since `mtest` isn't part of the pine build.
+- [x] Verified: clean rebuild (`./build lnx`) with no new warnings (the
+      pre-existing unrelated `imapd.c` fetch-attribute-table build failure,
+      documented in item 8, is still present and still pre-existing — c-client
+      driver removal doesn't touch `imapd.c`). Had to `rm -f c-client.a
+      phile.o` manually once, since `make`'s dependency check considered the
+      already-built `c-client.a` up to date against its (unchanged) `.o`
+      prerequisites and wouldn't notice the archive-member list itself had
+      changed in the makefile recipe. `ar t c-client.a` confirms `phile.o`
+      is gone from the archive. `nm bin/pine` still shows no phile symbols.
+      Full smoketest suite (6/6) passes. text+data+bss unchanged at 567448
+      bytes (489080+18768+59600) — no size reduction, since `phile.o` was
+      dead weight in the archive already, not linked into the final binary;
+      this cut is about not compiling+archiving unused code each build, not
+      about shrinking `bin/pine` itself.
 
 ## Buffer right-sizing (not feature cuts, but required regardless)
 These fixed global buffers alone can blow a PDP-11 data segment:
