@@ -39,15 +39,8 @@ LDFLAGS =
 
 all: c-client.a
 
-mtest: mtest.o c-client.a
-	echo $(CFLAGS) > CFLAGS
-	echo $(LDFLAGS) > LDFLAGS
-	$(CC) $(CFLAGS) -o mtest mtest.o c-client.a $(LDFLAGS)
-
 clean:
-	rm -f *.o mtest c-client.a osdep.* CFLAGS LDFLAGS
-
-mtest.o: mail.h misc.h osdep.h
+	rm -f *.o c-client.a osdep.* CFLAGS LDFLAGS
 
 c-client.a: mail.o bezerk.o mbox.o \
 	dummy.o rfc822.o misc.o osdep.o sm_unix.o

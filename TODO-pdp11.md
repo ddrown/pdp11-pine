@@ -437,6 +437,36 @@ is still ~970KB, way over budget.
       this cut is about not compiling+archiving unused code each build, not
       about shrinking `bin/pine` itself.
 
+### Follow-up: remove `mtest`/`imapd` diagnostic/server tools (not part of pine build)
+- [x] Neither was ever part of the shipped `bin/pine` binary or its build
+      path: `imap/ANSI/c-client/makefile.lnx`'s default `all:` target only
+      builds `c-client.a`, and `./build lnx` never asked for the `mtest`
+      target — confirmed `bin/mtest` never existed even before this change.
+      `imapd` (the IMAP4 *server* daemon, for client/server mode) is
+      irrelevant on a target with no TCP/IP per the top-of-file premise, and
+      was already broken (`imapd.c`'s fetch-attribute-table build failure,
+      noted as pre-existing in items 8 and 9).
+- [x] Deleted `imap/ANSI/c-client/mtest.c` and its `mtest`/`mtest.o` build
+      rules from `makefile.lnx`. Deleted `imap/ANSI/imapd/` entirely
+      (`imapd.c`, `imapd.8c`, `Makefile`) — unlike the smtp.c/phile.c
+      precedent of leaving unused c-client *driver* sources in place, these
+      are whole standalone diagnostic/server programs with no other
+      relationship to the pine build, so full removal (rather than an
+      unbuilt leftover) was the better cut.
+- [x] Updated the top-level `build` script: removed the `imapd`/`mtest` help
+      text, the `imapd` symlink setup/teardown, the "Making Imapd" step, the
+      `bin/mtest`/`bin/imapd` linking and `size` invocation, and the
+      `imapd`-cleaning block from the `clean` target. Removed the stale
+      `imapd` symlink left over from before this change (gitignored, not
+      tracked).
+- [x] Verified: clean rebuild (`rm -f c-client.a *.o` in c-client dir, then
+      `./build lnx`) now completes with **zero errors** for the first time
+      this session — previously every rebuild logged the pre-existing
+      `imapd.c` fetch-attribute-table failure as noise to filter past.
+      Full smoketest suite (6/6) passes. `size` unchanged: `bin/pine`
+      567448 bytes (489080+18768+59600), since neither tool was ever linked
+      into it.
+
 ## Buffer right-sizing (not feature cuts, but required regardless)
 These fixed global buffers alone can blow a PDP-11 data segment:
 - [ ] `tmp_20k_buf` (20KB) — `pine/folder.c`

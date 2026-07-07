@@ -88,14 +88,6 @@ The executables built by this are:
  
  pico   The standalone editor similar to the Pine message composer.
         This is a very simple straight forward text editor.
- 
- imapd  The IMAP daemon. If you want to run Pine in client/server mode,
-        this is the daemon to run on the server. Installing this
-        requires system privileges and modifications to /etc/services.
-        See doc/tech-notes for more details.
- 
- mtest  The test IMAP client, an absolutely minimal mail client, useful
-        for debugging.
 
 In general you should be able to just copy the Pine and Pico binaries
 to the place you keep your other local binaries. /usr/local/bin is a
@@ -149,24 +141,17 @@ case $maketarget in
         cd $PHOME
 
         if [ -s c-client ] ; then rm -f c-client ; fi
-        if [ -s imapd    ] ; then rm -f imapd    ; fi
         if [ -s imap/ANSI/c-client/makefile.$maketarget ] ; then
           ln -s imap/ANSI/c-client c-client
-          ln -s imap/ANSI/imapd imapd
         elif [ -s imap/non-ANSI/c-client/makefile.$maketarget ] ; then
           ln -s imap/non-ANSI/c-client c-client
-          ln -s imap/non-ANSI/imapd imapd
         fi
 
 	if [ -s c-client/makefile ] ; then rm -f c-client/makefile ; fi
 	ln -s makefile.$maketarget c-client/makefile
-        echo "Making c-client library and mtest"
+        echo "Making c-client library"
         cd $PHOME/c-client
         make $makeargs -f makefile.$maketarget
-        echo ''
-        echo "Making Imapd"
-        cd $PHOME/imapd
-        make $makeargs
         echo ''
         echo "Making Pico"
         cd $PHOME/pico
@@ -178,15 +163,13 @@ case $maketarget in
         cd $PHOME
         if [ ! -d bin ] ;  then    mkdir bin;        fi
         cd $PHOME/bin
-        rm -f pine mtest imapd pico
+        rm -f pine pico
         if [ -s ../pine/pine ] ;      then ln ../pine/pine  pine      ; fi
-        if [ -s ../c-client/mtest ] ; then ln ../c-client/mtest mtest ; fi
-        if [ -s ../imapd/imapd ] ;    then ln ../imapd/imapd imapd    ; fi
         if [ -s ../pico/pico ] ;      then ln ../pico/pico pico ; fi
         cd $PHOME
         echo ''
         echo "Links to executables are in bin directory:"
-        size bin/pine bin/mtest bin/imapd bin/pico
+        size bin/pine bin/pico
         echo "Done"
         ;;
 
@@ -201,12 +184,6 @@ case $maketarget in
 	    make -f makefile.nxt clean
 	  fi
 	  rm $PHOME/c-client
-	fi
-        echo "Cleaning imapd"
-	if [ -s $PHOME/imapd ] ; then
-          cd $PHOME/imapd
-          make clean
-	  rm $PHOME/imapd
 	fi
         echo "Cleaning Pine"
         cd $PHOME/pine
