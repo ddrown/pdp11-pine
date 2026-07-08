@@ -729,16 +729,35 @@ These fixed global buffers alone can blow a PDP-11 data segment:
         hundred lines up in this file (~line 145).
       Verified both: rebuilt clean, re-ran the valgrind repro — those two
       warnings are gone, full suite (9/9) still passes.
-- [ ] Third warning found by the same pass, NOT fixed: `pico/display.c`'s
-      `wstripe()` (~line 2044) reads `pscr(line,i)->c` from the physical
-      screen buffer that `vtinit()` (~line 143) allocates with plain
-      `malloc()` and never initializes (only `v_flag` is set to 0). Looks
-      like a deliberate screen-diffing trick — uninitialized garbage
-      almost certainly won't match the first real character, forcing an
-      initial redraw — and the same pattern recurs for `vscreen`
-      throughout `display.c`. Technically UB, but widespread/longstanding
-      in this file; fixing it properly would mean auditing the redraw
-      logic more broadly rather than a one-line guard. Left alone for now.
+- [x] Third warning found by the same pass: `pico/display.c`'s
+      `wstripe()` (~line 2044) read `pscr(line,i)->c` from the physical
+      screen buffer that `vtinit()` (~line 143) allocated with plain
+      `malloc()` and never initialized (only `v_flag` was set to 0). This
+      looked like a deliberate screen-diffing trick — uninitialized
+      garbage almost certainly won't match the first real character,
+      forcing an initial redraw — and the same pattern recurred for
+      `vscreen`. Fixed by `memset`ing each freshly `malloc`'d `VIDEO`
+      block (both `vscreen[i]` and `pscreen[i]` in `vtinit()`) to all
+      zero instead of just clearing `v_flag`: NUL can never match a real
+      printable/space screen character, so the "always differs, forces
+      first redraw" property is now deterministic rather than relying on
+      malloc's leftover bytes happening to differ. Verified: rebuilt
+      clean, re-ran the valgrind repro — 0 errors, 0 contexts; full suite
+      (9/9) still passes.
+- [ ] `pico/display.c`'s `resize_pico()` (~line 1693) has a similar
+      uninitialized-`pscreen`-cell gap to the one just fixed in
+      `vtinit()` above, but on the terminal-resize path: new rows added
+      via `malloc`, and the grown tail of existing rows' `CELL` arrays
+      via `realloc`, are left uninitialized. `vscreen`'s equivalent gap
+      is already handled there (an explicit `vteeol()` call fills the
+      newly-grown column range, gated on `old_ncol < term.t_ncol`), but
+      there's no matching call for `pscreen`. Not fixed alongside
+      `vtinit()` because `resize_pico()` sets `v_flag = VFCHG` (not 0) on
+      these rows, so a blanket `memset` would wipe that flag too — the
+      correct fix needs to clear only the grown tail region (mirroring
+      `vscreen`'s `vteeol()` approach) rather than the whole-block
+      `memset` used in `vtinit()`, and touches resize/redraw logic that's
+      riskier to change without a resize-path regression test.
 
 ## After each cut
 - [ ] Rebuild on Linux, confirm `size pine/pine` text+data+bss shrinks.

@@ -150,7 +150,7 @@ vtinit()
             return(FALSE);
 	}
 
-	vp->v_flag = 0;
+	memset((void *)vp, 0, sizeof(VIDEO)+(term.t_ncol*sizeof(CELL)));
         vscreen[i] = vp;
         vp = (VIDEO *) malloc(sizeof(VIDEO)+(term.t_ncol*sizeof(CELL)));
 
@@ -168,7 +168,7 @@ vtinit()
             return(FALSE);
 	}
 
-	vp->v_flag = 0;
+	memset((void *)vp, 0, sizeof(VIDEO)+(term.t_ncol*sizeof(CELL)));
         pscreen[i] = vp;
     }
 
