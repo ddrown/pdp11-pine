@@ -710,6 +710,35 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       inventing a new one. Verified: rebuilt clean, re-ran the plain
       compose+postpone valgrind repro — no more invalid reads at all;
       full suite (9/9) still passes.
+- [x] With all invalid reads/writes cleared, a further valgrind pass over
+      the same plain compose+postpone flow surfaced three
+      "uninitialised value" warnings and a small startup leak. Two fixed:
+      - `pico/composer.c`'s `LineEdit()` declared `int j;` (~line 850)
+        uninitialized and passed `&j` to `(*Pmaster->newmail)(&j, ...)`
+        (~line 877), which only sets `*cursor_moved` (`pine/newmail.c`)
+        on paths returning `>= 0` — its first check returns `-1` without
+        touching it. But `if(j || mpresf)` (~line 883) is *unconditional*,
+        outside that `>= 0` block, so `j` got read uninitialized whenever
+        `new_mail()`'s earliest bail-out fired. Fixed by initializing
+        `j = 0` at declaration.
+      - `imap/ANSI/c-client/bezerk.c`'s `bezerk_ping()` (~line 838) called
+        `stat(LOCAL->name,&sbuf)` and used `sbuf.st_size` without checking
+        the return value — a failed `stat()` (mailbox deleted/inaccessible
+        mid-session) left `sbuf` uninitialized. Fixed by guarding with
+        `!stat(...) &&`, matching the same idiom already used a few
+        hundred lines up in this file (~line 145).
+      Verified both: rebuilt clean, re-ran the valgrind repro — those two
+      warnings are gone, full suite (9/9) still passes.
+- [ ] Third warning found by the same pass, NOT fixed: `pico/display.c`'s
+      `wstripe()` (~line 2044) reads `pscr(line,i)->c` from the physical
+      screen buffer that `vtinit()` (~line 143) allocates with plain
+      `malloc()` and never initializes (only `v_flag` is set to 0). Looks
+      like a deliberate screen-diffing trick — uninitialized garbage
+      almost certainly won't match the first real character, forcing an
+      initial redraw — and the same pattern recurs for `vscreen`
+      throughout `display.c`. Technically UB, but widespread/longstanding
+      in this file; fixing it properly would mean auditing the redraw
+      logic more broadly rather than a one-line guard. Left alone for now.
 
 ## After each cut
 - [ ] Rebuild on Linux, confirm `size pine/pine` text+data+bss shrinks.

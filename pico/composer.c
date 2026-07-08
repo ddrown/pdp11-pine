@@ -847,7 +847,7 @@ int	allowedit;
     register int	ch = 0;
     register int	status;			/* various func's return val */
     register char	*tbufp;			/* temporary buffer pointers */
-	     int	j;
+	     int	j = 0;
 	     int	skipmove = 0;
              char	*strng;
 

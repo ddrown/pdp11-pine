@@ -835,8 +835,8 @@ long bezerk_ping (MAILSTREAM *stream)
 				/* make sure it is alright to do this at all */
   if (LOCAL && LOCAL->ld && !stream->lock) {
 				/* get current mailbox size */
-    stat (LOCAL->name,&sbuf);	/* parse if mailbox changed */
-    if ((sbuf.st_size != LOCAL->filesize) &&
+				/* parse if mailbox changed */
+    if (!stat (LOCAL->name,&sbuf) && (sbuf.st_size != LOCAL->filesize) &&
 	((fd = bezerk_parse (stream,lock,LOCK_SH)) >= 0)) {
 				/* unlock mailbox */
       bezerk_unlock (fd,stream,lock);
