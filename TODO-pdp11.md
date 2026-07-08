@@ -692,16 +692,24 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       fix's treatment of empty text as "nothing to check"). Verified:
       rebuilt clean, re-ran the plain compose+postpone valgrind repro —
       both invalid reads are gone.
-- [ ] `pine/send.c:714` — `real_current_msgno =
-      ps_global->sort[ps_global->current_sorted_msgno];` reads one
-      element before/after `sort`'s allocated array in at least one path
-      through a plain compose+send (surfaced by the same valgrind repro
-      used to verify the `packheader()`/`resolve_niks()` fixes above,
-      once their invalid reads stopped drowning it out). Different bug
-      class — an index/allocation-size mismatch on `ps_global->sort`, not
-      a missing-empty-string-check — and not investigated or fixed here.
-      Worth its own look at how `sort` and `current_sorted_msgno` get
-      sized/set relative to each other before `send()` runs.
+- [x] `pine/send.c:714` did `real_current_msgno =
+      ps_global->sort[ps_global->current_sorted_msgno];` unconditionally,
+      reading one element before/after `sort`'s allocated array in at
+      least one path through a plain compose+send (surfaced by the same
+      valgrind repro used to verify the `packheader()`/`resolve_niks()`
+      fixes above, once their invalid reads stopped drowning it out).
+      Different bug class — an index/allocation-size mismatch on
+      `ps_global->sort`, not a missing-empty-string-check. Turns out
+      `pine/newmail.c:208-209` already has the exact same
+      `ps_global->sort[ps_global->current_sorted_msgno]` read guarded
+      with `(ps_global->current_sorted_msgno <= 0L) ? 0L : ...` —
+      `current_sorted_msgno` is `-1` before a folder has a current
+      message selected (see `pine.c:261`, `mailindx.c`'s `< 0L` checks),
+      which is out of bounds for `sort`. Fixed `send.c:714` with the
+      identical guard, matching existing codebase convention rather than
+      inventing a new one. Verified: rebuilt clean, re-ran the plain
+      compose+postpone valgrind repro — no more invalid reads at all;
+      full suite (9/9) still passes.
 
 ## After each cut
 - [ ] Rebuild on Linux, confirm `size pine/pine` text+data+bss shrinks.

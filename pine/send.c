@@ -711,7 +711,8 @@ pine_send(outgoing, body, editor_title, fcc, are_replying, att)
      * may invalidate the current sorted message number.  Restore it
      * before we return...
      */
-    real_current_msgno = ps_global->sort[ps_global->current_sorted_msgno];
+    real_current_msgno = (ps_global->current_sorted_msgno <= 0L) ? 0L :
+			   ps_global->sort[ps_global->current_sorted_msgno];
 
     /*
      * Cancel any pending initial commands since pico uses a different
