@@ -605,7 +605,8 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       s[]`) as defense in depth. Verified: rebuilt clean,
       re-ran the same valgrind repro afterward — no more invalid
       writes/stack corruption (some unrelated pre-existing invalid-*read*
-      warnings remain in `composer.c`'s `packheader()`, see below).
+      warnings remained in `composer.c`'s `packheader()`, since fixed —
+      see below).
       Added `test/cases/test_attach_overflow.py`, which types a ~4000-byte
       bogus attachment filename and Postpones; confirmed this test
       reliably crashes pine before the fix and passes after it.
@@ -668,21 +669,39 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       scoped to `tmp_20k_buf`; worth an easy, low-risk fix (add
       `.100s`/`.184s` like its sibling branches) alongside the broader
       audit above.
-- [ ] `pico/composer.c`'s `packheader()` (~line 2487) does
+- [x] `pico/composer.c`'s `packheader()` (~line 2487) did
       `if(line->text[strlen(line->text)-1] == ',')` with no check that
       `line->text` is non-empty first — when it is empty, `strlen()-1`
-      underflows (`size_t`) and wraps around to read one byte *before*
-      the heap block, which valgrind flags as an invalid read every
+      underflowed (`size_t`) and wrapped around to read one byte *before*
+      the heap block, which valgrind flagged as an invalid read every
       single time a composer session is packed for sending/postponing
       (reproduced with a completely ordinary compose+postpone, no
       attachments involved, so unrelated to the `ParseAttach()` fix
-      above). Didn't appear to crash in testing (probably silently reads
-      adjacent heap metadata rather than unmapped memory) but is still a
-      real out-of-bounds read and pre-existing, not introduced this
-      session. Found while re-verifying the `ParseAttach()` fix under
-      valgrind; not fixed here to keep that fix scoped — an easy fix
-      would be guarding with `*line->text &&` before the `strlen()-1`
-      indexing.
+      above). Didn't appear to crash in testing (probably silently read
+      adjacent heap metadata rather than unmapped memory) but was still a
+      real out-of-bounds read, pre-existing and not introduced by the
+      `ParseAttach()` work. Fixed by guarding with `*line->text &&` before
+      the `strlen()-1` indexing.
+      Fixing this and re-running valgrind surfaced a second instance of
+      the identical pattern in the same file: `resolve_niks()`
+      (~line 2092) did `line->text[i-1] == ','` (and again at ~line 2101,
+      `line->text[i-1] != ' '`) where `i = strlen(line->text)`, same
+      unguarded read one byte before an empty entry's heap block. Fixed
+      both by requiring `i &&` before indexing at `i-1` (empty line now
+      just skips the comma/space bookkeeping, matching the `packheader()`
+      fix's treatment of empty text as "nothing to check"). Verified:
+      rebuilt clean, re-ran the plain compose+postpone valgrind repro —
+      both invalid reads are gone.
+- [ ] `pine/send.c:714` — `real_current_msgno =
+      ps_global->sort[ps_global->current_sorted_msgno];` reads one
+      element before/after `sort`'s allocated array in at least one path
+      through a plain compose+send (surfaced by the same valgrind repro
+      used to verify the `packheader()`/`resolve_niks()` fixes above,
+      once their invalid reads stopped drowning it out). Different bug
+      class — an index/allocation-size mismatch on `ps_global->sort`, not
+      a missing-empty-string-check — and not investigated or fixed here.
+      Worth its own look at how `sort` and `current_sorted_msgno` get
+      sized/set relative to each other before `send()` runs.
 
 ## After each cut
 - [ ] Rebuild on Linux, confirm `size pine/pine` text+data+bss shrinks.

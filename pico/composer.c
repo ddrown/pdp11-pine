@@ -2089,7 +2089,7 @@ int	entry;
 	 * the line), and there's another line below, treat the new line as
 	 * an implied comma
 	 */
-        if(line->text[i-1] == ',')
+        if(i && line->text[i-1] == ',')
 	  strcat(line->text, " ");		/* help address builder */
 	else if(line->next != NULL && !strend(line->text, ',')){
 	    if(strqchr(line->text, ',')){
@@ -2097,8 +2097,8 @@ int	entry;
 	  }
 	}
 	else if(line->prev != NULL && line->next != NULL){
-	    if(strchr(line->prev->text, ' ') != NULL 
-	       && line->text[i-1] != ' ')
+	    if(strchr(line->prev->text, ' ') != NULL
+	       && i && line->text[i-1] != ' ')
 	      strcat(line->text, " ");
 	}
 	strcat(sbuf, line->text);
@@ -2484,7 +2484,7 @@ packheader()
         if(retval != FALSE){
 	    while(line != NULL){
                 strcat(*headents[i].realaddr, line->text);
-		if(line->text[strlen(line->text)-1] == ',')
+		if(*line->text && line->text[strlen(line->text)-1] == ',')
 		  strcat(*headents[i].realaddr, " ");
                 line = line->next;
             }
