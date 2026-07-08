@@ -50,7 +50,7 @@ class Session:
     """A running `pine` process in its own scratch HOME."""
 
     def __init__(self, mbox=None, args=None, timeout=DEFAULT_TIMEOUT,
-                 dismiss_splash=True):
+                 dismiss_splash=True, postponed_mail=None):
         if not os.path.exists(PINE_BIN):
             raise SmoketestFailure(
                 "%s not found -- build it first (./build lnx)" % PINE_BIN)
@@ -71,6 +71,17 @@ class Session:
         argv += ["-p", os.path.join(self.home, ".pinerc")]
         if args:
             argv += list(args)
+
+        if postponed_mail is not None:
+            # Seed ~/mail/postponed-mail *before* pine starts, so a test
+            # can drive "Continue postponed composition" against a fresh
+            # process -- unlike composing-then-postponing in one running
+            # process, this doesn't benefit from any buffer growth an
+            # earlier action in the same process already triggered.
+            mail_dir = os.path.join(self.home, "mail")
+            os.makedirs(mail_dir, exist_ok=True)
+            with open(os.path.join(mail_dir, "postponed-mail"), "w") as f:
+                f.write(postponed_mail)
 
         self.child = pexpect.spawn(
             PINE_BIN, argv, cwd=REPO_ROOT, env=env,

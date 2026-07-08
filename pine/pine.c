@@ -69,9 +69,41 @@ int          timeout = NEW_MAIL_TIME; /* referenced in weemacs */
     q_status_messageX: while doing printf formatting
     pine.c: When address specified on command line
     init.c: When expanding variable values
+    send.c: while building the outgoing RFC822 header/address list
 
+  Dynamically sized instead of a fixed 20K: most uses are short
+  (a status line, a single address, a config value) and fit well
+  within TMP_20K_BUF_BASELINE, but the RFC822 header/address-list
+  builders in send.c have no fixed upper bound (arbitrarily many
+  recipients), so they call grow_tmp_20k_buf() with a size estimate
+  before writing into it instead of assuming a fixed capacity is
+  always big enough.
  ----*/
-char         tmp_20k_buf[20480];  
+#define TMP_20K_BUF_BASELINE 2048
+
+char         *tmp_20k_buf = NULL;
+static size_t tmp_20k_buf_size = 0;
+
+void
+grow_tmp_20k_buf(need)
+    size_t need;
+{
+    size_t newsize;
+
+    if(need <= tmp_20k_buf_size)
+      return;
+
+    newsize = tmp_20k_buf_size ? tmp_20k_buf_size : TMP_20K_BUF_BASELINE;
+    while(newsize < need)
+      newsize *= 2;
+
+    if(tmp_20k_buf)
+      fs_resize((void **) &tmp_20k_buf, newsize);
+    else
+      tmp_20k_buf = (char *) fs_get(newsize);
+
+    tmp_20k_buf_size = newsize;
+}
 
 
 
@@ -209,6 +241,8 @@ main(argc, argv)
     /*----------------------------------------------------------------------
           Set up buffering and some data structures
       ----------------------------------------------------------------------*/
+
+    grow_tmp_20k_buf(TMP_20K_BUF_BASELINE);
 
     pine_state                 = (struct pine *)fs_get(sizeof (struct pine));
     memset((void *)pine_state, 0, sizeof(struct pine));

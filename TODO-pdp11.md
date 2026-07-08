@@ -469,11 +469,147 @@ is still ~970KB, way over budget.
 
 ## Buffer right-sizing (not feature cuts, but required regardless)
 These fixed global buffers alone can blow a PDP-11 data segment:
-- [ ] `tmp_20k_buf` (20KB) — `pine/folder.c`
-- [ ] `s` (16KB)
-- [ ] `temp_format` (2.75KB)
-Shrink these to sizes appropriate for realistic PDP-11 line/terminal widths
-(e.g. 80 columns) instead of modern-terminal assumptions.
+- [x] `tmp_20k_buf` (20KB, `pine/pine.c`) — DONE, converted to dynamic
+      allocation rather than shrunk to a fixed size. Investigation showed
+      this buffer is NOT just a screen-line formatter: `send.c`'s
+      `pine_rfc822_header()`/`pine_rfc822_output()` format the *entire*
+      outgoing RFC822 header (To/Cc/Bcc address lists, Subject, etc.)
+      straight into it via c-client's `rfc822_header_line`/
+      `rfc822_address_line`/`rfc822_cat`, none of which take a length —
+      they assume the caller already made the buffer "big enough". A
+      message with many recipients can genuinely need several KB, so a
+      fixed shrink to ~80 columns would have been a real buffer overflow,
+      not just a size cut.
+    - `pine/pine.c`: `tmp_20k_buf` is now `char *` (was `char[20480]`),
+      starting at `TMP_20K_BUF_BASELINE` (2048 bytes) and grown via
+      `grow_tmp_20k_buf(need)` (doubling, using `fs_get`/`fs_resize`, same
+      alloc wrappers c-client itself uses). `pine/headers.h`'s
+      `extern char tmp_20k_buf[]` became `extern char *tmp_20k_buf` +
+      the `grow_tmp_20k_buf` prototype. All ~140 existing call sites
+      across 10 files needed no changes — C doesn't distinguish
+      `array[i]`/`sprintf(array,...)` from the pointer equivalent, so
+      only the declaration and the two genuinely-unbounded call sites
+      needed touching.
+    - `pine/send.c`: added `pine_rfc822_header_size(env, body)` — a
+      conservative *upper-bound* estimate (doubles every address's
+      personal/mailbox/host/adl length to account for `rfc822_cat`'s
+      quoting/escaping, plus fixed per-field/per-address slop) — called
+      via `grow_tmp_20k_buf()` right before both call sites that build a
+      full header (`call_sendmail`'s path and the Fcc-only path in
+      `pine_send_mail`). This mirrors the *content*, not the screen, so it
+      scales with however many recipients the user actually adds.
+    - `pine/send.c`: decoupled the unrelated `l_putc`/`l_flush_net` output
+      batching (used while piping the message body to sendmail, previously
+      sharing/reusing `tmp_20k_buf` up to a hardcoded 16384-byte
+      threshold) into its own small fixed `l_out_buf` (1024 bytes) — this
+      was a pure write()-call-count optimization with no relation to
+      header/content size, so tying its sizing to the header buffer no
+      longer makes sense once the header buffer is dynamic.
+    - Verified: clean rebuild, no new warnings; bss dropped from 59600 to
+      40208 bytes (saving ~19KB of *always-resident* static footprint,
+      more than a naive fixed shrink would have, since most sends never
+      need more than the 2KB baseline). Added
+      `test/cases/test_postpone_many_recipients.py`, a new smoketest that
+      composes a message to 450 recipients and Postpones it (Postpone
+      runs the same `append_message2`/`pine_rfc822_header` code path as
+      real Send, but writes to `~/mail/postponed-mail` instead of
+      exec'ing an MTA, so it's fully automatable without one) — this
+      forces `tmp_20k_buf` through multiple `grow_tmp_20k_buf()` doublings
+      and asserts the postponed file contains the first/middle/last
+      addresses, the subject, and the body intact.
+    - Found (via user review) two more unbounded writes into
+      `tmp_20k_buf` that the initial pass missed, both now fixed:
+      - `pine/send.c`'s `compose_mail()` "Continue postponed
+        composition" path re-reads a saved postponed message by
+        walking a pointer through `tmp_20k_buf` via repeated
+        `fgets(p, 1024, fp)` with no capacity check, then hands
+        `tmp_20k_buf` to `rfc822_parse_msg()` as scratch space for the
+        longest unfolded logical header line (which can be nearly the
+        whole header). With the buffer shrunk to a 2KB baseline this
+        is a real, confirmed overflow: reproduced under `valgrind`
+        (an "Invalid write" past the malloc'd block, severe enough to
+        corrupt valgrind's own heap-block metadata and abort it) by
+        seeding a fresh process with a pre-existing large postponed
+        message and resuming it — composing-then-postponing in one
+        process doesn't reproduce it, since `tmp_20k_buf` never shrinks
+        back down and the postpone's own write already grew it. Fixed
+        by growing the buffer as the slurp loop advances (tracking an
+        offset instead of a raw pointer, since `realloc` can move the
+        block) and again before `rfc822_parse_msg()`, sized off the
+        already-known `strlen(file)`. Verified clean under `valgrind`
+        afterward (no invalid-write errors, only pre-existing unrelated
+        warnings). Added `test/cases/test_resume_postponed_many_recipients.py`
+        (and a `postponed_mail=` param on `smoketest.Session` to seed
+        `~/mail/postponed-mail` before a *fresh* pine process starts,
+        which is what actually exercises this path) — confirmed this
+        test fails without the fix and passes with it.
+      - `pine/mailview.c`'s `display_parameters()` (used to display a
+        MIME part's Content-Type parameters, e.g. when viewing a
+        received message) walks a pointer through `tmp_20k_buf`
+        appending one parameter's `attribute: value` per iteration,
+        also with no bound — and unlike the postponed-mail case, this
+        one is driven by *remote* message content (a crafted email with
+        many/long Content-Type parameters), not just the user's own
+        drafts. Fixed the same way as `pine_rfc822_header_size()`: sum
+        the real attribute/value lengths up front and
+        `grow_tmp_20k_buf()` before writing.
+    - Full suite (8/8) now passes.
+- [ ] `s` (16KB, `pico/edef.h:69`) — NOT YET DONE. Used as a generic
+      global scratch string throughout ~15 pico files (filenames, search
+      strings, prompts). Pico's own line-length convention (`NLINE`,
+      `pico/estruct.h`) is only 256 bytes, so this one looks like a much
+      safer candidate for a plain fixed-size shrink after auditing real
+      call sites (mostly path/filename construction, bounded by
+      `MAXPATHLEN`-style conventions) — likely doesn't need the dynamic
+      treatment `tmp_20k_buf` got, unless auditing turns up a genuine
+      unbounded use.
+- [ ] `temp_format` (10KB, `pine/ttyout.c:1098`) — NOT YET DONE. Has its
+      own comment: `"Very large because there's no bounds checks"`. Its
+      writers (`PutLine1`..`PutLine5`, `Stripe3`) take a fixed number of
+      `void *` args with no static type info (an old poor-man's-varargs
+      trick), so — unlike `tmp_20k_buf`'s typed `ADDRESS`/`ENVELOPE`
+      fields — there's no safe way to tell which args are `%s` strings
+      (to size for) vs. `%d`/`%c` (small, fixed) without parsing the
+      format string at each call, and blindly `strlen()`-ing a
+      non-string arg would segfault. Needs either a real audit of every
+      call site's actual argument content, or a rewrite of `PutLine*`/
+      `Stripe3` onto real varargs (`stdarg.h`) plus a bounds-checked
+      formatter — bigger lift than `tmp_20k_buf`, deliberately left for a
+      separate pass.
+
+### Follow-up: buffer-overflow security audit (raised alongside the above)
+- [ ] Both `tmp_20k_buf`'s old fixed-size behavior and `temp_format`'s
+      current one share the same root issue: code that formats
+      unbounded/attacker-influenced content (recipient addresses,
+      subjects, filenames from a mailbox) into a buffer sized only by
+      guess/precedent, with no bounds checking at the point of the write
+      itself (`sprintf`/`strcat`/`rfc822_cat` don't know the buffer size).
+      `tmp_20k_buf` is fixed for its one truly unbounded use
+      (`pine_rfc822_header`) via a matching size estimate, but this
+      class of bug should get a dedicated sweep: grep for other
+      `sprintf`/`strcat`/`rfc822_cat`/`rfc822_address_line`-style calls
+      into fixed local/global buffers (e.g. `char tmp[MAILTMPLEN]` in
+      `send.c`'s per-MIME-part header writer, `bezerk.c`'s `LOCAL->buf`)
+      and confirm each one's real worst-case input is actually bounded by
+      its buffer size, rather than "has been big enough so far".
+      Two more instances already found while auditing `tmp_20k_buf`
+      itself (both described above, now fixed): `compose_mail()`'s
+      postponed-message-resume read loop, and `display_parameters()`'s
+      MIME-parameter formatting (remote-content-driven, the more
+      concerning of the two).
+- [ ] `pine/mailview.c`'s `type_desc()` (`static char type_d[200]`) has
+      one branch — `TYPEAPPLICATION`/`octet-stream`, the "Attached file
+      "%s"" case — that `sprintf`s a MIME parameter's `value` (e.g. an
+      attachment's `filename=`/`name=` parameter, taken directly from a
+      *received* message) into `type_d` **without** the `%.100s`-style
+      precision cap every other branch in this function uses. This is
+      pre-existing (not introduced this session, and not a `tmp_20k_buf`
+      issue at all — `type_d` is its own fixed static buffer) but is a
+      real overflow if a crafted email has a long enough attachment
+      filename parameter. Found but not fixed here, to keep this pass
+      scoped to `tmp_20k_buf`; worth an easy, low-risk fix (add
+      `.100s`/`.184s` like its sibling branches) alongside the broader
+      audit above.
 
 ## After each cut
 - [ ] Rebuild on Linux, confirm `size pine/pine` text+data+bss shrinks.

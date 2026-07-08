@@ -2176,27 +2176,40 @@ search_scroll_text(start_line, word)
 }
      
 
-char *    
+char *
 display_parameters(parameter_list)
      PARAMETER *parameter_list;
 {
     int        longest_attribute;
     PARAMETER *p;
     char      *d;
+    size_t     need;
 
     if(parameter_list == NULL) {
         tmp_20k_buf[0] = '\0';
 
     } else {
         longest_attribute = 0;
-    
-        for(p = parameter_list; p != NULL; p = p->next)
+        need = 0;
+
+        for(p = parameter_list; p != NULL; p = p->next){
           longest_attribute = max(longest_attribute, (p->attribute == NULL ?
                                                       0 :
                                                       strlen(p->attribute)));
-    
+          /*
+           * This is remote-message-controlled content (MIME Content-Type
+           * parameters, e.g. a filename= value) formatted into
+           * tmp_20k_buf one parameter at a time with no bound of its
+           * own, so size the buffer for the actual worst case instead
+           * of assuming the baseline allocation is always big enough.
+           */
+          need += (p->attribute ? strlen(p->attribute) : 0)
+                  + (p->value ? strlen(p->value) : 0) + 16;
+        }
+
         longest_attribute = min(longest_attribute, 11);
-    
+        grow_tmp_20k_buf(need + 16);
+
         d = tmp_20k_buf;
         for(p = parameter_list; p != NULL; p = p->next) {
             sprintf(d, "%-*s: %s\n", longest_attribute,

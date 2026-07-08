@@ -84,6 +84,7 @@ static    int   call_system(char *);
 void      pine_write_body_header(char **, BODY  *);
 void      pine_encode_body(ENVELOPE *, BODY *);
 void      pine_rfc822_header(char *, ENVELOPE *, BODY *);
+size_t    pine_rfc822_header_size(ENVELOPE *, BODY *);
 long      pine_rfc822_output(char *,ENVELOPE *,BODY *,soutr_t,TCPSTREAM *);
 long      pine_rfc822_output_body(BODY *,soutr_t,TCPSTREAM *);
 void      pine_free_body(BODY **);
@@ -110,6 +111,7 @@ static int     call_system();
 void      pine_write_body_header();
 void      pine_encode_body();
 void      pine_rfc822_header();
+size_t    pine_rfc822_header_size();
 long      pine_rfc822_output();
 long      pine_rfc822_output_body();
 void      pine_free_body();
@@ -243,17 +245,36 @@ compose_mail(given_to)
             return;
 	}
 
-	p = tmp_20k_buf;
-	while(fgets(p, 1024, fp) != NULL	/* slurp up the header */
-	      && strncmp(p, NEWLINE, strlen(NEWLINE))){
-	    while(*p != '\0')
-	      p++;
+	{
+	    /*
+	     * Accumulate the whole header in tmp_20k_buf, growing it to
+	     * stay ahead of hdr_off instead of assuming a fixed capacity
+	     * is big enough -- a postponed message can have a header
+	     * (e.g. a long To: list) well past the 2K baseline.
+	     */
+	    size_t hdr_off = 0;
+
+	    grow_tmp_20k_buf(hdr_off + 1025);
+	    p = tmp_20k_buf + hdr_off;
+	    while(fgets(p, 1024, fp) != NULL	/* slurp up the header */
+		  && strncmp(p, NEWLINE, strlen(NEWLINE))){
+		hdr_off += strlen(p);
+		grow_tmp_20k_buf(hdr_off + 1025);
+		p = tmp_20k_buf + hdr_off;
+	    }
 	}
 
 	fget_pos(fp, &body_start);		/* remember where we're at */
 
 	strcat(tmp_20k_buf, NEWLINE);
 	file = cpystr(tmp_20k_buf);		/* copy header */
+	/*
+	 * rfc822_parse_msg() reuses tmp_20k_buf as scratch space for one
+	 * unfolded logical header line at a time, which in the worst
+	 * case (e.g. one very long address list folded across many
+	 * physical lines) can be nearly as long as the whole header.
+	 */
+	grow_tmp_20k_buf(strlen(file) + 128);
 	p    = tmp_20k_buf;
 	/* have c-client parse the rest */
 	INIT(&string_struct, mail_string, (void *)"", 0L);
@@ -1125,6 +1146,7 @@ call_mailer(fcc, envelope, body)
 	 * If there aren't any real addressees, but there is an fcc, 
 	 * go thru the motions of building the message...
 	 */
+	grow_tmp_20k_buf(pine_rfc822_header_size(envelope, body));
 	if(pine_rfc822_output(tmp_20k_buf, envelope, body, NULL, NULL) < 1){
 	    q_status_message(0,2,3, "Fcc Failed!.  No message saved.");
 	    return(0);
@@ -1789,6 +1811,7 @@ append_message2(folder, env, bod, type, fcc, a)
     pine_encode_body(env, bod);
 
     /*---- Output the header ----*/
+    grow_tmp_20k_buf(pine_rfc822_header_size(env, bod));
     pine_rfc822_header(tmp_20k_buf, env, bod);
     removing_trailing_white_space(tmp_20k_buf);
     strcat(tmp_20k_buf, "\015\012");
@@ -2263,6 +2286,65 @@ set_mime_types(body)
 
 
 /*
+ * addr_list_size - conservative upper bound on the RFC822-formatted
+ *                  size of an address list, for pine_rfc822_header_size()
+ *                  below.  rfc822_cat() may quote/escape personal names,
+ *                  so double their length rather than trying to predict
+ *                  exactly how much escaping will happen.
+ */
+static size_t
+addr_list_size(adr)
+    ADDRESS *adr;
+{
+    size_t n = 0;
+
+    for(; adr; adr = adr->next)
+      n += 2 * ((adr->personal ? strlen(adr->personal) : 0)
+                + (adr->mailbox ? strlen(adr->mailbox) : 0)
+                + (adr->host   ? strlen(adr->host)   : 0)
+                + (adr->adl    ? strlen(adr->adl)    : 0))
+           + 32;    /* "<>", "@", quotes, ", " separator, CRLF fold */
+
+    return(n);
+}
+
+
+/*
+ * pine_rfc822_header_size - conservative upper bound on the buffer
+ *                  space pine_rfc822_header() will need to format
+ *                  env/body into, so callers can grow_tmp_20k_buf()
+ *                  before calling it instead of assuming a fixed-size
+ *                  buffer is always big enough (env->to/cc/bcc can
+ *                  hold arbitrarily many addresses).
+ */
+size_t
+pine_rfc822_header_size(env, body)
+    ENVELOPE *env;
+    BODY     *body;
+{
+    size_t n = 512;    /* header labels, MIME-Version, blank lines, slop */
+
+    if(env->remail)      n += strlen(env->remail);
+    if(env->date)        n += strlen(env->date) + 16;
+    if(env->subject)     n += strlen(env->subject) + 16;
+    if(env->in_reply_to) n += strlen(env->in_reply_to) + 16;
+    if(env->message_id)  n += strlen(env->message_id) + 16;
+    if(env->newsgroups)  n += strlen(env->newsgroups) + 16;
+
+    n += addr_list_size(env->from);
+    n += addr_list_size(env->sender);
+    n += addr_list_size(env->reply_to);
+    n += addr_list_size(env->to);
+    n += addr_list_size(env->cc);
+    n += addr_list_size(env->bcc);
+
+    if(body) n += 512; /* Content-Type/-Transfer-Encoding/-ID/-Description */
+
+    return(n);
+}
+
+
+/*
  * pine version of c-client's rfc822_header() function.  Same
  * function, actually, except pine's body_header write function
  * is called, because encoding is delayed until output_body() is
@@ -2390,6 +2472,16 @@ static TCPSTREAM *l_stream;
 static unsigned   c_in_buf = 0;
 
 /*
+ * l_out_buf is a fixed, dedicated buffer -- unlike tmp_20k_buf, its
+ * job is purely to batch bytes of the (already-formatted) outgoing
+ * message body to cut down on write() calls, so its size is a
+ * self-contained performance tradeoff, not a function of message
+ * content, and it never needs to grow.
+ */
+#define L_OUT_BUF_LEN 1024
+static char       l_out_buf[L_OUT_BUF_LEN + 2];
+
+/*
  * l_flust_net - empties gf_io terminal function's buffer
  */
 void
@@ -2397,10 +2489,10 @@ l_flush_net()
 {
     if(c_in_buf){
 	if(l_f)
-	  (*l_f)(l_stream, tmp_20k_buf);
+	  (*l_f)(l_stream, l_out_buf);
 
 	if(fcc_so)
-	  so_puts(fcc_so, tmp_20k_buf);
+	  so_puts(fcc_so, l_out_buf);
     }
 
     c_in_buf = 0;
@@ -2416,15 +2508,15 @@ int
 l_putc(c)
     int c;
 {
-    tmp_20k_buf[c_in_buf++] = (char) c;
-    tmp_20k_buf[c_in_buf]   = '\0';
+    l_out_buf[c_in_buf++] = (char) c;
+    l_out_buf[c_in_buf]   = '\0';
 
-    if(c_in_buf > 16384){
+    if(c_in_buf > L_OUT_BUF_LEN){
 	if(fcc_so)
-	  so_puts(fcc_so, tmp_20k_buf);
+	  so_puts(fcc_so, l_out_buf);
 
         c_in_buf = 0;
-        return(l_f ? (int)(*l_f)(l_stream, tmp_20k_buf) : 1);
+        return(l_f ? (int)(*l_f)(l_stream, l_out_buf) : 1);
     }
     else
 	return(TRUE);
