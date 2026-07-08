@@ -49,6 +49,8 @@
 #ifndef	EDEF_H
 #define	EDEF_H
 
+#define	SLEN	16384			/* size of global scratch string s */
+
 #ifdef	maindef
 
 /* for MAIN.C */
@@ -66,7 +68,7 @@ int	scrollexist = TRUE;		/* does insert line exist	*/
 int	inschar = TRUE;			/* does insert character exist	*/
 int	delchar = TRUE;			/* does delete character exist	*/
 int     sgarbk = TRUE;                  /* TRUE if keyhelp garbaged     */
-char	s[16384];			/* global temporary string	*/
+char	s[SLEN];			/* global temporary string	*/
 int     mline_open = FALSE;             /* TRUE if message line is open */
 int	ComposerTopLine = 2;		/* TRUE if message line is open */
 int	ComposerEditing = FALSE;	/* TRUE if message line is open */
@@ -114,7 +116,7 @@ extern	int	scrollexist;		/* does insert line exist	*/
 extern	int	inschar;		/* does insert character exist	*/
 extern	int	delchar;		/* does delete character exist	*/
 extern  int     sgarbk;
-extern  char	s[];			/* global temporary string	*/
+extern  char	s[SLEN];		/* global temporary string	*/
 extern  int     mline_open;             /* Message line is open         */
 extern	int	ComposerTopLine;	/* TRUE if message line is open */
 extern	int	ComposerEditing;	/* TRUE if message line is open */

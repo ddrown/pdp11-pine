@@ -58,12 +58,14 @@ static char rcsid[] = "$Id: attach.c,v 4.8 1993/11/08 23:08:56 mikes Exp $";
 
 
 #ifdef	ANSI
-    int    ParseAttach(struct hdr_line **,int *,char *,char *,char *,int *);
+    int    ParseAttach(struct hdr_line **,int *,char *,size_t,char *,size_t,
+			char *,size_t,int *);
     PATMT *NewAttach(char *, long, char *);
     void   ZotAttach(struct pico_atmt *);
     void   sinserts(char *, int, char *, int);
 #else
-    int    ParseAttach(struct hdr_line **,int *,char *,char *,char *,int *);
+    int    ParseAttach(struct hdr_line **,int *,char *,size_t,char *,size_t,
+			char *,size_t,int *);
     PATMT *NewAttach(char *, long, char *);
     void   ZotAttach(struct pico_atmt *);
     void   sinserts(char *, int, char *, int);
@@ -210,7 +212,9 @@ int SyncAttach()
     while(lp != NULL){
 	na = ++n;
 
-	if(status = ParseAttach(&lp, &offset, file, size, comment, &na))
+	if(status = ParseAttach(&lp, &offset, file, sizeof(file),
+				 size, sizeof(size), comment, sizeof(comment),
+				 &na))
 	    rv = (rv < 0) ? rv : status ;	/* remember worst case */
 
 	if(*file == '\0'){
@@ -320,17 +324,22 @@ int SyncAttach()
 
 
 /*
- * ParseAttach - given a header line and an offset into it, return with 
- *		 the three given fields filled in.  Assumes the size of 
- *		 the buffers passed is large enough to hold what's there.
- *		 Always updates header fields that have changed or are 
+ * ParseAttach - given a header line and an offset into it, return with
+ *		 the three given fields filled in.  fnlen/szlen/cmntlen
+ *		 give the actual capacity of fn/sz/cmnt -- overlong input
+ *		 is truncated to fit rather than overflowing the caller's
+ *		 buffers (SyncAttach's are fixed-size stack arrays, and
+ *		 attachment filenames/comments are ordinary composer text
+ *		 with no length limit of its own).
+ *		 Always updates header fields that have changed or are
  *		 fixed.  An error advances offset to next attachment.
  *
  *		returns: 1 if a field changed
  *                       0 nothing changed
  *                      -1 on error
  */
-int ParseAttach(struct hdr_line **lp, int *off, char *fn, char *sz, char *cmnt, int *no)
+int ParseAttach(struct hdr_line **lp, int *off, char *fn, size_t fnlen,
+		 char *sz, size_t szlen, char *cmnt, size_t cmntlen, int *no)
 {
     int  j, status,				/* various return codes     */
          rv = 0,				/* return value             */
@@ -416,7 +425,7 @@ int ParseAttach(struct hdr_line **lp, int *off, char *fn, char *sz, char *cmnt, 
 		emlwrite("\007Attchmnt: Number field missing '.': \"%s\"", s);
 		rv = -1;
 	    }
-	    else
+	    else if(p < s + sizeof(s) - 1)
 	      *p++ = c;
 
 	    break;
@@ -444,7 +453,7 @@ int ParseAttach(struct hdr_line **lp, int *off, char *fn, char *sz, char *cmnt, 
 		if(p != s){
 		    *p = '\0';			/* got something */
 
-		    strcpy(fn, s);		/* store file name */
+		    strlcpy(fn, s, fnlen);	/* store file name */
 		    if(!lbln){			/* normal file attachment */
 			fixpath(fn, NLINE);
 			if((status=fexist(fn, "r", &l)) != FIOSUC){
@@ -528,7 +537,7 @@ int ParseAttach(struct hdr_line **lp, int *off, char *fn, char *sz, char *cmnt, 
 		if(!lbln && c == '(')		/* no space 'tween file, size*/
 		  level = SIZE;
 		else if(c == '\0' || (!lbln && (c == ',' || c == '\"'))){
-		    strcpy(sz, (lblsz) ? lblsz : prettysz(l));
+		    strlcpy(sz, (lblsz) ? lblsz : prettysz(l), szlen);
 		    sprintf(s, " (%s) %s", sz, (c == '\"') ? "" : "\"\"");
 		    sinserts((*lp == NULL) ? &lprev->text[*off] 
 			                   : &(*lp)->text[*off],
@@ -544,7 +553,7 @@ int ParseAttach(struct hdr_line **lp, int *off, char *fn, char *sz, char *cmnt, 
 		rv = -1;			/* bad char in file name */
 		level = TG;			/* gobble garbage */
 	    }
-	    else
+	    else if(p < s + sizeof(s) - 1)
 	      *p++ = c;				/* add char to name */
 
 	    break;
@@ -555,7 +564,7 @@ int ParseAttach(struct hdr_line **lp, int *off, char *fn, char *sz, char *cmnt, 
 		 * whole attachment, comment or done! 
 		 */
 		if(c == ',' || c == '\0' || c == '\"'){
-		    strcpy(sz, (lblsz) ? lblsz : prettysz(l));
+		    strlcpy(sz, (lblsz) ? lblsz : prettysz(l), szlen);
 		    sprintf(s, " (%s) %s", sz, 
 				           (c == '\"') ? "" : "\"\"");
 		    sinserts((*lp == NULL) ? &lprev->text[*off]
@@ -583,9 +592,9 @@ int ParseAttach(struct hdr_line **lp, int *off, char *fn, char *sz, char *cmnt, 
 		/*
 		 * replace sizes if they don't match!
 		 */
-		strcpy(sz, s);
+		strlcpy(sz, s, szlen);
 		if(strcmp(sz, (lblsz) ? lblsz : prettysz(l))){
-		    strcpy(sz, (lblsz) ? lblsz : prettysz(l));
+		    strlcpy(sz, (lblsz) ? lblsz : prettysz(l), szlen);
 		    if(p-s > *off){		/* where to begin replacemnt */
 			j = (p-s) - *off;
 			sinserts((*lp)->text, *off, "", 0);
@@ -611,7 +620,7 @@ int ParseAttach(struct hdr_line **lp, int *off, char *fn, char *sz, char *cmnt, 
 		rv = -1;
 		level = TG;
 	    }
-	    else
+	    else if(p < s + sizeof(s) - 1)
 	      *p++ = c;
 
 	    break;
@@ -636,7 +645,7 @@ int ParseAttach(struct hdr_line **lp, int *off, char *fn, char *sz, char *cmnt, 
 	    if(c == '\"' || c == '\0'){		/* got comment */
 		*p = '\0';			/* cap it off */
 		p = s;				/* reset p */
-		strcpy(cmnt,s);			/* copy the comment  */
+		strlcpy(cmnt, s, cmntlen);	/* copy the comment  */
 		if(c == '\0'){
 		    emlwrite("\007Attchmnt: Closing quote required at end of comment", NULL);
 		    rv = -1;
@@ -644,7 +653,7 @@ int ParseAttach(struct hdr_line **lp, int *off, char *fn, char *sz, char *cmnt, 
 		level = TG;			/* prepare for next one */
 		lbln = 0;			/* reset flag */
 	    }
-	    else
+	    else if(p < s + sizeof(s) - 1)
 	      *p++ = c;
 
 	    break;

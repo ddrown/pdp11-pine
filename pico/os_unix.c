@@ -698,6 +698,49 @@ long *l;
 
 
 /*
+ * This platform's libc predates strlcpy (BSD added it in 4.4BSD/1998,
+ * after 2.11BSD's; glibc didn't add it until 2.38/2023), so provide a
+ * fallback below for any libc we can't positively confirm already has
+ * it. Deliberately nested #ifdefs rather than one "defined(__GLIBC__)
+ * && __GLIBC_PREREQ(...)" expression: on a libc where __GLIBC_PREREQ
+ * isn't a macro at all, the preprocessor chokes on the bare reference
+ * even though the earlier && operand would short-circuit it away at
+ * evaluation time -- macro expansion happens before the && is ever
+ * evaluated. Nesting keeps the version-check text out of the picture
+ * completely unless __GLIBC__ is already known to be defined.
+ */
+#ifdef	__GLIBC__
+# if	!__GLIBC_PREREQ(2, 38)
+#  define	PICO_NEED_STRLCPY	1
+# endif
+#else
+# define	PICO_NEED_STRLCPY	1
+#endif
+
+#ifdef	PICO_NEED_STRLCPY
+/*
+ * strlcpy - bounded strcpy: copy at most dstsize-1 bytes of src into
+ *	     dst and always nul-terminate (unlike a bare strcpy(), which
+ *	     has no bound, or strncpy(), which doesn't nul-terminate when
+ *	     src doesn't fit). Returns strlen(src), so a caller can tell
+ *	     whether truncation happened.
+ */
+size_t
+strlcpy(char *dst, char *src, size_t dstsize)
+{
+    size_t n = strlen(src);
+
+    if(dstsize){
+	strncpy(dst, src, dstsize - 1);
+	dst[dstsize - 1] = '\0';
+    }
+
+    return(n);
+}
+#endif
+
+
+/*
  * isdir - returns true if fn is a readable directory, false otherwise
  *         silent on errors (we'll let someone else notice the problem;)).
  */

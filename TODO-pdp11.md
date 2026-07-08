@@ -554,15 +554,68 @@ These fixed global buffers alone can blow a PDP-11 data segment:
         the real attribute/value lengths up front and
         `grow_tmp_20k_buf()` before writing.
     - Full suite (8/8) now passes.
-- [ ] `s` (16KB, `pico/edef.h:69`) — NOT YET DONE. Used as a generic
-      global scratch string throughout ~15 pico files (filenames, search
-      strings, prompts). Pico's own line-length convention (`NLINE`,
-      `pico/estruct.h`) is only 256 bytes, so this one looks like a much
-      safer candidate for a plain fixed-size shrink after auditing real
-      call sites (mostly path/filename construction, bounded by
-      `MAXPATHLEN`-style conventions) — likely doesn't need the dynamic
-      treatment `tmp_20k_buf` got, unless auditing turns up a genuine
-      unbounded use.
+- [ ] `s` (16KB, `pico/edef.h:69`) — audited, one confirmed real bug
+      found and fixed (below); the size itself is still NOT shrunk.
+      Used as a generic global scratch string throughout ~15 pico files
+      (filenames, search strings, prompts). Pico's own line-length
+      convention (`NLINE`, `pico/estruct.h`) is only 256 bytes, so this
+      looked like a much safer candidate for a plain fixed-size shrink
+      than `tmp_20k_buf` — but auditing real call sites turned up a
+      genuinely unbounded (and exploitable) use after all:
+    - `pico/attach.c`'s `ParseAttach()` parses the composer's Attchmnt
+      header field (`"N. filename (size) \"comment\""` syntax) by
+      walking a pointer through `s` one character at a time
+      (`*p++ = c`) with no bound of its own for the filename, size, and
+      comment sub-fields, then `strcpy()`s each parsed field straight
+      from `s` into **the caller's fixed-size stack arrays**
+      (`SyncAttach()`'s `char file[NLINE], size[32], comment[1024]`)
+      with no length check at all — the function's own header comment
+      even said "Assumes the size of the buffers passed is large enough
+      to hold what's there." Since the Attchmnt field is ordinary
+      composer text with no length cap (pico's own line storage is
+      dynamically sized), simply typing/pasting a filename, size, or
+      comment longer than 256/32/1024 bytes respectively overflows the
+      corresponding *stack* buffer in `SyncAttach()` — a classic stack
+      smash, reachable with no remote/crafted message involved at all.
+      Confirmed under `valgrind`: typing a ~4000-byte bogus filename and
+      Postponing corrupted the stack badly enough that the backtrace
+      itself showed frames literally made of the injected `'A'` (0x41)
+      bytes, and pine's own crash handler (`panic`/`coredump`) caught
+      the resulting SIGABRT.
+      Fixed by giving `ParseAttach()` explicit `fnlen`/`szlen`/`cmntlen`
+      capacity parameters (from `sizeof(file)`/`sizeof(size)`/
+      `sizeof(comment)` at the one call site) and replacing every
+      `strcpy()` into those output fields with `strlcpy()` — silently
+      truncating an overlong filename/size/comment is an acceptable
+      degradation here (unlike `tmp_20k_buf`'s recipient lists, where
+      truncating would silently drop real addressees), so this stayed a
+      fixed-size fix rather than a dynamic-allocation conversion.
+      `strlcpy()` isn't available on the actual 2.11BSD/PDP-11 target
+      (it postdates 4.3BSD-era libc) or on pre-2.38 glibc, so
+      `pico/os_unix.c` now provides a fallback implementation, compiled
+      in only when `__GLIBC_PREREQ(2, 38)` isn't satisfied (nested
+      `#ifdef __GLIBC__`, since referencing `__GLIBC_PREREQ` at all
+      when it isn't a macro is itself a preprocessor error — `&&`
+      short-circuiting doesn't save you, because macro expansion of
+      the whole `#if` line happens before any of it is evaluated).
+      Also bounded all four `*p++ = c` accumulation sites in
+      `ParseAttach()` against `sizeof(s)` itself (`s`'s extern
+      declaration now carries its real size via a new `SLEN` constant
+      in `pico/edef.h`, rather than the old incomplete `extern char
+      s[]`) as defense in depth. Verified: rebuilt clean,
+      re-ran the same valgrind repro afterward — no more invalid
+      writes/stack corruption (some unrelated pre-existing invalid-*read*
+      warnings remain in `composer.c`'s `packheader()`, see below).
+      Added `test/cases/test_attach_overflow.py`, which types a ~4000-byte
+      bogus attachment filename and Postpones; confirmed this test
+      reliably crashes pine before the fix and passes after it.
+      Full suite (9/9) now passes.
+    - The rest of `s`'s ~15-file call site survey (mostly `sprintf`s of
+      short/bounded content — paths, prompts) didn't turn up another
+      unbounded accumulation like `ParseAttach()`'s, but wasn't
+      exhaustive either. Leaving `s` at 16KB rather than shrinking it
+      for now; a real shrink would want the same file-by-file diligence
+      `tmp_20k_buf` got before picking a smaller fixed size.
 - [ ] `temp_format` (10KB, `pine/ttyout.c:1098`) — NOT YET DONE. Has its
       own comment: `"Very large because there's no bounds checks"`. Its
       writers (`PutLine1`..`PutLine5`, `Stripe3`) take a fixed number of
@@ -596,7 +649,12 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       itself (both described above, now fixed): `compose_mail()`'s
       postponed-message-resume read loop, and `display_parameters()`'s
       MIME-parameter formatting (remote-content-driven, the more
-      concerning of the two).
+      concerning of the two). A third, more severe instance found while
+      auditing `s` (also described above, now fixed): `pico/attach.c`'s
+      `ParseAttach()` overflowing `SyncAttach()`'s fixed *stack* arrays
+      via unchecked `strcpy()`s from an unbounded parse buffer — an
+      actual stack smash confirmed under `valgrind`, reachable by
+      ordinary composer typing/pasting, no crafted email needed.
 - [ ] `pine/mailview.c`'s `type_desc()` (`static char type_d[200]`) has
       one branch — `TYPEAPPLICATION`/`octet-stream`, the "Attached file
       "%s"" case — that `sprintf`s a MIME parameter's `value` (e.g. an
@@ -610,6 +668,21 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       scoped to `tmp_20k_buf`; worth an easy, low-risk fix (add
       `.100s`/`.184s` like its sibling branches) alongside the broader
       audit above.
+- [ ] `pico/composer.c`'s `packheader()` (~line 2487) does
+      `if(line->text[strlen(line->text)-1] == ',')` with no check that
+      `line->text` is non-empty first — when it is empty, `strlen()-1`
+      underflows (`size_t`) and wraps around to read one byte *before*
+      the heap block, which valgrind flags as an invalid read every
+      single time a composer session is packed for sending/postponing
+      (reproduced with a completely ordinary compose+postpone, no
+      attachments involved, so unrelated to the `ParseAttach()` fix
+      above). Didn't appear to crash in testing (probably silently reads
+      adjacent heap metadata rather than unmapped memory) but is still a
+      real out-of-bounds read and pre-existing, not introduced this
+      session. Found while re-verifying the `ParseAttach()` fix under
+      valgrind; not fixed here to keep that fix scoped — an easy fix
+      would be guarding with `*line->text &&` before the `strlen()-1`
+      indexing.
 
 ## After each cut
 - [ ] Rebuild on Linux, confirm `size pine/pine` text+data+bss shrinks.
