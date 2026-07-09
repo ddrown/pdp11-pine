@@ -30,14 +30,14 @@ temp_nam(dir, prefix)
         return((char *)NULL);
 
     if (!dir && (f = getenv("TMPDIR")) && !stat(f, &buf) &&
-                         (buf.st_mode&S_IFMT) == S_IFDIR &&
+                         S_ISDIR(buf.st_mode) &&
 			 !can_access(f, WRITE_ACCESS|EXECUTE_ACCESS)) {
         (void)strcpy(name, f);
         goto done;
     }
 
     if (dir && !stat(dir, &buf) &&
-                         (buf.st_mode&S_IFMT) == S_IFDIR &&
+                         S_ISDIR(buf.st_mode) &&
 	                 !can_access(dir, WRITE_ACCESS|EXECUTE_ACCESS)) {
         (void)strcpy(name, dir);
         goto done;
@@ -47,14 +47,14 @@ temp_nam(dir, prefix)
 #define	P_tmpdir	"/usr/tmp"
 #endif
     if (!stat(P_tmpdir, &buf) &&
-                         (buf.st_mode&S_IFMT) == S_IFDIR &&
+                         S_ISDIR(buf.st_mode) &&
 			 !can_access(P_tmpdir, WRITE_ACCESS|EXECUTE_ACCESS)) {
         (void)strcpy(name, P_tmpdir);
         goto done;
     }
 
     if (!stat("/tmp", &buf) &&
-                         (buf.st_mode&S_IFMT) == S_IFDIR &&
+                         S_ISDIR(buf.st_mode) &&
 			 !can_access("/tmp", WRITE_ACCESS|EXECUTE_ACCESS)) {
         (void)strcpy(name, "/tmp");
         goto done;
@@ -90,7 +90,7 @@ _gettemp(as)
 	extern int	errno;
 	register char	*start, *trv;
 	struct stat	sbuf;
-	u_int	pid;
+	unsigned int	pid;
 
 	pid = getpid();
 
@@ -109,7 +109,7 @@ _gettemp(as)
 	for (start = ++trv; trv > as && *trv != '/'; --trv);
 	if (*trv == '/') {
 		*trv = '\0';
-		if (stat(as, &sbuf) || !(sbuf.st_mode & S_IFDIR))
+		if (stat(as, &sbuf) || !S_ISDIR(sbuf.st_mode))
 			return(0);
 		*trv = '/';
 	}

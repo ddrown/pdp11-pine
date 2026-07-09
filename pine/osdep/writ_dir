@@ -17,7 +17,7 @@ is_writable_dir(dir)
       /*--- It doesn't exist ---*/
       return(3);
 
-    if(!(sb.st_mode & S_IFDIR))
+    if(!S_ISDIR(sb.st_mode))
       /*---- it's not a directory ---*/
       return(2);
 

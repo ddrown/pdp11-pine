@@ -113,7 +113,6 @@ required for an implementation:
 
 
 #include "headers.h"
-#include <sys/stat.h>
 
 
 
@@ -1034,23 +1033,24 @@ gf_play_sound(f, c, flg)
 
 
 /*----------------------------------------------------------------------
-   This is an emulation of the ANSI C fgetpos function.
+   This is just a call to the ANSI C fgetpos function.
   ----*/
 fget_pos(stream, ptr)
 FILE *stream;
 fpos_t *ptr;
 {
-    return fgetpos(stream, ptr);
+    return(fgetpos(stream, ptr));
 }
 
+
 /*----------------------------------------------------------------------
-   This is an emulation of the ANSI C fsetpos function.
+   This is just a call to the ANSI C fsetpos function.
   ----*/
 fset_pos(stream, ptr)
 FILE *stream;
 fpos_t *ptr;
 {
-    return fsetpos(stream, ptr);
+    return(fsetpos(stream, ptr));
 }
 
 

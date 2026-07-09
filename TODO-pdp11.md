@@ -764,47 +764,80 @@ These fixed global buffers alone can blow a PDP-11 data segment:
 - [ ] Re-run `nm -S --size-sort` to check for newly-dead large symbols.
 
 ## Build process issues
-- [ ] `pine/osdep/os-lnx.c` is a generated file (assembled by
+- [x] `pine/osdep/os-lnx.c` is a generated file (assembled by
       `pine/osdep/includer` from `os-lnx.ic` + fragment files, per the
       rule at `pine/makefile.lnx:140-149`), but the fixes needed to
-      make it build with a modern glibc were committed directly into
-      the generated `os-lnx.c` instead of into the fragments/template
-      it's generated from. A `./build clean && ./build lnx` regenerates
-      `os-lnx.c` from source and silently reintroduces the bugs,
-      clobbering the checked-in fixes (this happened this session;
-      reverted `os-lnx.c` by hand rather than fix it properly).
-      The generation inputs that actually need the fixes (confirmed by
-      diffing a from-scratch regeneration against the committed,
-      working `os-lnx.c`):
-        - `pine/osdep/os-lnx.ic:117` includes `fgetpos.non` (a
+      make it build with a modern glibc had been committed directly
+      into the generated `os-lnx.c` instead of into the
+      fragments/template it's generated from. A `./build clean &&
+      ./build lnx` regenerated `os-lnx.c` from source and silently
+      reintroduced the bugs, clobbering the checked-in fixes (this
+      happened in an earlier session; `os-lnx.c` was reverted by hand
+      rather than fixed properly at the time).
+      Fixed the four generation inputs (confirmed by diffing a
+      from-scratch regeneration against the previously-committed,
+      working `os-lnx.c`, then iterating until the diff was empty
+      modulo genuine cleanups):
+        - `pine/osdep/os-lnx.ic:117` included `fgetpos.non` (a
           non-ANSI ftell/fseek-based emulation of fgetpos/fsetpos,
           whose fseek/ftell-as-long assumption doesn't hold for
-          glibc's opaque `fpos_t`) — should include the plain
-          `fgetpos` fragment instead, which just calls the real ANSI
+          glibc's opaque `fpos_t`) — now includes the plain `fgetpos`
+          fragment instead, which just calls the real ANSI
           `fgetpos()`/`fsetpos()` that glibc actually provides.
-        - `pine/osdep/err_desc` references the removed-from-glibc
-          `sys_errlist[]` array directly — should call `strerror()`
-          instead (this fragment is `include()`'d by most/all `os-*.ic`
-          platform manifests, not just Linux's, so check it doesn't
-          regress a real non-glibc target).
-        - `pine/osdep/tempnam` and `pine/osdep/writ_dir` test
+        - `pine/osdep/err_desc` referenced the removed-from-glibc
+          `sys_errlist[]` array directly — now calls `strerror()`
+          instead (same fix already used previously in the hand-patched
+          generated file; this fragment is `include()`'d by most/all
+          `os-*.ic` platform manifests, not just Linux's, but all other
+          platforms are DOS/dead-Unix targets outside this project's
+          scope so no regression risk in practice).
+        - `pine/osdep/tempnam` and `pine/osdep/writ_dir` tested
           `st_mode & S_IFDIR`/`(st_mode & S_IFMT) == S_IFDIR` directly
           instead of using the portable `S_ISDIR()` macro, and
-          `tempnam` declares a `u_int` (BSD-ism, not always defined)
-          instead of `unsigned int`.
-      Fix these four generation inputs, then regenerate `os-lnx.c` from
-      scratch (`cd pine/osdep && rm -f os-lnx.c && cd .. && make -f
-      makefile.lnx osdep/os-lnx.c`) and confirm the regenerated file
-      now matches (or improves on) the currently-committed one, so a
-      clean rebuild is no longer destructive.
+          `tempnam` declared a `u_int` (BSD-ism, not always defined)
+          instead of `unsigned int` — both now fixed at the fragment
+          source, matching the pattern already used in the previously
+          hand-patched generated file.
+        - `pine/osdep/mimedisp` still had the dead `#ifdef OLDWAY`
+          two-charset-argument `match_charset()` block in
+          `mime_can_display()` that had already been deleted from the
+          generated `os-lnx.c`/`os.c` in an earlier session (commit
+          `ace02e2`) but never from the fragment it's generated from —
+          deleted here too, so regeneration doesn't resurrect it.
+      Also found (not previously flagged) a redundant, already-provided
+      `#include <sys/stat.h>` that had been added directly to the
+      generated `os-lnx.c`'s header block; `sys/stat.h` is already
+      included unconditionally by `pine/osdep/os-lnx.h:202` (`os.h` is
+      a symlink to it, included via `headers.h`), so no fragment change
+      was needed there — the regenerated file is simply correct without
+      it. Also fixed two dependency-list references to
+      `osdep/fgetpos.non` that should have said `osdep/fgetpos`
+      (`pine/makefile.lnx:142` and `pine/osdep/makefile`'s `os-lnx.c:`
+      line; left the latter file's other platforms' dependency lines
+      and the rest of its generated content untouched by hand-editing
+      only the one line, rather than rerunning
+      `pine/osdep/makedep` wholesale — that pulled in unrelated churn
+      for other platform targets, including one referencing
+      `pine/osdep/os-dos.ic`, a fragment file that doesn't exist in
+      this tree).
+      Verified: `./build clean && ./build lnx` now regenerates
+      `os-lnx.c` from scratch with no errors and no warnings related to
+      `os.c`/`os-lnx.c`; diffing the regenerated file against the
+      previously-committed hand-patched one shows only the redundant
+      `#include` removal and a cosmetic fgetpos/fsetpos comment fix
+      (now correctly says "just a call to" instead of the stale
+      "emulation of", matching the fragment's actual, non-emulated
+      behavior) — no functional difference. Full smoketest suite (9/9)
+      passes. A clean rebuild is no longer destructive.
 - [x] Hit the same class of bug in `pico/osdep.h`/`osdep.c`, which
       `pico/makefile.lnx:41-47` generates as a plain `cp` of
       `pico/os_unix.h`/`os_unix.c` (no fragment assembly, unlike
       `os-lnx.c`) — but those two files are gitignored, so the
       previously-working copies (evidently hand-patched at some point,
       same as `os-lnx.c`) had no git history and were unrecoverable
-      once `./build clean` deleted them this session. Unlike the
-      `os-lnx.c` case, this one *is* fixed at the true source now:
+      once `./build clean` deleted them in an earlier session. Unlike
+      the `os-lnx.c` case at the time, this one *was* fixed at the true
+      source immediately:
       `pico/os_unix.h` had an unguarded `extern int kbseq();` that
       conflicted with `os_unix.c`'s `#ifdef ANSI` prototype
       `int kbseq(int *);` (now wrapped in the same `#ifdef ANSI` as the
@@ -813,7 +846,7 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       (now excluded via `&& !defined(LINUX)`, matching the `-Dbsd
       -DLINUX` flags `makefile.lnx` builds pico with). A clean
       `./build clean && ./build lnx` now regenerates both `os-lnx.c`
-      (still needs the fixes above, since that one's fixes live in the
-      untracked generated file) and `pico/osdep.[ch]` (now genuinely
-      fixed at the source) and produces the same binary sizes as
+      (also fixed at the source now, per the item above) and
+      `pico/osdep.[ch]` (fixed at the source) and produces the same
+      binary sizes as
       before.

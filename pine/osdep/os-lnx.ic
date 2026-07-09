@@ -114,4 +114,4 @@ include(play_snd.non)
 
 ; Most systems have the ANSI fgetpos and fsetpos functions.  For those,
 ; use fgetpos.  If a system doesn't have it use fgetpos.non.
-include(fgetpos.non)
+include(fgetpos)

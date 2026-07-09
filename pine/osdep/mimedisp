@@ -16,15 +16,6 @@ mime_can_display(type, subtype, params)
     case TYPETEXT:
         /* we always try to display text now */
 	return 1;
-#ifdef OLDWAY
-        if(ps_global->show_all_characters)
-          return(1);
-        while(params != NULL && strucmp(params->attribute,"charset") != 0)
-          params = params->next;
-
-	return(match_charset((params) ? params->value : "US-ASCII",
-			     ps_global->VAR_CHAR_SET) != 2);
-#endif
 
     case TYPEAUDIO:
      return(0);
