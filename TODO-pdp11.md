@@ -704,13 +704,149 @@ These fixed global buffers alone can blow a PDP-11 data segment:
     - The rest of `s`'s call sites (`sprintf`s of short/bounded content
       — paths, prompts, and `browse.c`'s file operations, which stay
       bounded because `mlreply()`/`NLINE`-sized buffers cap whatever
-      reaches `s` there) didn't turn up another unbounded accumulation.
-      Leaving `s` at 16KB rather than shrinking it for now; a real
-      shrink would want to also re-derive a safe minimum size from the
-      worst-case call sites identified above (`InitMailHeader()`'s
-      per-entry formatting, `wkeyhelp()`'s `term.t_ncol`-scaled
-      accumulation) rather than picking a number without that
-      accounting.
+      reaches `s` there) didn't turn up another unbounded accumulation
+      *except* one, found while trying to actually settle the "what's
+      the real worst case" question the previous round left open
+      (`resolve_niks()`'s call into pine's address builder). Chasing
+      that down turned into its own round with four distinct real bugs,
+      described next.
+    - **New verification tool this round: a full local build with
+      AddressSanitizer, not just a standalone-extracted repro.** The
+      previous `pfnexpand()` bug (above) used a standalone C file
+      compiled with `-fsanitize=address` because the vulnerable logic
+      was a simple, self-contained loop. This round's bugs are deep in
+      real call chains across pico/pine/c-client (curses state, c-client
+      ADDRESS structures, the composer's line-list), too entangled to
+      usefully extract. Instead: `git worktree add` a scratch checkout,
+      rebuild `c-client.a`/`libpico.a`/`pine` there with
+      `-fsanitize=address -fno-omit-frame-pointer` added to each
+      makefile's `CFLAGS`/`PROFILE` override (same mechanism
+      `run_smoketests.py --coverage` already uses for gcov), relink
+      `bin/pine`, and drive it with the exact same `test/smoketest.py`
+      harness (imported from the worktree's own copy) instead of a
+      one-off script. This catches heap-, stack-, *and* global-buffer
+      overflows and use-after-frees in the real binary, not just a
+      hand-simulated fragment — at the cost of a several-minute rebuild
+      per iteration instead of a one-file compile.
+      One environment wrinkle: the ASan build crashed on startup before
+      reaching the Main Menu at all (`SEGV`, backtrace through
+      `gethostbyname` → `_nss_myhostname_gethostbyname3_r` → a symbol
+      named `uname`) — `nm -D` showed `uname` exported as a *dynamic*
+      symbol in the ASan build (but not the plain build), because
+      `imap/ANSI/c-client/os_lnx.c:233` defines
+      `char *uname = NIL;` (a per-file username cache used by
+      `myusername()`) at file scope with external linkage, and
+      AddressSanitizer's ODR-checking machinery makes the linker export
+      globals dynamically where a plain build wouldn't. That export let
+      the dynamic linker's symbol interposition resolve
+      `libnss_myhostname.so.2`'s internal call to the real libc
+      `uname()` to pine's *unrelated data variable* of the same name
+      instead — a real, if obscure and ASan-tooling-specific, naming
+      hazard. Fixed at the true source
+      (`imap/ANSI/c-client/os_lnx.c`, not generated) by marking it
+      `static` — it's never referenced outside this file. Confirmed
+      `nm -D` no longer lists it and the ASan build starts normally.
+      (The four sibling `os_*.c` files for other platforms have the
+      exact same pattern but aren't part of this project's build, so
+      were left alone.)
+    - **Bug 1 — heap-use-after-free, `ods.top_l`/`ods.cur_l` after
+      `resolve_niks()`.** `resolve_niks()` (composer.c) already carried
+      a "BEWARE: this function can cause cur_l and top_l to get lost...
+      This would usually result in a nice core dump" comment — a risk
+      the original UW authors flagged but never fixed. When an
+      entry's address(es) get rewritten, `resolve_niks()` builds an
+      entirely new line list (`InitEntryText`) and frees the old one
+      (`zotentry`) — but `ods.top_l` (and, outside the one `CTRL|'X'`
+      call site that already patches `ods.cur_l` up per a
+      "need to be careful here" comment, `ods.cur_l` too) can still
+      point into the just-freed old list. Confirmed under
+      AddressSanitizer: typing ~500 bytes of ordinary text into To:
+      and pressing `CTRL|'N'` (next field) reliably produced a
+      heap-use-after-free in `next_line()`, called from `entry_line()`
+      from `InvertPrompt()` re-painting the *new* current field's
+      prompt right after `resolve_niks()` ran on the old one — no huge
+      address needed, no remote content, just ordinary composing.
+      Fixed by having `resolve_niks()` itself repoint `ods.top_l`/
+      `ods.cur_l` at the freshly built list whenever they referenced
+      the entry being resolved, right before freeing the old one —
+      this covers every caller (`CTRL|'N'`/`CTRL|'P'` field navigation,
+      `CTRL|'O'` postpone, `CTRL|'X'` send) uniformly instead of
+      patching each call site.
+    - **Bug 2 — global-buffer-overflow, `pine/addrutil.c`'s
+      `addr_string()`.** Formatted a single address into
+      `static char string[MAX_ADDR_EXPN+1]` (1001 bytes) via
+      `rfc822_write_address()`, which — like every c-client RFC822
+      formatter in this file — does unbounded `strcat()`s
+      (`rfc822_cat()`) trusting the caller's buffer is "big enough".
+      `addr->mailbox`/`host`/`personal`/`adl` are `cpystr()`'d with no
+      length cap anywhere upstream, so one address over ~1000 bytes
+      overflows this global. Reachable simply by resuming a postponed
+      message with a long To: address — fires in `outgoing2strings()`
+      before the composer even redraws, confirmed under
+      AddressSanitizer with a 20000-byte address. Fixed by sizing the
+      buffer dynamically (grown on demand, same technique as
+      `tmp_20k_buf`) instead of a fixed size — the function's
+      "returns pointer to internal static buffer, caller doesn't own
+      it" contract is unchanged, so no caller needed updating.
+    - **Bug 3 — global-buffer-overflow, `resolve_niks()`'s call into
+      `build_address()`.** This is the bug the whole round set out to
+      chase down: `resolve_niks()` passed the shared 16KB global `s`
+      directly to `(*Pmaster->buildaddr)()` (pine's `build_address()`)
+      as its output buffer. Like `addr_string()` above,
+      `build_address()`/`rfc822_write_address()` write with unbounded
+      `strcat()`s. A single To:/Cc:/Bcc: field over 16KB (trivial to
+      reach by pasting a large recipient list, or via a resumed
+      postponed message) overflowed `s` itself — confirmed under
+      AddressSanitizer, which identified the overflow landing exactly
+      "0 bytes after global variable 's' ... 32 bytes before ...
+      'mline_open'" (`edef.h`), i.e. corrupting the very globals
+      declared right after `s` that the original call-site survey (two
+      rounds ago) had flagged as the ones at risk if `s` were ever
+      overflowed. Fixed by giving `build_address()` its own buffer,
+      sized off the same upper bound used to size the input buffer
+      (`sbuf`) instead of the shared fixed-size `s` — `s` is no longer
+      touched by this function at all.
+    - **Bug 4 — stack-buffer-overflow,
+      `imap/ANSI/c-client/rfc822.c`'s `rfc822_address_line()`.**
+      Formats each address in an envelope's To:/Cc:/etc. list into a
+      fixed local `char tmp[MAILTMPLEN]` (1024 bytes) one at a time —
+      same unbounded-`strcat()`-into-a-"should be big enough"-buffer
+      pattern as the two bugs above, but this one is inside c-client
+      itself rather than pine, and triggers on the *write* path
+      (`pine_rfc822_header()`, called when Postponing or Sending
+      actually writes the RFC822-formatted header out), not just the
+      *read/resume* path. A single address over 1024 bytes overflows
+      this stack buffer — confirmed under AddressSanitizer via
+      Postponing a resumed message with a 20000-byte To: address.
+      Fixed by sizing `tmp` per-address (`fs_get`/`fs_give`, matching
+      this file's own existing allocation convention) instead of
+      assuming `MAILTMPLEN` always fits one address.
+    - This is likely not an exhaustive list — `rfc822.c` has several
+      more address/text formatters (`rfc822_header_line`,
+      `rfc822_write_body_header`, the group-address branches in
+      `rfc822_address_line`/`rfc822_write_address` themselves) built on
+      the same "caller's buffer is big enough" assumption, some
+      relying on `pine_rfc822_header_size()`'s upper-bound accounting
+      (itself only as good as its own estimate) rather than sizing
+      themselves. Folded into the "Follow-up: buffer-overflow security
+      audit" item below rather than re-auditing every c-client
+      formatter right now.
+    - Verified end-to-end: rebuilt the ASan worktree after each of the
+      four fixes and re-ran the resume-postpone repro, confirming each
+      fix individually cleared its bug (no crash, no new one uncovered
+      until the next layer). Final combined run — resume a postponed
+      message with a 20000-byte To:, tab up through the header fields,
+      Postpone, quit — completes cleanly end-to-end with 0 ASan
+      reports. Added `test/cases/test_resume_postponed_huge_address.py`
+      covering all four. Full smoketest suite (12/12) passes on a
+      normal (non-ASan) rebuild.
+      Leaving `s` at 16KB rather than shrinking it for now — with
+      `resolve_niks()`'s `build_address()` call (the actual worst case)
+      no longer routing through `s` at all, the remaining call sites
+      are all bounded by `NLINE`/short literal prompts/`term.t_ncol`,
+      so a future shrink attempt should size against
+      `wkeyhelp()`'s `term.t_ncol`-scaled accumulation as the new
+      worst case rather than what this round fixed.
 - [ ] `temp_format` (10KB, `pine/ttyout.c:1098`) — NOT YET DONE. Has its
       own comment: `"Very large because there's no bounds checks"`. Its
       writers (`PutLine1`..`PutLine5`, `Stripe3`) take a fixed number of

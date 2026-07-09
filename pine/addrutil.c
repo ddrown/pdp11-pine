@@ -215,7 +215,37 @@ addr_string(addr)
      ADDRESS *addr;
 {
     ADDRESS  tmp_addr;
-    static char string[MAX_ADDR_EXPN+1];
+    static char  *string = NULL;
+    static size_t string_size = 0;
+    size_t        need;
+
+    /*
+     * rfc822_write_address()/rfc822_cat() do unbounded strcat()s on
+     * the assumption the caller's buffer is "big enough" -- true of
+     * MAX_ADDR_EXPN (1000 bytes) for an ordinary address, but
+     * addr->mailbox/host/personal/adl are cpystr()'d with no length
+     * cap anywhere upstream (e.g. parsing a resumed postponed
+     * message's To: line), so a long address overflows a fixed
+     * buffer here. Confirmed under AddressSanitizer: resuming a
+     * postponed message with a 20000-byte To: address overflows this
+     * exact buffer via rfc822_cat(), reachable before the composer
+     * even redraws. Size dynamically instead, same technique as
+     * tmp_20k_buf.
+     */
+    need = 2 * ((addr->personal ? strlen(addr->personal) : 0)
+                + (addr->mailbox ? strlen(addr->mailbox) : 0)
+                + (addr->host   ? strlen(addr->host)   : 0)
+                + (addr->adl    ? strlen(addr->adl)    : 0))
+           + 32;    /* "<>", "@", quotes, group ": ", ";" */
+    if(need < MAX_ADDR_EXPN+1)
+      need = MAX_ADDR_EXPN+1;
+
+    if(need > string_size){
+	if(string)
+	  fs_give((void **)&string);
+	string = (char *)fs_get(need);
+	string_size = need;
+    }
 
     string[0] = '\0';
     tmp_addr = *addr;

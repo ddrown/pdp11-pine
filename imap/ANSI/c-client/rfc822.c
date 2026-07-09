@@ -146,8 +146,9 @@ void rfc822_header (char *header,ENVELOPE *env,BODY *body)
 
 void rfc822_address_line (char **header,char *type,ENVELOPE *env,ADDRESS *adr)
 {
-  char *t,tmp[MAILTMPLEN];
+  char *t,*tmp;
   long i,len,n = 0;
+  size_t tmpneed;
   char *s = (*header += strlen (*header));
   if (adr) {			/* do nothing if no addresses */
     if (env && env->remail) strcat (s,"ReSent-");
@@ -155,7 +156,24 @@ void rfc822_address_line (char **header,char *type,ENVELOPE *env,ADDRESS *adr)
     strcat (s,": ");
     s += (len = strlen (s));	/* initial string length */
     do {			/* run down address list */
-      *(t = tmp) = '\0';	/* initially empty string */
+      /*
+       * mailbox/personal/host/adl come from cpystr()'d fields with
+       * no length cap anywhere upstream, so a single long address
+       * (typed/pasted into pine's composer, or an oversized field in
+       * a resumed postponed message) can exceed a fixed MAILTMPLEN
+       * scratch buffer here -- confirmed under AddressSanitizer as a
+       * stack-buffer-overflow of this function's old `tmp[MAILTMPLEN]`
+       * local, reachable via an ordinary Postpone/Send. Size per
+       * address instead of assuming MAILTMPLEN is always enough.
+       */
+      tmpneed = 2 * ((adr->personal ? strlen (adr->personal) : 0)
+                     + (adr->mailbox ? strlen (adr->mailbox) : 0)
+                     + (adr->host    ? strlen (adr->host)    : 0)
+                     + (adr->adl     ? strlen (adr->adl)     : 0))
+                + 32;		/* "<>", "@", quotes, ": ", ", ", ";" */
+      if (tmpneed < MAILTMPLEN) tmpneed = MAILTMPLEN;
+      *(t = tmp = (char *) fs_get (tmpneed)) = '\0';
+					/* initially empty string */
 				/* start of group? */
       if (adr->mailbox && !adr->host) {
 				/* yes, write group name */
@@ -189,6 +207,7 @@ void rfc822_address_line (char **header,char *type,ENVELOPE *env,ADDRESS *adr)
 	*s++ = ' '; *s++ = ' '; *s++ = ' '; *s++ = ' ';
       }
       while (*t) *s++ = *t++;	/* write this address */
+      fs_give ((void **) &tmp);
     } while (adr = adr->next);
 				/* tie off header line */
     *s++ = '\015'; *s++ = '\012'; *s = '\0';

@@ -2076,19 +2076,44 @@ int	entry;
     register	int	i;
     register    struct  hdr_line  *line = headents[entry].hd_text;
     char	*sbuf;
+    char	*full_to;
     char	*errmsg;
-    
+    size_t	sbuf_size;
+
     line = headents[entry].hd_text;
     i = 0;
     while(line != NULL){
 	i += term.t_ncol;
         line = line->next;
     }
-    if((sbuf=(char *)malloc((unsigned) i)) == NULL){
+    sbuf_size = (size_t) i;
+    if((sbuf=(char *)malloc(sbuf_size)) == NULL){
 	emlwrite("Can't malloc space to expand address", NULL);
 	return(-1);
     }
-    
+
+    /*
+     * (*Pmaster->buildaddr)() (pine's build_address()) formats its
+     * result into whatever buffer we hand it here with unbounded
+     * strcat()s (rfc822_cat()), on the assumption the caller's buffer
+     * is "big enough" -- true for an ordinary address, but sbuf above
+     * has no upper bound (as many/long addresses as the user has
+     * typed or pasted into this field), so the shared, fixed 16KB
+     * global `s` used to be passed here directly and overflowed once
+     * the field's content exceeded it. Confirmed under
+     * AddressSanitizer: resolving a ~20000-byte To: field overflowed
+     * `s` by design, corrupting the globals right after it in
+     * edef.h. Give build_address() its own buffer sized off the same
+     * upper bound as sbuf instead (doubled: rfc822_cat() may quote/
+     * escape personal names, so don't try to predict exactly how much
+     * escaping will happen).
+     */
+    if((full_to=(char *)malloc(2*sbuf_size + 64)) == NULL){
+	emlwrite("Can't malloc space to expand address", NULL);
+	free(sbuf);
+	return(-1);
+    }
+
     *sbuf = '\0';
     /*
      * cat the whole entry into one string...
@@ -2123,18 +2148,39 @@ int	entry;
         line = line->next;
     }
 
-    if((retval=(*Pmaster->buildaddr)(sbuf, s, &errmsg)) == -1){
+    if((retval=(*Pmaster->buildaddr)(sbuf, full_to, &errmsg)) == -1){
 	sprintf(s, "%s field: %s", headents[entry].name, errmsg);
 	(*term.t_beep)();
 	emlwrite(s, NULL);
     }
-    else if(strcmp(sbuf, s)){
+    else if(strcmp(sbuf, full_to)){
 	line = headents[entry].hd_text;
-	InitEntryText(s, entry);		/* arrange new one */
+	InitEntryText(full_to, entry);		/* arrange new one */
+
+	/*
+	 * ods.top_l/ods.cur_l may be pointing into the line list we're
+	 * about to free below -- see the "BEWARE" note in this
+	 * function's header comment. Only the CTRL|'X' caller patched
+	 * ods.cur_l up afterward (and never ods.top_l), so any other
+	 * caller (CTRL|'N'/CTRL|'P' field navigation, CTRL|'O' postpone)
+	 * left a dangling pointer that the next screen repaint would
+	 * walk via entry_line()/next_line() -- a real, easily reachable
+	 * use-after-free (confirmed under AddressSanitizer: typing
+	 * ordinary text into To:/Cc:/Bcc: and tabbing to the next field
+	 * is enough). Since both are just position markers into this
+	 * entry's line list, repointing them at the freshly built list
+	 * is always safe.
+	 */
+	if(ods.top_e == entry)
+	  ods.top_l = headents[entry].hd_text;
+	if(ods.cur_e == entry)
+	  ods.cur_l = headents[entry].hd_text;
+
         zotentry(line); 			/* blast old list of entries */
         retval = TRUE;
     }
     free(sbuf);
+    free(full_to);
     return(retval);
 }
 

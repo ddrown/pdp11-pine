@@ -230,7 +230,7 @@ long server_login (char *user,char *pass,char **home,int argc,char *argv[])
  * Returns: my user name
  */
 
-char *uname = NIL;
+static char *uname = NIL;
 
 char *myusername ()
 {
