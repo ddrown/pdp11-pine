@@ -656,19 +656,29 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       via unchecked `strcpy()`s from an unbounded parse buffer — an
       actual stack smash confirmed under `valgrind`, reachable by
       ordinary composer typing/pasting, no crafted email needed.
-- [ ] `pine/mailview.c`'s `type_desc()` (`static char type_d[200]`) has
+- [x] `pine/mailview.c`'s `type_desc()` (`static char type_d[200]`) had
       one branch — `TYPEAPPLICATION`/`octet-stream`, the "Attached file
-      "%s"" case — that `sprintf`s a MIME parameter's `value` (e.g. an
-      attachment's `filename=`/`name=` parameter, taken directly from a
-      *received* message) into `type_d` **without** the `%.100s`-style
-      precision cap every other branch in this function uses. This is
-      pre-existing (not introduced this session, and not a `tmp_20k_buf`
-      issue at all — `type_d` is its own fixed static buffer) but is a
-      real overflow if a crafted email has a long enough attachment
-      filename parameter. Found but not fixed here, to keep this pass
-      scoped to `tmp_20k_buf`; worth an easy, low-risk fix (add
-      `.100s`/`.184s` like its sibling branches) alongside the broader
-      audit above.
+      "%s"" (and sibling "File "%s"") case — that `sprintf`s a MIME
+      parameter's `value` (the attachment's `name=` parameter, taken
+      directly from a *received* message) into `type_d` **without** the
+      `%.100s`-style precision cap every other branch in this function
+      uses. Confirmed exploitable under valgrind: a message with an
+      `application/octet-stream` part whose `name=` parameter is 500
+      bytes crashed pine (SIGSEGV) as soon as the message view's
+      `describe_mime()`/`part_desc()` formatted the "not shown"
+      attachment description line — no attachment or user typing
+      involved, just viewing an ordinary received message with an
+      oversized parameter, same stack-smash signature (backtrace frames
+      made of the injected `'A'` bytes) as the earlier `ParseAttach()`
+      bug. Fixed by adding `%.100s` to both `sprintf`s, matching the
+      convention already used by this function's other branches.
+      Verified: rebuilt clean, confirmed under valgrind that the same
+      repro (stashing the fix) reliably reproduces the invalid
+      write/crash beforehand and is gone afterward (0 errors, exit
+      status 0). Added `test/cases/test_mime_filename_overflow.py`
+      (views a message with a 500-byte attachment `name=` parameter);
+      confirmed it fails (crash) before the fix and passes after.
+      Full suite (10/10) now passes.
 - [x] `pico/composer.c`'s `packheader()` (~line 2487) did
       `if(line->text[strlen(line->text)-1] == ',')` with no check that
       `line->text` is non-empty first — when it is empty, `strlen()-1`

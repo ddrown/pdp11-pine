@@ -416,11 +416,11 @@ type_desc(type, subtype, params, full)
             while(params != NULL && strucmp(params->attribute,"name") != 0)
               params = params->next;
             if(full)
-              sprintf(type_d, "Attached file \"%s\"",
+              sprintf(type_d, "Attached file \"%.100s\"",
                       params != NULL && params->value != NULL ?
                                                     params->value : "");
             else
-              sprintf(type_d, "File \"%s\"",
+              sprintf(type_d, "File \"%.100s\"",
                       params != NULL && params->value != NULL ?
                                                     params->value : "");
         } else if(subtype != NULL && strucmp(subtype, "postscript") == 0)
