@@ -554,7 +554,7 @@ These fixed global buffers alone can blow a PDP-11 data segment:
         the real attribute/value lengths up front and
         `grow_tmp_20k_buf()` before writing.
     - Full suite (8/8) now passes.
-- [ ] `s` (16KB, `pico/edef.h:69`) — audited, one confirmed real bug
+- [ ] `s` (16KB, `pico/edef.h:69`) — audited, two confirmed real bugs
       found and fixed (below); the size itself is still NOT shrunk.
       Used as a generic global scratch string throughout ~15 pico files
       (filenames, search strings, prompts). Pico's own line-length
@@ -611,12 +611,56 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       bogus attachment filename and Postpones; confirmed this test
       reliably crashes pine before the fix and passes after it.
       Full suite (9/9) now passes.
+    - Continuing the call-site survey turned up a second, more severe
+      bug: `pico/composer.c`'s `InitMailHeader()` (~line 253) builds the
+      Attchmnt field's display text by walking `mp->attachments` and,
+      per entry, `sprintf()`ing `"N. filename (size) \"description\","`
+      into the shared global `s` and then `strcat()`ing that into
+      `addrbuf` — a fixed `malloc(1024)`, regardless of how many
+      attachments there are or how long their fields are. Unlike the
+      `ParseAttach()` case above (bounded by composer text-entry
+      limits), `mp->attachments`' `filename`/`description` fields can
+      come from a *resumed postponed message*: `pine/send.c`'s
+      `parse_postponed_header()` reads `Attachment-file:`/
+      `Attachment-description:` pseudo-header lines with `cpystr()`,
+      with no length cap of its own at all. A postponed-mail file with
+      one long `Attachment-description:` line therefore overflows both
+      the shared 16KB `s` (silently — it's a static array, not a heap
+      block, so nothing catches this one directly) and, confirmed under
+      `valgrind`, the 1024-byte `addrbuf` heap block via `strcat()` —
+      severely enough to corrupt valgrind's own heap metadata and abort
+      it; reproduced without valgrind too (glibc's own allocator
+      aborts with "malloc(): invalid size (unsorted)" /
+      "free(): corrupted unsorted chunks"). Reachable just by resuming
+      a postponed message with one oversized attachment description —
+      no attachment file or user typing involved.
+      Fixed by summing the real field lengths up front and `malloc`ing
+      `addrbuf` exactly that size, then formatting each entry directly
+      into `addrbuf` (via a running pointer) instead of through the
+      shared, fixed-size `s`.
+      Fixing this surfaced a third instance of the `LineEdit()`-class
+      uninitialized-value bug (see above): `pico.c`'s main `pico()` loop
+      declared `int i;` (~line 142) uninitialized and passed `&i` to
+      `(*Pmaster->newmail)(&i, ...)`, which only sets `*cursor_moved` on
+      paths returning `>= 0` — but `if(i || mpresf)` (~line 234) is
+      unconditional, identical in shape to the already-fixed `j` bug.
+      Fixed the same way: `i = 0` at declaration.
+      Verified: rebuilt clean, re-ran a dedicated valgrind repro (a
+      postponed-mail file with a 20000-byte `Attachment-description:`
+      line, resumed via "Continue postponed composition") — reliably
+      crashes before both fixes (heap corruption assertion in valgrind
+      itself), 0 errors after. Added
+      `test/cases/test_attach_resume_overflow.py`; confirmed it crashes
+      pine (a real, non-valgrind glibc allocator abort) before the fix
+      and passes after. Full suite (11/11) now passes.
     - The rest of `s`'s ~15-file call site survey (mostly `sprintf`s of
-      short/bounded content — paths, prompts) didn't turn up another
-      unbounded accumulation like `ParseAttach()`'s, but wasn't
-      exhaustive either. Leaving `s` at 16KB rather than shrinking it
-      for now; a real shrink would want the same file-by-file diligence
-      `tmp_20k_buf` got before picking a smaller fixed size.
+      short/bounded content — paths, prompts, and `browse.c`'s file
+      operations, which stay bounded because `mlreply()`/`NLINE`-sized
+      buffers cap what ever reaches `s` there) didn't turn up another
+      unbounded accumulation, but wasn't exhaustive either. Leaving `s`
+      at 16KB rather than shrinking it for now; a real shrink would want
+      the same file-by-file diligence `tmp_20k_buf` got before picking a
+      smaller fixed size.
 - [ ] `temp_format` (10KB, `pine/ttyout.c:1098`) — NOT YET DONE. Has its
       own comment: `"Very large because there's no bounds checks"`. Its
       writers (`PutLine1`..`PutLine5`, `Stripe3`) take a fixed number of

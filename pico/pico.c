@@ -139,7 +139,7 @@ PICO *pm;
     register int    c;
     register int    f;
     register int    n;
-    int      i;
+    int      i = 0;
     char     bname[NBUFN];		/* buffer name of file to read */
     extern   struct on_display ods;
 

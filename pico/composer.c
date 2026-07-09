@@ -251,25 +251,43 @@ PICO  *mp;
 
 		/* build entries: one to a line then feed to initializer */
 		if(mp->attachments != NULL){
-		    int   x = 0;
-		    PATMT *ap = mp->attachments;
+		    int    x = 0;
+		    size_t need = 0;
+		    PATMT *ap;
+		    char  *p;
 
-		    addrbuf = (char *)malloc((size_t)1024);
+		    /*
+		     * ap->filename/description come from an unbounded
+		     * source -- a resumed postponed message's
+		     * Attachment-file:/Attachment-description: header
+		     * lines have no length cap of their own (see
+		     * pine/send.c's parse_postponed_header()) -- so
+		     * neither a fixed-size addrbuf nor the shared
+		     * global `s` scratch buffer can be trusted to hold
+		     * an entry's formatted text. Size addrbuf exactly
+		     * and format straight into it instead.
+		     */
+		    for(ap = mp->attachments; ap; ap = ap->next)
+		      if(ap->filename)
+			need += strlen(ap->filename)
+			      + (ap->size ? strlen(ap->size) : 0)
+			      + (ap->description ? strlen(ap->description) : 0)
+			      + 32;	/* "%d. ", "(", ") ", quotes, "," */
+
+		    addrbuf = (char *)malloc(need + 1);
 		    addrbuf[0] = '\0';
-		    s[0] = '\0';
-		    while(ap){
+		    p = addrbuf;
+		    for(ap = mp->attachments; ap; ap = ap->next){
 			if(ap->filename){
-			    sprintf(s, "%d. %s %s%s%s\"%s\"%s",
+			    p += sprintf(p, "%d. %s %s%s%s\"%s\"%s",
 				    ++x,
 				    ap->filename,
 				    ap->size ? "(" : "",
 				    ap->size ? ap->size : "",
 				    ap->size ? ") " : "",
-				    ap->description ? ap->description : "", 
+				    ap->description ? ap->description : "",
 				    ap->next ? "," : "");
-			    strcat(addrbuf, s);
 			}
-			ap = ap->next;
 		    }
 		    InitEntryText(addrbuf, i);
 		    free((char *)addrbuf);
