@@ -964,7 +964,10 @@ int  len;
     char name[20];
     
     if(*fn == '~') {
-        for(x = fn+1, y = name; *x != '/' && *x != '\0'; *y++ = *x++);
+        for(x = fn+1, y = name; *x != '/' && *x != '\0' &&
+	    y < name + sizeof(name) - 1; *y++ = *x++);
+        if(*x != '/' && *x != '\0')	/* "~username" too long for name[] */
+          return(NULL);
         *y = '\0';
         if(x == fn + 1) 
           pw = getpwuid(getuid());

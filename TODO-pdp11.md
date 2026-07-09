@@ -653,14 +653,64 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       `test/cases/test_attach_resume_overflow.py`; confirmed it crashes
       pine (a real, non-valgrind glibc allocator abort) before the fix
       and passes after. Full suite (11/11) now passes.
-    - The rest of `s`'s ~15-file call site survey (mostly `sprintf`s of
-      short/bounded content — paths, prompts, and `browse.c`'s file
-      operations, which stay bounded because `mlreply()`/`NLINE`-sized
-      buffers cap what ever reaches `s` there) didn't turn up another
-      unbounded accumulation, but wasn't exhaustive either. Leaving `s`
-      at 16KB rather than shrinking it for now; a real shrink would want
-      the same file-by-file diligence `tmp_20k_buf` got before picking a
-      smaller fixed size.
+    - Finished the file-by-file survey: `display.c`'s two remaining
+      global-`s` writers (`mlyesno()`'s `sprintf(s, "%s...", prompt)`
+      and `wkeyhelp()`'s char-by-char accumulation into `s`) are bounded
+      by their callers' fixed/short literal prompts and by
+      `term.t_ncol`, respectively — no unbounded input reaches either.
+      `pico/os_unix.c`'s `gethomedir()`/`compresspath()` writers into
+      `s` are bounded by `NLINE`-sized inputs. The remaining files
+      either don't reference the global `s` at all (its name is reused
+      as an unrelated local `int status` variable in `buffer.c`,
+      `file.c`, `random.c`, `region.c`, and `search.c`) or only appear
+      in comments (`bind.c`, `main.c`, `tcap.c`, `tinfo.c`, `word.c`).
+      No further unbounded accumulation into `s` itself found.
+    - While tracing `s`'s `fixpath()`/`gethomedir()` call chain (used by
+      `os_unix.c`'s `gethomedir()`, `file.c`'s Read/Write/Insert-file
+      prompts, and `attach.c`'s attachment filenames), found an
+      unrelated but real stack-buffer overflow one level down:
+      `pico/os_unix.c`'s `pfnexpand()` (~line 958) expands a leading
+      `~`/`~username` into the matching home directory, and copies the
+      username portion into a local `char name[20]` via
+      `for(x = fn+1, y = name; *x != '/' && *x != '\0'; *y++ = *x++);`
+      — no bound of its own. Typing an ordinary filename starting with
+      `~` followed by more than 19 non-`/` characters (e.g. into the
+      composer's Ctrl-R "Read File" prompt, or an attachment filename)
+      overflows `name[20]` on the stack. Plain `valgrind`/Memcheck does
+      **not** catch this class of bug — it only tracks heap allocations
+      and select redzone-instrumented boundaries, not a plain local
+      array overflowing into adjacent same-frame stack variables — so
+      confirmed it a different way: extracted the vulnerable copy loop
+      into a standalone reproduction compiled with
+      `-fsanitize=address`, which reported a clean
+      "stack-buffer-overflow" (`name` at offset 52 in its frame) on the
+      original code and nothing after the fix. Also manually confirmed
+      under the real binary that this exact input (Ctrl-R, then a
+      filename starting with `~` and 40 `A`s) doesn't crash on this
+      x86-64/glibc build (likely luck of stack layout/reordering, not a
+      real mitigation) — a reminder that "doesn't crash under valgrind"
+      isn't the same as "safe", especially porting to a target (the
+      real PDP-11) with none of glibc/gcc's incidental hardening.
+      Fixed by bounding the copy loop against `sizeof(name)` and
+      rejecting (returning `NULL`, matching the function's existing
+      failure mode for the "expanded path too long" case just below it)
+      when the username portion doesn't fit — `fixpath()` (the only
+      caller) already discards `pfnexpand()`'s return value and leaves
+      the original string untouched on failure, so this degrades to a
+      harmless "no such file" rather than a crash. Verified: rebuilt
+      clean, full smoketest suite (11/11) still passes, and manually
+      confirmed a normal `~/...`-relative filename still expands and
+      opens correctly through the real composer.
+    - The rest of `s`'s call sites (`sprintf`s of short/bounded content
+      — paths, prompts, and `browse.c`'s file operations, which stay
+      bounded because `mlreply()`/`NLINE`-sized buffers cap whatever
+      reaches `s` there) didn't turn up another unbounded accumulation.
+      Leaving `s` at 16KB rather than shrinking it for now; a real
+      shrink would want to also re-derive a safe minimum size from the
+      worst-case call sites identified above (`InitMailHeader()`'s
+      per-entry formatting, `wkeyhelp()`'s `term.t_ncol`-scaled
+      accumulation) rather than picking a number without that
+      accounting.
 - [ ] `temp_format` (10KB, `pine/ttyout.c:1098`) — NOT YET DONE. Has its
       own comment: `"Very large because there's no bounds checks"`. Its
       writers (`PutLine1`..`PutLine5`, `Stripe3`) take a fixed number of
