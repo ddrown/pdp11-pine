@@ -32,9 +32,9 @@ mail, write a reply, file it in a folder" is being kept.
   allocator hardening a modern glibc build has, so bugs that are
   invisible here can be fatal there.
 
-See [`TODO-pdp11.md`](TODO-pdp11.md) for the detailed, in-progress
-cut list, size measurements, and write-ups of every bug found and
-fixed along the way.
+See [`TODO-pdp11.md`](TODO-pdp11.md) for the still-open cut list and
+size measurements, and [`TODO-pdp11-done.md`](TODO-pdp11-done.md) for
+the detailed write-ups of every bug found and fixed along the way.
 
 ## Building
 

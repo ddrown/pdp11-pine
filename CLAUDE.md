@@ -11,7 +11,10 @@ outgoing delivery via a local `sendmail`. See `README.md` for the
 project pitch and `TODO-pdp11.md` for the authoritative, detailed cut
 list, size measurements, and write-ups of every bug found so far.
 **Read `TODO-pdp11.md` before starting work** — it is the running log
-of what's done, what's in progress, and why past decisions were made.
+of what's still open and why past decisions were made. Completed
+items' detailed write-ups live in the companion `TODO-pdp11-done.md`
+(split out once the combined file got too long to scan) — check there
+for history/rationale on anything already marked DONE.
 
 ## Build and test
 
@@ -71,8 +74,9 @@ fatal there. When fixing one:
    it should stay green.
 6. Add a regression test under `test/cases/` when the harness can
    observe the difference (e.g. the process crashing vs. not).
-7. Update `TODO-pdp11.md` with a detailed write-up: what the bug was,
-   how it's reachable, how it was verified, how it was fixed.
+7. Move the item from `TODO-pdp11.md` to `TODO-pdp11-done.md` with a
+   detailed write-up: what the bug was, how it's reachable, how it was
+   verified, how it was fixed.
 
 ## Git workflow
 
