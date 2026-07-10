@@ -1095,7 +1095,18 @@ PutLine0n8b(x, y, line, length)
 
 
 
-static char temp_format[10240]; /*Very large because there's no bounds checks*/
+/*
+ * Audited every PutLine1..PutLine5 call site (none pass unbounded
+ * content except redraw_klocked_body()'s klockame/klockin, now capped
+ * at other.c's klockin[128]/klockame[128]): worst real case is
+ * screen.c's "%s of %s %3d%% %s%s" (update_titlebar_message) at
+ * comatose()<=~13 + comatose()<=~13 + "%3d"<=3 + BAR_STATUS()<=3 +
+ * repeat_char()<=511 (its own hard internal cap) plus ~20 bytes of
+ * literal text, call it ~570 bytes worst case. Sized well above that,
+ * matching this codebase's existing MAILTMPLEN convention, rather than
+ * the original UW-inherited 10KB "just in case" sizing.
+ */
+static char temp_format[MAILTMPLEN];
 /*----------------------------------------------------------------------
       Printf style output line to the screen at given position, 1 arg
 
@@ -1238,74 +1249,6 @@ Centerline(line, string)
 
 	PutLine0(line, col, string);
 	return(col);
-}
-
-
-
-/*----------------------------------------------------------------------
-    Output line at given position, with parts in reverse video, 0 args
-
-  Args:  line   -- row position on screen
-         column -- column number to begin on
-         key    -- key character to turn on inverse
-         pmt    -- string to output
-
- Result: string is output
-         cursor position is update
-  ----*/
-/* 
- * show pmt, with every character after key highlighted, on line line 
- * beginning at column column.
- */
-void
-Stripe0(line, column, key,  pmt)
-     int  line;
-     int  column;
-     char *pmt;
-     int key;
-{
-  char  *buf;
-  int   i = column;
-
-    buf = pmt;
-    do{
-        if(*buf == key){
-            buf++;
-            StartInverse();
-            PutLine1(line, i++, "%c", (void *)(int)*buf);
-            EndInverse();
-        }
-        else{
-            PutLine1(line, i++, "%c", (void *)(int)*buf);
-        }
-    }
-    while(*++buf != '\0');
-    MoveCursor(line, i);
-}
-
-
-
-/*----------------------------------------------------------------------
-    Output line at given position, with parts in reverse video, 3 args
-
- Input:  line -- position on screen
-         columne --
-         key -- key character to turn on inverse
-         string -- printf style string to output
-         arg1   -- printf arguments
-         arg2
-         arg3
-
- Result: string is output
-         cursor position is update
-  ----*/
-void
-Stripe3(line, column, key, string, arg1, arg2, arg3)
-     int line, column, key;
-     char *string, *arg1, *arg2, *arg3;
-{
-    sprintf(temp_format, string, arg1, arg2, arg3);
-    Stripe0(line, column, key, temp_format);
 }
 
 

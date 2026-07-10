@@ -163,14 +163,21 @@ redraw_kl_body()
 }
 
 
-static char *klockin, *klockame;
+/*
+ * login/username come from VAR_USER_ID/VAR_PERSONAL_NAME, cpystr()'d
+ * from the user's pinerc with no length cap of its own -- copy into
+ * fixed, truncated buffers here (rather than keeping the raw pointers)
+ * so redraw_klocked_body()'s PutLine2() below has a proven bound on
+ * its %s args instead of an unbounded pinerc value.
+ */
+static char klockin[128], klockame[128];
 
 static void
 draw_klocked_body(login, username)
     char *login, *username;
 {
-    klockin = login;
-    klockame = username;
+    strlcpy(klockin, login, sizeof(klockin));
+    strlcpy(klockame, username, sizeof(klockame));
     redraw_klocked_body();
 }
 

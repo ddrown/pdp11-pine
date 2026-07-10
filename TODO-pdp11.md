@@ -847,19 +847,64 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       so a future shrink attempt should size against
       `wkeyhelp()`'s `term.t_ncol`-scaled accumulation as the new
       worst case rather than what this round fixed.
-- [ ] `temp_format` (10KB, `pine/ttyout.c:1098`) — NOT YET DONE. Has its
-      own comment: `"Very large because there's no bounds checks"`. Its
-      writers (`PutLine1`..`PutLine5`, `Stripe3`) take a fixed number of
-      `void *` args with no static type info (an old poor-man's-varargs
-      trick), so — unlike `tmp_20k_buf`'s typed `ADDRESS`/`ENVELOPE`
-      fields — there's no safe way to tell which args are `%s` strings
-      (to size for) vs. `%d`/`%c` (small, fixed) without parsing the
-      format string at each call, and blindly `strlen()`-ing a
-      non-string arg would segfault. Needs either a real audit of every
-      call site's actual argument content, or a rewrite of `PutLine*`/
-      `Stripe3` onto real varargs (`stdarg.h`) plus a bounds-checked
-      formatter — bigger lift than `tmp_20k_buf`, deliberately left for a
-      separate pass.
+- [x] `temp_format` (10KB, `pine/ttyout.c:1098`) — took the "audit every
+      call site" branch rather than the `stdarg.h` rewrite (which
+      remains the bigger lift, still not needed once the call sites are
+      proven bounded). Found only two things:
+    - `Stripe0()`/`Stripe3()` (one of the two named offenders) turned
+      out to be entirely dead code — grepped the whole tree, zero
+      callers anywhere outside their own definitions/declarations.
+      Deleted both functions (`pine/ttyout.c`) and their prototypes
+      (`pine/pine.h`, both the ANSI and old-style K&R declaration
+      blocks) outright, closing off that half of the concern instead of
+      auditing a function nothing calls.
+    - Every remaining `PutLine1`..`PutLine5` call site (`pine.c`,
+      `other.c`, `mailindx.c` x3, `screen.c` x5) formats only:
+      fixed string literals; a single `%c` from a `char`; `%d`/`%3d`
+      from an `int` (bounded by int range); `comatose()` (own
+      `static char buf[100]`, never overflowed — the DOS branch's
+      `buf[16]` is dead code, `DOS` isn't defined in this build);
+      `BAR_STATUS()` (fixed 3-char-or-less literals); `int2string()`
+      (own `static char string[20]`, `%d` of an `int` always fits); and
+      `repeat_char()`, which self-clamps to its own `bb[512]` regardless
+      of what's asked for. The one genuinely open-ended input was
+      `other.c`'s `redraw_klocked_body()`: `klockame`/`klockin` were raw
+      pointers into `VAR_PERSONAL_NAME`/`VAR_USER_ID`.
+      `VAR_USER_ID` turns out to always be `get_system_login()`
+      (`pw_name` from `getpwuid()`) on this non-DOS build — the
+      `user-id` pinerc variable is DOS-only and never consulted here —
+      so it's bounded by a trusted local `/etc/passwd` entry. But
+      `VAR_PERSONAL_NAME` *can* come straight from the pinerc file
+      (`cpystr()` of an `expand_variables()` result, no length cap) when
+      a user sets `personal-name=...`, confirmed by testing with a
+      pinerc containing a `personal-name` line and checking it rendered
+      correctly on the keyboard-lock screen. Fixed by copying both into
+      new fixed `klockin[128]`/`klockame[128]` buffers via `strlcpy()`
+      (already available in this tree — see the `s`/`ParseAttach` writeup
+      above) instead of storing raw pointers, closing off the only
+      unbounded input reaching `temp_format` while leaving the
+      "acceptable to silently truncate a locally-configured display
+      name" behavior consistent with the `ParseAttach` precedent.
+      With every input now audited/bounded, computed the true worst
+      case across all call sites: `screen.c`'s
+      `update_titlebar_message()`, `"%s of %s %3d%% %s%s"` with two
+      `comatose()` results (~13 bytes each) + `%3d` (3) + `BAR_STATUS()`
+      (3) + `repeat_char()`'s hard 511-byte cap + ~20 bytes of literal
+      text — call it ~570 bytes, well clear of `redraw_klocked_body()`'s
+      now-bounded ~290-byte worst case. Shrank `temp_format` from 10240
+      to `MAILTMPLEN` (1024, matching the same constant already used
+      throughout c-client for exactly this "one formatted line" use
+      case) — comfortable headroom over the ~570-byte audited worst
+      case without picking an arbitrary new number.
+      Verified: rebuilt clean, full smoketest suite (12/12) still
+      passes; manually drove the keyboard-lock screen (`k` from Main
+      Menu) with a pinerc `personal-name` set, confirming the display
+      still renders the name correctly through the new bounded buffers
+      and that lock/unlock still works end-to-end. Confirmed the actual
+      size win via `size bin/pine` before/after: `bss` dropped from
+      39216 to 30224 bytes (the 9216-byte `temp_format` shrink, exactly
+      10240 − 1024), `text` also dropped slightly from the two deleted
+      functions.
 
 ### Follow-up: buffer-overflow security audit (raised alongside the above)
 - [ ] Both `tmp_20k_buf`'s old fixed-size behavior and `temp_format`'s
