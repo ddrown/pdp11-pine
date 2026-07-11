@@ -292,7 +292,7 @@
 #define V_SORT_KEY                 16
 #define V_CHAR_SET                 17  /* disabled, this build is US-ASCII only */
 #define V_EDITOR                   18  /* disabled, alternate editor not supported */
-#define V_IMAGE_VIEWER             19
+#define V_IMAGE_VIEWER             19  /* disabled, no attachment display support */
 #define V_USE_ONLY_DOMAIN_NAME     20
 #define V_PRINTER                  21  /* disabled, printing not supported */
 #define V_PERSONAL_PRINT_COMMAND   22  /* disabled, printing not supported */
@@ -325,7 +325,6 @@
 #define VAR_INIT_CMD_LIST            vars[V_INIT_CMD_LIST].current_val.l
 #define VAR_SAVED_MSG_NAME_RULE      vars[V_SAVED_MSG_NAME_RULE].current_val.p
 #define VAR_SORT_KEY                 vars[V_SORT_KEY].current_val.p
-#define VAR_IMAGE_VIEWER             vars[V_IMAGE_VIEWER].current_val.p
 #define VAR_USE_ONLY_DOMAIN_NAME     vars[V_USE_ONLY_DOMAIN_NAME].current_val.p
 #define VAR_LAST_TIME_PRUNE_QUESTION vars[V_LAST_TIME_PRUNE_QUESTION].current_val.p
 #define VAR_LAST_VERS_USED           vars[V_LAST_VERS_USED].current_val.p

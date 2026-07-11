@@ -1193,3 +1193,68 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       malloc's leftover bytes happening to differ. Verified: rebuilt
       clean, re-ran the valgrind repro — 0 errors, 0 contexts; full suite
       (9/9) still passes.
+
+### Drop the image-viewer attachment feature (`VAR_IMAGE_VIEWER`)
+- [x] Raised while surveying `pine/init.c`/`args.c` for one-shot startup
+      code that could either be thrown away or moved into a separate
+      bootstrap process (see the still-open composer-split item in
+      `TODO-pdp11.md`). `image-viewer`'s only job is telling
+      `display_attachment()` (`pine/mailcmd.c`) what external program to
+      fork/exec to show a GIF/TIFF/etc. attachment -- a poor fit for a
+      terminal-only PDP-11 mail station with no graphical display to hand
+      an image to in the first place. Also already effectively dead on
+      this very build: `mime_can_display()`'s `TYPEIMAGE` case
+      (`pine/osdep/mimedisp`, assembled into `os-lnx.c`/`os.c`) only
+      returned displayable if `getenv("DISPLAY")` was set -- true only
+      under X11, never on a real target terminal.
+      Removed:
+      - `run_viewer()` (`pine/mailcmd.c`, the fork/exec of
+        `$image-viewer` on a temp file) deleted outright, along with its
+        two K&R-style forward declarations.
+      - `display_attachment()`'s early "Can't display! Set image-viewer
+        in pinerc" check and its `#ifndef DOS if(type==TYPEIMAGE)
+        run_viewer(...)` call site removed; the temp-file-write
+        scaffolding above it is now unconditional (still used by
+        whatever non-text attachment types reach that point) and no
+        longer needs the now-single-purpose `aux_filter` array, replaced
+        with a plain `(filter_t *)NULL` argument to `detach()`.
+      - `mime_can_display()`'s `TYPEIMAGE` case (`pine/osdep/mimedisp`,
+        the actual fragment -- `pine/os.c` is a generated symlink, see
+        `CLAUDE.md`) simplified to an unconditional `return(0)`, matching
+        the already-`return(0)`-only `TYPEAUDIO`/`TYPEAPPLICATION` cases.
+        Note `mimedisp` (unlike `os-lnx.c`-specific fragments) is shared
+        by most of upstream Pine's other `os-*.ic` port manifests
+        (aix/a32/aux/bsd/osf/nxt/ptx/hpp/bsi/pt1/dyn/cvx/sgi/isc/ult/
+        gen/sv4) -- edited anyway since this fork only ever builds `lnx`
+        and none of those other ports are maintained here, matching the
+        precedent already set for `pico/os_unix.c` (also shared POSIX
+        fragment, edited directly per `CLAUDE.md`).
+      - `image-viewer` pinerc variable marked disabled via the
+        established obsolete-slot pattern (same as `editor`/`printer`/
+        `character-set`): `V_IMAGE_VIEWER`'s numeric index kept stable
+        in `pine/pine.h` (old pinerc files naming it still parse without
+        error) but its `VAR_IMAGE_VIEWER` current-value macro and
+        `init.c`'s `set_current_val(vars,V_IMAGE_VIEWER,...)` call
+        removed, and its `variables[]` help text changed to "Image-viewer
+        is disabled, this build has no attachment display support".
+      Bonus dead code found, deliberately left alone: `gf_play_sound()`
+      (`pine/osdep/play_snd.non`) was `display_attachment()`'s TYPEAUDIO
+      branch's only caller, which is now gone too -- but that branch was
+      *already* unreachable before this change, since
+      `mime_can_display()`'s `TYPEAUDIO` case has unconditionally
+      returned 0 for a while (the check happens before the switch on
+      body type ever reaches it). `gf_play_sound()`'s body is also
+      already an empty no-op ("We don't know how to play audio."). Left
+      the fragment file itself untouched rather than deleting it --
+      unlike `mimedisp`, `play_snd.non` is the shared "no-op" stub for
+      every non-Sun `os-*.ic` port (only `play_snd.sun` differs), and its
+      cost is negligible (an empty function body), so it wasn't worth
+      the wider blast radius of touching a fragment this broadly shared
+      for a few bytes.
+      Verified: clean rebuild (`./build lnx`), `nm bin/pine` confirms
+      `run_viewer` is gone (`gf_play_sound` remains, as intended, still
+      linked but unreferenced), full smoketest suite (13/13) passes.
+      `text` dropped from 492010 to 490682 bytes (~1.3KB) -- small,
+      since this was mostly UI/glue code around a temp-file-write path
+      still needed for other attachment types, not a large standalone
+      subsystem.

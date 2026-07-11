@@ -213,8 +213,8 @@ static struct variable variables[] = {
   "Character-set is disabled, this build only supports US-ASCII"},
 {"editor",                     1, 1, 0, 1, 1, 0,
   "Alternate editor is disabled, this build only supports the built-in composer"},
-{"image-viewer",               0, 1, 0, 1, 1, 0,
-  "Program to view images if format such as GIF and TIFF"},
+{"image-viewer",               1, 1, 0, 1, 1, 0,
+  "Image-viewer is disabled, this build has no attachment display support"},
 {"use-only-domain-name",       0, 1, 0, 1, 1, 0,
   ONLY_DOMAIN_TEXT},
 {"printer",                    1, 1, 0, 1, 1, 0,
@@ -398,7 +398,6 @@ init_vars(ps)
     set_current_val(vars,V_BUGS_ADDRESS, TRUE);
     set_current_val(vars,V_DEFAULT_FCC, TRUE);
     set_current_val(vars,V_READ_MESSAGE_FOLDER, TRUE);
-    set_current_val(vars,V_IMAGE_VIEWER, TRUE);
 
     /* obsolete, backwards compatibility */
     set_current_val(vars, V_FEATURE_LEVEL, TRUE);

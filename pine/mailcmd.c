@@ -70,7 +70,6 @@ int                save(char *, CONTEXT_S *, MESSAGECACHE *, long);
 void               select_sort(int);
 struct attachment *attachments(int, long);
 char              *mcdate2ctime(MESSAGECACHE *);
-void               run_viewer(char *, char *);
 int                display_attachment(long, struct attachment *);
 void               save_attachment(int, long, struct attachment *);
 void		   display_text_att(long, struct attachment *);
@@ -82,7 +81,6 @@ void                select_sort();
 struct attachment *attachments();
 void                save_attachment();
 int                 display_attachment();
-void                run_viewer();
 char               *mcdate2ctime();
 void		   display_text_att();
 
@@ -2756,14 +2754,7 @@ display_attachment(msgno, a)
     char     filename[MAXPATH+1];
     STORE_S *store;
     gf_io_t  pc;
-    filter_t aux_filter[2];
     char    *err;
-
-    aux_filter[0] = NULL;
-    if(!ps_global->VAR_IMAGE_VIEWER && a->body->type == TYPEIMAGE){
-	q_status_message(0,2,4,"Can't display!  Set image-viewer in pinerc.");
-	return(0);
-    }
 
     /*------- Display the attachment -------*/
     if(!a->can_display) {
@@ -2783,7 +2774,7 @@ display_attachment(msgno, a)
     }
 
         
-    /*------ Write the image to a temporary file ------*/
+    /*------ Write the attachment to a temporary file ------*/
 #ifdef	DOS
     strcpy(filename, temp_nam(NULL, "im"));
     if(a->body->subtype != NULL){
@@ -2791,13 +2782,9 @@ display_attachment(msgno, a)
 	strncat(filename, a->body->subtype, 3);
     }
 #else
-    if(a->body->type == TYPEAUDIO)  {
-        strcpy(filename, "/dev/null");
-        aux_filter[0] = gf_play_sound;
-	aux_filter[1] = NULL;
-    } else {
+    {
 	char prefix[8];
-	sprintf(prefix, "img-%.3s",
+	sprintf(prefix, "att-%.3s",
 		(a->body->subtype) ? a->body->subtype : "unk");
         strcpy(filename, temp_nam(NULL, prefix));
     }
@@ -2813,20 +2800,13 @@ display_attachment(msgno, a)
     gf_set_so_writec(&pc, store);
 
     if((err=detach(msgno, a->body, a->number, (long *)NULL, pc,
-							aux_filter)) != NULL){
+							(filter_t *)NULL)) != NULL){
 	q_status_message2(1, 3, 5,
-		"\007%s: Error saving image to temp file %s", err, filename);
+		"\007%s: Error saving attachment to temp file %s", err, filename);
         return(0);
     }
 
     so_give(&store);
-
-    /*----- Run the viewer process ----*/
-#ifndef	DOS
-    if(a->body->type == TYPEIMAGE)
-#endif
-        run_viewer(filename, type_desc(a->body->type, a->body->subtype,
-                                   a->body->parameter, 1));
 
 #ifdef	DOS
     unlink(filename);
@@ -2896,138 +2876,6 @@ display_text_att(msgno, a)
 
 }
 
-
-#ifdef	DOS
-#include	<process.h>
-#endif
-
-/*----------------------------------------------------------------------
-   Run xloadimage to display gif,pbm and other such files
-
-Args: image_file -- The name of the file to pass to xloadimage
-
-If xloadimage produces any output on the command line or the shell
-produces output because it can't find or execute xloadimage the first
-5 lines will be displayed on the status line one at a time.
- ----*/
-void
-run_viewer(image_file, description)
-     char *image_file, *description;
-{
-#ifdef	DOS
-#define	MAXARGS	10
-    char     *args[MAXARGS], command[MAXPATH], *cp = command;
-    int       i;
-
-    /* build args */
-/* MAJOR HACK JUST FOR NOW */
-    if(struncmp(description, "audio", 5) == 0){
-	if(getenv("PINEHOME"))
-	  sprintf(command,"%s\\sound", getenv("PINEHOME"));
-	else
-	  strcpy(command, "c:\\pine\\sound");
-	args[0] = command;
-	args[1] = image_file;
-	args[2] = "27";
-	args[3] = NULL;
-    }
-    else {
-	strncpy(command, ps_global->VAR_IMAGE_VIEWER, MAXPATH);
-	for(i=0; *cp != '\0';i++){			/* build args array */
-	    if(i < MAXARGS+2){
-		args[i] = NULL;			/* in case we break out */
-	    }
-	    else{
-		q_status_message1(1, 3, 5, "\007Too many args : %s",
-				  ps_global->VAR_IMAGE_VIEWER);
-		return;
-	    }
-
-	    while(isspace(*cp))
-	      if(*cp != '\0')
-		cp++;
-	      else
-		break;
-
-	    args[i] = cp;
-
-	    while(!isspace(*cp))
-	      if(*cp != '\0')
-		cp++;
-	      else
-		break;
-
-	    if(*cp != '\0')
-	      *cp++ = '\0';
-	}
-	args[i++] = image_file;
-	args[i] = NULL;
-    }
-
-    /* actually display the sucker */
-    if(spawnv(_P_WAIT, args[0], args) == -1){
-	/* error spawning image viewer */
-        q_status_message2(0, 4, 5,
-                          "\007Error \"%s\" spawning %s",
-                          error_description(errno),
-			  ps_global->VAR_IMAGE_VIEWER); 
-	return;
-    }
-
-    /* let main loop know we messed with the display */
-    ps_global->mangled_screen = 1;
-#else
-    char      command[512], result_file[100], buf[512];
-    int       messages_queued, pid, r, status;
-    FILE     *f;
-    SigType (*hsig)(), (*isig)(), (*qsig)();
-    
-    sprintf(command, "(%s %s; rm -f %s) &\n", ps_global->VAR_IMAGE_VIEWER,
-          image_file, image_file);
-
-    strcpy(result_file, temp_nam(NULL, "pine_cmd"));
-
-    if((pid = fork()) == 0) {
-        int output = creat(result_file, 0777);
-        dup2(output, 1); 
-        dup2(output, 2);
-        execl("/bin/sh", "sh", "-c", command, 0);
-        exit(-1);
-    }
-    isig = signal(SIGINT, SIG_IGN);
-    qsig = signal(SIGQUIT, SIG_IGN);
-    hsig = signal(SIGHUP, SIG_IGN);
-#ifdef HAVE_WAIT_UNION
-    while((r=  wait((union wait *)&status)) && r != -1 && r != pid);
-#else
-    while((r=  wait(&status)) && r != -1 && r != pid);
-#endif
-    signal(SIGINT,  isig);
-    signal(SIGHUP,  hsig);
-    signal(SIGQUIT, qsig);
-
-    if(file_size(result_file) == 0L) 
-      sleep(3); /* Give the process time to do something */
-
-    messages_queued = 0;
-    f = fopen(result_file, "r");
-    if(f != NULL){
-        unlink(result_file);
-        while(fgets(buf, sizeof(buf), f) != NULL && messages_queued < 5) {
-            buf[strlen(buf) - 1] = '\0';
-            if(strlen(buf) == 0)
-              continue;
-            q_status_message1(0, 2, 4, "Display result: %s", buf);
-            messages_queued++;
-        }
-        fclose(f);
-    }
-    if(!messages_queued)
-#endif
-      q_status_message1(0, 1, 4, "Display of %s complete", description);
-
-    display_message('x');
-}
 
 
 /* This isn't quite ctime, because it doesn't have the \n */

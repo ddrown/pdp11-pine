@@ -992,16 +992,8 @@ mime_can_display(type, subtype, params)
      return(0);
 
     case TYPEIMAGE:
-      if(getenv("DISPLAY") == NULL)
-        return(0);
-      if(strucmp(subtype, "gif") == 0 ||
-         strucmp(subtype, "pgm") == 0 ||
-         strucmp(subtype, "pbm") == 0 ||
-	 strucmp(subtype, "tiff") == 0 ||
-	 strucmp(subtype, "jpeg") == 0)
-          return(1);
-      else
-        return(0);
+      /* no image-viewer support in this build -- see TODO-pdp11-done.md */
+      return(0);
 
 
     case TYPEAPPLICATION:
