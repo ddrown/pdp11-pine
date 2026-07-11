@@ -112,6 +112,10 @@ class Session:
     def sendcontrol(self, c):
         self.child.sendcontrol(c)
 
+    def resize(self, rows, cols):
+        """Change the pty's window size and let SIGWINCH be delivered."""
+        self.child.setwinsize(rows, cols)
+
     def screen(self):
         """NUL-stripped snapshot of output consumed by the last expect()."""
         return _clean(self.child.before)

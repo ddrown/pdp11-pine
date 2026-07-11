@@ -62,15 +62,19 @@ static char rcsid[] = "$Id: os_unix.c,v 4.37 1993/11/23 05:40:11 mikes Exp $";
 #include	<pwd.h>
 #include	<stdlib.h>
 #include	<unistd.h>
+#include	<sys/ioctl.h>	/* TIOCGWINSZ -- the a32/cvx-only guard this
+				   used to be under left every other POSIX
+				   target (including Linux) without a real
+				   declaration of TIOCGWINSZ, silently
+				   compiling out all of the SIGWINCH/resize
+				   handling below (#ifdef TIOCGWINSZ never
+				   true) instead of failing loudly. */
 #if	defined(sv4) || defined(ptx)
 #include	<stropts.h>
 #include	<poll.h>
 #endif
 #if	defined(POSIX)
 #include	<termios.h>
-#if	defined(a32) || defined(cvx)
-#include	<sys/ioctl.h>
-#endif
 #else
 #if	defined(sv3) || defined(sgi) || defined(isc) || defined(ct)
 #include	<termio.h>
@@ -152,7 +156,7 @@ int	errno;					/* ya, I know... */
     SIGTYPE  do_hup_signal(int);
     SIGTYPE  rtfrmshell(int);
 #ifdef	TIOCGWINSZ
-    SIGTYPE  winch_handler();
+    SIGTYPE  winch_handler(int);
 #endif
 #else
     int      kbseq();
@@ -568,7 +572,6 @@ rtfrmshell(int s)
 #ifdef	TIOCGWINSZ
     {
 	struct winsize win;
-	extern int resize_pico();
 
 	/*
 	 * refit pico of window size changed....
@@ -1382,10 +1385,9 @@ sstrcasecmp(const void *s1, const void *s2)
 /*
  * winch_handler - handle window change signal
  */
-SIGTYPE winch_handler()
+SIGTYPE winch_handler(int sig)
 {
     struct winsize win;
-    extern int resize_pico();
 
     signal(SIGWINCH, winch_handler);
 

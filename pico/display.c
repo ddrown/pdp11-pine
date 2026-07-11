@@ -2081,6 +2081,7 @@ char	*keys;
 char	*helptxt;
 {
     char *obufp, *ibufp = helptxt, *kbufp = HelpKeyNames, *startp;
+    char *bufend = s + sizeof(s) - 1;	/* leave room for the trailing NUL */
     int  i, j, spaces, index, copy, extra;
 
     /*
@@ -2101,10 +2102,14 @@ char	*helptxt;
 		do{
 		    if((*kbufp == '~') && (!copy))
 		      kbufp++;
-		    if(copy)
-		      *obufp++ = *kbufp++;
+		    if(copy){
+			if(obufp < bufend)
+			  *obufp++ = *kbufp;
+			kbufp++;
+		    }
 		    else{
-			*obufp++ = ' ';
+			if(obufp < bufend)
+			  *obufp++ = ' ';
 			kbufp++;
 		    }
 		}
@@ -2112,23 +2117,24 @@ char	*helptxt;
 	    }
 	    else{
 		if(copy){
-		    *obufp++ = '~';
-		    *obufp++ = '^';
-		    *obufp++ = '~';
-		    *obufp++ = copy + '0';
+		    if(obufp < bufend) *obufp++ = '~';
+		    if(obufp < bufend) *obufp++ = '^';
+		    if(obufp < bufend) *obufp++ = '~';
+		    if(obufp < bufend) *obufp++ = copy + '0';
 		}
 		else{
-		    *obufp++ = ' ';
-		    *obufp++ = ' ';
+		    if(obufp < bufend) *obufp++ = ' ';
+		    if(obufp < bufend) *obufp++ = ' ';
 		}
 	    }
 
-	    *obufp++ = ' ';
+	    if(obufp < bufend)
+	      *obufp++ = ' ';
 	    startp = obufp;
 	    /*
 	     * we use "spaces-3" because of length key names
 	     */
-	    while(obufp - startp < (spaces-extra)) {
+	    while(obufp - startp < (spaces-extra) && obufp < bufend) {
 		if((copy) && ((*ibufp != '\0') && (*ibufp != ',')))
 		  *obufp++ = *ibufp++;
 		else

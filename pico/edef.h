@@ -49,7 +49,21 @@
 #ifndef	EDEF_H
 #define	EDEF_H
 
-#define	SLEN	16384			/* size of global scratch string s */
+/*
+ * Shrunk from the original 16384 after auditing every writer of `s`
+ * (see TODO-pdp11-done.md): wkeyhelp() (pico/display.c) is now bounded
+ * against sizeof(s) itself regardless of terminal width, so it no
+ * longer drives this number. The one call site still assumed to need
+ * more than a short/NLINE-bounded string is composer.c's Ctrl-T
+ * Fcc-folder-picker, which round-trips through pine's
+ * folders_for_fcc()/context_apply() (pine/folder.c, pine/context.c) --
+ * those use local buffers up to MAXPATHLEN (4096 on this Linux dev
+ * build) plus a MAILTMPLEN(1024)-sized context pattern. Sized to 8192
+ * (2x MAXPATHLEN) to comfortably cover that combined worst case with
+ * headroom, without having fully audited/fixed that path yet (folded
+ * into the still-open general buffer-overflow-audit TODO item).
+ */
+#define	SLEN	8192			/* size of global scratch string s */
 
 #ifdef	maindef
 

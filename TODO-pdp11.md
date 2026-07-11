@@ -10,19 +10,9 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-## Buffer right-sizing (not feature cuts, but required regardless)
-These fixed global buffers alone can blow a PDP-11 data segment; see
-`TODO-pdp11-done.md` for `tmp_20k_buf` and `temp_format`, both already done.
-
-- [ ] `s` (16KB, `pico/edef.h:69`) — still not shrunk. A full call-site
-      audit already happened and fixed several real bugs along the way
-      (see `TODO-pdp11-done.md`) — most notably, `resolve_niks()`'s call
-      into `build_address()` (the actual worst case) no longer routes
-      through `s` at all. The remaining call sites are all bounded by
-      `NLINE`/short literal prompts/`term.t_ncol`, so a future shrink
-      attempt should size against `wkeyhelp()`'s `term.t_ncol`-scaled
-      accumulation as the new worst case rather than what the audit
-      round already fixed.
+Buffer right-sizing (`tmp_20k_buf`, `s`, `temp_format` -- not feature
+cuts, but required regardless) is now fully done; see
+`TODO-pdp11-done.md`.
 
 ### Follow-up: buffer-overflow security audit (raised alongside the above)
 - [ ] Both `tmp_20k_buf`'s old fixed-size behavior and `temp_format`'s
@@ -49,6 +39,19 @@ These fixed global buffers alone can blow a PDP-11 data segment; see
       via unchecked `strcpy()`s from an unbounded parse buffer — an
       actual stack smash confirmed under `valgrind`, reachable by
       ordinary composer typing/pasting, no crafted email needed.
+      A fourth candidate, found while closing out `s`'s sizing (see
+      `TODO-pdp11-done.md`) but not yet fixed: `pico/composer.c`'s
+      Ctrl-T Fcc-folder-picker passes the shared `s` straight to
+      `(*Pmaster->folders)()` (pine's `folders_for_fcc()`,
+      `pine/folder.c`), which can in turn call `context_apply()`
+      (`pine/context.c`) -- both assume their caller's buffer is at
+      least `MAXPATHLEN` (+ a `MAILTMPLEN`-sized context pattern)
+      bytes, matching this whole class of bug. Not confirmed
+      reachable in practice (needs a locally-configured
+      folder-collection context long enough to matter), so `s` was
+      just sized with headroom over this combined worst case rather
+      than fixing the root call chain -- fold into this sweep instead
+      of re-opening the `s` item.
 - [ ] `pico/display.c`'s `resize_pico()` (~line 1693) has a similar
       uninitialized-`pscreen`-cell gap to the one just fixed in
       `vtinit()` above, but on the terminal-resize path: new rows added
@@ -63,3 +66,10 @@ These fixed global buffers alone can blow a PDP-11 data segment; see
       `vscreen`'s `vteeol()` approach) rather than the whole-block
       `memset` used in `vtinit()`, and touches resize/redraw logic that's
       riskier to change without a resize-path regression test.
+      Note: `resize_pico()` was actually *dead code* on this Linux
+      build until the `s`-sizing pass (see `TODO-pdp11-done.md`) fixed
+      a missing `#include <sys/ioctl.h>` that had silently compiled out
+      every `#ifdef TIOCGWINSZ` block (including both call sites of
+      `resize_pico()` itself) -- so this uninitialized-memory gap is
+      now genuinely reachable via a real terminal resize, not just a
+      latent, unreachable bug.

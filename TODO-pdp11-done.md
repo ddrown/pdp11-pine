@@ -564,8 +564,9 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       fixed-size shrink than `tmp_20k_buf` — but auditing real call
       sites turned up several genuinely unbounded (and exploitable)
       uses instead. (The buffer's size itself was deliberately left at
-      16KB rather than shrunk — see the still-open item in
-      `TODO-pdp11.md`.)
+      16KB rather than shrunk in earlier rounds, pending sizing against
+      `wkeyhelp()`'s `term.t_ncol`-scaled accumulation — closed out
+      below.)
     - `pico/attach.c`'s `ParseAttach()` parses the composer's Attchmnt
       header field (`"N. filename (size) \"comment\""` syntax) by
       walking a pointer through `s` one character at a time
@@ -844,6 +845,107 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       reports. Added `test/cases/test_resume_postponed_huge_address.py`
       covering all four. Full smoketest suite (12/12) passes on a
       normal (non-ASan) rebuild.
+    - **Final round: `wkeyhelp()`'s `term.t_ncol`-scaled write, and the
+      shrink itself.** `pico/display.c`'s `wkeyhelp()` (paints the
+      composer/pico key-help footer) builds each row into `s` via
+      `spaces = term.t_ncol/6` and then, per key slot, pads out to
+      `spaces-extra` characters — completely unbounded against `s`'s
+      actual size for a wide enough terminal. Extracted the accumulation
+      loop into a standalone file compiled with `-fsanitize=address`
+      (real terminals don't get anywhere near the ~16374-column
+      threshold needed to overflow the original 16KB `s`, so a live
+      repro wasn't the first port of call): confirmed a clean
+      global-buffer-overflow at `term.t_ncol` a few hundred columns past
+      that threshold, 0 errors below it.
+      Trying to reproduce this through the real UI (resize the pty wide,
+      SIGWINCH, redraw) kept silently *not* crashing — chasing that
+      down surfaced a much bigger, unrelated, pre-existing bug: on this
+      Linux/POSIX build, `pico/os_unix.c` only `#include`s
+      `<sys/ioctl.h>` when `a32`/`cvx` (two obscure 1990s Unix variants)
+      are defined, neither of which apply here. Without that include,
+      `TIOCGWINSZ` is never defined, so *every* `#ifdef TIOCGWINSZ`
+      block in the file — reading the real window size at startup,
+      registering the `SIGWINCH` handler, `resize_pico()`'s two call
+      sites — silently compiles out. Both `pico` and pine's composer
+      were therefore permanently stuck at the compile-time
+      `NROW`/`NCOL` default (`pico/os_bsd.h`, 24x80) on this build,
+      never reading the real terminal size and never responding to a
+      resize, no matter the pty's actual dimensions. Confirmed via a
+      temporary debug print in `wkeyhelp()` (always `t_ncol=80`
+      regardless of pty size) and via `/proc/<pid>/status`'s `SigCgt`
+      bitmask (signal 28/`SIGWINCH` absent — never registered at all).
+      Fixed by moving `#include <sys/ioctl.h>` out from under the
+      `a32`/`cvx` guard to be unconditional (matching `pine/ttyout.c`'s
+      own unconditional include of the same header for the same
+      ioctl).
+      That one-line fix immediately exposed a second, cascading,
+      equally pre-existing bug: `winch_handler()` was declared/defined
+      with old-style empty parens (`SIGTYPE winch_handler()`) in both
+      its `#ifdef ANSI` prototype and its real definition, which modern
+      C treats as "takes no arguments" — a hard type mismatch against
+      `signal()`'s expected `void (*)(int)`, since this whole function
+      body had never actually been compiled before (same dead
+      `#ifdef TIOCGWINSZ` block) to surface the error. Fixed by giving
+      it a real `int sig` parameter, matching the sibling
+      `do_hup_signal(int)` right next to it. Also removed two now-
+      redundant/conflicting local `extern int resize_pico();`
+      forward-declarations (inside `winch_handler()` and the composer
+      startup resize block) that only became visible as a *second*
+      prototype-mismatch error once the first was fixed — `resize_pico`
+      already has a correct `int resize_pico(int, int);` prototype in
+      `efunc.h`, included earlier in the same file.
+      With real resizing restored, re-ran the same wide-terminal repro
+      end-to-end through the actual signal path (not just the
+      standalone extraction) under a from-scratch `-fsanitize=address`
+      rebuild of `libpico.a`: `winch_handler` → `resize_pico` →
+      `update` → `wkeyhelp`, a genuine global-buffer-overflow into `s`,
+      both in standalone `pico` (via its `sgarbk`-gated key-help
+      redraw) and in pine's composer (confirmed pine's own
+      `_columns`/`MAX_SCREEN_COLS` clamp does *not* protect pico's
+      independent `term.t_ncol` — the composer's key-help footer is
+      exposed to the real, unclamped terminal width too). Also manually
+      confirmed, as a non-security side effect, that this restores
+      real, correct behavior: pine's composer footer now properly
+      re-flows (extra inter-key padding) when resized to 200 columns,
+      instead of staying frozen at the old 80-column layout.
+      Fixed `wkeyhelp()` itself by bounding every `*obufp++ = ...` write
+      against `s + sizeof(s) - 1` (same `p < s + sizeof(s) - 1` idiom as
+      `ParseAttach`'s fix above), truncating the rendered key-help line
+      instead of overflowing — verified clean under the same ASan
+      rebuild at `t_ncol` up to 65535 (the largest a `struct winsize`
+      field can hold), and that ordinary 80-column rendering is
+      byte-for-byte unchanged.
+      With `wkeyhelp()` provably bounded regardless of `s`'s size, the
+      remaining question was just the *other* call sites' real worst
+      case. Re-examined `pico/composer.c`'s Ctrl-T Fcc-folder-picker
+      (`(*Pmaster->folders)(s)` → pine's `folders_for_fcc()` →
+      sometimes `context_apply()`) and found it assumes up to
+      `MAXPATHLEN` (4096 on this Linux dev build, via glibc) plus a
+      `MAILTMPLEN`-sized (1024) context-pattern buffer — not confirmed
+      reachable in practice (would need an unusually long local
+      folder-collection context, not remote/attacker content), but not
+      disproven either, and out of scope to fully chase down in this
+      round. Rather than leave it riding on an inflated `s`, sized the
+      new `s` at 8192 bytes (2x that combined worst case, comfortable
+      headroom) and filed the folders_for_fcc/context_apply path itself
+      as a new candidate for the "Follow-up: buffer-overflow security
+      audit" item in `TODO-pdp11.md`, alongside the already-open
+      general sweep.
+      Also flagged (not fixed, folded into the same TODO-pdp11.md
+      `resize_pico()` item): now that real resizing works, its existing
+      known `pscreen`-cell uninitialized-memory gap is reachable via a
+      genuine resize too, not just latent/dead code as before.
+      Verified: clean rebuild, full smoketest suite (13/13) passes.
+      Added `test/cases/test_composer_wide_terminal.py` (resizes the
+      pty to 20000 columns while composing and confirms pine survives)
+      — confirmed via `git stash` that it reliably reproduces pine's own
+      "Bug in Pine detected: Received abort signal" crash handler
+      catching the old `wkeyhelp()` overflow when only the `display.c`
+      fix is reverted (include/prototype fixes kept, so the resize path
+      is genuinely live), and passes with the fix restored. `size`
+      before/after: `bss` dropped from 30224 to 22032 bytes for
+      `bin/pine` (491522+18776+22032 — the full 8192-byte `s` shrink,
+      16384→8192) and from 18856 to 10664 for `bin/pico`.
 
 - [x] `temp_format` (10KB, `pine/ttyout.c:1098`) — took the "audit every
       call site" branch rather than the `stdarg.h` rewrite (which
