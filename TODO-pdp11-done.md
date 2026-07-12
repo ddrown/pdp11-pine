@@ -1562,3 +1562,43 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       separator line. Added `test/cases/test_export_message.py`;
       confirmed it fails with the crash (reverting the fix reproduces
       it) and passes with the fix. Full smoketest suite green, 13/13.
+
+### Fix wrong timezone (+0100 regardless of system config) on sent/postponed mail Date header — DONE
+- [x] User-reported: sent mail's `Date` header showed `+0100` no matter
+      what `/etc/localtime` actually configured (e.g. `America/Chicago`,
+      `-0500`/`-0600`). Every `Send` and `Postpone` stamps `outgoing->date`
+      via `rfc822_date()` (`imap/ANSI/c-client/os_lnx.c`, called from
+      `pine/send.c:1056`) unconditionally, so this hit every outgoing/
+      postponed message, not just some.
+      Root cause: `rfc822_date()` computed the UTC offset from the
+      `struct timezone` optionally filled in by `gettimeofday()`:
+      `zone = (t->tm_isdst ? 60 : 0) - tz.tz_minuteswest;`. That struct
+      is obsolete on Linux -- glibc's `gettimeofday()` no longer
+      populates it from `/etc/localtime`/`TZ` at all, it just always
+      reports `tz_minuteswest=0, tz_dsttime=0`. So whenever
+      `t->tm_isdst` was true (DST in effect), `zone` always came out to
+      exactly 60 minutes -- `+0100` -- completely independent of the
+      real configured timezone. Confirmed with a standalone test
+      program comparing this computation against `struct tm`'s
+      `tm_gmtoff` field (which glibc's `localtime()` *does* populate
+      correctly from the real timezone) on a box configured for
+      America/Chicago/CDT: old formula gave `+0100`, `tm_gmtoff` gave
+      the correct `-0500`.
+      Fixed by switching to `t->tm_gmtoff` directly, dropping the
+      `struct timezone` from the `gettimeofday()` call entirely --
+      matching the pattern already used by sibling os-dependent files
+      in the same c-client tree (`os_bsi.c`, `os_osf.c`), which never
+      had this bug. `os_lnx.c` was the outlier still using the
+      obsolete approach.
+      Verified: reproduced via a pty-driven postpone (Postpone runs the
+      identical `rfc822_date()`-stamping code as Send, writing to
+      `~/mail/postponed-mail` instead of invoking `sendmail` --
+      confirmed `Date:` header was `+0100` before the fix, `-0500`
+      after, on a machine configured for `America/Chicago`. Rebuilt
+      clean with no new warnings. Added
+      `test/cases/test_date_header_timezone.py`, which computes the
+      expected offset from Python's own `time.timezone`/`time.altzone`
+      (so it stays correct on any machine/timezone the suite runs on,
+      not just this one) and confirmed it fails pre-fix (via
+      `git stash` isolating just the one-line change) and passes
+      post-fix. Full smoketest suite green, 14/14.

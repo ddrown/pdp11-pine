@@ -79,13 +79,11 @@ char *days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 void rfc822_date (char *date)
 {
   int zone;
-  char *zonename;
   struct tm *t;
   struct timeval tv;
-  struct timezone tz;
-  gettimeofday (&tv,&tz);	/* get time and timezone poop */
+  gettimeofday (&tv,NULL);	/* get the time */
   t = localtime (&tv.tv_sec);	/* convert to individual items */
-  zone = (t->tm_isdst ? 60 : 0) - tz.tz_minuteswest;
+  zone = t->tm_gmtoff/60;	/* get timezone from TZ environment stuff */
 				/* and output it */
   sprintf (date,"%s, %d %s %d %02d:%02d:%02d %+03d%02d",
 	   days[t->tm_wday],t->tm_mday,months[t->tm_mon],t->tm_year+1900,
