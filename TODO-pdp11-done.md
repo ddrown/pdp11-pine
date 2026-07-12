@@ -1521,3 +1521,44 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       text+data+bss: 517306 -> 405745 bytes (~112KB, ~21.6%).
       `bin/pico` text+data+bss: 127099 -> 129074 bytes (+~2KB, the new
       `compose_stub.c` glue plus the `-P` mode in `main.c`).
+
+### Fix real crash in (e)xport: missing `<time.h>` truncated `ctime()`'s return — DONE
+- [x] User-reported: viewing a message and using `(e)xport` to save it
+      to a file reliably crashed with `Bug in Pine detected: "Received
+      abort signal"` (a `SIGSEGV` caught by `signals.c`'s
+      `auger_in_signal()`). Not a buffer overflow -- a missing-
+      prototype bug: `pine/osdep/os-lnx.h` explicitly commented out
+      `#include <time.h>` ("plain time.h isn't enough on some
+      systems"), relying on `<sys/time.h>` alone for time support. On
+      this build that leaves `ctime()` (and `localtime()`) with no
+      prototype in scope anywhere in `pine/*.c`, so the compiler
+      implicitly declares them as returning `int` -- confirmed via the
+      resulting "makes pointer from integer without a cast" warning at
+      `mailcmd.c`'s `export_message()`:
+      `strcpy(tmp_20k_buf, ctime(&now))`. That silently truncates
+      `ctime()`'s real 64-bit `char*` return value to 32 bits;
+      `strcpy()` then dereferences the truncated/garbage "pointer" and
+      crashes immediately, every time, since `export_message()` calls
+      `ctime()` unconditionally to build the exported mbox file's
+      "From " separator line's date.
+      This was systemic, not specific to `export_message()`:
+      unprototyped `ctime()`/`localtime()` calls also exist in
+      `signals.c`, `newmail.c`, `init.c`, `log.c`, `imap.c`, `reply.c`,
+      `status.c` -- most inside `dprint()` debug diagnostics, so lower
+      exposure by default (only crashes if that debug level is
+      active), but the same latent bug. Also directly relevant to the
+      eventual 2.11BSD/PDP-11 port this fork targets: an old K&R
+      compiler with no prototype in scope has exactly this same
+      failure mode, so this wasn't just a "modern glibc oddity."
+      Fixed by restoring a real `#include <time.h>` in
+      `pine/osdep/os-lnx.h` alongside the existing `<sys/time.h>`
+      (kept for `struct timeval`).
+      Verified: reproduced the crash first via a pty-driven script
+      (view message -> `e` -> filename -> Enter -> "Bug in Pine
+      detected"); confirmed the compiler warning pointed exactly at
+      `export_message()`'s `ctime()` call; applied the fix; rebuilt
+      clean with the warning gone; reproduced again -- exports cleanly
+      now, confirmed the written file's content and mbox "From "
+      separator line. Added `test/cases/test_export_message.py`;
+      confirmed it fails with the crash (reverting the fix reproduces
+      it) and passes with the fix. Full smoketest suite green, 13/13.

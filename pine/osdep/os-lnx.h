@@ -207,9 +207,18 @@ int fgetpos(); int fsetpos();
 
 
 /*----------------- time.h ---------------------------------------------*/
-/* #include <time.h> */
-/* plain time.h isn't enough on some systems */
-#include <sys/time.h>  /* For struct timeval usually in time.h */ 
+/*
+ * Needed for a real ctime()/localtime()/time() prototype -- without it,
+ * every ctime()/localtime() call in pine's *.c files (export_message()
+ * in mailcmd.c, signals.c, newmail.c, init.c, log.c, imap.c, reply.c,
+ * status.c) implicitly declares them as returning int, silently
+ * truncating the real pointer they return to 32 bits. Passing that
+ * truncated "pointer" to strcpy() (export_message()'s case) is an
+ * immediate, reliable SIGSEGV -- "Bug in Pine detected: Received abort
+ * signal" every time (e)xport is used to save a message to a file.
+ */
+#include <time.h>
+#include <sys/time.h>  /* For struct timeval usually in time.h */
 
 
 
