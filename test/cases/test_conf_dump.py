@@ -1,20 +1,21 @@
-# `pine -conf` needs no pty -- it just dumps a blank global config to
-# stdout and exits. Also checks that variables marked "disabled" during
-# the PDP-11 size-reduction cuts (TODO-pdp11.md) stay out of the dump:
-# smtp-server (SMTP client removed) and address-book (address book removed).
+# Regression check for the init.c cut (TODO-pdp11.md): `-conf` (and the
+# dump_global_conf() it drove) was removed as a first-run/discoverability
+# convenience this build doesn't need. `pine -conf` should no longer dump
+# a blank global config to stdout -- since the multi-char "-conf" check is
+# gone, args.c now parses it char-by-char and rejects the unrecognized
+# "c" flag, exiting nonzero without ever printing variable names.
 import subprocess
 
-from smoketest import PINE_BIN, SmoketestFailure
+from smoketest import PINE_BIN
 
 
 def run():
     result = subprocess.run([PINE_BIN, "-conf"], capture_output=True, text=True, timeout=10)
-    if result.returncode != 0:
-        raise SmoketestFailure("pine -conf exited with status %r:\n%s"
-                                % (result.returncode, result.stderr))
+    assert result.returncode != 0, "pine -conf unexpectedly succeeded; -conf should be gone"
 
     out = result.stdout
-    assert "user-domain=" in out, "expected user-domain var in -conf output"
-    assert "inbox-path=" in out, "expected inbox-path var in -conf output"
-    assert "smtp-server=" not in out, "removed smtp-server var reappeared in -conf output"
-    assert "address-book=" not in out, "removed address-book var reappeared in -conf output"
+    assert "user-domain=" not in out, "removed -conf dump reappeared in output"
+    assert "inbox-path=" not in out, "removed -conf dump reappeared in output"
+    assert "unknown flag" in result.stderr, (
+        "expected -conf to be rejected as unknown flags, got: %r" % result.stderr
+    )

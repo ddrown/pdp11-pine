@@ -297,7 +297,7 @@
 #define V_PRINTER                  21  /* disabled, printing not supported */
 #define V_PERSONAL_PRINT_COMMAND   22  /* disabled, printing not supported */
 #define V_STANDARD_PRINTER         23  /* disabled, printing not supported */
-#define V_LAST_TIME_PRUNE_QUESTION 24
+#define V_LAST_TIME_PRUNE_QUESTION 24  /* disabled, sent-mail pruning not supported */
 #define V_LAST_VERS_USED           25
 #define V_BUGS_NICKNAME            26
 #define V_BUGS_FULLNAME            27
@@ -326,7 +326,6 @@
 #define VAR_SAVED_MSG_NAME_RULE      vars[V_SAVED_MSG_NAME_RULE].current_val.p
 #define VAR_SORT_KEY                 vars[V_SORT_KEY].current_val.p
 #define VAR_USE_ONLY_DOMAIN_NAME     vars[V_USE_ONLY_DOMAIN_NAME].current_val.p
-#define VAR_LAST_TIME_PRUNE_QUESTION vars[V_LAST_TIME_PRUNE_QUESTION].current_val.p
 #define VAR_LAST_VERS_USED           vars[V_LAST_VERS_USED].current_val.p
 #define VAR_BUGS_NICKNAME            vars[V_BUGS_NICKNAME].current_val.p
 #define VAR_BUGS_FULLNAME            vars[V_BUGS_FULLNAME].current_val.p
@@ -709,8 +708,6 @@ struct pine {
     SortOrder    sort_order, current_sort_order,
                  sort_types[20];
 
-    int          last_expire_year, last_expire_month;
-
     char         last_error[500];
     struct variable *vars;
 };
@@ -876,14 +873,10 @@ void helper(char *text[], char *title, int);
 void init_vars(struct pine *);
 char *expand_variables(char *, char *);
 int  init_username(struct pine *);  
-int  init_hostname(struct pine *);  
-int  write_pinerc(struct pine *);
-void dump_global_conf(void);
+int  init_hostname(struct pine *);
 int  set_variable(int, char *);
 int  set_variable_list(int, char **);
-int  init_mail_dir(char *); 
-void init_save_defaults();
-int  expire_sent_mail(void);
+int  init_mail_dir(char *);
 char **parse_list(char *, int, char **);
 #ifdef DEBUG
 void init_debug(void);
@@ -1200,14 +1193,10 @@ void helper();
 void init_vars();
 char *expand_variables();
 int  init_username();  
-int  init_hostname();  
-int  write_pinerc();
-void dump_global_conf();
+int  init_hostname();
 int  set_variable();
 int  set_variable_list();
-int  init_mail_dir(); 
-void init_save_defaults();
-int  expire_sent_mail();
+int  init_mail_dir();
 char **parse_list();
 #ifdef DEBUG
 void init_debug();

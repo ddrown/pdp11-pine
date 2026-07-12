@@ -134,12 +134,6 @@ unlock this keyboard by typing the password.
 ========== h_oe_export ==========
 Type the name of file in your home directory to write the mail message into and
 press RETURN.  You may also give an absolute path or use \"~\".  Use ^C to cancel
-========== h_wt_expire ==========
-At the beginning of each month Pine offers to rename your current sent-mail
-folder to one named for the month so you have a sent-mail folder for each month
-========== h_wt_delete_old ==========
-It is the beginning of the month, and we need to conserve disk
-space.  Please delete any sent-mail that you do not need.
 ========== h_wt_auger_in ==========
 This emergency cancel is used when Pine is completely stuck.  It'll dump a core
 file for debugging and will NOT SAVE message under composition or status.

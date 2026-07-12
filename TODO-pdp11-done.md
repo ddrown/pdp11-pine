@@ -1602,3 +1602,81 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       not just this one) and confirmed it fails pre-fix (via
       `git stash` isolating just the one-line change) and passes
       post-fix. Full smoketest suite green, 14/14.
+
+### Drop `init.c`'s convenience/self-documenting features — DONE
+- [x] Removed all three pieces scoped in the original TODO item, plus
+      their now-dead downstream state.
+      `write_pinerc()` (`pine/init.c`, ~2.6KB) is gone outright, along
+      with the copyright/trademark-banner detection in `read_pinerc()`
+      that only fed it (`copyright_line_is_there`/
+      `trademark_lines_are_there` statics, the `INITIAL_COMMENT1/2/3`
+      macros) and the `EXTRA_BEFORE_*` pinerc-section-divider macros.
+      `pine.c`'s `write_pinerc(pine_state)` startup call ("Temporary, to
+      get new entries in .pinerc") is gone too. `set_variable()`/
+      `set_variable_list()` still exist -- they're called from several
+      places, not just the removed first-run/DOS prompts (see below) --
+      but now only update the in-memory `struct variable` and always
+      return 0; they no longer call `write_pinerc()`. Confirmed none of
+      their callers (`pine/send.c`'s DOS-only From-address prompts,
+      `pine/pine.c`'s DOS-only inbox-path prompt, and `init.c`'s own
+      obsolete-variable-migration calls for `V_LAST_VERS_USED`/
+      `V_SAVE_BY_SENDER`/`V_FOLDER_SPEC`) check the return value, so
+      this is a pure behavior removal (pine no longer persists these to
+      disk) with no dangling logic. Left `read_pinerc()`'s
+      `pinerc_lines`/`struct pinerc_line` line-by-line bookkeeping
+      alone -- it's now write-only dead weight (nothing reads it since
+      `write_pinerc()` was its only consumer), but it's woven throughout
+      a core, load-bearing parsing function; ripping it out safely is a
+      separate, riskier job than this item scoped, so it's left as a
+      known follow-up rather than done under this cut.
+      `dump_global_conf()` (`pine/init.c`, ~1KB) and the `-conf`
+      command-line flag are gone: removed the function, its
+      `pine.h` prototypes, the `do_conf` variable and `"conf"` string
+      check in `pine/args.c`'s flag parser, and the `-conf` line from
+      `args_help()`'s usage text. `pine -conf` now falls through to the
+      per-character flag parser, which rejects the unrecognized `c` in
+      "conf" and exits nonzero -- confirmed via the updated
+      `test/cases/test_conf_dump.py` (previously asserted the dump
+      worked and omitted removed variables like `smtp-server`/
+      `address-book`; now asserts `-conf` is rejected and produces no
+      config dump at all, since the feature itself is gone).
+      The sent-mail pruning/expiration subsystem (`expire_sent_mail`/
+      `prune_folders`/`delete_old_mail`/`get_mail_list`/
+      `compare_sm_files`/`init_save_defaults`, `struct sm_folder`,
+      ~3.8KB) is gone from `pine/init.c`, along with its `pine.h`
+      prototypes and its two `pine.c` call sites
+      (`if(expire_sent_mail())` and the first-time-user/
+      show-new-version `init_save_defaults()` call -- confirmed Save
+      and Fcc both already lazily `context_create()` a missing folder
+      on demand elsewhere, in `send.c` and `mailcmd.c`, so losing this
+      startup pre-creation doesn't break either path, just defers folder
+      creation to first use). Also removed the now-dead
+      `V_LAST_TIME_PRUNE_QUESTION` migration/bugfix block in
+      `init_vars()` (the "month value was 0-11, fixing it in January"
+      workaround) and the `last_expire_year`/`last_expire_month` fields
+      from `struct pine`, since nothing sets or reads them once
+      `expire_sent_mail()` is gone. Marked the `last-time-prune-
+      questioned` pinerc variable disabled via the same obsolete-slot
+      pattern established for the `printer` cut (numeric `V_*` index
+      kept stable, `is_obsolete` set, description replaced) -- no
+      divider-anchor to move this time, since the whole
+      `EXTRA_BEFORE_PRINTER`-anchor mechanism went away with
+      `write_pinerc()` in the same session. Removed the now-orphaned
+      `h_wt_expire`/`h_wt_delete_old` help topics from `pine/pine.hlp`
+      and regenerated `helptext.c`/`helptext.h` via `cmplhelp.sh`/
+      `cmplhlp2.sh` (gitignored build products, same as the printer cut).
+- [x] Verified: clean rebuild (`./build lnx`) and a full `./build clean
+      && ./build lnx` both succeed with no new warnings (the same six
+      pre-existing warnings in `folder.c`/`screen.c`/`send.c`/
+      `signals.c` persist, just at shifted line numbers). `nm bin/pine`
+      shows no `write_pinerc`/`dump_global_conf`/`expire_sent_mail`/
+      `prune_folders`/`delete_old_mail`/`get_mail_list`/
+      `compare_sm_files`/`init_save_defaults` symbols. Updated
+      `test/cases/test_conf_dump.py` to check `-conf` is rejected
+      instead of asserting its old dump-and-succeed behavior. Full
+      smoketest suite passes, 14/14. text+data+bss dropped from 405489
+      to 394073 bytes (365321 + 13528 + 15224) -- an ~11.4KB reduction,
+      a bit more than the original ~7.4KB estimate (the estimate didn't
+      account for the copyright/divider-macro removal riding along with
+      `write_pinerc()`, or the `helptext.c`/`.h` shrink from dropping the
+      two orphaned help topics).

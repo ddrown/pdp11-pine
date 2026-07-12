@@ -354,9 +354,6 @@ main(argc, argv)
     if(init_hostname(pine_state) < 0)
       exit(-1);
 
-    write_pinerc(pine_state); /* Temporary, to get new entries in .pinerc
-                                  on first run until pinerc is more robust */
-
     if(*argv == NULL)
       /* do mail dir if we're not in send only mode */
       if(init_mail_dir(pine_state->folders_dir) < 0)
@@ -557,18 +554,6 @@ main(argc, argv)
 
         if(pine_state->mangled_footer)
 	  pine_state->painted_footer_on_startup = 0;
-
-        if(expire_sent_mail())
-	  pine_state->painted_footer_on_startup = 0;
-
-	/*
-	 * Initialize the defaults.  Initializing here means that
-	 * if they're remote, the user isn't prompted for an imap login
-	 * before the display's drawn, AND there's the chance that
-	 * we can climb onto the already opened folder's stream...
-	 */
-	if(ps_global->first_time_user || ps_global->show_new_version)
-	  init_save_defaults();	/* initialize default save folders */
 
         build_path(int_mail, pine_state->folders_dir, INTERRUPTED_MAIL);
         if(can_access(int_mail, ACCESS_EXISTS) == 0) {

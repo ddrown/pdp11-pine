@@ -89,7 +89,6 @@ pine_args(pine_state, argc, argv, addrs)
     char *cmd_list        = NULL;
     char *sort            = NULL;
     int   do_help         = 0;
-    int   do_conf         = 0;
     int   usage           = 0;
     struct variable *vars = pine_state->vars;
 
@@ -109,10 +108,7 @@ Loop: while(--ac > 0 && **++av == '-') {
 	 /* while more chars in this argument */
 	 while(*++*av) {
 	    /* check for multi-char options first */
-	    if(strcmp(*av, "conf") == 0) {
-	       do_conf = 1;
-	       goto Loop;  /* done with this arg, go to next */
-	    }else if(strcmp(*av, "sort") == 0) {
+	    if(strcmp(*av, "sort") == 0) {
 	       sort = --ac ? *++av : "<missing arg>";
 	       vars[V_SORT_KEY].command_line_val.p = cpystr(sort);
 	       goto Loop;
@@ -238,8 +234,6 @@ Loop: while(--ac > 0 && **++av == '-') {
       args_help(); 
     if(usage)
       exit(-1);
-    if(do_conf)
-      dump_global_conf();
 
     pine_state->orig_use_fkeys = F_ON(F_USE_FK,pine_state);
 
@@ -282,7 +276,6 @@ args_help()
         printf("\t -I <keystroke_list>\tInitial keystrokes to be executed\n");
         printf("\t -n <number>\tEntry in index to begin on\n");
 	printf("\t -o \t\tReadOnly - Open first folder read-only\n");
-        printf("\t -conf\t\tConfiguration - Print out blank global configuration\n");
         printf("\t -p <pinerc>\tSpecify alternate .pinerc file\n");
 #ifndef DOS
         printf("\t -P <pine.conf>\tSpecify alternate pine.conf file\n");

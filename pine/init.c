@@ -57,19 +57,15 @@ static char rcsid[] = "$Id: init.c,v 4.102 1993/11/23 00:04:05 mikes Exp $";
        init_username
        init_hostname
        read_pinerc
-       write_pinerc
        init_mail_dir
 
-       sent-mail expiration
- 
-       open debug files 
+       open debug files
 
       - open and set up the debug files
       - fetch username, password, and home directory
       - get host and domain name
-      - read and write the users .pinerc config file
+      - read the user's .pinerc config file
       - create the "mail" subdirectory
-      - expire old sent-mail
 
   ====*/
 
@@ -86,7 +82,6 @@ typedef enum {ParseLocal, ParseGlobal} ParsePinerc;
 int  read_pinerc(char *, struct variable *, ParsePinerc);
 void set_current_val(struct variable *, int, int);
 void set_feature_list_current_val(struct variable *, int);
-int  compare_sm_files(const QSType *, const QSType *);
 /* AIX gives warning here 'cause it can't quite cope with enums */
 void process_init_cmds(struct pine *, char **);
 void process_feature_list(struct pine *, char **, int , int, int);
@@ -95,7 +90,6 @@ int  decode_sort(struct pine *, char *);
 int  read_pinerc();
 void set_current_val();
 void set_feature_list_current_val();
-int  compare_sm_files();
 void process_init_cmds();
 void process_feature_list();
 int  decode_sort();
@@ -106,14 +100,6 @@ int  decode_sort();
 Some definitions to keep the static variable array below 
 a bit more readable...
   ----*/
-/* be careful changing these INITIAL_COMMENTs */
-#define INITIAL_COMMENT1 "# Updated by Pine(tm) "
-#define INITIAL_COMMENT2 ", copyright 1989-1993 University of Washington.\n"
-#define INITIAL_COMMENT3 "#\n# Pine configuration file -- customize as needed.\n#\n# This file sets the configuration options used by Pine and PC-Pine.  If you\n# are using Pine on a Unix system, there may be a system-wide configuration\n# file which sets the defaults for these variables.  There are comments in\n# this file to explain each variable, but if you have questions about\n# specific\
- settings see the section on configuration options in the Pine\n# notes.  On Unix, run pine -conf to see how system defaults have been set.\n# For variables that accept multiple values, list elements are separated\n# by commas.  A line beginning with a space or tab is considered to be a\n# continuation of the previous line.  For a variable to be unset its value\n# must be blank.  To set a variable to the empty string its value should\n# \
-be \"\".  You can override system defaults by setting a variable to the\n# empty string.  Switch variables are set to either \"yes\" or \"no\", and\n# default to \"no\".\n"
-
-
 #define PERSONAL_NAME_TEXT   "personal-name specifies your full name as it should appear on outgoing mail.\n# If unset, Unix Pine will obtain your full name from the system passwd file."
 
 #define USER_DOMAIN_TEXT   "user-domain specifies the domain part of your return address on outgoing\n# email and is also used as the default domain for email composed to a\n# local user.  If unset, Unix Pine will obtain the domain from the system."
@@ -144,16 +130,6 @@ characters \"no-\" prepended to it, to cancel its effect.  So, for example,\n# y
 #define ONLY_DOMAIN_TEXT     "Used if \"user-domain\" not set.  Strips hostname from user\'s return address.\n# Not applicable for PC-Pine",
 
 
-#define	UNKNOWN_VAR_TEXT  "The following variable is unknown and unused."
-
-/* these sort of divide up the pinerc file into categories */
-#define EXTRA_BEFORE_PERSONAL_NAME	"########################### Essential Parameters ###########################"
-#define EXTRA_BEFORE_INCOMING_FOLDERS	"###################### Collections, Folders, and Files #####################"
-#define EXTRA_BEFORE_FEATURE_LIST	"############################### Preferences ################################"
-#define EXTRA_BEFORE_PRINTER		"########## Set within or by Pine: No need to edit below this line ##########"
-
-static int	copyright_line_is_there,
-		trademark_lines_are_there;
 
 
 /*----------------------------------------------------------------------
@@ -223,8 +199,8 @@ static struct variable variables[] = {
   "Printing is disabled, this build has no printer support"},
 {"standard-printer",           1, 1, 0, 0, 1, 0,
   "Printing is disabled, this build has no printer support"},
-{"last-time-prune-questioned" ,0, 1, 0, 1, 0, 0,
-  "Date last time you were asked about deleting old sent-mail (automatic)"},
+{"last-time-prune-questioned" ,1, 1, 0, 1, 0, 0,
+  "Sent-mail pruning is disabled, this build has no automatic expiration"},
 {"last-version-used",          0, 1, 0, 1, 0, 0,
   "Version of Pine used last session (set automatically)"},
 {"bugs-nickname",              0, 1, 0, 0, 1, 0,
@@ -370,28 +346,6 @@ init_vars(ps)
     /* obsolete, backwards compatibility */
     set_current_val(vars,V_HEADER_IN_REPLY, TRUE);
     obs_header_in_reply=!strucmp(VAR_HEADER_IN_REPLY, "yes");
-
-    set_current_val(vars, V_LAST_TIME_PRUNE_QUESTION, TRUE);
-    if(VAR_LAST_TIME_PRUNE_QUESTION != NULL) {
-        /* The month value in the file runs from 1-12, the variable here
-           runs from 0-11; the value in the file used to be 0-11, but we're 
-           fixing it in January */
-        ps->last_expire_year  = atoi(VAR_LAST_TIME_PRUNE_QUESTION);
-        ps->last_expire_month =
-			atoi(strindex(VAR_LAST_TIME_PRUNE_QUESTION, '.') + 1);
-        if(ps->last_expire_month == 0) {
-            /* Fix for 0 because of old bug */
-            char buf[10];
-            sprintf(buf, "%d.%d", ps_global->last_expire_year,
-              ps_global->last_expire_month + 1);
-            set_variable(V_LAST_TIME_PRUNE_QUESTION, buf);
-        } else {
-            ps->last_expire_month--; 
-        } 
-    } else {
-        ps->last_expire_year  = -1;
-        ps->last_expire_month = -1;
-    }
 
     set_current_val(vars,V_BUGS_NICKNAME, TRUE);
     set_current_val(vars,V_BUGS_FULLNAME, TRUE);
@@ -1213,22 +1167,6 @@ read_pinerc(filename, vars, which_vars)
 			    (3 + line_count) * sizeof(struct pinerc_line));
     pline = pinerc_lines;
 
-    /* copyright stuff */
-    p = file;
-    /* same up through the version number (which we don't know yet) */
-    if(which_vars == ParseLocal &&
-   		 strncmp(p, INITIAL_COMMENT1, strlen(INITIAL_COMMENT1)) == 0) {
-	/* find the comma after the version number */
-	p = strchr(p+strlen(INITIAL_COMMENT1), ',');
-	/* rest of the first line is the same */
-        if(p && strncmp(p, INITIAL_COMMENT2, strlen(INITIAL_COMMENT2)) == 0) {
-	    copyright_line_is_there = 1;
-	    p += strlen(INITIAL_COMMENT2);
-            if(strncmp(p, INITIAL_COMMENT3, 27) == 0)
-		trademark_lines_are_there = 1;
-	}
-    }
-
     for(p = file, line = file; *p != '\0';) {
         /*----- Grab the line ----*/
         line = p;
@@ -1527,231 +1465,6 @@ parse_list(list, count, error)
 }
 
 
-/*----------------------------------------------------------------------
-    Write out the .pinerc state information
-
-   Args: ps -- The pine structure to take state to be written from
-
-  This writes to a temporary file first, and then renames that to 
- be the new .pinerc file to protect against disk error.  This has the 
- problem of possibly messing up file protections, ownership and links.
-  ----*/
-write_pinerc(ps)
-     struct pine *ps;
-{
-     char                buf[MAXPATH+1];
-     char                copyright[90];
-     int		 write_trademark = 0;
-     FILE               *f;
-     struct pinerc_line *pline;
-     struct variable    *var;
-     char               *p,
-                        *dir,
-                        *tmp;
-
-#ifdef	DOS
-     dir = ".";
-     if(p = strrchr(ps->pinerc, '\\')) {
-       *p = '\0';
-       dir = ps->pinerc;
-     }
-     if(can_access(dir, 6) < 0 && mkdir(dir) < 0){
-       q_status_message2(1, 3, 5,
-	      "\007Error creating \"%s\" : %s", dir, error_description(errno));
-       return(-1);
-     }
-     tmp = temp_nam(dir, "rc");
-     if(p)
-       *p = '\\';
-     if(tmp == NULL)
-       goto io_err;
-     strcpy(buf, tmp);
-     free(tmp);
-     f = fopen(buf, "wt");
-#else  /* !DOS */
-     /* warning, Unix delimiter assumed here */
-     dir = ".";
-     if(p = strrchr(ps->pinerc, '/')) {
-       *p = '\0';
-       dir = ps->pinerc;
-     }
-     tmp = temp_nam(dir, "pinerc");
-     if(p)
-       *p = '/';
-     if(tmp == NULL)
-       goto io_err;
-     strcpy(buf, tmp);
-     free(tmp);
-     f = fopen(buf, "w");
-#endif  /* !DOS */
-     if(f == NULL) 
-       goto io_err;
-
-     for(var = ps->vars; var->name != NULL; var++) 
-         var->been_written = 0;
-
-     /* copyright stuff starts here */
-     pline = pinerc_lines;
-     if(ps->first_time_user ||
-	     (ps->show_new_version && !trademark_lines_are_there))
-           write_trademark = 1;
-     /* if it was already there, remove old one */
-     if(copyright_line_is_there)
-       pline++;
-     if(fprintf(f, "%s%s%s", INITIAL_COMMENT1,
-	     ps->vars[V_LAST_VERS_USED].user_val.p, INITIAL_COMMENT2) == EOF)
-       goto io_err;
-     if(write_trademark)
-       if(fprintf(f, "%s%s",
-		 INITIAL_COMMENT3, ps->first_time_user ? "" : "\n") == EOF)
-         goto io_err;
-     /* end of copyright stuff */
-
-     /* Write out what was in the .pinerc */
-     if(pline != NULL) {
-         for(; pline->is_var || pline->line != NULL; pline++) {
-             if(pline->is_var && !pline->obsolete_var) {
-		 var = pline->var;
-		 if((var->is_list && var->user_val.l == NULL)
-		    || (!var->is_list && var->user_val.p == NULL)){
-                     if(fprintf(f, "%s=\n", pline->var->name) == EOF)
-                       goto io_err;
-		 }else if((var->is_list && *var->user_val.l[0] == '\0')
-			   || (!var->is_list && *var->user_val.p == '\0')) {
-                     if(fprintf(f, "%s=\"\"\n", pline->var->name) == EOF)
-                       goto io_err;
-                 }else {
-		     if(var->is_list) {
-			 int i = 0;
-
-			 for(i = 0; var->user_val.l[i] ; i++)
-			   if(fprintf(f, "%s%s%s%s\n",
-				      (i) ? "\t" : var->name,
-				      (i) ? "" : "=",
-				      var->user_val.l[i],
-				      var->user_val.l[i+1] ? ",":"") == EOF)
-			     goto io_err;
-		     }else {
-			 if(fprintf(f, "%s=%s%s%s\n", pline->var->name,
-				    (pline->is_quoted ? "\"" : ""),
-				    pline->var->user_val.p,
-				    (pline->is_quoted ? "\"" : "")) == EOF)
-			   goto io_err;
-		     }
-                 }
-
-                 pline->var->been_written = 1;
-
-             }else {
-		 /*
-		  * The description text should be changed into a message
-		  * about the variable being obsolete when a variable is
-		  * moved to obsolete status.  We add that message before
-		  * the variable unless it is already there.  However, we
-		  * leave the variable itself in case the user runs an old
-		  * version of pine again.  Note that we have read in the
-		  * value of the variable in read_pinerc and translated it
-		  * into a new variable if appropriate.
-		  */
-		 if(pline->obsolete_var) {
-		   if(pline <= pinerc_lines || (pline-1)->line == NULL ||
-		       strlen((pline-1)->line) < 3 ||
-		       strucmp((pline-1)->line+2, pline->var->description) != 0)
-                     if(fprintf(f, "# %s\n", pline->var->description) == EOF)
-                       goto io_err;
-#ifdef DONT_DO_THIS
-   /*
-    * This screws things up for people who switch between two versions of
-    * pine, where the newer one has new variables.
-    */
-		 /*
-		  * For unknown variables we give a comment and comment out
-		  * the variable instead of leaving it.
-		  */
-		 }else if(pline->no_such_var) {
-                   if(fprintf(f, "# %s\n# ", UNKNOWN_VAR_TEXT) == EOF)
-                     goto io_err;
-#endif
-		 }
-                 if(fprintf(f, "%s\n", pline->line) == EOF)
-                   goto io_err;
-             }
-         }
-     }
-
-
-     /* Now write out all the variables not in the .pinerc */
-     for(var = ps->vars; var->name != NULL; var++) {
-         if(!var->is_user || var->been_written || !var->is_used ||
-							    var->is_obsolete)
-           continue;
-
-         dprint(5,(debugfile,"write_pinerc: %s = %s\n", var->name,
-                   var->user_val.p ? var->user_val.p : "<not set>"));
-
-	 /* Add extra comments about categories of variables */
-         if(ps->first_time_user) {
-           if(var == &variables[V_PERSONAL_NAME]) {
-             if(fprintf(f, "\n%s\n", EXTRA_BEFORE_PERSONAL_NAME) == EOF)
-               goto io_err;
-           }else if(var == &variables[V_INCOMING_FOLDERS]) {
-             if(fprintf(f, "\n%s\n", EXTRA_BEFORE_INCOMING_FOLDERS) == EOF)
-               goto io_err;
-           }else if(var == &variables[V_FEATURE_LIST]) {
-             if(fprintf(f, "\n%s\n", EXTRA_BEFORE_FEATURE_LIST) == EOF)
-               goto io_err;
-           }else if(var == &variables[V_LAST_TIME_PRUNE_QUESTION]) {
-             if(fprintf(f, "\n%s\n", EXTRA_BEFORE_PRINTER) == EOF)
-               goto io_err;
-           }
-         }
-
-         if(var->description != NULL)
-           if(fprintf(f, "\n# %s\n", var->description) == EOF)
-             goto io_err;
-
-         if((var->is_list && var->user_val.l == NULL) 
-	    || (!var->is_list && var->user_val.p == NULL)) {
-             if(fprintf(f, "%s=\n", var->name) == EOF)
-               goto io_err;
-         } else if((var->is_list && var->user_val.l[0][0] == '\0') 
-		   || (!var->is_list && var->user_val.p[0] == '\0')) {
-             if(fprintf(f, "%s=\"\"\n", var->name) == EOF)
-               goto io_err;
-         } else if(var->is_list){
-	     int i = 0;
-
-	     for(i = 0; var->user_val.l[i] ; i++)
-	       if(fprintf(f, "%s%s%s%s\n",
-			  (i) ? "\t" : var->name,
-			  (i) ? "" : "=",
-			  var->user_val.l[i],
-			  var->user_val.l[i+1] ? ",":"") == EOF)
-		 goto io_err;
-
-	 } else {
-             if(fprintf(f, "%s=%s\n", var->name, var->user_val.p) == EOF)
-               goto io_err;
-         }
-     }
-
-     if(fclose(f) == EOF)
-       goto io_err;
-
-     if(rename_file(buf, ps->pinerc) < 0)
-       goto io_err;
-
-     return(0);
-
-
-   io_err:
-     q_status_message2(1, 3, 5,
-                 "\007Error saving configuration in file \"%s\": %s",
-                          ps->pinerc, error_description(errno));
-     dprint(1, (debugfile, "Error writing %s : %s\n", ps->pinerc,
-                                      error_description(errno)));
-     return(-1);
-}
 
 
 /*
@@ -1798,91 +1511,17 @@ decode_sort(ps, sort_spec)
 }
 
 
-/*------------------------------------------------------------
-    Dump out the typical global pine.conf on the standard output.
-  Useful for creating it the first time on a system.
-  ----*/
-void
-dump_global_conf()
-{
-     FILE            *f;
-     struct variable *var;
-
-     read_pinerc(SYSTEM_PINERC, variables, ParseGlobal);
-
-     f = stdout;
-     if(f == NULL) 
-       goto io_err;
-
-     fprintf(f, "#      /usr/local/lib/pine.conf -- system wide pine configuration\n#\n");
-     fprintf(f, "# Values here affect all pine users unless they've overidden the values\n");
-     fprintf(f, "# in their .pinerc files.  A blank copy of this file may be obtained\n");
-     fprintf(f, "# by running \"pine -conf\". It will be printed on the standard output.\n#\n");
-     fprintf(f,"# For a variable to be unset its value must be blank.\n");
-     fprintf(f,"# To set a variable to the empty string its value should be \"\".\n");
-     fprintf(f,"# Switch variables are set to either \"yes\" or \"no\", and default to \"no\".\n#\n");
-     fprintf(f,"# (These comments are automatically inserted.)\n\n");
-
-     for(var = variables; var->name != NULL; var++) {
-         dprint(5,(debugfile,"write_pinerc: %s = %s\n", var->name,
-                   var->user_val.p ? var->user_val.p : "<not set>"));
-         if(!var->is_global || !var->is_used || var->is_obsolete)
-           continue;
-
-         if(var->description != NULL)
-           fprintf(f, "# %s\n", var->description);
-
-	 if(var->is_list){
-	     if(var->global_val.l == NULL) {
-		 if(fprintf(f, "%s=\n\n", var->name) == EOF)
-		   goto io_err;
-	     }
-	     else{
-		 int i;
-
-		 for(i=0; var->global_val.l[i]; i++)
-		   if(fprintf(f, "%s%s%s%s\n", (i) ? "\t" : var->name,
-			      (i) ? "" : "=", var->global_val.l[i],
-			      var->global_val.l[i+1] ? ",":"") == EOF)
-		     goto io_err;
-
-		 if(fprintf(f, "\n") == EOF)
-		   goto io_err;
-	     }
-	 }
-	 else{
-	     if(var->global_val.p == NULL) {
-		 if(fprintf(f, "%s=\n\n", var->name) == EOF)
-		   goto io_err;
-	     } else if(strlen(var->global_val.p) == 0) {
-		 if(fprintf(f, "%s=\"\"\n\n", var->name) == EOF)
-               goto io_err;
-	     } else {
-		 if(fprintf(f,"%s=%s\n\n",var->name,var->global_val.p) == EOF)
-		   goto io_err;
-	     }
-	 }
-     }
-     exit(0);
-
-
-   io_err:
-     fprintf(stderr, "Error writing config to stdout: %s\n",
-             error_description(errno));
-     exit(-1);
-}
-
 
 /*----------------------------------------------------------------------
-      Set a user variable and save the .pinerc
-   
+      Set a user variable in memory (pinerc is never rewritten)
+
   Args:  var -- The index of the variable to set from pine.h (V_....)
          value -- The string to set the value to
 
- Result: -1 is returned on failure and 0 is returned on success
+ Result: 0 is always returned
 
- The vars data structure is updated and the pinerc saved.
- ----*/ 
+ The vars data structure is updated; the change does not persist to disk.
+ ----*/
 set_variable(var, value)
      int   var;
      char *value;
@@ -1903,20 +1542,20 @@ set_variable(var, value)
     v->user_val.p    = value == NULL ? NULL : cpystr(value);
     v->current_val.p = value == NULL ? NULL : cpystr(value);
 
-    return(write_pinerc(ps_global));
+    return(0);
 }
 
 
 /*----------------------------------------------------------------------
-      Set a user variable list and save the .pinerc
-   
+      Set a user variable list in memory (pinerc is never rewritten)
+
   Args:  var -- The index of the variable to set from pine.h (V_....)
          lvalue -- The list to set the value to
 
- Result: -1 is returned on failure and 0 is returned on success
+ Result: 0 is always returned
 
- The vars data structure is updated and the pinerc saved.
- ----*/ 
+ The vars data structure is updated; the change does not persist to disk.
+ ----*/
 set_variable_list(var, lvalue)
     int    var;
     char **lvalue;
@@ -1959,7 +1598,7 @@ set_variable_list(var, lvalue)
     }
 
 
-    return(write_pinerc(ps_global));
+    return(0);
 }
            
 
@@ -2004,393 +1643,6 @@ init_mail_dir(dir)
 
     return(0);
 }
-
-
-/*----------------------------------------------------------------------
-  Make sure the default save folders exist in the default
-  save context.
-  ----*/
-void
-init_save_defaults()
-{
-    CONTEXT_S  *save_cntxt;
-
-    if(!(save_cntxt = default_save_context(ps_global->context_list)))
-      save_cntxt = ps_global->context_list;
-
-    if(context_isambig(ps_global->VAR_DEFAULT_FCC)){
-	find_folders_in_context(save_cntxt, ps_global->VAR_DEFAULT_FCC);
-	if(folder_index(ps_global->VAR_DEFAULT_FCC, save_cntxt->folders) < 0)
-	  context_create(save_cntxt->context, save_cntxt->proto,
-			 ps_global->VAR_DEFAULT_FCC);
-    }
-
-    find_folders_in_context(save_cntxt, DEFAULT_SAVE);
-    if(folder_index(DEFAULT_SAVE, save_cntxt->folders) < 0)
-      context_create(save_cntxt->context, save_cntxt->proto, DEFAULT_SAVE);
-
-    free_folders_in_context(save_cntxt);
-}
-
-
-/*----------------------------------------------------------------------
-   Routines for pruning old Fcc, usually "sent-mail" folders.     
-  ----*/
-struct sm_folder {
-    char *name;
-    int   month_num;
-};
-
-
-#ifdef ANSI
-void delete_old_mail(struct sm_folder *, CONTEXT_S *, char *);
-struct sm_folder *get_mail_list(CONTEXT_S *, char *);
-void prune_folders(CONTEXT_S *, char *, int, char *);
-
-#else
-void delete_old_mail();
-struct sm_folder *get_mail_list();
-void prune_folders();
-#endif
-
-
-/*----------------------------------------------------------------------
-      Put sent-mail files in date order 
-
-   Args: a, b  -- The names of two files.  Expects names to be sent-mail-mmm-yy
-                  Other names will sort in order and come before those
-                  in above format.
- ----*/
-int   
-compare_sm_files(aa, bb)
-    const QSType *aa, *bb;
-{
-    struct sm_folder *a = (struct sm_folder *)aa,
-                     *b = (struct sm_folder *)bb;
-
-    if(a->month_num == -1 && b->month_num == -1)
-      return(strucmp(a->name, b->name));
-    if(a->month_num == -1)      return(-1);
-    if(b->month_num == -1)      return(1);
-
-    return(a->month_num - b->month_num);
-}
-
-
-
-/*----------------------------------------------------------------------
-      Create an ordered list of sent-mail folders and their month numbers
-
-   Args: dir -- The directory to find the list of files in
-
- Result: Pointer to list of files is returned. 
-
-This list includes all files that start with "sent-mail", but not "sent-mail" 
-itself.
-  ----*/
-struct sm_folder *
-get_mail_list(list_cntxt, folder_base)
-    CONTEXT_S *list_cntxt;
-    char      *folder_base;
-{
-#define MAX_FILES  (150)
-    register struct sm_folder *sm  = NULL;
-    struct sm_folder          *sml = NULL;
-    char                      *filename;
-    int                        i, folder_base_len;
-    char		       searchname[MAXPATH+1];
-
-    sml = sm = (struct sm_folder *)fs_get(sizeof(struct sm_folder)*MAX_FILES);
-    memset((void *)sml, 0, sizeof(struct sm_folder) * MAX_FILES);
-    if((folder_base_len = strlen(folder_base)) == 0 || !list_cntxt) {
-        sml->name = cpystr("");
-        return(sml);
-    }
-
-#ifdef	DOS
-    if(*list_cntxt->context != '{'){	/* NOT an IMAP collection! */
-	sprintf(searchname, "%4.4s*", folder_base);
-	folder_base_len = strlen(searchname) - 1;
-    }
-    else
-#endif
-    sprintf(searchname, "%s*", folder_base);
-
-    find_folders_in_context(list_cntxt, searchname);
-    for(i = 0; i < folder_total(list_cntxt->folders); i++){
-	filename = folder_entry(i, list_cntxt->folders)->name;
-#ifdef	DOS
-        if(struncmp(filename, folder_base, folder_base_len) == 0
-           && strucmp(filename, folder_base)) {
-
-	if(*list_cntxt->context != '{'){
-	    int j;
-	    for(j = 0; j < 4; j++)
-	      if(!isdigit(filename[folder_base_len + j]))
-		break;
-
-	   if(j < 4)		/* not proper date format! */
-	     continue;		/* keep trying */
-	}
-#else
-        if(strncmp(filename, folder_base, folder_base_len) == 0
-           && strcmp(filename, folder_base)) {
-#endif
-	    sm->name = cpystr(filename);
-#ifdef	DOS
-	    if(*list_cntxt->context != '{'){ /* NOT an IMAP collection! */
-		sm->month_num  = (sm->name[folder_base_len] - '0') * 10;
-		sm->month_num += sm->name[folder_base_len + 1] - '0';
-	    }
-	    else
-#endif
-            sm->month_num = month_num(sm->name + (size_t)folder_base_len + 1);
-            sm++;
-            if(sm >= &sml[MAX_FILES])
-               break; /* Too many files, ignore the rest ; shouldn't occur */
-        }
-    }
-
-    sm->name = cpystr("");
-
-    /* anything to sort?? */
-    if(sml->name && *(sml->name) && (sml+1)->name && *((sml+1)->name)){
-	qsort(sml,
-	      sm - sml,
-	      sizeof(struct sm_folder),
-	      compare_sm_files);
-    }
-
-    return(sml);
-}
-
-
-
-/*----------------------------------------------------------------------
-      Rename the current sent-mail folder to sent-mail for last month
-
-   open up sent-mail and get date of very first message
-   if date is last month rename and...
-       if files from 3 months ago exist ask if they should be deleted and...
-           if files from previous months and yes ask about them, too.   
-  ----------------------------------------------------------------------*/
-int
-expire_sent_mail()
-{
-    int          cur_month;
-    long         now;
-    char         tmp[20];
-    struct tm   *tm_now;
-    CONTEXT_S   *prune_cntxt;
-
-    dprint(5, (debugfile, "==== expire_mail called ====\n"));
-
-    now = time(0);
-    tm_now = localtime(&now);
-
-    /*
-     * If the last time we did this is blank (as if pine's run for
-     * first time), don't go thru list asking, but just note it for 
-     * the next time...
-     */
-    if(ps_global->VAR_LAST_TIME_PRUNE_QUESTION == NULL){
-	ps_global->last_expire_year = tm_now->tm_year;
-	ps_global->last_expire_month = tm_now->tm_mon;
-	sprintf(tmp, "%d.%d", ps_global->last_expire_year,
-		ps_global->last_expire_month + 1);
-	set_variable(V_LAST_TIME_PRUNE_QUESTION, tmp);
-	return(0);
-    }
-
-    if(ps_global->last_expire_year != -1 &&
-      (tm_now->tm_year <  ps_global->last_expire_year ||
-       (tm_now->tm_year == ps_global->last_expire_year &&
-        tm_now->tm_mon <= ps_global->last_expire_month)))
-      return(0); 
-    
-    cur_month = (1900 + tm_now->tm_year) * 12 + tm_now->tm_mon;
-    dprint(5, (debugfile, "Current month %d\n", cur_month));
-
-    /*
-     * locate the default save context...
-     */
-    if(!(prune_cntxt = default_save_context(ps_global->context_list)))
-      prune_cntxt = ps_global->context_list;
-
-    /*
-     * Since fcc's and read-mail can be an IMAP mailbox, be sure to only
-     * try expiring a list if it's an ambiguous name associated with some
-     * collection...
-     *
-     * If sentmail set outside a context, then pruning is up to the
-     * user...
-     */
-    if(prune_cntxt){
-	if(ps_global->VAR_DEFAULT_FCC && *ps_global->VAR_DEFAULT_FCC
-	   && context_isambig(ps_global->VAR_DEFAULT_FCC))
-	  prune_folders(prune_cntxt, ps_global->VAR_DEFAULT_FCC, cur_month,
-			"SENT");
-
-	if(ps_global->VAR_READ_MESSAGE_FOLDER 
-	   && *ps_global->VAR_READ_MESSAGE_FOLDER
-	   && context_isambig(ps_global->VAR_READ_MESSAGE_FOLDER))
-	  prune_folders(prune_cntxt, ps_global->VAR_READ_MESSAGE_FOLDER,
-			cur_month, "READ");
-    }
-
-    /*
-     * Mark that we're done for this month...
-     */
-    ps_global->last_expire_year = tm_now->tm_year;
-    ps_global->last_expire_month = tm_now->tm_mon;
-    sprintf(tmp, "%d.%d", ps_global->last_expire_year,
-            ps_global->last_expire_month + 1);
-    set_variable(V_LAST_TIME_PRUNE_QUESTION, tmp);
-    return(1);
-}
-
-
-
-/*----------------------------------------------------------------------
-     Offer to delete old sent-mail folders
-
-  Args: sml -- The list of sent-mail folders
- 
-  ----*/
-void
-prune_folders(prune_cntxt, folder_base, cur_month, type)
-    CONTEXT_S *prune_cntxt;
-    char      *folder_base, *type;
-    int        cur_month;
-{
-    char         path[MAXPATH+1], path2[MAXPATH+1],  prompt[128], tmp[20];
-    int          month_to_use, i;
-    MAILSTREAM  *prune_stream;
-    struct sm_folder *mail_list, *sm;
-
-    mail_list = get_mail_list(prune_cntxt, folder_base);
-
-#ifdef	DEBUG
-    for(sm = mail_list; sm != NULL && sm->name[0] != '\0'; sm++)
-      dprint(5, (debugfile,"Old sent-mail: %5d  %s\n",sm->month_num,sm->name));
-#endif
-
-    for(sm = mail_list; sm != NULL && sm->name[0] != '\0'; sm++)
-      if(sm->month_num == cur_month - 1)
-        break;  /* matched a month */
- 
-    month_to_use = (sm == NULL || sm->name[0] == '\0') ? cur_month - 1 : 0;
-
-    dprint(5, (debugfile, "Month_to_use : %d\n", month_to_use));
-
-    if(month_to_use == 0)
-      goto delete_old;
-
-    strcpy(path, folder_base);
-/* BUG: how to check that a folder is zero_length via c-client?? */
-    strcpy(path2, folder_base);
-    strcpy(tmp, month_abbrev((month_to_use % 12)+1));
-    lcase(tmp);
-#ifdef	DOS
-    if(*prune_cntxt->context != '{'){
-      sprintf(path2 + (size_t)(((i = strlen(path2)) > 4) ? 4 : i),
-	      "%2.2d%2.2d", (month_to_use % 12) + 1,
-	      ((month_to_use / 12) - 1900) % 100);
-    }
-    else
-#endif
-    sprintf(path2 + strlen(path2), "-%s-%2d", tmp, month_to_use/12);
-
-    sprintf(prompt, "\007Move current \"%s\" to \"%s\"", path, path2);
-
-    if(want_to(prompt, 'n', 0, h_wt_expire, 1) == 'n') {
-        dprint(5, (debugfile, "User declines renaming %s\n",
-                   ps_global->VAR_DEFAULT_FCC));
-        goto delete_old;
-    }
-
-    /*--- User says OK to rename ---*/
-    dprint(5, (debugfile, "rename \"%s\" to \"%s\"\n", path, path2));
-    prune_stream = context_same_stream(prune_cntxt->context, path2,
-				       ps_global->mail_stream);
-
-    if(!prune_stream && ps_global->mail_stream != ps_global->inbox_stream)
-      prune_stream = context_same_stream(prune_cntxt->context, path2,
-					 ps_global->inbox_stream);
-
-    if(!context_rename(prune_cntxt->context, prune_stream, path, path2)) {
-        q_status_message2(1, 2,4, "\007Error renaming \"%s\": %s",
-                          pretty_fn(folder_base),
-                         error_description(errno));
-        dprint(1, (debugfile, "Error renaming %s to %s: %s\n",
-                   path, path2, error_description(errno)));
-        display_message('x');
-        goto delete_old;
-    }
-
-    context_create(prune_cntxt->context,
-		   prune_stream ? prune_stream : prune_cntxt->proto,
-		   folder_base);
-
-  delete_old:
-    delete_old_mail(mail_list, prune_cntxt, type);
-    if(sm = mail_list){
-	while(sm->name){
-	    fs_give((void **)&(sm->name));
-	    sm++;
-	}
-
-        fs_give((void **)&mail_list);
-    }
-
-    return;
-}
-
-
-/*----------------------------------------------------------------------
-     Offer to delete old sent-mail folders
-
-  Args: sml       -- The list of sent-mail folders
-        fcc_cntxt -- context to delete list of folders in
-        type      -- label indicating type of folders being deleted
- 
-  ----*/
-void
-delete_old_mail(sml, fcc_cntxt, type)
-    struct sm_folder *sml;
-    CONTEXT_S        *fcc_cntxt;
-    char             *type;
-{
-    char  prompt[150];
-    int   rc;
-    struct sm_folder *sm;
-    MAILSTREAM       *del_stream;
-
-    for(sm = sml; sm != NULL && sm->name[0] != '\0'; sm++) {
-        sprintf(prompt, "Deleting old %s mail. Remove \"%s\"", type, sm->name);
-        if(want_to(prompt, 'n', 0, h_wt_delete_old, 1) == 'y'){
-	    del_stream = context_same_stream(fcc_cntxt->context, sm->name,
-					     ps_global->mail_stream);
-
-	    if(!del_stream 
-	       && ps_global->mail_stream != ps_global->inbox_stream)
-	      del_stream = context_same_stream(fcc_cntxt->context, sm->name,
-					       ps_global->inbox_stream);
-
-	    if(!context_delete(fcc_cntxt->context, del_stream, sm->name)){
-		q_status_message1(0,1,3,"Error deleting \"%s\".", sm->name);
-		dprint(1, (debugfile, "Error context_deleting %s in \n",
-			   sm->name, fcc_cntxt->context));
-		display_message('x');
-		sleep(3);
-            }
-        } else {
-               /* break; /* skip out of the whole thing when he says no */
-               /* Decided to keep asking anyway */
-        }
-    }
-}
-
 
 
 /*----------------------------------------------------------------------
