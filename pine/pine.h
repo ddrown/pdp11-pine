@@ -700,9 +700,8 @@ struct pine {
                 *localdomain,    /* The (DNS) domain this host resides in */
                 *userdomain,     /* The per user domain from .pinerc or */
                 *maildomain,     /* Domain name for most uses */
-#ifdef	DOS
-                *pine_exe,	 /* argv[0] as provided by DOS */
-#else
+                *pine_exe,	 /* argv[0], used to find sibling pico */
+#ifndef	DOS
                 *pine_conf,	 /* Location of global pine.conf */
 #endif
                 *pinerc;	 /* Location of user's pinerc */
@@ -756,8 +755,8 @@ typedef enum {OpenFolder, SaveMessage, FolderMaint, GetFcc} FolderFun;
 typedef enum {FolderName, MessageNumber, TextPercent, PageNumber} TitleBarType;
 typedef enum {ComposerHelpText, HelpText, NewsText, MessageText, AttachText,
 		WhoText, NetNewsText} TextType;
-typedef enum {CharStarStar, CharStar, FileStar, 
-		TmpFileStar, PicoText} SourceType;
+typedef enum {CharStarStar, CharStar, FileStar,
+		TmpFileStar} SourceType;
 typedef enum {GoodTime, BadTime, VeryBadTime, DoItNow} CheckPointTime;
 typedef enum {IsText, IsText8, IsBinary} FileTypes;
 typedef enum {AppendPostpone, AppendInterrupted, AppendSendmail} AppendTypes;
@@ -852,6 +851,7 @@ void	 gf_translate_opt(unsigned char *, unsigned);
 /*--- folder.c ---*/
 void        folder_screen(struct pine *);
 int         folders_for_fcc(char *);
+char      **fcc_candidate_list(struct pine *, int *);
 int         folder_lister(struct pine *,FolderFun,CONTEXT_S *,CONTEXT_S **,
                           char *);
 char       *pretty_fn(char *);
@@ -1024,7 +1024,7 @@ int  update_titlebar_status(MESSAGECACHE *);
 /*-- send.c --*/
 void  compose_screen(struct pine *); 
 void  compose_mail(char *);
-void  pine_send(ENVELOPE *, BODY **, char *, char *, long, void *);
+void  pine_send(ENVELOPE *, BODY **, char *, char *, long);
 void  pine_free_body(BODY **);
 
 /*-- signals.c --*/
@@ -1176,6 +1176,7 @@ void	 gf_prefix_opt();
 /*--- folder.c ---*/
 void        folder_screen();
 int         folders_for_fcc();
+char      **fcc_candidate_list();
 int         folder_lister();
 char       *pretty_fn();
 int         folder_exists();

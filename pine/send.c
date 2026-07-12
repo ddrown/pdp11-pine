@@ -64,13 +64,11 @@ static char rcsid[] = "$Id: send.c,v 4.75 1993/12/07 01:42:03 mikes Exp $";
 #endif
 
 #ifdef ANSI
-void     outgoing2strings(ENVELOPE *,BODY *,char **,char **,char **,void **,
-			  PATMT **);
-void      strings2outgoing(ENVELOPE *,BODY **,char *,char *,char *,PATMT *);
-int       append_message2(char *,ENVELOPE *,BODY *,AppendTypes,char *,PATMT *);
-void      parse_postponed_header(char *, char *, int, PATMT **);
-void      create_message_body(BODY **, PATMT *);
-void      free_attachment_list(PATMT *);
+void     outgoing2strings(ENVELOPE *,BODY *,char **,char **,char **,void **);
+void      strings2outgoing(ENVELOPE *,BODY **,char *,char *,char *);
+int       append_message2(char *,ENVELOPE *,BODY *,AppendTypes,char *);
+void      parse_postponed_header(char *, char *, int);
+void      create_message_body(BODY **);
 #ifndef	DOS
 static    char *call_sendmail(ENVELOPE *, BODY *);
 static    int   call_system(char *);
@@ -101,7 +99,6 @@ void      mime_recur(BODY *);
 void      outgoing2strings();
 void	  strings2outgoing();
 void      create_message_body();
-void      free_attachment_list();
 int       append_message2();
 void      parse_postponed_header();
 #ifndef	DOS
@@ -126,13 +123,6 @@ void      mime_recur();
 
 
 /*
- * Buffer to hold pointers into pine data that's needed by pico. 
- * Defined here so as not to take up room on the stack.  Better malloc'd?
- */
-static	PICO	pbuf;
-
-
-/* 
  * Storage object where the FCC is to be written.
  * This is amazingly bogus.  Much work was done to put messages 
  * together and encode them as they went to the tmp file for sendmail
@@ -198,7 +188,6 @@ compose_mail(given_to)
     long       start_in_body = 0L;
     char      *p, *fcc2, *file, *enc_error,
                fcc[MAXFOLDER+1], file_path[MAXPATH+1], *sig = NULL;
-    PATMT     *attachments;
     STRING     string_struct;
     FILE      *fp;
     STORE_S   *so = NULL;
@@ -210,7 +199,6 @@ compose_mail(given_to)
 
     fcc2 = NULL;
     file_path[0] = '\0';
-    attachments = NULL;
 
     {
 	int ret=0;
@@ -281,7 +269,7 @@ compose_mail(given_to)
 	rfc822_parse_msg(&outgoing, &body, file, (unsigned long)strlen(file),
 			 &string_struct, ps_global->maildomain, tmp_20k_buf);
 	/* grab what we want from the header */
-        parse_postponed_header(file, fcc, sizeof(fcc), &attachments);
+        parse_postponed_header(file, fcc, sizeof(fcc));
         fcc2 = fcc;
 
 	/*
@@ -290,8 +278,8 @@ compose_mail(given_to)
 	 * Create a space for the text, and read in with any necessary
 	 * decoding...
 	 */
-	if((so = (void *)so_get(PicoText, NULL, EDIT_ACCESS)) == NULL){
-	    q_status_message(1, 2, 4, 
+	if((so = (void *)so_get(CharStar, NULL, EDIT_ACCESS)) == NULL){
+	    q_status_message(1, 2, 4,
 			     "\007Problem creating space for message text.");
 	    fclose(fp);
 	    return;
@@ -303,17 +291,22 @@ compose_mail(given_to)
 	fset_pos(fp, &body_start);		/* reset to start of body */
 
 	/*
-	 * decoding filters expect endoflines to be CRLF so we need to
-	 * convert what's on disk in the local convention to CRLF.
-	 * We don't need to worry about what comes out of the pipe since
-	 * we're writing into a PicoText storage object which treats
-	 * CRLF and CR the same.  Bug or feature, you decide...
+	 * decoding filters expect endoflines to be CRLF, so convert
+	 * what's on disk in the local convention to CRLF going in, then
+	 * (following the same canonical model detach()/mailcmd.c uses
+	 * for attachments) convert back from CRLF to local convention
+	 * coming out -- CharStar storage, unlike the PicoText storage
+	 * this used before the composer-as-a-separate-process cut (see
+	 * TODO-pdp11-done.md), keeps CR bytes verbatim rather than
+	 * silently dropping them.
 	 */
 	gf_link_filter(gf_local_nvtnl);
 	if(body->encoding == ENCBASE64)
 	  gf_link_filter(gf_b64_binary);
 	else if(body->encoding == ENCQUOTEDPRINTABLE)
 	  gf_link_filter(gf_qp_8bit);
+
+	gf_link_filter(gf_nvtnl_local);
 
 	if(enc_error = gf_pipe(gc, pc)){
 	    q_status_message1(1, 3, 4, "\007Decoding Error \"%s\"", enc_error);
@@ -350,7 +343,7 @@ compose_mail(given_to)
 	 * The type of storage object allocated below is vitally
 	 * important.  See SIMPLIFYING ASSUMPTION #37
 	 */
-	if((body->contents.binary = (void *)so_get(PicoText, NULL,
+	if((body->contents.binary = (void *)so_get(CharStar, NULL,
 						   EDIT_ACCESS)) == NULL){
 	    q_status_message(1, 2, 4, "\007Problem creating space for message text.");
 	    return;
@@ -367,8 +360,7 @@ compose_mail(given_to)
 
     ps_global->prev_screen = compose_screen;
 
-    pine_send(outgoing, &body, "COMPOSE MESSAGE", fcc2,
-	      start_in_body, (void *)attachments);
+    pine_send(outgoing, &body, "COMPOSE MESSAGE", fcc2, start_in_body);
 
     mail_free_envelope(&outgoing);
     pine_free_body(&body);
@@ -379,97 +371,21 @@ compose_mail(given_to)
 /*----------------------------------------------------------------------
     Parse the postponed message for the Pine specific fields
 
-Args:  text -- Text to parse for fcc and attachments refs
-       fcc  -- Pointer to buffer to return fcc in 
-       atmt -- Attachments structure to return result in
-
-The current strategy on postponing a message with attachments or one that
-is multipart is this:  If the parts are attachments of local files then just 
-store a reference to the file in the postponed message file. If the 
-parts are not local files and came about by MIME style forwarding, replying
-or inclusion or some other way, then we would like to store the 
-whole part, contents and all. Currently this not done because the code
-to parse a whole MIME format message is not written. The code to write
-it out does work. Now when a message with attachments is postponed any
-MIME style forwarding parts or such will be dropped and only references
-to files attached will be included.
+Args:  text -- Text to parse for fcc
+       fcc  -- Pointer to buffer to return fcc in
  ----*/
 void
-parse_postponed_header(text, fcc, fcc_size, atmt)
+parse_postponed_header(text, fcc, fcc_size)
     char   *text, *fcc;
-    PATMT **atmt;
     int     fcc_size;
 {
-    register char *p, *q, *a;
-    PATMT         *pa;
-    char           tmp;
+    register char *p, *q;
 
     *fcc = '\0';
-    for(pa = *atmt; pa != NULL && pa->next != NULL; pa = pa->next);
 
     /*---- Loop until the end of the header ----*/
     for(p = text; *p && !(*p == '\n' && *(p+1) != '\n'); p++) {
-        if(struncmp(p, "Attachment-file:", 16) == 0) {
-            p += 16;
-            while(*p && *p != '\n' && isspace(*p))
-              p++;
-            if(*p == '\n')
-              continue; /* Blank field, skip this */
-
-            /*---- Got a field, now allocate a structure for it -----*/
-            if(pa == NULL) {
-                /* empty list */
-                *atmt = (PATMT *)fs_get(sizeof(PATMT));
-                pa    = *atmt;
-            } else {
-                pa->next = (PATMT *)fs_get(sizeof(PATMT));
-                pa       = pa->next;
-            }
-            pa->id = NULL;
-            pa->description = cpystr("");
-            pa->size = cpystr(""); /* BUG these should be NULL, 
-                                      but pico can't handle NULL's */
-            pa->next = NULL;
-            a = p;
-            while(*p && *p != '\n' && !isspace(*p))
-              p++;
-            tmp = *p;
-            *p = '\0';
-            pa->filename = cpystr(a);
-            *p = tmp;
-#ifdef X_NEVER
-        } else if(struncmp(p, "Attachment-id:", 14) == 0) {
-            if(pa != NULL){
-                p += 14;
-                while(*p && *p != '\n' && isspace(*p))
-                  p++;
-                if(*p == '\n')
-                  continue; /* Blank field, skip this */
-                a = p;
-                while(*p && *p != '\n' && !isspace(*p))
-                  p++;
-                tmp = *p;
-                *p = '\0';
-                pa->id = cpystr(a);
-                *p = tmp;
-            }
-#endif
-        } else if(struncmp(p, "Attachment-description:", 23) == 0) {
-            if(pa != NULL){
-                p += 23;
-                while(*p && *p != '\n' && isspace(*p))
-                  p++;
-                if(*p == '\n')
-                  continue; /* Blank field, skip this */
-                a = p;
-                while(*p && *p != '\n')
-                  p++;
-                tmp = *p;
-                *p = '\0';
-                pa->description = cpystr(a);
-                *p = tmp;
-            }
-        } else if(struncmp(p, "Fcc:", 4) == 0) {
+        if(struncmp(p, "Fcc:", 4) == 0) {
             /*-- Skip past white space and field tag --*/
             p += 4; 
             while(*p && *p != '\n' && isspace(*p))
@@ -648,6 +564,302 @@ dos_valid_from()
 
 
 /*----------------------------------------------------------------------
+    Support for running the composer as a separate exec'd process (see
+    TODO-pdp11.md / TODO-pdp11-done.md). pine_send() below writes a
+    small handoff file (plain strings it already builds via
+    outgoing2strings(), plus the body as a separate plain-text temp
+    file) and execs "pico -P <handoff> <result>"; the child (see
+    pico/compose_stub.c) reads it, runs the ordinary composer, and
+    writes an edited version back. None of this needs c-client in the
+    child -- see compose_stub.c's header comment.
+  ----------------------------------------------------------------------*/
+
+/*
+ * write_field/read_field - length-prefixed field I/O, matching
+ * compose_stub.c's format exactly (kept as a separate copy rather than
+ * a shared helper -- pine and pico are different link units and this
+ * is only a few lines each way).
+ */
+static void
+write_field(fp, tag, buf)
+    FILE *fp;
+    char *tag, *buf;
+{
+    long len = buf ? strlen(buf) : 0L;
+
+    fprintf(fp, "%s %ld\n", tag, len);
+    if(len)
+      fwrite(buf, 1, (size_t)len, fp);
+    fputc('\n', fp);
+}
+
+
+static char *
+read_field(fp, tag)
+    FILE *fp;
+    char *tag;
+{
+    char got_tag[32];
+    char linebuf[56];
+    long len;
+    char *buf;
+
+    if(fgets(linebuf, sizeof(linebuf), fp) == NULL)
+      return(NULL);
+
+    if(sscanf(linebuf, "%31s %ld", got_tag, &len) != 2
+       || strcmp(got_tag, tag) != 0 || len < 0)
+      return(NULL);
+
+    if((buf = (char *)fs_get((size_t)len + 1)) == NULL)
+      return(NULL);
+
+    if(len && fread(buf, 1, (size_t)len, fp) != (size_t)len){
+	fs_give((void **)&buf);
+	return(NULL);
+    }
+
+    buf[len] = '\0';
+    (void)fgetc(fp);
+    return(buf);
+}
+
+
+/*
+ * compose_body_store - the STORE_S* holding the message text, same
+ * branch outgoing2strings()/create_message_body() already use.
+ */
+static STORE_S *
+compose_body_store(bod)
+    BODY *bod;
+{
+    return (STORE_S *)((bod->type == TYPETEXT) ? bod->contents.binary
+			: bod->contents.part->body.contents.binary);
+}
+
+
+/*
+ * dump_body_text - copy the composer body's current text out to a
+ * plain file, for handing to the composer subprocess.
+ */
+static int
+dump_body_text(bod, path)
+    BODY *bod;
+    char *path;
+{
+    STORE_S      *so = compose_body_store(bod);
+    FILE         *fp;
+    unsigned char c;
+
+    if((fp = fopen(path, "w")) == NULL)
+      return(-1);
+
+    so_seek(so, 0L, 0);
+    while(so_readc(&c, so))
+      putc((int)c, fp);
+
+    fclose(fp);
+    return(0);
+}
+
+
+/*
+ * reload_body_text - replace the composer body's STORE_S with a fresh
+ * one built from the composer subprocess's edited body file.
+ */
+static int
+reload_body_text(bod, path)
+    BODY *bod;
+    char *path;
+{
+    FILE    *fp;
+    STORE_S *newso, *oldso;
+    int      c;
+
+    if((fp = fopen(path, "r")) == NULL)
+      return(-1);
+
+    if((newso = so_get(CharStar, NULL, EDIT_ACCESS)) == NULL){
+	fclose(fp);
+	return(-1);
+    }
+
+    while((c = getc(fp)) != EOF)
+      so_writec(c, newso);
+
+    fclose(fp);
+
+    oldso = compose_body_store(bod);
+    so_give(&oldso);
+
+    if(bod->type == TYPETEXT)
+      bod->contents.binary = (void *)newso;
+    else
+      bod->contents.part->body.contents.binary = (void *)newso;
+
+    return(0);
+}
+
+
+/*
+ * pico_child_path - the composer binary to exec: the same directory
+ * pine's own binary lives in (matches both a real install, where pine
+ * and pico are installed together, and the local ./build lnx dev/test
+ * layout, where both sit in ./bin/) -- falling back to a bare "pico"
+ * (relying on $PATH) if pine's own argv[0] had no directory part.
+ */
+static char *
+pico_child_path()
+{
+    static char path[MAXPATH + 1];
+    char       *slash;
+
+    if(ps_global->pine_exe
+       && (slash = strrchr(ps_global->pine_exe, '/')) != NULL){
+	int dirlen = slash - ps_global->pine_exe + 1;
+
+	strncpy(path, ps_global->pine_exe, dirlen);
+	path[dirlen] = '\0';
+	strcat(path, "pico");
+    }
+    else
+      strcpy(path, "pico");
+
+    return(path);
+}
+
+
+/*
+ * run_composer_subprocess - write the handoff file, fork/exec/wait for
+ * "pico -P", then read the result back. Leaves new_to/new_cc/new_bcc/
+ * new_sub/new_fcc pointing at fresh fs_get'd strings (falling back to
+ * copies of the unedited input on any failure, so callers never see a
+ * NULL) and returns the equivalent of pico()'s old return value --
+ * COMP_CANCEL/COMP_SUSPEND/COMP_GOTHUP/0-meaning-send.
+ */
+static int
+run_composer_subprocess(anchor, to, cc, bcc, sub, fcc, bodyfile, flags,
+			 new_to, new_cc, new_bcc, new_sub, new_fcc)
+    char     *anchor, *to, *cc, *bcc, *sub, *fcc, *bodyfile;
+    unsigned  flags;
+    char    **new_to, **new_cc, **new_bcc, **new_sub, **new_fcc;
+{
+    extern char version_buff[];
+    char     handoff_path[MAXPATH + 1], result_path[MAXPATH + 1];
+    FILE    *fp;
+    char   **fcclist;
+    int      n_fcc, i, pid, r, status, editor_result;
+    SigType (*isig)(), (*qsig)(), (*hsig)();
+
+    strcpy(handoff_path, temp_nam(NULL, "pinecmph"));
+    strcpy(result_path, temp_nam(NULL, "pinecmpr"));
+
+    if((fp = fopen(handoff_path, "w")) == NULL){
+	q_status_message(1, 2, 4, "\007Can't create composer temp file");
+	goto fallback;
+    }
+
+    write_field(fp, "ANCHOR", anchor);
+    write_field(fp, "VERSION", version_buff);
+    write_field(fp, "TO", to);
+    write_field(fp, "CC", cc);
+    write_field(fp, "BCC", bcc);
+    write_field(fp, "SUBJECT", sub);
+    write_field(fp, "FCC", fcc);
+    write_field(fp, "BODYFILE", bodyfile);
+    { char flagbuf[16]; sprintf(flagbuf, "%u", flags); write_field(fp, "FLAGS", flagbuf); }
+
+    fcclist = fcc_candidate_list(ps_global, &n_fcc);
+    fprintf(fp, "FCCLIST %d\n", n_fcc);
+    for(i = 0; i < n_fcc; i++)
+      fprintf(fp, "%s\n", fcclist[i]);
+    if(fcclist)
+      fs_give((void **)&fcclist);
+
+    fclose(fp);
+
+    isig = signal(SIGINT, SIG_IGN);
+    qsig = signal(SIGQUIT, SIG_IGN);
+    hsig = signal(SIGHUP, SIG_IGN);
+
+    if((pid = fork()) == 0){
+	execl(pico_child_path(), "pico", "-P", handoff_path, result_path,
+	      (char *)0);
+	_exit(-1);
+    }
+
+    if(pid == -1){
+	signal(SIGINT,  isig);
+	signal(SIGQUIT, qsig);
+	signal(SIGHUP,  hsig);
+	unlink(handoff_path);
+	q_status_message1(1, 2, 4, "\007Error starting composer: %s",
+			  error_description(errno));
+	goto fallback;
+    }
+
+    /*
+     * Retry on EINTR -- unlike call_system()'s short-lived wait()
+     * (which this loop is otherwise modeled on), the composer
+     * subprocess can run for as long as the user takes to compose,
+     * during which SIGWINCH (terminal resize) or other signals can
+     * interrupt wait() well before the child actually exits. Giving
+     * up on any wait() != pid (the old idiom) misreads that as "no
+     * result" and abandons the composition.
+     */
+#ifdef HAVE_WAIT_UNION
+    while((r = wait((union wait *)&status)) != pid)
+      if(r == -1 && errno != EINTR)
+	break;
+#else
+    while((r = wait(&status)) != pid)
+      if(r == -1 && errno != EINTR)
+	break;
+#endif
+
+    signal(SIGINT,  isig);
+    signal(SIGQUIT, qsig);
+    signal(SIGHUP,  hsig);
+
+    unlink(handoff_path);
+
+    if((fp = fopen(result_path, "r")) != NULL){
+	char line[32];
+
+	editor_result = COMP_CANCEL;
+	if(fgets(line, sizeof(line), fp) != NULL)
+	  sscanf(line, "STATUS %d", &editor_result);
+
+	if((*new_to  = read_field(fp, "TO"))      == NULL)
+	  *new_to  = cpystr(to);
+	if((*new_cc  = read_field(fp, "CC"))      == NULL)
+	  *new_cc  = cpystr(cc);
+	if((*new_bcc = read_field(fp, "BCC"))     == NULL)
+	  *new_bcc = cpystr(bcc);
+	if((*new_sub = read_field(fp, "SUBJECT")) == NULL)
+	  *new_sub = cpystr(sub);
+	if((*new_fcc = read_field(fp, "FCC"))     == NULL)
+	  *new_fcc = cpystr(fcc);
+
+	fclose(fp);
+	unlink(result_path);
+	return(editor_result);
+    }
+
+    q_status_message(1, 2, 4, "\007Composer subprocess produced no result");
+
+  fallback:
+    *new_to  = cpystr(to);
+    *new_cc  = cpystr(cc);
+    *new_bcc = cpystr(bcc);
+    *new_sub = cpystr(sub);
+    *new_fcc = cpystr(fcc);
+    return(COMP_CANCEL);
+}
+
+
+
+/*----------------------------------------------------------------------
      Prepare data structures for pico, call pico, then post message
 
   Args:  outgoing -- Partially formatted outgoing ENVELOPE
@@ -691,19 +903,18 @@ stored in a storage object (see filter.c).
   ----*/
 
 void
-pine_send(outgoing, body, editor_title, fcc, are_replying, att)
+pine_send(outgoing, body, editor_title, fcc, are_replying)
     ENVELOPE  *outgoing;  /* envelope for outgoing message */
-    BODY     **body;   
+    BODY     **body;
     char      *editor_title, *fcc;
     long	are_replying;
-    void      *att;
 {
-    int   editor_result, result, orig_cols, second_time = 0;
-    long  real_current_msgno, i;
-    extern char version_buff[];
-#ifdef	DOS
-    char *reserve;
-#endif
+    int      editor_result, result, orig_cols, second_time = 0;
+    long     real_current_msgno, i;
+    char    *tobuf, *ccbuf, *bccbuf, *fccbuf, *anchor;
+    void    *msgtext;
+    unsigned pine_flags;
+    char     bodyfile_path[MAXPATH + 1];
 
     dprint(1, (debugfile,"\n === send called === \n"));
     /*
@@ -735,11 +946,9 @@ pine_send(outgoing, body, editor_title, fcc, are_replying, att)
     }
 #endif
 
-    pbuf.attachments = (PATMT *)att;
-
     /*----- Fill in a few general parts of the envelope ----*/
-    pbuf.fccbuf = cpystr(fcc != NULL ? fcc : ps_global->VAR_DEFAULT_FCC);
-    pbuf.fcclen = strlen(pbuf.fccbuf);
+    fccbuf = cpystr(fcc != NULL ? fcc : ps_global->VAR_DEFAULT_FCC);
+    strcpy(bodyfile_path, temp_nam(NULL, "pinecmpb"));
 
     if(!outgoing->subject)
 	outgoing->subject = cpystr("");
@@ -764,75 +973,63 @@ pine_send(outgoing, body, editor_title, fcc, are_replying, att)
 
         /*-----------------------------------------------------
           Convert the envelope and body to the string format that
-            pico can edit
+            the composer can edit
          */
-        outgoing2strings(outgoing, *body, &pbuf.tobuf, &pbuf.ccbuf,
-                         &pbuf.bccbuf, &pbuf.msgtext, &pbuf.attachments);
+        outgoing2strings(outgoing, *body, &tobuf, &ccbuf, &bccbuf, &msgtext);
 
-	pbuf.pine_anchor = set_titlebar(editor_title, 0, FolderName, 0, 0, 0),
-	pbuf.pine_version = version_buff;
-	pbuf.tolen = strlen(pbuf.tobuf);
-	pbuf.cclen = strlen(pbuf.ccbuf);
-	pbuf.bcclen = strlen(pbuf.bccbuf);
-	pbuf.subbuf = outgoing->subject;
-	pbuf.sublen = strlen(pbuf.subbuf);
+	anchor = set_titlebar(editor_title, 0, FolderName, 0, 0, 0);
 
-	pbuf.raw_io = Raw;
-	pbuf.showmsg = display_message;
-	pbuf.clearcur = clear_cursor_pos;
-	pbuf.newmail = new_mail;
-	pbuf.folders = folders_for_fcc;
-	pbuf.buildaddr = build_address;
-	pbuf.keybinit = init_keyboard;
-	pbuf.helper = helper;
-	pbuf.ins_help = h_composer_ins;
-	pbuf.search_help = h_composer_search;
-	pbuf.to_help = h_composer_to;
-	pbuf.cc_help = h_composer_cc;
-	pbuf.bcc_help = h_composer_bcc;
-	pbuf.fcc_help = h_composer_fcc;
-	pbuf.subject_help = h_composer_subject;
-	pbuf.attachment_help = h_composer_attachment;
-	pbuf.browse_help = h_composer_browse;
-	pbuf.composer_help = h_composer;
+	pine_flags  = 0;
+	pine_flags |= (F_ON(F_CAN_SUSPEND,ps_global)) ? P_SUSPEND : 0;
+	pine_flags |= (F_ON(F_USE_FK,ps_global)) ? P_FKEYS : 0;
+	pine_flags |= (ps_global->restricted ? P_SECURE : 0);
+	pine_flags |= (are_replying || second_time) ? P_BODY : 0;
 
-
-      	pbuf.pine_flags  = 0;
-	pbuf.pine_flags |= (F_ON(F_CAN_SUSPEND,ps_global)) ? P_SUSPEND : 0;
-	pbuf.pine_flags |= (F_ON(F_USE_FK,ps_global)) ? P_FKEYS : 0;
-	pbuf.pine_flags |= (ps_global->restricted ? P_SECURE :
-                                                                   0);
-	pbuf.pine_flags |= (are_replying || second_time) ? P_BODY : 0;
-
-        dprint(9, (debugfile, "flags: %x\n", pbuf.pine_flags));
+        dprint(9, (debugfile, "flags: %x\n", pine_flags));
 
         flush_status_messages();
         clear_cursor_pos();
 
-#ifdef	DOS
-/*
- * dumb hack to help ensure we've got something left
- * to send with if the user runs out of precious memory
- * in the composer...	(FIX THIS!!!)
- */
-	if((reserve = (char *)malloc(16384)) == NULL){
+	if(dump_body_text(*body, bodyfile_path) < 0){
+	    char *nt, *nc, *nb, *ns, *nf;
+
 	    q_status_message(1, 2, 4,
-			"\007LOW MEMORY!  May be unable to complete send!");
-	    flush_status_messages();
+			     "\007Can't create composer temp file");
+	    editor_result = COMP_CANCEL;
+	    nt = cpystr(tobuf); nc = cpystr(ccbuf); nb = cpystr(bccbuf);
+	    ns = cpystr(outgoing->subject); nf = cpystr(fccbuf);
+	    fs_give((void **)&tobuf); tobuf = nt;
+	    fs_give((void **)&ccbuf); ccbuf = nc;
+	    fs_give((void **)&bccbuf); bccbuf = nb;
+	    fs_give((void **)&outgoing->subject); outgoing->subject = ns;
+	    fs_give((void **)&fccbuf); fccbuf = nf;
 	}
-#endif
+	else{
+	    char *new_to, *new_cc, *new_bcc, *new_sub, *new_fcc;
 
-	editor_result = pico(&pbuf);
+	    editor_result = run_composer_subprocess(anchor, tobuf, ccbuf,
+			bccbuf, outgoing->subject, fccbuf, bodyfile_path,
+			pine_flags, &new_to, &new_cc, &new_bcc, &new_sub,
+			&new_fcc);
 
-#ifdef	DOS
-	free((char *)reserve);
-#endif
-        /*-- Text returned here has network EOL's, CRLF's that is --*/
+	    fs_give((void **)&tobuf);
+	    fs_give((void **)&ccbuf);
+	    fs_give((void **)&bccbuf);
+	    fs_give((void **)&outgoing->subject);
+	    fs_give((void **)&fccbuf);
 
-        if(outgoing->subject != pbuf.subbuf) 	/* subject string realloc'd */
-	  outgoing->subject = pbuf.subbuf; 	/* forget old subj. pointer */
+	    tobuf = new_to;
+	    ccbuf = new_cc;
+	    bccbuf = new_bcc;
+	    outgoing->subject = new_sub;
+	    fccbuf = new_fcc;
 
-        init_signals();        /* Pico has it's own signal stuff */
+	    if(reload_body_text(*body, bodyfile_path) < 0)
+	      q_status_message(1, 2, 4,
+			 "\007Couldn't read back edited message text");
+	}
+
+        init_signals();        /* the composer subprocess has its own */
         mark_status_dirty();
 	orig_cols = ps_global->ttyo->screen_cols;
         get_windsize(ps_global->ttyo); /* Might have changed, we won't know */
@@ -844,14 +1041,13 @@ pine_send(outgoing, body, editor_title, fcc, are_replying, att)
         /*-------------------------------------------------------------
           Turn strings back into structures
           ----*/
-        strings2outgoing(outgoing, body, pbuf.tobuf, pbuf.ccbuf,
-                         pbuf.bccbuf, pbuf.attachments);
+        strings2outgoing(outgoing, body, tobuf, ccbuf, bccbuf);
 
-        fs_give((void **)&pbuf.tobuf);
-        fs_give((void **)&pbuf.ccbuf);
-        fs_give((void **)&pbuf.bccbuf);
+        fs_give((void **)&tobuf);
+        fs_give((void **)&ccbuf);
+        fs_give((void **)&bccbuf);
 
-        removing_trailing_white_space(pbuf.fccbuf);
+        removing_trailing_white_space(fccbuf);
 
 	/*-------- Stamp it with a current date -------*/
 	if(outgoing->date)			/* update old date */
@@ -887,8 +1083,7 @@ pine_send(outgoing, body, editor_title, fcc, are_replying, att)
             }
 
             result = append_message2(POSTPONED_MAIL, outgoing, b_tmp,
-                                     AppendPostpone, pbuf.fccbuf,
-				     (void *)pbuf.attachments);
+                                     AppendPostpone, fccbuf);
 
             if((*body)->type != TYPETEXT) {
                 (*body)->contents.part->next = p_tmp;
@@ -908,7 +1103,7 @@ pine_send(outgoing, body, editor_title, fcc, are_replying, att)
             /*----- Disconnected, save the interrupted composition ----*/
             result = append_message2(INTERRUPTED_MAIL,outgoing,*body,
                                      AppendInterrupted,
-                                     pbuf.fccbuf, pbuf.attachments);
+                                     fccbuf);
             dprint(1, (debugfile, "Save composition on HUP %s\n",
                        result < 0 ? "FAILED" : "succeeded"));
             hup_signal(); /* Do what we normally do on SIGHUP */
@@ -917,7 +1112,7 @@ pine_send(outgoing, body, editor_title, fcc, are_replying, att)
             /*------ Must be sending mail ! -----*/
 
 	    if(!outgoing->to && !outgoing->cc && !outgoing->bcc &&
-				    (!pbuf.fccbuf || pbuf.fccbuf[0] == '\0')) {
+				    (!fccbuf || fccbuf[0] == '\0')) {
                q_status_message(1, 2, 4, "No recipients specified!");
                display_message('x');
                sleep(3);
@@ -931,7 +1126,7 @@ pine_send(outgoing, body, editor_title, fcc, are_replying, att)
                continue;
             }
 
-            if(call_mailer(pbuf.fccbuf, outgoing, *body)){
+            if(call_mailer(fccbuf, outgoing, *body)){
 		/*
 		 * If message successfully sent, we're replying
 		 * AND we're allowed to write back state, do it.
@@ -967,8 +1162,8 @@ pine_send(outgoing, body, editor_title, fcc, are_replying, att)
     ps_global->current_sorted_msgno = sorted_msgno(ps_global,
 						   real_current_msgno);
 
-    fs_give((void **)&pbuf.fccbuf);
-    free_attachment_list(pbuf.attachments);
+    fs_give((void **)&fccbuf);
+    unlink(bodyfile_path);
     display_message('\0');
 }
 
@@ -1254,7 +1449,7 @@ call_sendmail(envelope, body)
 
     tmpfile = temp_nam(NULL, "pinesend");
 
-    rv = append_message2(tmpfile, envelope, body, AppendSendmail, NULL, NULL);
+    rv = append_message2(tmpfile, envelope, body, AppendSendmail, NULL);
     if(rv < 0)
       goto io_error;
 
@@ -1334,20 +1529,15 @@ call_system(command)
     of a storage object brought into existence sometime before pico_send().
  -----*/
 void
-outgoing2strings(env, bod, to, cc, bcc, text, pico_a)
+outgoing2strings(env, bod, to, cc, bcc, text)
     ENVELOPE  *env;
     BODY      *bod;
     char     **to, **cc, **bcc;
     void     **text;
-    PATMT    **pico_a;
 {
-    PART  *part;
-    PATMT *pa;
-    char  *type;
-
     /*
      * SIMPLIFYING ASSUMPTION #37: the first TEXT part's storage object
-     * is guaranteed to be of type PicoText!
+     * is guaranteed to be of type CharStar!
      */
     if(bod->type == TYPETEXT){
 	*text = so_text(bod->contents.binary);
@@ -1357,44 +1547,11 @@ outgoing2strings(env, bod, to, cc, bcc, text, pico_a)
                    int2string(bod->contents.part->body.type));
         }
 	*text = so_text(bod->contents.part->body.contents.binary);
-
-	/*
-	 * If we already had a list, blast it now, so we can build a new
-	 * attachment list that reflects what's really there...
-	 */
-	if(*pico_a)
-	  free_attachment_list(*pico_a);
-
-	pa = NULL;
-
-        for(part = bod->contents.part->next; part != NULL; part = part->next) {
-            if(pa == NULL) {
-                /* empty list */
-                *pico_a = (PATMT *)fs_get(sizeof(PATMT));
-                pa = *pico_a;
-            } else {
-                pa->next = (PATMT *)fs_get(sizeof(PATMT));
-                pa = pa->next;
-            }
-            pa->description = part->body.description == NULL ? cpystr("") : 
-                                              cpystr(part->body.description);
-            
-            type         = type_desc(part->body.type,
-                                     part->body.subtype,part->body.parameter,0);
-            pa->filename = fs_get(strlen(type) + 4);
-            sprintf(pa->filename, "[%s]", type);
-            pa->flags    = A_FLIT;
-            pa->size     = cpystr(byte_string(part->body.size.bytes));
-            if(part->body.id == NULL)
-              part->body.id = cpystr(generate_message_id(ps_global));
-            pa->id       = cpystr(part->body.id);
-            pa->next     = NULL;
-        }
     } else {
         panic1("Can't compose message of MIME type %s\n",
                int2string(bod->type));
     }
-        
+
 
     /*------------------------------------------------------------------
        Malloc strings to pass to composer editor because it expects
@@ -1412,11 +1569,10 @@ outgoing2strings(env, bod, to, cc, bcc, text, pico_a)
     routines.
  -----*/
 void
-strings2outgoing(env, bod, to, cc, bcc, attach)
+strings2outgoing(env, bod, to, cc, bcc)
     ENVELOPE *env;
     BODY    **bod;
     char     *to, *cc, *bcc;
-    PATMT    *attach;
 {
     char *maildomain;
 
@@ -1452,7 +1608,7 @@ strings2outgoing(env, bod, to, cc, bcc, attach)
     removing_trailing_white_space(bcc);
     rfc822_parse_adrlist(&(env->bcc), bcc, maildomain);
 
-    create_message_body(bod, attach);
+    create_message_body(bod);
     pine_encode_body(env, *bod);
 }
 
@@ -1460,162 +1616,21 @@ strings2outgoing(env, bod, to, cc, bcc, attach)
 
 /*----------------------------------------------------------------------
 
- The head of the body list here is always either TEXT or MULTIPART. It may be
-changed from TEXT to MULTIPART if there are attachments to be added
-and it is not already multipart. 
+ The head of the body list here is always either TEXT or MULTIPART.
   ----*/
 void
-create_message_body(b, attach)
+create_message_body(b)
     BODY  **b;
-    PATMT  *attach;
 {
-    PART         *p, *p_trail;
-    PATMT        *pa;
-    BODY         *b1;
-    void         *file_contents;
-    long          file_len, new_len;
-    PARAMETER    *pm;
-#ifndef	DOS
-    char          full_filename[MAXPATH + 1];
-#endif
-
-    if((*b)->type == TYPETEXT && attach == NULL) {
+    if((*b)->type == TYPETEXT) {
 	(*b)->encoding = ENCOTHER;
 	set_mime_types(*b);
         return;
     }
 
-    if((*b)->type == TYPETEXT) {
-        /*-- Current type is text, but there are attachments to add --*/
-        /*-- Upgrade to a TYPEMULTIPART --*/
-        b1                                  = (BODY *)mail_newbody();
-        b1->type                            = TYPEMULTIPART;
-        b1->contents.part                   = mail_newbody_part();
-        b1->contents.part->body             = **b;
-
-        (*b)->subtype = (*b)->id = (*b)->description = NULL;
-	(*b)->parameter = NULL;
-	(*b)->contents.binary               = NULL;
-	pine_free_body(b);
-        *b = b1;
-    }
-
     /*-- Now type must be MULTIPART with first part text --*/
     (*b)->contents.part->body.encoding = ENCOTHER;
     set_mime_types(&((*b)->contents.part->body));
-
-    /*------ Go through the parts list remove those to be deleted -----*/
-    for(p = p_trail = (*b)->contents.part->next; p != NULL;) {
-        for(pa = attach; pa != NULL; pa = pa->next) {
-            if(pa->id == NULL)
-              continue;
-            if(p->body.id == NULL || strcmp(pa->id, p->body.id) == 0)
-              break; /* Found it */
-        }
-        if(pa == NULL) {
-            /* attachment wasn't in the list; zap it */
-            if(p == (*b)->contents.part->next) {
-                /* Beginning of list */
-                (*b)->contents.part->next = p->next;
-                p->next = NULL;  /* Don't free the whole chain */
-                pine_free_body_part(&p);
-                p = p_trail = (*b)->contents.part->next;
-            } else {
-                p_trail->next = p->next;
-                p->next = NULL;  /* Don't free the whole chain */
-                pine_free_body_part(&p);
-                p = p_trail->next;
-            }
-        } else {
-            p_trail = p;
-            p       = p->next;
-        }
-    }
-
-    /*---------- Now add any new attachments ---------*/
-    for(p = (*b)->contents.part ; p->next != NULL; p = p->next);
-    for(pa = attach; pa != NULL; pa = pa->next) {
-        if(pa->id != NULL)
-          continue; /* Has an ID, it's old */
-	/*
-	 * the idea is handle ALL attachments as open FILE *'s.  Actual
-         * encoding and such is handled at the time the message
-         * is shoved into the mail slot or written to disk...
-	 *
-         * Also, we never unlink a file, so it's up to whoever opens
-         * it to deal with tmpfile issues.
-	 */
-	if((file_contents = (void *)so_get(FileStar, pa->filename,
-					   READ_ACCESS)) == NULL){
-            q_status_message2(1, 3, 4,
-                              "\007Error \"%s\", couldn't attach file \"%s\"",
-                              error_description(errno), pa->filename);
-            display_message('x');
-            continue;
-        }
-        
-        p->next                      = mail_newbody_part();
-        p                            = p->next;
-        p->body.id                   = cpystr(generate_message_id(ps_global));
-        p->body.contents.binary      = file_contents;
-	/*
-	 * Set type to unknown and let set_mime_types figure it out.
-	 * Always encode attachments we add as BINARY.
-	 */
-	p->body.type		     = TYPEOTHER;
-	p->body.encoding	     = ENCBINARY;
-	p->body.size.bytes           = file_size(pa->filename);
-	set_mime_types(&(p->body));
-	so_release((STORE_S *)p->body.contents.binary);
-        p->body.description          = cpystr(pa->description);
-	/* add name attribute */
-	if (p->body.parameter == NULL) {
-	    pm = p->body.parameter = mail_newbody_parameter();
-	    pm->attribute = cpystr("name");
-	}else {
-            for (pm = p->body.parameter;
-			strucmp(pm->attribute, "name") && pm->next != NULL;
-								pm = pm->next);
-	    if (strucmp(pm->attribute, "name") != 0) {
-		pm->next = mail_newbody_parameter();
-		pm = pm->next;
-		pm->attribute = cpystr("name");
-	    }
-	}
-	pm->value = cpystr(last_cmpnt(pa->filename));
-
-        p->next = NULL;
-        pa->id = cpystr(p->body.id);
-    }
-}
-
-
-
-/*
- * free_attachment_list - free attachments in given list
- */
-void
-free_attachment_list(alist)
-    PATMT  *alist;
-{
-    PATMT  *trailing = alist;
-
-    while(trailing = alist){
-	alist = alist->next;
-	if(trailing->description)
-          fs_give((void **)&trailing->description);
-
-	if(trailing->filename)
-          fs_give((void **)&trailing->filename);
-
-	if(trailing->size)
-          fs_give((void **)&trailing->size);
-
-	if(trailing->id)
-          fs_give((void **)&trailing->id);
-
-	fs_give((void **)&trailing);
-    }
 }
 
 
@@ -1717,7 +1732,6 @@ Args:  folder -- The name of the folder
        bod    -- The message body
        type   -- Type of save operation
        fcc    -- name of file for fcc
-       a      -- Attachemnts for Postponing
 
 Returns: 0 if susccessful, -1 if not
 
@@ -1734,13 +1748,12 @@ AppendInterrupted:
 AppendSendmail:
   Includes: Bcc, header, body
   overwrites existing folder without confirmation
-----*/           
-append_message2(folder, env, bod, type, fcc, a)
+----*/
+append_message2(folder, env, bod, type, fcc)
     char       *folder, *fcc;
     ENVELOPE   *env;
     BODY       *bod;
     AppendTypes type;
-    PATMT      *a;
 {
     char   filename[MAXPATH+1];
     int    rv, save_errno;
@@ -1785,23 +1798,6 @@ append_message2(folder, env, bod, type, fcc, a)
     start_of_append = ftell(folder_stream);
 
     if(type == AppendPostpone || type == AppendInterrupted) {
-        while(a) {
-            if(a->flags & A_FLIT) {
-                a = a->next;
-                continue;
-            }
-            rv = fprintf(folder_stream, "Attachment-file: %s%s", 
-			a->filename, NEWLINE);
-            if (rv == EOF) 
-              goto done;
-
-            rv = fprintf(folder_stream, "Attachment-description: %s%s",
-                         a->description, NEWLINE);
-            if (rv == EOF) 
-              goto done;
-            a = a->next;
-        }
-
         if(fcc) {
             rv = fprintf(folder_stream, "Fcc: %s%s", fcc, NEWLINE);
             if (rv == EOF) 

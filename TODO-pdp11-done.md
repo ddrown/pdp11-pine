@@ -1258,3 +1258,266 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       since this was mostly UI/glue code around a temp-file-write path
       still needed for other attachment types, not a large standalone
       subsystem.
+
+### Drop compose-side attachment support — DONE
+- [x] Removed the ability to attach a local file when composing a
+      message (the Ctrl-J picker and its Attchmnt header field), per the
+      scoping in this file's former "Drop compose-side attachment
+      support" entry. Receive-side MIME rendering (viewing/saving
+      attachments other people send in) is completely untouched --
+      `pine/mailview.c`'s `describe_mime`/`type_desc`/`part_desc`/
+      `display_parameters`/`make_file_index`/`mime_show` and c-client's
+      BODYSTRUCTURE parsing were never touched. Forwarding a received
+      MIME message as an attachment on an outgoing message (reply.c's
+      "Forward message as a MIME attachment" prompt, which builds a
+      genuinely multipart outgoing body via `copy_body()`) also still
+      works -- that path never went through the PATMT/attach-picker
+      machinery being removed here, it only shares `create_message_body`/
+      `outgoing2strings`'s generic multipart-body plumbing, which was
+      kept (simplified, not deleted).
+      What was removed:
+      - `pico/attach.c` (871 lines, 100% attachment-specific: `AskAttach`
+        Ctrl-J picker, `SyncAttach`, `ParseAttach`, `NewAttach`,
+        `AttachError`, `ZotAttach`, `intag`, `sinserts`) deleted
+        outright. Its one shared, non-attachment-specific function,
+        `prettysz()` (byte-count pretty-printer also used by the plain
+        file browser), was moved into `pico/browse.c` next to its one
+        remaining caller (`getfcells()`) rather than left orphaned.
+      - `pico/pico.h`: the `ATTACHMENTS` macro was not a real toggle
+        (several `composer.c` call sites referenced `ATTCHDR` completely
+        unguarded by `#ifdef`), so removing it meant deleting the
+        `#ifdef`/`#else` scaffolding outright, not just undefining it.
+        `ATTCHDR` enum value removed, `SUBJHDR`/`LASTHDR` collapsed to
+        the non-ATTACHMENTS numbering (both now 4, one less header row).
+        `PATMT` struct, its `A_FLIT`/`A_ERR` flags, and the `PICO`
+        struct's `attachments`/`attachment_help` fields deleted --
+        confirming the Pmaster-callback audit's prediction that this
+        coupling "disappears entirely once the attachment-composition
+        cut lands."
+      - `pico/composer.c`: every `ATTCHDR`/`PATMT`/attach-picker call
+        site removed -- `InitMailHeader()`'s attachment display-entry
+        builder (including the buffer-overflow-audit fix from the `s`
+        buffer sizing pass, which is now moot since the code it guarded
+        is gone), the Ctrl-J handler, `SyncAttach()` calls on header-
+        focus-change/postpone/send, the Ctrl-T Fcc-vs-attach-file-browse
+        branch, `intag()` guards in char-insert/delete handlers,
+        `wkeyhelp()`'s attach-specific key-help strings, and
+        `packheader()`'s attachment special-case skip.
+      - `pico/pico.c`: `wquit()`'s `AttachError()` pre-send-confirmation
+        check removed (always shows the plain "Send message" prompt
+        now).
+      - `pine/send.c`: `parse_postponed_header()` no longer parses
+        `Attachment-file:`/`Attachment-description:` pseudo-headers
+        (still parses `Fcc:`, its other job) -- postponed messages that
+        predate this build and reference attachments will just silently
+        drop those references on resume rather than erroring.
+        `outgoing2strings()`/`strings2outgoing()`/`create_message_body()`
+        had their PATMT-list rebuild/filter/add logic stripped down to
+        just the generic multipart body-encoding step they always did
+        alongside it; `append_message2()` no longer writes
+        `Attachment-file:`/`-description:` lines when postponing/saving
+        an interrupted composition. `free_attachment_list()` and all its
+        call sites deleted. `pine_send()`'s `att` parameter dropped
+        (call sites in `send.c`, `reply.c` updated).
+      - `pico/efunc.h`, `pine/pine.h`: forward declarations for all the
+        above updated/removed to match.
+      - `pico/makefile.lnx`: `attach.o`/`attach.c` dropped from
+        `OFILES`/`CFILES`.
+      - `pine/pine.hlp`: removed the (already-empty, per the earlier
+        full-screen-help-removal cut) `h_composer_attachment` section
+        header; `helptext.c`/`helptext.h` regenerate from this on build
+        as usual (gitignored generated files).
+      - Two now-obsolete regression tests deleted outright rather than
+        adapted, since the vulnerable code they guarded no longer exists
+        at all: `test_attach_overflow.py` (ParseAttach/SyncAttach stack
+        overflow in the Ctrl-J picker) and `test_attach_resume_overflow.py`
+        (parse_postponed_header's unbounded Attachment-description:
+        parsing). Two other tests had stale "-> Attchmnt ->" mentions in
+        header-navigation-count comments fixed after confirming
+        `composer.c`'s `next_line()`/`prev_line()` clamp at the header
+        list's ends (so the extra Ctrl-N/Ctrl-P keystrokes were already
+        harmless no-ops before this change, just now one keystroke
+        fewer is correct): `test_postpone_many_recipients.py`,
+        `test_resume_postponed_huge_address.py`.
+      Verified: clean rebuild (`./build lnx`) succeeds with no new
+      warnings; grepped the whole `pico/`/`pine/` tree for `PATMT`,
+      `ATTACHMENTS`, `ATTCHDR`, `AskAttach`/`SyncAttach`/`ParseAttach`/
+      `NewAttach`/`ZotAttach`/`AttachError`/`sinserts` and confirmed zero
+      remaining references outside the untouched DOS-only `pine.def`
+      (a Windows/DOS-build export list, not part of the `lnx` target);
+      full smoketest suite green (11/11, after retiring the two
+      obsolete tests). `bin/pine` text+data+bss dropped from 531490 to
+      517306 bytes (~13.9KB, matching the ~15-16KB estimate); `bin/pico`
+      also shrank (136133 -> 127099 bytes, ~8.8KB) since it links the
+      same `libpico.a`.
+
+### Run the composer as a separate exec'd process — DONE
+- [x] Implemented the fork/exec split scoped in this file's former
+      "Consider: run the composer as a separate exec'd process" entry.
+      `pine/send.c`'s `pine_send()` no longer calls `pico(&pbuf)`
+      in-process; it writes a small handoff file, `fork()`+`execl()`s
+      `pico -P <handoff> <result>`, waits, and reads an edited result
+      back. `bin/pine`'s resident footprint dropped by **~112KB**
+      (text+data+bss 517306 -> 405745, ~21.6%) -- close to the ~118KB
+      `libpico.a`-size estimate this item was scoped against, and the
+      single biggest cut this project has made.
+
+      **The real blocker turned out to be linking, not design.** The
+      approved plan's mechanism (handoff/result files, `pico -P` mode,
+      callback stubs in a new `pico/compose_stub.c`) worked on the
+      first build, but `bin/pine`'s size didn't move at all -- `nm`
+      showed `pico()`, `HeaderEditor()`, `InitMailHeader()` still fully
+      linked in. Root cause: `pine/filter.c`'s `PicoText` storage-object
+      driver (used for the composed-message body, `so_get(PicoText,
+      ...)` in `compose_mail()`/`reply()`/`forward()`) calls
+      `pico_get()`/`pico_readc()`/`pico_writec()`/`pico_puts()`/
+      `pico_seek()`/`pico_give()`, which lived in `pico/pico.c` --
+      the *same translation unit* as `pico()` itself. A static linker
+      pulls in a whole `.o` member or none of it, so any PicoText use
+      anywhere in pine dragged in the entire composer regardless of
+      whether `pine_send()` still called `pico()` directly. (A first
+      attempt at fixing this by relocating just those functions to
+      their own `pico/picotext.c` didn't work either -- pico's own
+      basic-editing files, e.g. `line.c`/`basic.c`, have their own
+      `if(Pmaster)`-gated calls into `composer.c`/`pico.c`, so even the
+      *LINE-list allocator* pulls the composer back in transitively.
+      Fully severing that would mean auditing `if(Pmaster)` call sites
+      across some 11 pico source files -- untangling pico's own
+      internals, a materially larger task than this one. Abandoned in
+      favor of the option below.)
+
+      **Fix: stop using `PicoText` in pine at all.** Switched all 5
+      `so_get(PicoText, ...)` call sites (`pine/send.c` x3,
+      `pine/reply.c` x2) to `so_get(CharStar, ...)` -- a plain
+      in-memory buffer with no pico dependency whatsoever -- and
+      deleted `PicoText`'s branches from `pine/filter.c`'s
+      `so_get`/`so_give`/`so_readc`/`so_writec`/`so_puts`/`so_seek`,
+      the `PicoText` enumerator itself (`pine/pine.h`'s `SourceType`),
+      and (since nothing calls them anymore, `pico()`/`main.c`'s
+      standalone mode never did) `pico/pico.c`'s
+      `pico_get`/`pico_give`/`pico_readc`/`pico_writec`/`pico_puts`/
+      `pico_seek`/`insline`/`breplace`/`PICOTEXT`/the unused
+      already-dead `pico_replace()` stub, and the `PICO` struct's
+      `msgtext` field (replaced by the new `bodyfile` field below).
+      One real behavioral wrinkle this surfaced: `PicoText`'s
+      `pico_writec()` silently dropped `\r` bytes and translated `\n`
+      into a real line break, which `compose_mail()`'s postponed-
+      message-resume decode comment called out as relied-upon ("we're
+      writing into a PicoText storage object which treats CRLF and CR
+      the same"). `CharStar` has no such translation, so decoded CRLF
+      text would have landed with literal `\r`s in the buffer. Fixed by
+      adding an explicit `gf_link_filter(gf_nvtnl_local)` after the
+      decode filters in both `compose_mail()`'s resume path and
+      `reply.c`'s `get_body_part_text()` null-body fallback (an
+      ancient non-IMAP2bis-server compatibility path, essentially
+      unreachable given this target's local-mbox-only setup, fixed
+      anyway since it was cheap) -- the same "canonical model" already
+      used by `detach()` (`pine/mailcmd.c`, called for MIME-part
+      quoting/attachments) for exactly this reason. Confirmed no other
+      decode path in `reply.c`/`send.c` needed the same treatment: all
+      other `so_puts()`/`gf_puts()` calls write already-local-newline
+      strings pine builds itself (headers, delimiters, signatures),
+      and `detach()`'s own callers were already safe.
+
+      **Handoff/result protocol**: a length-prefixed `TAG <len>\n
+      <bytes>\n` format (`pine/send.c`'s and `pico/compose_stub.c`'s
+      matching, independently-implemented `write_field()`/
+      `read_field()` -- kept as separate small copies rather than a
+      shared header, since pine and pico are different link units).
+      Handoff carries `ANCHOR`/`VERSION`/`TO`/`CC`/`BCC`/`SUBJECT`/
+      `FCC`/`BODYFILE` (a path, not inline -- the body crosses via its
+      own plain-text temp file, read with `readin()` and written back
+      with `writeout()`, both already existing pico primitives --
+      `PICO.bodyfile` is a new field pico.c's `pico()` checks in place
+      of the old `msgtext`/`breplace()` path) /`FLAGS` (the
+      `P_SUSPEND`/`P_FKEYS`/`P_SECURE`/`P_BODY` bits) / an `FCCLIST`
+      (see below). Result carries a `STATUS <int>` (the same
+      `COMP_CANCEL`/`COMP_SUSPEND`/`COMP_GOTHUP`/0 bitmask `pico()`
+      always returned, so `pine_send()`'s existing if/else-if chain
+      testing it is unchanged) plus the same header fields back.
+      `pine_send()`'s do-while loop structure is otherwise untouched;
+      `outgoing2strings()`/`strings2outgoing()`/`create_message_body()`
+      are byte-for-byte unchanged from before this cut.
+
+      **Composer-side callback stubs** (new `pico/compose_stub.c`,
+      wired up in `pico/main.c`'s new `-P <handoff> <result>` mode,
+      which reuses the existing `bin/pico` binary rather than building
+      a second one): `clearcur`/`keybinit` are no-ops (standalone
+      `bin/pico` already does unconditional termios setup in
+      `ttopen()`/`vtinit()` regardless of `Pmaster`); `raw_io` is a
+      no-op for the same reason (only used by `bktoshell()`'s Ctrl-Z
+      path, which already checks `Pmaster` itself); `helper` prints a
+      fixed "no help available" message, consistent with the earlier
+      full-screen-help-removal cut; `showmsg` is a no-op (no status-
+      message queue to replay); `newmail` always reports no new mail
+      (mid-compose notification is dropped -- new mail surfaces
+      normally on return to the mail-reading process, an accepted
+      trade under this project's less-flexible-is-fine principle);
+      `buildaddr` is a passthrough copy with no address expansion (the
+      other accepted trade -- full canonicalization still happens back
+      in pine's `strings2outgoing()` when the child's result comes
+      back, so addresses still resolve correctly on send/postpone,
+      there's just no live on-screen feedback while typing); `folders`
+      (Ctrl-T Fcc-picker) is an in-process numbered-menu prompt
+      (`mlreply()`) over a **precomputed candidate list** -- since the
+      child has no access to `ps_global->context_list`, `pine/folder.c`
+      gained `fcc_candidate_list()`, which lists configured folder-
+      collection nicknames (not a live per-collection folder browse
+      like `folders_for_fcc()`/`context_apply()` did) -- a real,
+      accepted scope reduction for this target's expected single/few-
+      collection local-mbox setup; typing a folder name directly into
+      the Fcc field still works exactly as before regardless.
+
+      **Two real bugs found and fixed while testing against the
+      existing smoketest suite** (both are exactly why this project's
+      verification discipline runs the full suite after a change like
+      this, not just a manual smoke check):
+      - `FLAGS` was written with a bare `fprintf(fp, "FLAGS %u\n",
+        flags)`, not through `write_field()` -- so whenever `flags`
+        was nonzero (e.g. `P_BODY`, set when resuming a postponed
+        message), `compose_stub.c`'s `read_field(fp, "FLAGS")`
+        misparsed the value as a *byte count* and tried to read that
+        many bytes as the field's content, desyncing the rest of the
+        parse and failing the whole handoff read. Silent for a fresh
+        compose (flags often 0 in a minimal test config) but broke
+        every postponed-message-resume test. Fixed by routing `FLAGS`
+        through the same `write_field()`/`read_field()` protocol as
+        every other field (formatting it as a decimal string first).
+      - The `wait()` loop was modeled on `call_system()`'s existing
+        idiom (`while((r = wait(&status)) && r != -1 && r != pid);`),
+        which treats *any* `wait()` return of `-1` as "done" --
+        correct for `call_system()`'s short-lived, signal-quiet
+        sendmail invocation, but wrong here: the composer subprocess
+        can run for as long as the user takes to compose, during which
+        `SIGWINCH` (terminal resize) routinely interrupts a blocked
+        `wait()` with `EINTR`. The old idiom misread that interruption
+        as the child exiting, read a result file that didn't exist yet
+        ("Composer subprocess produced no result"), and abandoned the
+        composition. Caught by `test_composer_wide_terminal.py`
+        (resizes to 20000 columns mid-compose) failing specifically on
+        the *quit* step afterward, not the resize itself. Fixed by
+        retrying on `EINTR` instead of giving up
+        (`while((r = wait(&status)) != pid) if(r == -1 && errno !=
+        EINTR) break;`) -- `call_system()` itself is left alone, since
+        it isn't subject to the same long-blocking-call-under-signals
+        exposure and touching pre-existing working code beyond what
+        this task needed wasn't warranted.
+
+      **New regression test**: `test_compose_fcc_picker.py` -- drives
+      Ctrl-T at the Fcc field, picks candidate 1, and confirms the Fcc
+      header field actually gained the picked value (the shape a parse
+      error, crash, or missing result field in the new mechanism would
+      all otherwise silently take: an empty field, easy to miss without
+      an explicit assertion).
+
+      Verified: clean rebuild (`./build lnx`); `nm bin/pine | grep
+      -E " T (pico|HeaderEditor|InitMailHeader|ArrangeHeader
+      |ToggleHeader)$"` confirms all composer symbols are gone from
+      `bin/pine` (still present in `bin/pico`, as expected); full
+      smoketest suite green, 12/12 including the new test, stable
+      across repeated runs; manual pty-driven checks of compose ->
+      type headers/body -> postpone -> verify file content, and
+      compose -> send -> reach MAIN MENU cleanly. `bin/pine`
+      text+data+bss: 517306 -> 405745 bytes (~112KB, ~21.6%).
+      `bin/pico` text+data+bss: 127099 -> 129074 bytes (+~2KB, the new
+      `compose_stub.c` glue plus the `-P` mode in `main.c`).

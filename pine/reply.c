@@ -281,7 +281,7 @@ reply(pine_state, msgno, env, body)
     /* 
      * create storage object to be used for message text
      */
-    if((msgtext = (void *)so_get(PicoText, NULL, EDIT_ACCESS)) == NULL){
+    if((msgtext = (void *)so_get(CharStar, NULL, EDIT_ACCESS)) == NULL){
         q_status_message(1, 2, 4,"\007Error allocating message text");
 	fs_give((void **)&sig);
         goto done_early;
@@ -412,9 +412,8 @@ reply(pine_state, msgno, env, body)
     pine_send(outgoing,      /* partially formatted outgoing message */
               &body,
               "COMPOSE MESSAGE REPLY",
-              NULL, 
-              msgno,
-              NULL);
+              NULL,
+              msgno);
 
   done:
     pine_free_body(&body);
@@ -600,7 +599,7 @@ forward(pine_state, msgno, env, body)
      * as with all text bound for the composer, build it in 
      * a storage object of the type it understands...
      */
-    if((msgtext = (void *)so_get(PicoText, NULL, EDIT_ACCESS)) == NULL){
+    if((msgtext = (void *)so_get(CharStar, NULL, EDIT_ACCESS)) == NULL){
 	q_status_message(1, 2, 4,"\007Error allocating message text");
 	goto clean_early;
     }
@@ -796,8 +795,7 @@ forward(pine_state, msgno, env, body)
 		&body,
 		"FORWARD MESSAGE",
 		NULL,
-		0L,
-		NULL);
+		0L);
 
   clean:
     pine_free_body(&body);
@@ -878,7 +876,14 @@ get_body_part_text(body, msg_no, part_no, pc, prefix, hmm)
 
 	if(text = mail_fetchtext(ps_global->mail_stream, msg_no)){
 	    gf_set_readc(&gc,text,(src == FileStar) ? 0L : (unsigned long)strlen(text),src);
-	    gf_filter_init();		/* no filters needed */
+	    gf_filter_init();
+	    /*
+	     * Following the same canonical model detach() (mailcmd.c)
+	     * uses: convert newlines from crlf to local convention
+	     * before this reaches the (now CharStar, not PicoText)
+	     * message-text storage object -- see TODO-pdp11-done.md.
+	     */
+	    gf_link_filter(gf_nvtnl_local);
 	    if(decode_error = gf_pipe(gc, pc)){
 		sprintf(tmp_20k_buf, "%s%s    [Formatting error: %s]%s",
 			NEWLINE, NEWLINE,

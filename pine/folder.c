@@ -253,7 +253,54 @@ folders_for_fcc(return_string)
     return(rv);
 }
 
-    
+
+
+/*----------------------------------------------------------------------
+    Build a flat list of Fcc-picker candidates for the composer
+    subprocess (see pine/send.c's run_composer_subprocess()).
+
+  Args: ps -- the usual pine_state
+        np -- returns the number of candidates
+
+  Result: fs_get'd array of context nickname/label strings (not
+          fs_get'd copies -- callers must not outlive ps->context_list),
+          or NULL if there are no contexts configured.
+
+  The composer runs as a separate process with no access to
+  ps->context_list, so it can't browse into a collection's folders the
+  way folder_lister()/folders_for_fcc() do today -- it can only offer
+  the configured collections themselves. On this target's expected
+  single/few-collection local-mbox setup that's a reasonable trade
+  (see TODO-pdp11-done.md); typing a folder name directly into the Fcc
+  field still works exactly as before regardless.
+ ----*/
+char **
+fcc_candidate_list(ps, np)
+    struct pine *ps;
+    int         *np;
+{
+    CONTEXT_S *c;
+    char     **list;
+    int        n = 0;
+
+    for(c = ps->context_list; c; c = c->next)
+      n++;
+
+    if(n == 0){
+	*np = 0;
+	return(NULL);
+    }
+
+    list = (char **)fs_get(n * sizeof(char *));
+    n = 0;
+    for(c = ps->context_list; c; c = c->next)
+      list[n++] = c->nickname ? c->nickname : c->context;
+
+    *np = n;
+    return(list);
+}
+
+
 
 /*----------------------------------------------------------------------
       Main routine for the list of folders screen, displays and execute cmds.

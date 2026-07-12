@@ -88,11 +88,11 @@ def run():
         session.expect("Message Text", timeout=15)
 
         # Cursor lands in the body; CTRL|'P' walks back up through
-        # Subject/Attchmnt/Cc onto the last physical (wrapped) line of
+        # Subject/Cc onto the last physical (wrapped) line of
         # the huge To: field -- entry boundaries are adjacent in the
         # line list regardless of how many lines To: wraps to, so this
         # is a small, fixed number of keystrokes regardless of length.
-        for _ in range(5):
+        for _ in range(4):
             session.sendcontrol("p")
             time.sleep(0.3)
 

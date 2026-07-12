@@ -193,14 +193,6 @@ so_get(source, name, rtype)
 	    }
 	}
     }
-    else if(so->src == PicoText){
-	if((so->txt = pico_get()) == NULL){
-	    q_status_message(1, 3, 5,"ERROR allocating composer text space");
-	    if(so->name)
-	      fs_give((void **)&so->name);
-	    fs_give((void **)&so);		/* so freed & set to NULL */
-	}
-    }
     else{
 	so->size = MSIZE_INIT;
 	so->txt  = (void *)fs_get((size_t)so->size * sizeof(char));
@@ -230,8 +222,6 @@ STORE_S **so;
 	if((*so)->name && (*so)->src == TmpFileStar)
 	  unlink((*so)->name);		/* really disassociate! */
     }
-    else if((*so)->txt && (*so)->src == PicoText)
-      pico_give((*so)->txt);
     else if((*so)->txt)
       fs_give((void **)&((*so)->txt));
 
@@ -267,9 +257,6 @@ so_writec(c, so)
 	so->used++;
 	return(1);
     }
-    else if(so->src == PicoText){
-        return(pico_writec(so->txt, ch));
-    }
     else{
 	if(!so->txt && !so_reaquire(so))
 	  return(0);
@@ -292,8 +279,6 @@ so_readc(c, so)
     if(so->src == CharStar)
       return((so->txtp - (unsigned char *)so->txt) < so->used ? 
 		*c = *(so->txtp)++, 1 : 0);
-    else if(so->src == PicoText)
-      return(pico_readc(so->txt, c));
     else{		/* must be FileStar or TmpFileStar */
 	if(!so->txt && !so_reaquire(so))
 	  return(0);
@@ -333,9 +318,6 @@ so_puts(so, s)
 	so->used += l;
 	return(1);
     }
-    else if(so->src == PicoText){
-	return(pico_puts(so->txt, s));
-    }
     else{			/* must be FileStar or TmpFileStar */
 	if(!so->txt && !so_reaquire(so))
 	  return(0);
@@ -370,8 +352,6 @@ int      orig;
 	      return(-1);
 	}
     }
-    else if(so->src == PicoText)
-      return(pico_seek(so->txt, pos, orig));
     else{			/* FileStar or TmpFileStar */
 	if(!so->txt && !so_reaquire(so))
 	  return(0);

@@ -26,7 +26,7 @@ def run():
         session.expect("To")
 
         session.send(addrs)
-        for _ in range(3):  # To -> Cc -> Attchmnt -> Subject
+        for _ in range(2):  # To -> Cc -> Subject
             session.sendcontrol("n")
         session.expect("Subject")
 

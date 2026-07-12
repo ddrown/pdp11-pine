@@ -57,11 +57,19 @@
 /*	External function declarations		*/
 #ifdef	ANSI
 /* attach.c */
-extern	int AskAttach(char *, char *, char *);
-extern	int SyncAttach(void);
-extern	int intag(char *, int);
 extern	char *prettysz(long);
-extern  int AttachError(void);
+
+/* compose_stub.c */
+extern	struct pico_struct *compose_read_handoff(char *);
+extern	void  compose_write_result(char *, int, struct pico_struct *);
+extern	void  compose_clearcur(void);
+extern	void  compose_keybinit(int);
+extern	int   compose_raw_io(int);
+extern	void  compose_helper(char *[], char *, int);
+extern	void  compose_showmsg(int);
+extern	long  compose_newmail(int *, int, int);
+extern	int   compose_buildaddr(char *, char *, char **);
+extern	int   compose_folders(char *);
 
 /* basic.c */
 extern	int gotobol(int, int);
@@ -264,11 +272,19 @@ void unmarkbuffer();
 
 #else
 /* attach.c */
-extern	int AskAttach(char *fn, char *sz, char *cmnt);
-extern	int SyncAttach(void);
-extern	int intag(char *, int);
 extern	char *prettysz(long);
-extern  int AttachError(void);
+
+/* compose_stub.c */
+extern	struct pico_struct *compose_read_handoff();
+extern	void  compose_write_result();
+extern	void  compose_clearcur();
+extern	void  compose_keybinit();
+extern	int   compose_raw_io();
+extern	void  compose_helper();
+extern	void  compose_showmsg();
+extern	long  compose_newmail();
+extern	int   compose_buildaddr();
+extern	int   compose_folders();
 
 /* basic.c */
 extern	int gotobol();

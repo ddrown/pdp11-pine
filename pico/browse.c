@@ -1082,6 +1082,29 @@ char *dir, *fn, *sz;			/* dir, name and optional size */
 
 
 /*
+ * prettysz - return pointer to string containing nice
+ *            human-readable rendering of a byte count
+ */
+char *prettysz(l)
+long l;
+{
+    static char b[32];
+
+    if(l < 1000)
+      sprintf(b, "%ld  B", l);			/* xxx B */
+    else if(l < 10000)
+      sprintf(b, "%1.1f KB", (float)l/1000);    /* x.x KB */
+    else if(l < 1000000)
+      sprintf(b, "%ld KB", l/1000);		/* xxx KB */
+    else if(l < 10000000)
+      sprintf(b, "%1.1f MB", (float)l/1000000); /* x.x MB */
+    else
+      sprintf(b, "%ld MB", l/1000000);		/* xxx MB */
+    return(b);
+}
+
+
+/*
  * getfcells - make a master browser struct and fill it in
  *             return NULL if there's a problem.
  */

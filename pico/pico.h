@@ -41,11 +41,6 @@
 
 #ifndef	PICO_H
 #define	PICO_H
-/*
- * Defined for attachment support
- */
-#define	ATTACHMENTS	1
-
 
 /*
  * defs of return codes from pine mailer composer.
@@ -72,15 +67,9 @@
 #define	CCHDR		1
 #define	BCCHDR		2
 #define	FCCHDR		3
-#ifdef	ATTACHMENTS
-#define	ATTCHDR		4
-#define	SUBJHDR		5
-#define	LASTHDR		5
-#else
 #define	SUBJHDR		4
 #define	LASTHDR		4
-#endif
- 
+
 
 
 /*
@@ -123,32 +112,15 @@ struct on_display {
 
 
 /*
- * Structure to handle attachments
- */
-typedef struct pico_atmt {
-    char *description;
-    char *filename;
-    char *size;
-    char *id;
-    unsigned short flags;
-    struct pico_atmt *next;
-} PATMT;
-
-
-/*
- * Flags for attachment handling
- */
-#define	A_FLIT	0x0001			/* Accept literal file and size      */
-#define	A_ERR	0x0002			/* Problem with specified attachment */
-
-
-/*
  * Master pine composer structure.  Right now there's not much checking
  * that any of these are pointing to something, so pine must have them pointing
  * somewhere.
  */
 typedef struct pico_struct {
-    void  *msgtext;			/* ptrs to malloc'd arrays of char */
+    char  *bodyfile;			/* path to the message body text --
+					 * read in with readin(), written
+					 * back with writeout() (see
+					 * compose_stub.c) */
     char  *tobuf;			/* it's that way so it can be */
     int    tolen;			/* realloc'd or free'd as its size  */
     char  *ccbuf;			/* changes. */
@@ -161,7 +133,6 @@ typedef struct pico_struct {
     int    fcclen;
     char  *pine_anchor;			/* ptr to pine anchor line */
     char  *pine_version;		/* string containing Pine's version */
-    PATMT *attachments;			/* linked list of attachments */
     unsigned pine_flags;		/* entry mode flags */
     void (*helper)(char *text[], char *title, int from_composer); /* Pine's help function  */
     void  (*showmsg)(int);			/* Pine's display_message */
@@ -180,7 +151,6 @@ typedef struct pico_struct {
     short search_help;
     short ins_help;
     short composer_help;
-    short attachment_help;
     short browse_help;
 #else
     char  **to_help;			/* various pine help text arrays */
@@ -191,7 +161,6 @@ typedef struct pico_struct {
     char  **search_help;
     char  **ins_help;
     char  **composer_help;
-    char  **attachment_help;
     char  **browse_help;
 #endif
 } PICO;
@@ -293,22 +262,8 @@ extern char *HelpKeyNames;
  */
 #ifdef	ANSI
 int   pico(struct pico_struct *);
-void *pico_get(void);
-void  pico_give(void *);
-int   pico_readc(void *, unsigned char *);
-int   pico_writec(void *, int);
-int   pico_puts(void *, char *);
-int   pico_seek(void *, long, int);
-int   pico_replace(void *, char *);
 #else
 int   pico();
-void *pico_get();
-void  pico_give();
-int   pico_readc();
-int   pico_writec();
-int   pico_puts();
-int   pico_seek();
-int   pico_replace();
 #endif
 
 #endif	/* PICO_H */

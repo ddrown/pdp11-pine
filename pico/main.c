@@ -50,6 +50,7 @@ static char rcsid[] = "$Id: main.c,v 4.4 1993/10/06 17:09:24 mikes Exp $";
 #include        <stdio.h>
 #include	<setjmp.h>
 #include	<stdlib.h>
+#include	<string.h>
 #include	<unistd.h>
 #include	"osdep.h"	/* operating system dependent includes */
 #include	"pico.h"	/* pine composer definitions */
@@ -98,8 +99,36 @@ main(int argc, char *argv[])
     int	     starton = 0;		/* where's dot to begin with?	*/
     char     bname[NBUFN];		/* buffer name of file to read	*/
     char    *clerr = NULL;		/* garbage on command line	*/
-    
+
     Pmaster = NULL;			/* turn OFF composer functionality */
+
+    /*
+     * "-P <handoff-file> <result-file>": run as pine's composer
+     * subprocess (see pine/send.c's run_composer_subprocess() and
+     * compose_stub.c) instead of the ordinary standalone editor.
+     * Checked first and unconditionally exits -- none of the
+     * plain-file-editing setup below applies to this mode.
+     */
+    if(argc == 4 && strcmp(argv[1], "-P") == 0){
+	PICO *pm;
+	int   result;
+
+	if((pm = compose_read_handoff(argv[2])) == NULL)
+	  exit(1);
+
+	pm->clearcur  = compose_clearcur;
+	pm->keybinit  = compose_keybinit;
+	pm->raw_io    = compose_raw_io;
+	pm->helper    = compose_helper;
+	pm->showmsg   = compose_showmsg;
+	pm->newmail   = compose_newmail;
+	pm->buildaddr = compose_buildaddr;
+	pm->folders   = compose_folders;
+
+	result = pico(pm);
+	compose_write_result(argv[3], result, pm);
+	exit(0);
+    }
 
     /*
      * Read command line flags before initializing, otherwise, we never

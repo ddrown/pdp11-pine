@@ -186,9 +186,6 @@ PICO  *mp;
     static  char  ccprmt[]  = "Cc      : ";
     static  char  bccprmt[] = "Bcc     : ";
     static  char  fccprmt[] = "Fcc     : ";
-#ifdef	ATTACHMENTS
-    static  char  attprmt[] = "Attchmnt: ";
-#endif
     static  char  subprmt[] = "Subject : ";
 
     /*
@@ -241,62 +238,6 @@ PICO  *mp;
 	        headents[i].display_it = FALSE;
 		addrbuf = mp->fccbuf;
 		break;
-#ifdef	ATTACHMENTS
-	    case ATTCHDR :
-		headents[i].prompt = attprmt;
-		headents[i].name   = "Attchmnt";
-		headents[i].help   = mp->attachment_help;
-		headents[i].prlen  = 10;
-		headents[i].maxlen = 0;
-
-		/* build entries: one to a line then feed to initializer */
-		if(mp->attachments != NULL){
-		    int    x = 0;
-		    size_t need = 0;
-		    PATMT *ap;
-		    char  *p;
-
-		    /*
-		     * ap->filename/description come from an unbounded
-		     * source -- a resumed postponed message's
-		     * Attachment-file:/Attachment-description: header
-		     * lines have no length cap of their own (see
-		     * pine/send.c's parse_postponed_header()) -- so
-		     * neither a fixed-size addrbuf nor the shared
-		     * global `s` scratch buffer can be trusted to hold
-		     * an entry's formatted text. Size addrbuf exactly
-		     * and format straight into it instead.
-		     */
-		    for(ap = mp->attachments; ap; ap = ap->next)
-		      if(ap->filename)
-			need += strlen(ap->filename)
-			      + (ap->size ? strlen(ap->size) : 0)
-			      + (ap->description ? strlen(ap->description) : 0)
-			      + 32;	/* "%d. ", "(", ") ", quotes, "," */
-
-		    addrbuf = (char *)malloc(need + 1);
-		    addrbuf[0] = '\0';
-		    p = addrbuf;
-		    for(ap = mp->attachments; ap; ap = ap->next){
-			if(ap->filename){
-			    p += sprintf(p, "%d. %s %s%s%s\"%s\"%s",
-				    ++x,
-				    ap->filename,
-				    ap->size ? "(" : "",
-				    ap->size ? ap->size : "",
-				    ap->size ? ") " : "",
-				    ap->description ? ap->description : "",
-				    ap->next ? "," : "");
-			}
-		    }
-		    InitEntryText(addrbuf, i);
-		    free((char *)addrbuf);
-		}
-		else
-		  InitEntryText("", i);
-		headents[i].realaddr = NULL;
-		continue;
-#endif
 	    case SUBJHDR :
 		headents[i].prompt = subprmt;
 		headents[i].name   = "Subject";
@@ -516,23 +457,13 @@ int f, n;
 
         switch (ch){
 	  case (CTRL|'R') :			/* Toggle header display */
-#ifdef	ATTACHMENTS
-	    if(ods.cur_e == SUBJHDR || ods.cur_e == ATTCHDR)
-#else
 	    if(ods.cur_e == SUBJHDR)
-#endif
 	      InvertPrompt(ods.cur_e, FALSE);	/* don't leave inverted */
 
 	    if(partial_entries()){
-#ifdef	ATTACHMENTS
-		if(ods.cur_e > CCHDR && ods.cur_e < ATTCHDR){
-		    ods.p_off = 0;
-		    ods.cur_e = ATTCHDR;
-#else
 		if(ods.cur_e > CCHDR && ods.cur_e < SUBJHDR){
 		    ods.p_off = 0;
 		    ods.cur_e = SUBJHDR;
-#endif
 		    ods.cur_l = headents[ods.cur_e].hd_text;
 		}
 	    }
@@ -553,21 +484,7 @@ int f, n;
 	    break;
 
 	  case (CTRL|'X') :			/* Done. Send it. */
-#ifdef	ATTACHMENTS
 	    i = 0;
-	    if(ods.cur_e == ATTCHDR){
-		/* verify the attachments, and pretty things up in case
-		 * we come back to the composer due to error...
-		 */
-		if((i = SyncAttach()) != 0){
-		    sleep(2);		/* give time for error to absorb */
-		    FormatLines(headents[ATTCHDR].hd_text, "",
-				term.t_ncol - headents[ATTCHDR].prlen,
-				ATTCHDR);
-		}
-	    }
-	    else
-#endif
 	    if(ods.cur_e==BCCHDR || ods.cur_e==TOHDR || ods.cur_e==CCHDR)
 	      i = resolve_niks(ods.cur_e);
 
@@ -603,54 +520,9 @@ int f, n;
 	    if(ods.cur_e==BCCHDR || ods.cur_e==TOHDR || ods.cur_e==CCHDR){
 		resolve_niks(ods.cur_e);
 	    }
-#ifdef	ATTACHMENTS
-	    if(ods.cur_e == ATTCHDR){
-		if(SyncAttach() < 0){
-		    if(mlyesno("Problem with attachments. Postpone anyway?",
-			       FALSE) != TRUE){
-			if(FormatLines(headents[ATTCHDR].hd_text, "",
-				       term.t_ncol - headents[ATTCHDR].prlen,
-				       ATTCHDR) == -1)
-			  emlwrite("\007Format lines failed!", NULL);
-			UpdateHeader();
-			PaintHeader(COMPOSER_TOP_LINE, FALSE);
-			PaintBody(1);
-			continue;
-		    }
-		}
-	    }
-#endif
 	    suspend_composer(1,0);
 	    return(retval);
 	    break;
-
-#ifdef	ATTACHMENTS
-	  case (CTRL|'J') :			/* handle attachments */
-	    { char fn[NLINE], sz[32], cmt[NLINE];
-
-	      if(AskAttach(fn, sz, cmt)){
-		  /* update display */
-		  sprintf(s, "%s (%s) \"%s\"%s", fn, sz, cmt, 
-			  (headents[ATTCHDR].hd_text->text[0]=='\0') ? "":",");
-
-		  if(FormatLines(headents[ATTCHDR].hd_text, s,
-				 term.t_ncol - headents[ATTCHDR].prlen,
-				 ATTCHDR) == -1){
-		      emlwrite("\007Format lines failed!", NULL);
-		  }
-
-		  if(SyncAttach() < 0)
-		    emlwrite("\007Problem attaching: %s", fn);
-
-		  UpdateHeader();
-		  PaintHeader(COMPOSER_TOP_LINE, FALSE);
-		  PaintBody(1);
-	      }
-
-	      ShowPrompt();			/* clean up prompt */
-	    }
-	    break;
-#endif
 
 	  case (CTRL|'I') :			/* tab */
 	    ods.p_off = 0;			/* fall through... */
@@ -691,20 +563,6 @@ int f, n;
 			    }
 			}
 			break;
-#ifdef	ATTACHMENTS
-		      case ATTCHDR:
-			/*
-			 * make sure things are in order, check files
-			 * and comments
-			 */
-			if(status = SyncAttach()){ /* fixup if 1 or -1 */
-			    if(FormatLines(headents[ATTCHDR].hd_text, "",
-					   term.t_ncol-headents[ATTCHDR].prlen,
-					   ATTCHDR) == -1)
-			      emlwrite("\007Format lines failed!", NULL);
-			}
-			break;
-#endif
 		      default:
 			break;
 		    }
@@ -749,19 +607,6 @@ int f, n;
 			  if(status || i)
 			    status = TRUE;
 			break;
-#ifdef	ATTACHMENTS
-		      case ATTCHDR:
-			/*
-			 * Check that attachments are in order
-			 */
-			if(status = SyncAttach()){	/* returns 1 or -1 */
-			    if(FormatLines(headents[ATTCHDR].hd_text, "",
-					   term.t_ncol - headents[ATTCHDR].prlen,
-					   ATTCHDR) == -1)
-			      emlwrite("\007Format lines failed!", NULL);
-			}
-			break;
-#endif
 		      default:
 			break;
 		    }
@@ -781,29 +626,6 @@ int f, n;
 		if((*Pmaster->folders)(s))		/* pine call */
 		  strcpy(headents[FCCHDR].hd_text->text, s);
 	    }
-#ifdef	ATTACHMENTS
-	    else if(ods.cur_e == ATTCHDR){
-		char dir[NLINE], fn[NLINE], sz[NLINE];
-
-		strcpy(dir, gethomedir(NULL));
-		switch(FileBrowse(dir, fn, sz)){
-		  case 1:			/* got a new file */
-		    sprintf(s, "%s%c%s (%s) \"\"%s", dir, C_FILESEP, fn, sz, 
-			  (headents[ATTCHDR].hd_text->text[0] == '\0') ? "" : ",");
-		    if(FormatLines(headents[ATTCHDR].hd_text, s,
-				   term.t_ncol - headents[ATTCHDR].prlen,
-				   ATTCHDR) == -1){
-			emlwrite("\007Format lines failed!", NULL);
-		    }
-		    UpdateHeader();
-		    break;
-		  case 0:			/* nothing of interest */
-		    break;
-		  default:
-		    break;
-		}
-	    }
-#endif
 	    else{
 		(*term.t_beep)();
 		continue;
@@ -928,11 +750,6 @@ int	allowedit;
 		    emlwrite("\007Can't have a '%c' in folder name",(void *)ch);
 		    continue;
 		}
-		else if(ods.cur_e == ATTCHDR && intag(strng, ods.p_off)){
-		    emlwrite("\007Can't edit attachment number!", NULL);
-		    continue;
-		}
-
 		if(ods.cur_e != SUBJHDR){	/* single spaced except subj.*/
 		    if(ch == ' ' 
 		       && (strng[ods.p_off]==' ' || strng[ods.p_off-1]==' '))
@@ -1096,22 +913,12 @@ int	allowedit;
 		else if(ods.p_off >= strlen(strng))
 		  continue;
 
-		if(ods.cur_e == ATTCHDR && intag(strng, ods.p_off)){
-		    emlwrite("\007Can't edit attachment number!", NULL);
-		    continue;
-		}
-
 		pputc(strng[ods.p_off++], 0); 	/* drop through and rubout */
 
 	      case 0x7f       :			/* blast previous char */
 	      case (CTRL|'H') :
 		if(!allowedit){
 		    (*term.t_beep)();
-		    continue;
-		}
-
-		if(ods.cur_e == ATTCHDR && intag(strng, ods.p_off - 1)){
-		    emlwrite("\007Can't edit attachment number!", NULL);
 		    continue;
 		}
 
@@ -1233,12 +1040,7 @@ int	entry;					/* which header field */
     ostr = h->text;
     nlp = h->next;
     l = strlen(instr) + strlen(ostr);
-    addr = (entry == TOHDR || entry == CCHDR 
-#ifdef	ATTACHMENTS
-	    || entry == BCCHDR || entry == ATTCHDR); /* ATTCHDR breaks on ,s too */
-#else
-	    || entry == BCCHDR);
-#endif
+    addr = (entry == TOHDR || entry == CCHDR || entry == BCCHDR);
     if((buf = (char *)malloc(l+10)) == NULL)
       return(-1);
 
@@ -2461,18 +2263,6 @@ ShowPrompt()
       case TOHDR:
       case CCHDR:
       case BCCHDR:
-#ifdef	ATTACHMENTS
-	wkeyhelp("GCR0KOXDJ0U0", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,Attach,UnDel Line");
-	break;
-      case FCCHDR:
-	wkeyhelp("GCR0KOXDJ0UT", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,Attach,UnDel Line,To Fldrs");
-	break;
-      case ATTCHDR:
-	wkeyhelp("GCR0KOXDJ0UT", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,Attach,UnDel Line,To Files");
-	break;
-      default:
-	wkeyhelp("GCR0KOXDJ0U0", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,Attach,UnDel Line");
-#else
 	wkeyhelp("GCR0KOXD00U0", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,UnDel Line");
 	break;
       case FCCHDR:
@@ -2480,7 +2270,6 @@ ShowPrompt()
 	break;
       default:
 	wkeyhelp("GCR0KOXD00U0", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,UnDel Line");
-#endif
 	break;
     }
 }
@@ -2502,16 +2291,6 @@ packheader()
     register struct	hdr_line *line;
 
     while(i <= LASTHDR){
-#ifdef	ATTACHMENTS
-	/*
-	 * attachments are special case, already in struct we pass back
-	 */
-	if(i == ATTCHDR){
-	    i++;
-	    continue;
-	}
-#endif
-
         /*
          * count chars to see if we need a new malloc'd space for our
          * array.

@@ -92,12 +92,8 @@ static char rcsid[] = "$Id: pico.c,v 4.19 1993/12/02 16:44:31 mikes Exp $";
 
 #ifdef	ANSI
     int  func_init(void);
-    void breplace(void *);
-    int  insline(LINE **, short *);
 #else
     int  func_init();
-    void breplace();
-    int  insline();
 #endif
 
 
@@ -165,8 +161,8 @@ PICO *pm;
     if(pico_anchor)
       strcpy(pico_anchor, Pmaster->pine_anchor);
 
-    if(pm->msgtext)
-      breplace(pm->msgtext);
+    if(pm->bodyfile)
+      readin(pm->bodyfile, FALSE);
 
     pico_all_done = setjmp(finstate);	/* jump out of HUP handler ? */
 
@@ -210,6 +206,9 @@ PICO *pm;
 		c |= COMP_SUSPEND;
 		break;
 	    }
+
+	    if(pm->bodyfile)
+	      writeout(pm->bodyfile);
 
 	    free(pico_anchor);
 	    vttidy();			/* clean up tty modes */
@@ -484,14 +483,8 @@ int f, n;
 	    update();
 	}
 
-	if(AttachError()){
-	    prompt = "\007Problem with attachments!  Send anyway";
-	    defans = FALSE;
-	}
-	else{
-	    prompt = "Send message";
-	    defans = TRUE;
-	}
+	prompt = "Send message";
+	defans = TRUE;
 
 	switch(mlyesno(prompt, defans)){
 	  case TRUE:
@@ -676,264 +669,17 @@ zotedit()
 }
 
 
-/* 
- * Below are functions for use outside pico to manipulate text
- * in a pico's native format (circular linked list of lines).
- *
- * The idea is to streamline pico use by making it fairly easy
- * for outside programs to prepare text intended for pico's use.
- * The simple char * alternative is messy as it requires two copies
- * of the same text, and isn't very economic in limited memory
- * situations (THANKS BELLEVUE-BILLY.).
- */
-typedef struct picotext {
-    LINE *linep;
-    LINE *dotp;
-    short doto;
-    short crinread;
-} PICOTEXT;
-
-#define PT(X)	((PICOTEXT *)(X))
-
 /*
- * pico_get - return window struct pointer used as a handle
- *            to the other pico_xxx routines.
+ * pico_get/pico_give/pico_readc/pico_writec/pico_puts/pico_seek/
+ * insline/breplace and the PicoText storage-object source type they
+ * backed (pine/filter.c) are gone: pine no longer creates PicoText
+ * objects (switched to CharStar -- see TODO-pdp11-done.md), and
+ * nothing else ever used them (they existed purely "for use outside
+ * pico", per this functions' original header comment). Keeping them
+ * would have meant linking *any* PicoText use anywhere in pine pulled
+ * in the entire interactive composer (pico(), HeaderEditor(), etc. --
+ * everything else in this file) as a side effect, since they lived in
+ * this same translation unit -- defeating the point of running the
+ * composer as a separate process.
  */
-void *
-pico_get()
-{
-   PICOTEXT *wp = NULL;
-   LINE     *lp = NULL;
 
-   if(wp = (PICOTEXT *)malloc(sizeof(PICOTEXT))){
-       wp->crinread = 0;
-       if((lp = lalloc(0)) == NULL){
-	   free(wp);
-	   return(NULL);
-       }
-
-       wp->dotp = wp->linep = lp->l_fp = lp->l_bp = lp;
-       wp->doto = 0;
-   }
-   else
-     emlwrite("Can't allocate space for text", NULL);
-
-   return((void *)wp);
-}
-
-/*
- * pico_give - free resources and give up picotext struct
- */
-void
-pico_give(w)
-void *w;
-{
-    register LINE *lp;
-    register LINE *fp;
-
-    fp = lforw(PT(w)->linep);
-    while((lp = fp) != PT(w)->linep){
-        fp = lforw(lp);
-	free(lp);
-    }
-    free(PT(w)->linep);
-    free((PICOTEXT *)w);
-}
-
-/*
- * pico_readc - return char at current point.  Up to calling routines
- *              to keep cumulative count of chars.
- */
-int
-pico_readc(w, c)
-void          *w;
-unsigned char *c;
-{
-    int rv     = 0;
-
-    if(PT(w)->crinread){
-	*c = '\012';				/* return LF */
-	PT(w)->crinread = 0;
-	rv++;
-    }
-    else if(PT(w)->doto < llength(PT(w)->dotp)){ /* normal char to return */
-        *c = (unsigned char) lgetc(PT(w)->dotp, (PT(w)->doto)++).c;
-	rv++;
-    }
-    else if(lforw(PT(w)->dotp) != PT(w)->linep){ /* return line break */
-	PT(w)->dotp = lforw(PT(w)->dotp);
-	PT(w)->doto = 0;
-#if	defined(DOS)
-	*c = '\015';
-	PT(w)->crinread++;
-#else
-	*c = '\012';				/* return local eol! */
-#endif
-	rv++;
-    }						/* else no chars to return */
-
-    return(rv);
-}
-
-
-/*
- * pico_writec - write a char into picotext and advance pointers.
- *               Up to calling routines to keep track of total chars
- *               written
- */
-int
-pico_writec(w, c)
-void *w;
-int   c;
-{
-    int   rv = 0;
-
-    if(c == '\r')				/* ignore CR's */
-      rv++;					/* so fake it */
-    else if(c == '\n'){				/* insert newlines on LF */
-	
-	if(PT(w)->linep == PT(w)->dotp){	/* special case */
-	    if(!insline(&(PT(w)->dotp), &(PT(w)->doto)))
-	      return(0);
-	}
-
-	if(!insline(&(PT(w)->dotp), &(PT(w)->doto)))
-	  return(0);
-
-        rv++;
-    }
-    else
-      rv = geninsert(&(PT(w)->dotp), &(PT(w)->doto), PT(w)->linep, c, 0, 1);
-
-    return((rv) ? 1 : 0);			/* return number written */
-}
-
-
-/*
- * pico_puts - just write the given string into the text
- */
-int
-pico_puts(w, s)
-void *w;
-char *s;
-{
-    while(*s != '\0')
-      pico_writec(w, (int)*s++);
-}
-
-
-/*
- * pico_seek - position dotp and dot at requested location
- */
-int
-pico_seek(w, offset, orig)
-void *w;
-long  offset;
-int   orig;
-{
-    register LINE *lp;
-
-    PT(w)->crinread = 0;
-    switch(orig){
-      case 0 :				/* SEEK_SET */
-	PT(w)->dotp = lforw(PT(w)->linep);
-	PT(w)->doto = 0;
-      case 1 :				/* SEEK_CUR */
-	lp = PT(w)->dotp;
-	while(lp != PT(w)->linep){
-	    if(offset <= llength(lp)){
-		PT(w)->doto = (int)offset;
-		PT(w)->dotp = lp;
-		break;
-	    }
-
-	    offset -= ((long)llength(lp)
-#ifdef	DOS
-		       + 2L);
-#else
-		       + 1L);
-#endif
-	    lp = lforw(lp);
-	}
-        break;
-
-      case 2 :				/* SEEK_END */
-	PT(w)->dotp = lback(PT(w)->linep);
-	PT(w)->doto = llength(PT(w)->dotp);
-	break;
-      default :
-        return(-1);
-    }
-
-    return(0);
-}
-
-
-/*
- * pico_replace - replace whatever's in the associated text with
- *                the given string
- */
-int
-pico_replace(w, s)
-void *w;
-char *s;
-{
-    return(0);
-}
-
-/*
- * breplace - replace the current window's text with the given 
- *            LINEs
- */
-void
-breplace(w)
-void *w;
-{
-    register LINE *lp;
-    register LINE *fp;
-
-    fp = lforw(curbp->b_linep);
-    while((lp = fp) != curbp->b_linep){		/* blast old lines */
-        fp = lforw(lp);
-	free(lp);
-    }
-    free(curbp->b_linep);
-
-    curbp->b_linep  = PT(w)->linep;			/* arrange pointers */
-
-    curwp->w_linep = lforw(curbp->b_linep);
-    curwp->w_dotp  = lforw(curbp->b_linep);
-    curwp->w_doto  = 0;
-    curwp->w_markp = curwp->w_imarkp = NULL;
-    curwp->w_marko = curwp->w_imarko = 0;
-
-    curbp->b_dotp   = curwp->w_dotp;
-    curbp->b_doto   = curbp->b_marko  = 0;
-    curbp->b_markp  = NULL;
-
-    curwp->w_flag |= WFHARD;
-}
-
-
-/*
- * generic line insert function.
- */
-int
-insline(dotp, doto)
-LINE **dotp;
-short *doto;
-{
-    register LINE *lp;
-
-    if((lp = lalloc(0)) == NULL){
-	emlwrite("Can't allocate space for more characters",NULL);
-	return(FALSE);
-    }
-
-    lp->l_fp = (*dotp)->l_fp;
-    lp->l_bp = (*dotp);
-    lp->l_fp->l_bp = (*dotp)->l_fp = lp;
-    (*dotp) = lp;
-    (*doto) = 0;
-    return(TRUE);
-}

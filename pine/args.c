@@ -97,9 +97,12 @@ pine_args(pine_state, argc, argv, addrs)
     ac = argc;
     av = argv;
 
-#ifdef	DOS
+    /*
+     * Needed on every platform now, not just DOS: pine_send()'s
+     * composer subprocess (see send.c's pico_child_path()) uses this
+     * to find the "pico" binary alongside pine's own.
+     */
     pine_state->pine_exe = cpystr(argv[0]);
-#endif
 
       /* while more arguments with leading - */
 Loop: while(--ac > 0 && **++av == '-') {
