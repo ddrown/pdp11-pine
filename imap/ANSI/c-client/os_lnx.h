@@ -34,7 +34,7 @@
  */
 
 
-#define MAILFILE "/usr/spool/mail/%s"
+#define MAILFILE "/var/spool/mail/%s"
 #define ACTIVEFILE "/usr/lib/news/active"
 #define NEWSSPOOL "/usr/spool/news"
 #define NEWSRC strcat (strcpy (tmp,myhomedir ()),"/.newsrc")
