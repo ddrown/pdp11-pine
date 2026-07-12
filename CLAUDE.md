@@ -78,6 +78,22 @@ fatal there. When fixing one:
    detailed write-up: what the bug was, how it's reachable, how it was
    verified, how it was fixed.
 
+## Code style: prefer ANSI-style function signatures
+
+This codebase is a mix of old K&R-style function definitions (name and
+parameter list on one line, parameter types declared separately below,
+e.g. `set_variable(var, value)\n    int var;\n    char *value;\n{`) and
+modern ANSI-style ones with inline parameter types (e.g. `int
+main(int argc, char **argv)`). Prefer the ANSI form. It's part of a
+larger, ongoing goal of eliminating compiler warnings (K&R-style
+definitions are a common source of implicit-int/mismatched-prototype
+warnings under a modern gcc).
+
+- Don't do a dedicated mechanical conversion pass over the whole tree
+  for this alone.
+- Do convert a function's signature to ANSI style opportunistically
+  whenever you're already editing that function for some other reason.
+
 ## Git workflow
 
 - Never commit unless the user explicitly says so (e.g. "commit it").
