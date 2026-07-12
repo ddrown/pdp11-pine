@@ -68,17 +68,6 @@ void fatal (char *string);
 unsigned long strcrlfcpy (char **dst,unsigned long *dstl,char *src,
 			  unsigned long srcl);
 unsigned long strcrlflen (STRING *s);
-long server_login (char *user,char *pass,char **home,int argc,char *argv[]);
 char *myusername ();
 char *myhomedir ();
 char *lockname (char *tmp,char *fname);
-TCPSTREAM *tcp_open (char *host,int port);
-TCPSTREAM *tcp_aopen (char *host,char *service);
-char *tcp_getline (TCPSTREAM *stream);
-long tcp_getbuffer (TCPSTREAM *stream,unsigned long size,char *buffer);
-long tcp_getdata (TCPSTREAM *stream);
-long tcp_soutr (TCPSTREAM *stream,char *string);
-long tcp_sout (TCPSTREAM *stream,char *string,unsigned long size);
-void tcp_close (TCPSTREAM *stream);
-char *tcp_host (TCPSTREAM *stream);
-char *tcp_localhost (TCPSTREAM *stream);

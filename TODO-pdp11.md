@@ -121,35 +121,6 @@ cuts, but required regardless) is now fully done; see
       now genuinely reachable via a real terminal resize, not just a
       latent, unreachable bug.
 
-### c-client: dead TCP/`server_login` code in `osdep.o`
-- [ ] Investigated why `imap/ANSI/c-client/c-client.a` is 500KB+: mostly
-      an illusion -- its makefile's `CFLAGS = -g -O` leaves every member
-      unstripped, and `strip --strip-debug` alone takes it from 514KB to
-      164KB with no code changes (same story for `bin/pine`'s on-disk
-      size vs. its real `size`-reported text+data+bss). Worth remembering
-      when eyeballing `ls -la` on any of these.
-      Separately, a real (if small) dead-code pocket was found in
-      `osdep.o` (built from `imap/ANSI/c-client/os_lnx.c`, the Linux
-      stand-in for whatever os-dependent file eventually targets
-      2.11BSD): checked every symbol `osdep.o` defines against what the
-      other seven linked `.o` files (`mail bezerk mbox dummy rfc822 misc
-      sm_unix`) reference, then cross-checked the remainder against all
-      of `pine/`, `pico/`, and `imap/` for any caller outside c-client.
-      Now that `smtp.o`/`phile.o` are gone (see `TODO-pdp11-done.md`),
-      the entire TCP client stack in `osdep.o` is unreachable -- its only
-      callers were `smtp.c`, which isn't compiled:
-      `tcp_open`, `tcp_aopen`, `tcp_getline`, `tcp_getbuffer`,
-      `tcp_getdata`, `tcp_sout`, `tcp_soutr`, `tcp_close`, `tcp_abort`,
-      `server_login`. Also entirely unreferenced anywhere: `hdname`,
-      `uname`, `tcp_host`, `tcp_localhost`. Together ~2.9KB of
-      text/data/bss -- confirmed `rfc822_date`, living in the same file,
-      is *not* part of this (it's called directly by `pine/send.c:860`).
-      Not yet removed. Small in isolation, but cheap/clean to cut now,
-      and more importantly this whole TCP/`server_login` block shouldn't
-      be carried over at all when a real 2.11BSD os-dependent file gets
-      written to replace `os_lnx.c`'s role -- no TCP/IP on the target
-      means none of it is relevant there either.
-
 ### `pine/` UI files: dead/vestigial code found while surveying send.c, mailcmd.c, folder.c, mailview.c
 - [ ] Read through the four largest files under `pine/` end to end
       looking for removal candidates. Findings split into two buckets:

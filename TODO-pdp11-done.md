@@ -1680,3 +1680,44 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       account for the copyright/divider-macro removal riding along with
       `write_pinerc()`, or the `helptext.c`/`.h` shrink from dropping the
       two orphaned help topics).
+
+### c-client: dead TCP/`server_login` code in `osdep.o` — DONE
+- [x] Removed the entire unreachable TCP client stack identified in the
+      original audit from `imap/ANSI/c-client/os_lnx.c`: `tcp_open`,
+      `tcp_aopen`, `tcp_getline`, `tcp_getbuffer`, `tcp_getdata`,
+      `tcp_sout`, `tcp_soutr`, `tcp_close`, `tcp_abort`, `server_login`,
+      plus `tcp_host`/`tcp_localhost` (confirmed to have zero callers
+      anywhere, not even from the doomed TCP functions themselves) and
+      the `TCPSTREAM`/`struct tcp_stream` type definition and `BUFLEN`
+      macro that only existed to back them. Re-checked every symbol
+      this touches against the whole repo (not just `smtp.c`/`phile.c`,
+      which already aren't compiled) before deleting anything, since
+      the original audit note's claim that `hdname`/`uname` were
+      "entirely unreferenced" turned out to be imprecise -- both are
+      file-scope statics that back `myhomedir()`/`myusername()`, which
+      *are* still called (`mbox.c`, `bezerk.c`, `sm_unix.c`, `dummy.c`),
+      so those two and `lockname()` (called from `bezerk.c`) were kept
+      untouched. Also trimmed the includes/externs that existed only to
+      support the removed code: `<sys/socket.h>`, `<netinet/in.h>`,
+      `<netdb.h>`, `<ctype.h>`, `<errno.h>`/`extern int errno`,
+      `<grp.h>`, `<arpa/inet.h>`, and the `extern char *crypt(...)`
+      declaration. Updated the real tracked header source,
+      `imap/ANSI/c-client/os_lnx.h` (`osdep.h` is a build-time hard link
+      of it, per `makefile.lnx`'s `ln os_lnx.h osdep.h` rule, and is
+      gitignored) to drop the matching prototypes; left the
+      `#ifndef TCPSTREAM / #define TCPSTREAM void` dummy-type fallback
+      in place since `rfc822.h` and `pine/send.c` both rely on that same
+      fallback pattern for their `soutr_t` function-pointer signature,
+      entirely decoupled from real TCP now.
+- [x] Verified: `git stash`-isolated before/after `size bin/pine`
+      comparison (clean `./build clean && ./build lnx` on each side) --
+      text+data+bss dropped from 394073 to 389503 bytes (360831 + 13448
+      + 15224), a 4570-byte reduction, somewhat more than the original
+      ~2.9KB estimate (the estimate covered just the function bodies,
+      not the header/include trimming that rode along). `nm
+      imap/ANSI/c-client/osdep.o` confirms zero `tcp_*`/`server_login`
+      symbols remain. Total warning count is unchanged at 180 (this
+      code wasn't a warning source either way). Full smoketest suite
+      stays green, 14/14 -- no regression test added, since this is
+      pure removal of code with no caller anywhere in the tree (nothing
+      observable changes for the harness to pin down).
