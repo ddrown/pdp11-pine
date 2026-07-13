@@ -543,6 +543,17 @@ char *dummy_file (char *dst,char *name)
 {
   struct passwd *pw;
   char *s,*t,tmp[MAILTMPLEN];
+  /*
+   * name is a caller-typed candidate mailbox name with no length cap
+   * upstream (e.g. straight from the composer's Fcc field, and unlike
+   * bezerk_valid(), dummy_valid() accepts any nonempty name with no
+   * length check of its own); every caller of dummy_file() passes a
+   * MAILTMPLEN-sized dst, by convention across this whole file. Bounded
+   * well under MAILTMPLEN (not just under it) to leave headroom for the
+   * "~"/default cases below, which prepend a home directory to (part of)
+   * name into the same MAILTMPLEN dst.
+   */
+  if (strlen (name) >= MAILTMPLEN/2) name = "/NOSUCHNAME";
   switch (*name) {
   case '/':			/* absolute file path */
     strcpy (dst,name);		/* copy the mailbox name */
@@ -550,7 +561,12 @@ char *dummy_file (char *dst,char *name)
   case '~':			/* home directory */
     if (name[1] == '/') t = myhomedir ();
     else {
-      strcpy (tmp,name + 1);	/* copy user name */
+      /* name+1 is a caller-typed ~user prefix with no length cap upstream
+	 -- truncate to fit tmp rather than overflowing it. A truncated
+	 name will just fail getpwnam() and fall through to
+	 "/NOSUCHUSER" below, same as any other nonexistent user. */
+      strncpy (tmp,name + 1,MAILTMPLEN-1);
+      tmp[MAILTMPLEN-1] = '\0';
       if (s = strchr (tmp,'/')) *s = '\0';
       t = ((pw = getpwnam (tmp)) && pw->pw_dir) ? pw->pw_dir : "/NOSUCHUSER";
     }

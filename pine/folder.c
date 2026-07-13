@@ -1930,8 +1930,17 @@ folder_exists(c_string, file)
 
     if(c_string && *c_string && context_isambig(file))
       context_apply(fn, c_string, file);
-    else
-      strcpy(fn, file);
+    else {
+	/*
+	 * file is a caller-typed folder/Fcc name with no length cap
+	 * upstream (e.g. straight from the composer's Fcc field) -- a
+	 * name too long to fit fn can't be a real folder anyway, so
+	 * reject rather than overflow.
+	 */
+	if(strlen(file) >= sizeof(fn))
+	  return(0);
+	strcpy(fn, file);
+    }
 
     find_stream = mail_open(NULL, fn, OP_PROTOTYPE);
     if(find_stream && mail_valid_net(fn, find_stream->dtb, host, mbox)){

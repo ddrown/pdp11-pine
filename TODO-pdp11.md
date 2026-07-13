@@ -131,28 +131,18 @@ cuts, but required regardless) is now fully done; see
         Fcc-only Send path (confirmed, needed to make the regression
         test not risk sending real mail through this dev box's live
         Postfix). Full write-up in `TODO-pdp11-done.md`.
-      - [ ] `imap/ANSI/c-client/mail.c`'s `mail_valid_net_parse()`
-        (~line 373): `strcpy(mb->mailbox, t+1)` into `NETMBX.mailbox`
-        (`char[MAILTMPLEN]`, a stack struct at its one call site,
-        `pine/folder.c:1937`) -- unbounded copy of whatever follows a
-        `{host}` folder-spec's closing brace. Config/self-inflicted
-        (needs a `.pinerc` collection entry or typed folder name using
-        `{...}` syntax with a >1KB tail) rather than remote-attacker-
-        driven; overlaps the already-flagged "`{host}`-remote
-        folder-collection syntax" removal candidate below -- if that
-        syntax gets cut, this bug goes away with it, so worth deciding
-        together rather than patching in isolation.
-      - [ ] Lower-priority, needs a closer look but not confirmed
-        exploitable yet: `pine/context.c`'s `context_digest()` builds
-        its own `tmp[MAILTMPLEN]` character-by-character from a
-        `.pinerc` folder-collection string with no bound (only a
-        pathologically long, >1KB configured collection path would
-        trigger it); `imap/ANSI/c-client/bezerk.c`'s `bezerk_file()`
-        and `dummy.c`'s `dummy_file()` both do
-        `strcpy(tmp, name+1)` (also `tmp[MAILTMPLEN]`) for a `~`-prefixed
-        mailbox name with no slash before the 1024-byte mark -- same
-        "needs a contrived local config/folder name" bar as the
-        `mail_valid_net_parse()` finding above.
+      - [x] `imap/ANSI/c-client/mail.c`'s `mail_valid_net_parse()`,
+        `bezerk.c`'s `bezerk_file()`/`bezerk_isvalid()`, `dummy.c`'s
+        `dummy_file()`, `pine/context.c`'s `context_find()`/
+        `context_find_all()`/`context_digest()`, and `pine/folder.c`'s
+        `folder_exists()` -- turned out to be a chain of six related
+        overflows, not the two lower-priority items originally guessed
+        here (below), reachable just by typing a long string into the
+        composer's Fcc field and hitting Send (no `.pinerc` editing
+        needed, contrary to what this note assumed). `context_digest()`
+        alone is confirmed still config-only. Full write-up, including
+        which bugs the two new regression tests each catch, in
+        `TODO-pdp11-done.md`.
       - False positive, checked and ruled out: `bezerk.c`'s
         `LOCAL->buf` (the other site this item originally named) is
         `fs_get`'d dynamically (always >= `CHUNK` = 8192 bytes, never

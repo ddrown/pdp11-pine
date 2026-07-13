@@ -368,6 +368,13 @@ long mail_valid_net_parse (char *name,NETMBX *mb)
 				/* have host specification? */
   if (!(*name == '{' && (t = strchr (s = name+1,'}')) && (i = t - s)))
     return NIL;			/* not valid host specification */
+  /*
+   * host/mailbox come straight from whatever folder name the caller typed
+   * (e.g. a Goto or Fcc prompt) with no length cap upstream -- reject
+   * rather than overflow mb->host/mb->mailbox (both char[MAILTMPLEN]) if
+   * either component is too long to fit.
+   */
+  if (i >= MAILTMPLEN || strlen (t+1) >= MAILTMPLEN) return NIL;
   strncpy (mb->host,s,i);	/* set host name */
   mb->host[i] = '\0';		/* tie it off */
   strcpy (mb->mailbox,t+1);	/* set mailbox name */
@@ -396,7 +403,8 @@ long mail_valid_net_parse (char *name,NETMBX *mb)
 	}
 	else c = '\0';		/* no delimiter */
 	if (!strcmp (s,"service")) {
-	  if (*mb->service) return NIL;
+	  /* v is caller-typed, unbounded; mb->service is char[MAXSRV+1] */
+	  if (*mb->service || strlen (v) > MAXSRV) return NIL;
 	  else strcpy (mb->service,v);
 	}
 	else return NIL;	/* invalid argument switch */

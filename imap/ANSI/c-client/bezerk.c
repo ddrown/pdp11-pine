@@ -138,6 +138,12 @@ int bezerk_isvalid (char *name,char *tmp)
     lhostn = cpystr ((host_name = gethostbyname (tmp)) ?
 		     host_name->h_name : tmp);
   }
+				/* name is a caller-typed candidate mailbox
+				   name with no length cap upstream; tmp is
+				   MAILTMPLEN. Nothing this long could be a
+				   real local mailbox path, so reject rather
+				   than overflow. */
+  if (strlen (name) >= MAILTMPLEN) return NIL;
 				/* INBOX is always accepted */
   if (!strcmp (ucase (strcpy (tmp,name)),"INBOX")) return T;
 				/* if file, get its status */
@@ -1078,9 +1084,20 @@ char *bezerk_file (char *dst,char *name)
 {
   struct passwd *pw;
   char *s,*t,tmp[MAILTMPLEN];
+  /*
+   * name is a caller-typed candidate mailbox name with no length cap
+   * upstream (e.g. straight from the composer's Fcc field); every caller
+   * of bezerk_file() passes a MAILTMPLEN-sized dst, by convention across
+   * this whole file. Nothing this long could be a real local mailbox
+   * name, so just tie off a truncated dst instead of overflowing it.
+   * Bounded well under MAILTMPLEN (not just under it) to leave headroom
+   * for the "~" case below, which prepends a home directory to (part of)
+   * name into the same MAILTMPLEN dst.
+   */
+  if (strlen (name) >= MAILTMPLEN/2) name = "/NOSUCHNAME";
   switch (*name) {
   case '*':			/* bboard? */
-    sprintf (tmp,"~ftp/%s",(name[1] == '/') ? name+2 : name+1);
+    sprintf (tmp,"~ftp/%.1000s",(name[1] == '/') ? name+2 : name+1);
     dst = bezerk_file (dst,tmp);/* recurse to get result */
     break;
   case '/':			/* absolute file path */
@@ -1089,7 +1106,12 @@ char *bezerk_file (char *dst,char *name)
   case '~':			/* home directory */
     if (name[1] == '/') t = myhomedir ();
     else {
-      strcpy (tmp,name + 1);	/* copy user name */
+      /* name+1 is a caller-typed ~user prefix with no length cap upstream
+	 -- truncate to fit tmp rather than overflowing it. A truncated
+	 name will just fail getpwnam() and fall through to
+	 "/NOSUCHUSER" below, same as any other nonexistent user. */
+      strncpy (tmp,name + 1,MAILTMPLEN-1);
+      tmp[MAILTMPLEN-1] = '\0';
       if (s = strchr (tmp,'/')) *s = '\0';
       t = ((pw = getpwnam (tmp)) && pw->pw_dir) ? pw->pw_dir : "/NOSUCHUSER";
     }

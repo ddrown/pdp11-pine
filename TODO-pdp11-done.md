@@ -1530,6 +1530,118 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       361863 -- 432 bytes, the largest single-item growth in this audit
       so far, for the new size-estimator helper plus its two call sites
       and the NULL-parameter guard.
+      - [x] Reviewed the three remaining lower-priority findings from
+        this sweep -- `imap/ANSI/c-client/mail.c`'s
+        `mail_valid_net_parse()`, `pine/context.c`'s `context_digest()`,
+        and `bezerk.c`'s `bezerk_file()`/`dummy.c`'s `dummy_file()`.
+        The TODO note for all three assumed they needed "a contrived
+        local config/folder name" to reach; that held for
+        `context_digest()` (still config-only, see below) but not for
+        the other two -- both turned out to be reachable just by typing
+        a long string into the composer's **Fcc** field and hitting
+        Send, no `.pinerc` editing required, because Send's Fcc-exists
+        check (`call_mailer()` in `send.c`) runs the typed value through
+        `folder_exists()` -> `mail_open()` -> each driver's `->valid()`
+        regardless of whether the folder is later actually created.
+        Chasing real repros for these two turned up **five** overflows
+        total, not the one apiece the TODO note implied -- each
+        confirmed with a standalone `cc -fsanitize=address` repro first
+        (per CLAUDE.md's note that this class of same-frame stack
+        overflow doesn't reliably trip under valgrind alone), then
+        confirmed against the real binary (valgrind-clean before/after,
+        and for the two most severe ones, a corrupted-return-address
+        crash under `coredumpctl`/`valgrind` before the fix, gone after):
+        - **`mail_valid_net_parse()`** (the item TODO actually named):
+          parses a `"{host}mailbox"`-shaped name into a `NETMBX` struct
+          with three unbounded copies, not just the one named --
+          `mb->host` (`strncpy` with a length taken straight from the
+          input, no cap), `mb->mailbox` (`strcpy`, the one TODO named),
+          and `mb->service` (`strcpy` into `char[MAXSRV+1]`, only 21
+          bytes -- from a `"/service=..."` switch value, the smallest
+          and easiest of the three to overrun). Fixed by rejecting
+          (`return NIL`) if any component would overflow its field,
+          which is also just correct validator behavior -- a mailbox
+          spec that long was never going to be valid anyway.
+        - **`bezerk_isvalid()`** (not `bezerk_file()`, and not named in
+          the original TODO note at all): its very first line
+          unconditionally `strcpy()`s the *entire* candidate name into
+          its caller's `char[MAILTMPLEN]` buffer before ever checking
+          what the name starts with -- so a long name overflows here
+          regardless of whether `bezerk_file()`'s own `~`-case is fixed.
+          This is the one that actually produced the corrupted-
+          return-address crash chased down below; found while tracing
+          why the crash persisted after fixing `bezerk_file()` alone.
+          Fixed by rejecting up front if the name is too long to fit.
+        - **`bezerk_file()`/`dummy_file()`** (the TODO-named finding):
+          the `case '~':` branch's `strcpy(tmp,name+1)` for a `~user`
+          prefix, unbounded up to the next `/`. Fixed by truncating to
+          fit (a truncated username just fails `getpwnam()` and falls
+          through to the existing "/NOSUCHUSER" case, same as any other
+          nonexistent user). While bounding this, noticed the `case
+          '/':` and `default:` branches have the exact same
+          unbounded-copy shape (a long absolute path, or a long
+          "any other name", both `dst`-sized `MAILTMPLEN` by convention
+          across every call site in both files) -- bounded those too
+          with a single guard at the top of each function, generous
+          enough (`MAILTMPLEN/2`) to leave headroom for the `~`
+          branch's homedir-prepending `sprintf` afterward.
+        - **`context_find()`/`context_find_all()`** (`pine/context.c`,
+          not in the original TODO note -- found chasing the
+          `bezerk_isvalid()` repro one level further out): after
+          `bezerk_valid()` rejects a `~`-prefixed name outright (from
+          the fix above) and the fallback `dummy` driver accepts it
+          (it validates *any* nonempty name), `mail_open()`'s
+          `OP_PROTOTYPE` path returns `NULL` for the `dummy` driver
+          specifically (its `open()` callback only does anything for a
+          real, non-`NULL` stream) -- so `folder_exists()` falls through
+          to `context_find_all(NULL, NULL, fn)` with the raw, still
+          unbounded name. Both functions build a `"Find of mailbox
+          outside context: %s"` message *and* a follow-up `strcpy`, into
+          the same `char[MAILTMPLEN]` `tmp`, whenever the name doesn't
+          look "ambiguous" (true for anything starting with `~` or
+          `{`). This is what was actually still crashing (with a
+          `0x4141414141414141` corrupted return address, per
+          `coredumpctl`) after the `bezerk_isvalid()` fix alone. Fixed
+          by bounding both the log message (`%.900s`) and the copy
+          (`strncpy`).
+        - **`folder_exists()`** (`pine/folder.c`, also not in the
+          original TODO note): its own `fn[MAXPATH+1]` gets a plain
+          `strcpy(fn,file)` for any non-"ambiguous" (i.e. fully-
+          qualified-looking) name, one step before any of the above --
+          `MAXPATH` is 4096 here so it takes a much longer input to
+          hit than the `MAILTMPLEN` (1024) buffers above, but it's the
+          same unbounded-copy shape. Fixed by rejecting up front if the
+          name doesn't fit.
+        - **`context_digest()`** (`pine/context.c`): confirmed this one
+          *is* config-only, as the original TODO note guessed --
+          reachable only through `context_apply()`'s "ambiguous name"
+          branch, which requires an actual configured folder-collection
+          string (`.pinerc`'s `Folders=` or the Setup Collection List
+          screen), not just a typed folder/Fcc name. Its `rcontext`
+          write loop (writing into its own local `tmp[MAILTMPLEN]`
+          when the caller doesn't supply an `rcontext` buffer) had the
+          same missing bound as the others; fixed with the same
+          "reject once too long" (returning a new `"Context too long"`
+          error string, consistent with the function's existing
+          `"Unbalanced '}'"`-style error returns). Left one related gap
+          undone: the same function's `host` copy loop writes into a
+          *caller-supplied* buffer with no length passed in to bound
+          against -- every current caller happens to size that buffer
+          at `MAXPATH` (4096), comfortably larger than the realistic
+          `.pinerc` collection strings that reach it, so not fixed here
+          (would need a signature change to pass the caller's buffer
+          size through, out of scope for this pass).
+        Two new regression tests, one per Fcc-field repro (both drive
+        Compose -> reveal Fcc -> type the crafted value -> Send,
+        matching the "type it into Fcc and hit Send" reachability
+        these findings actually have): `test/cases/test_fcc_tilde_overflow.py`
+        (the `bezerk_isvalid()`/`bezerk_file()`/`context_find_all()`
+        chain) and `test/cases/test_fcc_netmbx_overflow.py` (the
+        `mail_valid_net_parse()` service-buffer overflow). Full
+        smoketest suite passes throughout (23/23 with the two new
+        tests). `text` grew 361863 -> 362143, +280 bytes for the six
+        added guards across `mail.c`, `bezerk.c`, `dummy.c`,
+        `context.c` (x3), and `folder.c`.
 
 ### Drop the image-viewer attachment feature (`VAR_IMAGE_VIEWER`)
 - [x] Raised while surveying `pine/init.c`/`args.c` for one-shot startup

@@ -175,8 +175,17 @@ char *context, *scontext, *host, *rcontext, *view;
     }
 
     for(; *p ; p++){			/* get thru context */
-	if(rcontext)
-	  rcontext[i++] = *p;		/* copy if requested */
+	if(rcontext){
+	    /*
+	     * rcontext defaults to this function's own local tmp[MAILTMPLEN]
+	     * (above) when the caller doesn't supply its own -- context
+	     * comes from a .pinerc folder-collection string with no length
+	     * cap upstream, so bound the copy rather than overflow tmp.
+	     */
+	    if(i >= MAILTMPLEN - 1)
+	      return("Context too long");
+	    rcontext[i++] = *p;		/* copy if requested */
+	}
 
 	if(*p == '['){			/* done? */
 	    if(*++p == '\0')		/* look ahead */
@@ -206,8 +215,11 @@ char *context, *scontext, *host, *rcontext, *view;
       return("No ']' in context");
 
     for(; *p ; p++){			/* trailing context ? */
-	if(rcontext)
-	  rcontext[i++] = *p;
+	if(rcontext){
+	    if(i >= MAILTMPLEN - 1)
+	      return("Context too long");
+	    rcontext[i++] = *p;
+	}
     }
 
     if(host) *host = '\0';
@@ -303,9 +315,15 @@ char *context;MAILSTREAM *stream;char *pat;
   char tmp[MAILTMPLEN];
 				/* must be within context */
   if (!context_isambig (pat)) {
-    sprintf (tmp,"Find of mailbox outside context: %s",pat);
+    /*
+     * pat is a caller-typed folder/Fcc name with no length cap upstream
+     * -- bound both the log message and the copy below rather than
+     * overflow tmp.
+     */
+    sprintf (tmp,"Find of mailbox outside context: %.900s",pat);
     mm_log (tmp,(long) NIL);
-    strcpy(tmp, pat);		/* allow find for now */
+    strncpy(tmp, pat, MAILTMPLEN-1);	/* allow find for now */
+    tmp[MAILTMPLEN-1] = '\0';
   }
   else{
     current_context = context;	/* note current context */
@@ -328,9 +346,15 @@ char *context;MAILSTREAM *stream;char *pat;
   char tmp[MAILTMPLEN];
 				/* must be within context */
   if (!context_isambig (pat)) {
-    sprintf (tmp,"Find of mailbox outside context: %s",pat);
+    /*
+     * pat is a caller-typed folder/Fcc name with no length cap upstream
+     * -- bound both the log message and the copy below rather than
+     * overflow tmp.
+     */
+    sprintf (tmp,"Find of mailbox outside context: %.900s",pat);
     mm_log (tmp,(long) NIL);
-    strcpy(tmp, pat);		/* allow find for now */
+    strncpy(tmp, pat, MAILTMPLEN-1);	/* allow find for now */
+    tmp[MAILTMPLEN-1] = '\0';
   }
   else{
     current_context = context;	/* note current context */
