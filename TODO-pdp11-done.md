@@ -1410,6 +1410,126 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       `text` grew 361359 (after the `export_message()`-chain fixes) to
       361431 -- 72 bytes for four more bounds-checked call sites in one
       function.
+- [x] Picked up the sweep's original namesake candidate,
+      `pine/send.c`'s `pine_rfc822_output_body()`/
+      `pine_write_body_header()` (the "per-MIME-part header writer"):
+      writing a multipart outgoing message builds each part's
+      "--boundary" line plus a mini-header (Content-Type/subtype/
+      parameters/-Transfer-Encoding/-ID/-Description) into
+      `char tmp[MAILTMPLEN]` (1024 bytes), with *no* size accounting at
+      all -- unlike the top-level header (`pine_rfc822_header()`, which
+      writes into the dynamically-grown `tmp_20k_buf`, sized beforehand
+      via `pine_rfc822_header_size()`). `subtype`/parameter values/
+      `id`/`description` are all `cpystr()`'d from parsing a message
+      with no length cap anywhere. Reachable via receive -> Forward
+      (declining "as MIME attachment" -- off by default, so
+      `copy_body()` recurses verbatim `cpystr()`s of the original
+      part's fields automatically) -> Send of a multipart message with
+      a long `Content-Description:` (a 3000-byte one used in testing).
+      Confirmed under valgrind: an "Invalid read of size 1" inside
+      `pine_write_body_header()` re-measuring `strlen()` of the
+      already-corrupted buffer, landing squarely on the injected filler
+      bytes; also reliably aborts on a plain (non-ASan, non-valgrind)
+      build at this size, same as several of this audit's other finds.
+      Verifying this needed an actual Send, not Postpone: Postpone
+      strips all but the first text part before writing (`send.c`'s
+      "Attachments won't be included in message" handling), so it never
+      reaches this code path with the crafted part intact -- a dead
+      end discovered the hard way when an initial Postpone-based repro
+      attempt produced a suspiciously small, plain-text-only postponed
+      message. Send works fine for this without a real `sendmail`
+      installed: the vulnerable formatting happens in
+      `append_message2()`/`pine_rfc822_output_body()`, which runs
+      *before* `call_sendmail()` ever shells out, and that shell-out is
+      itself backgrounded/fire-and-forget (`( ( ... ) < tmpfile & )`).
+      Fixed by adding `pine_body_header_size()` (mirroring
+      `pine_rfc822_header_size()`'s style: sum the field lengths, with
+      a 2x factor on parameter values since `rfc822_cat()` can
+      backslash-escape every character) and `fs_get()`/`fs_give()`-ing
+      `tmp` per part instead of assuming `MAILTMPLEN` always fits one
+      part's header; the trailing "--boundary--" line (after the
+      per-part loop) got the same treatment, sized off the boundary
+      cookie's own (also `cpystr()`'d, technically unbounded) length.
+      Bonus fix found while writing `pine_body_header_size()`: a MIME
+      parameter can legitimately have `param->value == NULL` (an empty
+      `attr=;` value parses to no value at all --
+      `mail_newbody_parameter()`'s default, left unset by
+      `rfc822_parse_content_header()`'s `if (*s) param->value = ...`
+      guard when the value word is empty) -- `pine_write_body_header()`
+      passed this straight to `rfc822_cat()`, which has no NULL check
+      of its own and would `strpbrk()` a NULL pointer. Guarded both the
+      existing call site and the new size helper with
+      `param->value ? param->value : ""`. Unlike this entry's other
+      finds, not independently confirmed reachable via a hand-crafted
+      repro (a few attempts at empty/quoted-empty parameter values all
+      parsed to a non-NULL default instead) -- kept as a defensive fix
+      since the code path is real and the guard has no behavior change
+      for the non-NULL case, but flagged here as unconfirmed rather than
+      overstated as a live crash.
+      Second bonus fix, found after the fact: the first version of this
+      entry's regression test drove Send with a real-looking recipient
+      (`user@example.com`), on the assumption that `SENDMAIL`
+      (`/usr/lib/sendmail`) wouldn't exist in a throwaway dev sandbox.
+      That assumption was wrong -- this box has a live, running Postfix
+      with `/usr/lib/sendmail` wired up for real, so every smoketest run
+      would have hand it an actual outbound message addressed to a real
+      domain. Caught before landing (the user asked what could be done
+      about the bounce risk before running the suite repeatedly).
+      Redesigned the test to leave To:/Cc: blank instead: pine's default
+      `default-fcc` ("sent-mail") means Send still proceeds, but
+      entirely through the local Fcc-only path
+      (`call_mailer()`'s `else if(fcc_so)` branch calling
+      `pine_rfc822_output()` with `f=NULL,s=NULL`) -- `call_sendmail()`
+      is never reached, so this is safe regardless of what MTA (if any)
+      is installed. Trying this exposed one more real, independent bug:
+      `pine_rfc822_output_body()`'s multipart branch unconditionally
+      called `(*f)(s, "...MIME format...")` (the "unsuspecting
+      non-MIME-aware UA" warning banner) with no NULL check, unlike
+      every other callback invocation in the same function (all guarded
+      `f ? (*f)(...) : 1`). `f` is NULL precisely on this Fcc-only path,
+      so it crashed immediately with "Jump to the invalid address 0x0"
+      under valgrind -- a genuine, previously-undiscovered bug (sending
+      any multipart message with no recipients and only the default Fcc
+      has apparently never worked on this fork), not something
+      introduced by this session's changes. Fixed with the same
+      `f ? ... : 1`-style guard used elsewhere in the function.
+      Verified end-to-end: rebuilt clean; confirmed under valgrind that
+      the original repro (3000-byte `Content-Description:`) produces
+      the invalid-read before the `pine_write_body_header()` fix and is
+      clean after; separately confirmed the NULL-callback crash and fix
+      the same way, with a blank-recipient multipart Send. Full
+      smoketest suite passes throughout (21/21 with the two new tests).
+      Ended up with two separate regression tests, kept both rather than
+      picking one, because they exercise genuinely different code paths
+      and independently caught different bugs during development:
+      - `test/cases/test_send_body_header_overflow.py`: blank To:/Cc:,
+        relying on `default-fcc` ("sent-mail") so Send still proceeds
+        but entirely through the local Fcc-only path (`f=NULL,s=NULL`)
+        -- never touches `sendmail`. This is the one that caught the
+        NULL-callback bug (a real Send never hits it, since `f` is
+        always non-NULL when there's an actual recipient).
+      - `test/cases/test_send_body_header_overflow_via_sendmail.py`:
+        a real-looking recipient, driven through `call_sendmail()`'s
+        actual shell-out. Made safe via `smoketest.Session`'s new
+        `sendmail_stub=True` option: runs pine inside a private,
+        unprivileged `bwrap` mount namespace with a stub script
+        bind-mounted over the fully-resolved real sendmail binary (the
+        top-level `/usr/lib/sendmail` path is usually a symlink chain;
+        `bwrap --bind` needs the real regular-file target, resolved via
+        `os.path.realpath()`, or it fails outright). This matters on
+        real hardware, not just in theory -- this dev box has a live,
+        running Postfix genuinely wired up to `/usr/lib/sendmail`, so
+        the first version of this test (before the stub existed) really
+        would have hand it an outbound message addressed to a real
+        domain on every run. Confirmed both before adding the stub
+        (`mailq`/`readlink -f /usr/lib/sendmail` untouched afterward)
+        and after (the stub's log file captures the full argv + piped
+        message text, asserted on to confirm `call_sendmail()` actually
+        ran rather than silently no-opping).
+      `text` grew 361431 (after the `save_attachment()` fixes) to
+      361863 -- 432 bytes, the largest single-item growth in this audit
+      so far, for the new size-estimator helper plus its two call sites
+      and the NULL-parameter guard.
 
 ### Drop the image-viewer attachment feature (`VAR_IMAGE_VIEWER`)
 - [x] Raised while surveying `pine/init.c`/`args.c` for one-shot startup

@@ -19,6 +19,11 @@ import pexpect
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PINE_BIN = os.path.join(REPO_ROOT, "bin", "pine")
 
+# Must match pine/os.h's SENDMAIL. call_sendmail() (pine/send.c) shells
+# out to this absolute path directly -- it isn't looked up via $PATH,
+# so a test can't override it just by adjusting PATH/env.
+REAL_SENDMAIL_PATH = "/usr/lib/sendmail"
+
 # Generous default: pine paces its output with delay-padding bytes, so a
 # response to a keystroke can take a couple of seconds to fully arrive.
 DEFAULT_TIMEOUT = 10
@@ -50,7 +55,8 @@ class Session:
     """A running `pine` process in its own scratch HOME."""
 
     def __init__(self, mbox=None, args=None, timeout=DEFAULT_TIMEOUT,
-                 dismiss_splash=True, postponed_mail=None):
+                 dismiss_splash=True, postponed_mail=None,
+                 sendmail_stub=False):
         if not os.path.exists(PINE_BIN):
             raise SmoketestFailure(
                 "%s not found -- build it first (./build lnx)" % PINE_BIN)
@@ -58,6 +64,7 @@ class Session:
         self.home = tempfile.mkdtemp(prefix="pine-smoketest-")
         self.timeout = timeout
         self.mbox_path = os.path.join(self.home, "testmbox")
+        self.sendmail_log = None
 
         env = dict(os.environ)
         env["HOME"] = self.home
@@ -83,8 +90,12 @@ class Session:
             with open(os.path.join(mail_dir, "postponed-mail"), "w") as f:
                 f.write(postponed_mail)
 
+        spawn_cmd, spawn_argv = PINE_BIN, argv
+        if sendmail_stub:
+            spawn_cmd, spawn_argv = self._wrap_with_sendmail_stub(argv)
+
         self.child = pexpect.spawn(
-            PINE_BIN, argv, cwd=REPO_ROOT, env=env,
+            spawn_cmd, spawn_argv, cwd=REPO_ROOT, env=env,
             dimensions=(24, 80), encoding="utf-8", codec_errors="replace",
             timeout=timeout,
         )
@@ -95,6 +106,47 @@ class Session:
             self.expect("MAIN MENU")
             self.send("\r")
             self.expect("MAIN MENU")
+
+    def _wrap_with_sendmail_stub(self, argv):
+        """Run pine in a private mount namespace (bwrap) with a stub
+        script bind-mounted over the real sendmail binary, so a test can
+        drive an actual Send (through call_sendmail()'s real shell-out,
+        not just the no-recipient Fcc-only path) without risking real
+        outbound mail -- this dev box has a live Postfix wired up to
+        REAL_SENDMAIL_PATH, so a real Send here would otherwise hand it
+        an actual outbound message.
+
+        REAL_SENDMAIL_PATH is usually a symlink chain (e.g.
+        /usr/lib/sendmail -> .../mta-sendmail -> .../sendmail.postfix ->
+        ../bin/sendmail.postfix); bwrap's --bind needs the fully
+        resolved regular-file target, binding onto the top-level symlink
+        path itself fails ("Can't create file").
+        """
+        if not shutil.which("bwrap"):
+            raise SmoketestFailure(
+                "bwrap (bubblewrap) not found -- required for "
+                "sendmail_stub=True so a test can drive a real Send "
+                "without risking real outbound mail")
+
+        real_target = os.path.realpath(REAL_SENDMAIL_PATH)
+
+        self.sendmail_log = os.path.join(self.home, "fake-sendmail.log")
+        stub_path = os.path.join(self.home, "fake-sendmail")
+        with open(stub_path, "w") as f:
+            f.write(
+                "#!/bin/sh\n"
+                "echo \"ARGS: $*\" >> %s\n"
+                "cat >> %s\n"
+                "exit 0\n" % (self.sendmail_log, self.sendmail_log)
+            )
+        os.chmod(stub_path, 0o755)
+
+        bwrap_argv = [
+            "--dev-bind", "/", "/",
+            "--bind", stub_path, real_target,
+            "--", PINE_BIN,
+        ] + argv
+        return "bwrap", bwrap_argv
 
     def expect(self, pattern, timeout=None):
         try:

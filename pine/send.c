@@ -2521,7 +2521,39 @@ l_putc(c)
 
 
 /*
- * pine_rfc822_output_body - pine's version of c-client call.  Again, 
+ * pine_body_header_size - conservative upper bound on the buffer space
+ *                  pine_write_body_header() will need to format a single
+ *                  MIME part's mini-header, so callers can fs_get() a
+ *                  buffer sized to fit instead of assuming a fixed-size
+ *                  one is always big enough (subtype/parameter values/
+ *                  id/description can all be arbitrarily long -- see
+ *                  the caller, pine_rfc822_output_body()).
+ */
+static size_t
+pine_body_header_size(body)
+    BODY *body;
+{
+    size_t n = 128;    /* Content-Type/-Transfer-Encoding labels, CRLFs, slop */
+    PARAMETER *param;
+
+    n += strlen(body_types[body->type]);
+    n += body->subtype ? strlen(body->subtype)
+                        : strlen(rfc822_default_subtype(body->type));
+    for(param = body->parameter; param; param = param->next)
+      /* rfc822_cat() can quote/backslash-escape every character of
+	 param->value, up to doubling its length; value can be NULL
+	 (see pine_write_body_header()'s matching guard) */
+      n += strlen(param->attribute) +
+	   2 * (param->value ? strlen(param->value) : 0) + 8;
+    if(body->id)          n += strlen(body->id) + 32;
+    if(body->description) n += strlen(body->description) + 32;
+
+    return(n);
+}
+
+
+/*
+ * pine_rfc822_output_body - pine's version of c-client call.  Again,
  *                necessary since c-client doesn't know about how
  *                we're treating attachments
  */
@@ -2534,7 +2566,7 @@ pine_rfc822_output_body(body, f, s)
     PART *part;
     PARAMETER *param;
     char *cookie = NIL, *t, *encode_error;
-    char tmp[MAILTMPLEN];
+    char *tmp;
     gf_io_t            gc, pc;
 
     if(body->type == TYPEMULTIPART) {   /* multipart gets special handling */
@@ -2548,12 +2580,28 @@ pine_rfc822_output_body(body, f, s)
 	 * Output a bit of text before the first multipart delimiter
 	 * to warn unsuspecting users of non-mime-aware ua's that
 	 * they should expect weirdness...
+	 *
+	 * f is NULL when there's no real recipient and this is only
+	 * being written to the Fcc copy (pine_rfc822_output(), called
+	 * with f=NULL,s=NULL) -- every other callback invocation in
+	 * this function already guards against that with "f ? ... : 1",
+	 * this one didn't and called through a NULL function pointer.
 	 */
-	if(!(*f)(s, "  This message is in MIME format.  The first part should be readable text,\015\012  while the remaining parts are likely unreadable without MIME-aware tools.\015\012\015\012"))
+	if(f && !(*f)(s, "  This message is in MIME format.  The first part should be readable text,\015\012  while the remaining parts are likely unreadable without MIME-aware tools.\015\012\015\012"))
 	  return(0);
 
 	do {				/* for each part */
 					/* build cookie */
+	    /*
+	     * cookie/subtype/parameters/id/description all come
+	     * straight from parsing a message (possibly received,
+	     * then forwarded/copied into this outgoing part) with no
+	     * length cap anywhere upstream -- a fixed MAILTMPLEN
+	     * buffer here overflowed on a long enough part. Size to
+	     * fit instead.
+	     */
+	    tmp = (char *) fs_get(strlen(cookie) +
+				   pine_body_header_size(&part->body) + 16);
 	    sprintf (t = tmp,"--%s\015\012",cookie);
 					/* append mini-header */
 	    pine_write_body_header (&t,&part->body);
@@ -2562,17 +2610,25 @@ pine_rfc822_output_body(body, f, s)
 	      so_puts(fcc_so, tmp);
 
 	    if (!((f ? (*f) (s,tmp) : 1)
-		  && pine_rfc822_output_body (&part->body,f,s)))
-	      return(0);
+		  && pine_rfc822_output_body (&part->body,f,s))) {
+		fs_give((void **) &tmp);
+		return(0);
+	    }
+	    fs_give((void **) &tmp);
 	} while (part = part->next);	/* until done */
 					/* output trailing cookie */
+	tmp = (char *) fs_get(strlen(cookie) + 16);
 	sprintf (t = tmp,"--%s--",cookie);
 	if(fcc_so){
 	    so_puts(fcc_so, t);
 	    so_puts(fcc_so, "\015\012");
 	}
 
-	return(f ? ((*f) (s,t) && (*f) (s,"\015\012")) : 1);
+	{
+	    long rv = f ? ((*f) (s,t) && (*f) (s,"\015\012")) : 1;
+	    fs_give((void **) &tmp);
+	    return(rv);
+	}
     }
 
     l_f      = f;			/* set up for writing chars...  */
@@ -2647,7 +2703,10 @@ pine_write_body_header(dst, body)
     sprintf (*dst += strlen (*dst),"/%s",s);
     if (param) do {
 	sprintf (*dst += strlen (*dst),"; %s=",param->attribute);
-	rfc822_cat (*dst,param->value,tspecials);
+	/* param->value can be NULL (an empty "attr=;" parameter value
+	   parses to no value at all, mail_newbody_parameter()'s
+	   default) -- rfc822_cat() has no NULL check of its own */
+	rfc822_cat (*dst,param->value ? param->value : "",tspecials);
     } while (param = param->next);
     else if (body->type == TYPETEXT) strcat (*dst,"; charset=US-ASCII");
     strcpy (*dst += strlen (*dst),"\015\012");

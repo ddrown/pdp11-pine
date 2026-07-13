@@ -121,21 +121,16 @@ cuts, but required regardless) is now fully done; see
         exists" prompt, and three `tmp_20k_buf`-embedding status-message
         calls with no `grow_tmp_20k_buf()` beforehand). Full write-up in
         `TODO-pdp11-done.md`.
-      - [ ] `pine/send.c`'s `pine_write_body_header()` (~line 2537,
-        the "per-MIME-part header writer" this item originally named):
-        writes a MIME part's mini-header (Content-Type/Description/
-        Transfer-Encoding/params) into a fixed `char tmp[MAILTMPLEN]`
-        (1024 bytes) with *no* size accounting at all, unlike the
-        top-level header (`pine_rfc822_header`, which writes into the
-        dynamically-grown `tmp_20k_buf`, sized via
-        `pine_rfc822_header_size()`). Reachable via receive -> Forward
-        (declining "as MIME attachment", so `copy_body()` recurses
-        verbatim `cpystr()`s of the original part's description/
-        subtype/params) -> Send of a crafted multipart message whose
-        part has a long `Content-Description:`/parameter. Not yet
-        fixed -- the most involved of the remaining candidates, since
-        it needs the same kind of per-part size accounting
-        `pine_rfc822_header_size()` already does for the top level.
+      - [x] `pine/send.c`'s `pine_write_body_header()`/
+        `pine_rfc822_output_body()` -- confirmed and fixed (needed an
+        actual Send, not Postpone, to reach with the crafted part
+        intact -- see the write-up for why). Also fixed two related
+        bugs in the same function found along the way: a
+        `param->value == NULL` crash risk (not independently confirmed
+        reachable) and a real NULL-callback crash on the no-recipient/
+        Fcc-only Send path (confirmed, needed to make the regression
+        test not risk sending real mail through this dev box's live
+        Postfix). Full write-up in `TODO-pdp11-done.md`.
       - [ ] `imap/ANSI/c-client/mail.c`'s `mail_valid_net_parse()`
         (~line 373): `strcpy(mb->mailbox, t+1)` into `NETMBX.mailbox`
         (`char[MAILTMPLEN]`, a stack struct at its one call site,
