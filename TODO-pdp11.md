@@ -115,14 +115,12 @@ cuts, but required regardless) is now fully done; see
         `mail_fetchfrom()`, reachable just by opening FOLDER INDEX;
         `pine/reply.c`'s `pretty_addr_string()`, reachable just by
         viewing any message). Full write-up in `TODO-pdp11-done.md`.
-      - [ ] `pine/mailcmd.c`'s `save_attachment()` (~line 2638):
-        `strcpy(filename, param->value)` into
-        `char filename[MAXPATH+1]` (4097 bytes on this Linux build) --
-        `param->value` is an attachment's MIME `name=` parameter,
-        unbounded `cpystr()` from the remote message, copied *before*
-        the length-capped prompt/edit step (`optionally_enter`) ever
-        runs. Higher bar than the others (needs >4KB) but still a real
-        unbounded copy. Not yet fixed.
+      - [x] `pine/mailcmd.c`'s `save_attachment()` -- confirmed and
+        fixed, along with two more overflows in the same function found
+        while chasing its repro (a fixed `prompt_buf[200]` "file already
+        exists" prompt, and three `tmp_20k_buf`-embedding status-message
+        calls with no `grow_tmp_20k_buf()` beforehand). Full write-up in
+        `TODO-pdp11-done.md`.
       - [ ] `pine/send.c`'s `pine_write_body_header()` (~line 2537,
         the "per-MIME-part header writer" this item originally named):
         writes a MIME part's mini-header (Content-Type/Description/

@@ -2642,9 +2642,15 @@ save_attachment(qline, msgno, a)
         if(strucmp(param->attribute, "name") == 0)
           break;
     }
-    if(param != NULL && param->value != NULL) 
-      strcpy(filename, param->value);
-    else
+    if(param != NULL && param->value != NULL) {
+        /* the "name" parameter is attacker-controlled (an attachment's
+           MIME Content-Type parameter, cpystr()'d with no length cap
+           anywhere), so truncate to what optionally_enter() below
+           would enforce anyway rather than overflowing this fixed
+           path-sized buffer */
+        strncpy(filename, param->value, MAXPATH);
+        filename[MAXPATH] = '\0';
+    } else
       filename[0] = '\0';
 
     /*---------- Prompt the user for the file name -------------*/
@@ -2708,7 +2714,11 @@ save_attachment(qline, msgno, a)
 
     /*----------- Write the contents to the file -------------*/
     if(can_access(full_filename, ACCESS_EXISTS) == 0) {
-        sprintf(prompt_buf, "File \"%s\" already exists. Overwrite it",
+        /* full_filename can be up to MAXPATH (4096) bytes, but
+           prompt_buf is only 200 -- cap the display precision so this
+           can never overflow, matching this codebase's %.100s-style
+           convention for other unbounded-into-fixed-buffer formats */
+        sprintf(prompt_buf, "File \"%.150s\" already exists. Overwrite it",
                 full_filename);
         if(want_to(prompt_buf, 'n', 'n', NO_HELP, 0) == 'n') {
             q_status_message(0, 1, 3, "\007Save of attachment cancelled");
@@ -2719,6 +2729,10 @@ save_attachment(qline, msgno, a)
     }
 
     if((store = so_get(FileStar, full_filename, WRITE_ACCESS)) == NULL){
+	/* full_filename can be up to MAXPATH (4096) bytes, but
+	   tmp_20k_buf (what q_status_message*() formats into) only
+	   starts at a 2048-byte baseline -- grow it first */
+	grow_tmp_20k_buf(strlen(full_filename) + 128);
 	q_status_message2(1, 3, 5, "\007Error opening destination %s: %s",
 			  full_filename, error_description(errno));
 	return;
@@ -2728,6 +2742,7 @@ save_attachment(qline, msgno, a)
 
     if((err = detach(msgno, a->body, a->number, &len, pc, NULL)) == NULL) {
         l_string = cpystr(byte_string(len));
+        grow_tmp_20k_buf(strlen(full_filename) + 128);
         q_status_message7(0, 2, 4, "Part %s, %s%s written to \"%s\"%s%s%s",
                          a->number, 
                          is_text ?   comatose(a->body->size.lines) :
@@ -2743,6 +2758,7 @@ save_attachment(qline, msgno, a)
         fs_give((void **)&l_string);
     }
     else{
+      grow_tmp_20k_buf(strlen(full_filename) + 128);
       q_status_message2(1, 3, 5,"\007%s: Error writing attachment to \"%s\"",
                         err, full_filename);
     }

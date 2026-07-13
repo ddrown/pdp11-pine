@@ -1340,6 +1340,76 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       `text` grew 361079 (after the `describe_mime()` fix) to 361359 --
       280 bytes for three more bounds-checked call sites, again
       accepted as the cost of closing three more real crash bugs.
+- [x] Picked up the sweep's last remaining named candidate,
+      `pine/mailcmd.c`'s `save_attachment()`: it pre-filled the Save-as
+      filename prompt with `strcpy(filename, param->value)` into a
+      fixed `char filename[MAXPATH+1]` (4097 bytes), where
+      `param->value` is an attachment's MIME `name=` parameter --
+      `cpystr()`'d from the message with no length cap anywhere, and
+      copied *before* the length-capped `optionally_enter()` prompt/edit
+      step ever runs. Confirmed under valgrind with a 6000-byte `name`:
+      the corrupted stack later manifests as "Jump to the invalid
+      address 0x4141414141414141" (a smashed return address), reachable
+      via the ordinary View/Save-attachment flow (`v` from MESSAGE TEXT,
+      pick the attachment number, `s` to save) -- and it reliably aborts
+      even on a plain (non-ASan, non-valgrind) build at that size.
+      Fixing the repro turned up two more overflows in the same
+      function once the (still long, if now bounded) `full_filename` gets
+      echoed back to the user:
+      - `sprintf(prompt_buf, "File \"%s\" already exists...",
+        full_filename)` into a fixed `char prompt_buf[200]` when the
+        destination file already exists -- `full_filename` can be up
+        to `MAXPATH` (4096) bytes even after bounding `filename`
+        itself, so this is its own overflow, only ~160 bytes needed to
+        trigger rather than 4096+.
+      - Every `q_status_message2()`/`q_status_message7()` call in this
+        function reporting success or failure embeds `full_filename`,
+        formatted into the shared `tmp_20k_buf` -- which starts at only
+        a 2048-byte baseline (`TMP_20K_BUF_BASELINE`, `pine.c`) and was
+        never grown at any of these three call sites, so a
+        `full_filename` anywhere over ~2000 bytes overflows it even
+        with `filename` itself now properly bounded to `MAXPATH`.
+      Fixed by: truncating the initial `strcpy` to `MAXPATH` via
+      `strncpy`+NUL (matching what `optionally_enter()` would enforce
+      on user edits anyway -- unlike an address or description, a path
+      is inherently bounded by a real length limit, so truncation is
+      the semantically correct fix here, not dynamic sizing); capping
+      `prompt_buf`'s `%s` precision at `%.150s`, matching this
+      codebase's existing `%.100s`-style convention; and calling
+      `grow_tmp_20k_buf(strlen(full_filename) + 128)` before each of the
+      three status-message calls that embed it.
+      Deliberately not expanded further: `os.c`'s `build_path()`
+      (`pathbuf, first_part, second_part`, used to build
+      `full_filename` from `ps_global->home_dir` + `filename`) has an
+      explicit "No check is made for overflow" doc comment and does an
+      unbounded `sprintf`/`strcat` of its own -- if `home_dir` were also
+      close to `MAXPATH` long, `full_filename` could still overflow.
+      Not fixed here: `home_dir` comes from the local system's
+      `getpwuid()` entry, not remote/attacker-controlled content, so
+      this is a self-inflicted local-config risk (same bucket as the
+      `mail_valid_net_parse()`/`context_digest()`/`bezerk_file()`
+      lower-priority findings in `TODO-pdp11.md`), not the remotely-
+      reachable class of bug this sweep is chasing. `display_attachment()`
+      (the sibling function right after `save_attachment()`, also
+      declares `char filename[MAXPATH+1]`) was checked and is unrelated
+      -- its `filename` comes from `temp_nam()`, not attacker content.
+      Verified end-to-end: rebuilt clean; confirmed under valgrind that
+      the original repro (6000-byte `name=` parameter) crashes before
+      the fix (stack smash landing on a corrupted return address) and
+      is clean after (only pre-existing, unrelated
+      "uninitialised value" warnings in `ttyin.c`'s `line_paint()`
+      remain, also seen in other unrelated tests). Full smoketest suite
+      passes throughout (19/19 with the new test). Added
+      `test/cases/test_save_attachment_overflow.py`; confirmed it fails
+      (crashes) before the fix and passes after -- note the test can't
+      assert the file was actually *written*, since a 6000-byte single
+      path component exceeds any real filesystem's own `NAME_MAX`
+      regardless of this fix, so it accepts either a clean
+      "written to"/"MESSAGE TEXT" success or a clean
+      "Error opening destination" failure -- either way, no crash.
+      `text` grew 361359 (after the `export_message()`-chain fixes) to
+      361431 -- 72 bytes for four more bounds-checked call sites in one
+      function.
 
 ### Drop the image-viewer attachment feature (`VAR_IMAGE_VIEWER`)
 - [x] Raised while surveying `pine/init.c`/`args.c` for one-shot startup
