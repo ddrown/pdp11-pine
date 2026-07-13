@@ -109,13 +109,12 @@ cuts, but required regardless) is now fully done; see
         bonus `a->number[20]` heap overflow), all reachable just by
         *viewing* a crafted message. Fixed; full write-up in
         `TODO-pdp11-done.md`.
-      - [ ] `pine/mailcmd.c`'s `export_message()` (~line 1430):
-        `sprintf(from, "%s%s%s", env->from->mailbox, ...)` into
-        `char from[MAX_ADDRESS+1]` (101 bytes) -- `env->from->mailbox`/
-        `host` come from parsing the message's own `From:` header with
-        no length cap anywhere (`rfc822_cpy`/`cpystr`), so a forged
-        oversized From address overflows this stack buffer via the
-        ordinary Export command. Not yet fixed.
+      - [x] `pine/mailcmd.c`'s `export_message()` -- confirmed and
+        fixed, along with two more instances of the same bug class
+        found while chasing its repro (`imap/ANSI/c-client/mail.c`'s
+        `mail_fetchfrom()`, reachable just by opening FOLDER INDEX;
+        `pine/reply.c`'s `pretty_addr_string()`, reachable just by
+        viewing any message). Full write-up in `TODO-pdp11-done.md`.
       - [ ] `pine/mailcmd.c`'s `save_attachment()` (~line 2638):
         `strcpy(filename, param->value)` into
         `char filename[MAXPATH+1]` (4097 bytes on this Linux build) --

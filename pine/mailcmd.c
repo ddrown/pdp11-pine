@@ -1311,7 +1311,7 @@ export_message(q_line, sorted_msgno)
 {
     HelpType	   help;
     char           filename[MAXPATH+1], full_filename[MAXPATH+1],*ill,
-                   from[MAX_ADDRESS+1];
+                  *from;
     int            rc, new_file;
     ENVELOPE      *env;
     BODY          *b;
@@ -1426,17 +1426,25 @@ export_message(q_line, sorted_msgno)
     }
 
     /*--------- The message separator -------*/
-    if(env && env->from)
-      sprintf(from, "%s%s%s",env->from->mailbox,
-                           env->from->host == NULL ? "" : "@",
-                           env->from->host == NULL ? "" : env->from->host);
-    else
-      strcpy(from, "the-concourse-on-high");
+    if(env && env->from) {
+        /* mailbox/host come straight from parsing the message's own
+           From: header, with no length cap anywhere upstream -- size
+           the buffer to fit rather than assuming MAX_ADDRESS is big
+           enough */
+        char *mbx  = env->from->mailbox ? env->from->mailbox : "";
+        char *host = env->from->host;
+        from = (char *) fs_get(strlen(mbx) + (host ? strlen(host) + 1 : 0) + 1);
+        sprintf(from, "%s%s%s", mbx, host == NULL ? "" : "@",
+                host == NULL ? "" : host);
+    } else
+      from = cpystr("the-concourse-on-high");
 
     now = time(0);
 
+    grow_tmp_20k_buf(strlen(from) + 32);
     sprintf(tmp_20k_buf, "%sFrom %s ", new_file ? "" : NEWLINE, from);
     so_puts(store, tmp_20k_buf);
+    fs_give((void **) &from);
 
     strcpy(tmp_20k_buf, ctime(&now)); 	/* have to put our own newline... */
     tmp_20k_buf[strlen(tmp_20k_buf) - 1] = '\0';

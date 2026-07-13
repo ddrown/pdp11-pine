@@ -784,7 +784,7 @@ char *mail_fetchbody (MAILSTREAM *stream,long m,char *sec,unsigned long *len)
 void mail_fetchfrom (char *s,MAILSTREAM *stream,long msgno,long length)
 {
   char *t;
-  char tmp[MAILTMPLEN];
+  int freet = 0;
   ENVELOPE *env = mail_fetchstructure (stream,msgno,NIL);
   ADDRESS *adr = env ? env->from : NIL;
   memset (s,' ',length);	/* fill it with spaces */
@@ -792,8 +792,16 @@ void mail_fetchfrom (char *s,MAILSTREAM *stream,long msgno,long length)
 				/* get first from address from envelope */
   while (adr && !adr->host) adr = adr->next;
   if (adr) {			/* if a personal name exists use it */
-    if (!(t = adr->personal)) sprintf (t = tmp,"%s@%s",adr->mailbox,adr->host);
+				/* mailbox/host are unbounded (parsed from
+				   the message itself), so size "mailbox@host"
+				   to fit rather than assuming MAILTMPLEN does */
+    if (!(t = adr->personal)) {
+      t = (char *) fs_get (strlen (adr->mailbox) + strlen (adr->host) + 2);
+      sprintf (t,"%s@%s",adr->mailbox,adr->host);
+      freet = 1;
+    }
     memcpy (s,t,min (length,(long) strlen (t)));
+    if (freet) fs_give ((void **) &t);
   }
 }
 

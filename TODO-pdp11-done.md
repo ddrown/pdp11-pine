@@ -1274,6 +1274,72 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       a possible follow-up rather than done here.
       `text` grew 361079-360831 = 248 bytes (bounds-checking code, not a
       cut) — expected and acceptable for closing a real crash bug.
+- [x] Picked up the sweep's `export_message()` candidate next (see the
+      "Update" note above): `pine/mailcmd.c`'s `export_message()` did
+      `sprintf(from, "%s%s%s", env->from->mailbox, ...)` into a fixed
+      `char from[MAX_ADDRESS+1]` (101 bytes), with `env->from->mailbox`/
+      `host` cpystr()'d from the message's own From: header with no
+      length cap anywhere. Investigating this turned up two *more*
+      instances of the identical bug class in the same call path,
+      found while building a repro (a message with an oversized From:
+      address kept crashing before the Export command was even
+      reached):
+      - `imap/ANSI/c-client/mail.c`'s `mail_fetchfrom()` (used by
+        `pine/mailindx.c`'s `build_header_line()` to build the "From"
+        column for every line of the FOLDER INDEX) did
+        `char tmp[MAILTMPLEN]; sprintf (t = tmp,"%s@%s",adr->mailbox,
+        adr->host);` -- reachable simply by opening the FOLDER INDEX,
+        no Export/Forward/Save needed. Confirmed under valgrind: "Jump
+        to the invalid address 0x4141414141414141" (return-address
+        smash) with a 2000-byte From: local-part. Fixed by sizing the
+        "mailbox@host" string with `fs_get()`/`fs_give()` instead of
+        assuming `MAILTMPLEN` fits one address.
+      - `pine/reply.c`'s `pretty_addr_string()` (formats each
+        From/To/Cc/Bcc line when viewing a message, and also when
+        quoting To/Cc in a reply) did `char buf[MAILTMPLEN];
+        rfc822_write_address(buf, addr);` -- `rfc822_write_address()`/
+        `rfc822_cat()` do unbounded `strcat()`s trusting the caller's
+        buffer is "big enough", the same assumption already found
+        wrong for `addrutil.c`'s `addr_string()` earlier in this audit
+        (see the `s`/`tmp_20k_buf` follow-up entries above). Reachable
+        simply by *viewing* any message with a long address --
+        `format_envelope()` calls this for every message displayed, no
+        Export needed either. Confirmed under valgrind: "Invalid read
+        of size 8 ... Address 0x4141...69 is not stack'd, malloc'd or
+        (recently) free'd" with a 2000-byte From: local-part. Fixed by
+        sizing the buffer per-address with `fs_get()`/`fs_give()`,
+        using the identical `need = 2*(personal+mailbox+host+adl) + 32`
+        sizing formula already established by `addr_string()`.
+      With both of those fixed, `export_message()`'s own bug could be
+      isolated and confirmed: a moderate (300-byte) From: address only
+      silently corrupted an adjacent same-frame stack local (confirmed
+      under a temporary ASan build, not on a plain build or under
+      valgrind -- same blind spot as the `describe_mime()` bugs above),
+      but a larger one (5000 bytes) reliably aborts even on a plain
+      build. Fixed the same way: `from` is now `fs_get()`'d to fit the
+      actual address, and `grow_tmp_20k_buf()` is called before
+      formatting it into the "From <address> <date>" mbox separator
+      line written into the shared `tmp_20k_buf` (which was previously
+      only ever handed short, `MAX_ADDRESS`-bounded content at this call
+      site, so was never grown here before).
+      Verified end-to-end: rebuilt clean; for `mail_fetchfrom()` and
+      `pretty_addr_string()`, confirmed via `git stash` + valgrind that
+      each crashes before its fix and is clean after; for
+      `export_message()`'s own bug, confirmed via a temporary
+      ASan-instrumented build (same technique as the `describe_mime()`
+      entry above, reverted afterward) that it overflows before the fix
+      and is clean after. Full smoketest suite passes throughout
+      (18/18 with the three new tests). Added
+      `test/cases/test_folder_index_from_overflow.py`,
+      `test/cases/test_message_view_from_overflow.py`, and
+      `test/cases/test_export_message_from_overflow.py` (distinct from
+      the pre-existing, unrelated `test_export_message.py` ctime/
+      time.h crash test) -- each uses a large enough address that the
+      corresponding bug crashes even on a plain build, confirmed to
+      fail before its respective fix and pass after.
+      `text` grew 361079 (after the `describe_mime()` fix) to 361359 --
+      280 bytes for three more bounds-checked call sites, again
+      accepted as the cost of closing three more real crash bugs.
 
 ### Drop the image-viewer attachment feature (`VAR_IMAGE_VIEWER`)
 - [x] Raised while surveying `pine/init.c`/`args.c` for one-shot startup

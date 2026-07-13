@@ -1375,7 +1375,8 @@ pretty_addr_string(field_name, addr, line_prefix, pc)
     char    *line_prefix, *field_name;
     gf_io_t   pc;
 {
-    char     buf[MAILTMPLEN];
+    char    *buf;
+    size_t   need;
     int	     trailing = 0, llen, alen, plen;
     ADDRESS *atmp;
 
@@ -1389,6 +1390,26 @@ pretty_addr_string(field_name, addr, line_prefix, pc)
     while(addr){
 	atmp       = addr->next; 	/* remember what's next */
 	addr->next = NULL;
+	/*
+	 * rfc822_write_address()/rfc822_cat() do unbounded strcat()s
+	 * assuming the caller's buffer is "big enough" -- addr->mailbox/
+	 * host/personal/adl are cpystr()'d with no length cap anywhere
+	 * upstream (e.g. parsing a received message's From:/To: line),
+	 * so a long address overflowed the fixed MAILTMPLEN buf this
+	 * used to be. Confirmed under valgrind: viewing an ordinary
+	 * received message with a 2000-byte From: mailbox smashed the
+	 * stack (jumped to an address built from the injected bytes).
+	 * Size dynamically per address instead, same technique as
+	 * addrutil.c's addr_string().
+	 */
+	need = 2 * ((addr->personal ? strlen(addr->personal) : 0)
+	            + (addr->mailbox ? strlen(addr->mailbox) : 0)
+	            + (addr->host   ? strlen(addr->host)   : 0)
+	            + (addr->adl    ? strlen(addr->adl)    : 0))
+	       + 32;    /* "<>", "@", quotes, group ": ", ";" */
+	if(need < MAILTMPLEN)
+	  need = MAILTMPLEN;
+	buf        = (char *) fs_get(need);
 	buf[0]     = '\0';
 	rfc822_write_address(buf, addr); /* write address into buf */
 	alen = strlen(buf);
@@ -1437,6 +1458,7 @@ pretty_addr_string(field_name, addr, line_prefix, pc)
 	else
 	  gf_puts(buf, pc);
 
+	fs_give((void **) &buf);
 	addr->next = atmp;
 	addr       = atmp;
     }
