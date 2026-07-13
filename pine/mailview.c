@@ -285,7 +285,7 @@ describe_mime(body, prefix, num, should_show)
     char               numx[50], string[200];
     int                n, alt_to_show, has_name;
     struct attachment *a;
-    MimeShow           alts[50]; /* BUG -- no bounds checking on this */
+    MimeShow           alts[50];
     PARAMETER         *param;
 
     if(body == NULL)
@@ -294,7 +294,12 @@ describe_mime(body, prefix, num, should_show)
     if(body->type == TYPEMULTIPART) {
         if(strucmp(body->subtype, "alternative") == 0) {
             /*---- Figure out which alternative part to display ---*/
-            for(part=body->contents.part,n=1; part!=NULL; part=part->next, n++)
+            /* n capped so a pathologically-wide multipart/alternative
+               (attacker-controlled part count) can't index past alts[]'s
+               end; parts beyond the cap just don't get considered */
+            for(part=body->contents.part,n=1;
+                part!=NULL && n < (int)(sizeof(alts)/sizeof(alts[0]));
+                part=part->next, n++)
               alts[n] = mime_show(&(part->body));
             n--;
             while(n > 1 && alts[n] == ShowNone)
@@ -306,9 +311,17 @@ describe_mime(body, prefix, num, should_show)
         }
         n = 1;
         for(part = body->contents.part; part != NULL; part = part->next, n++) {
-            sprintf(numx, "%s%d.", prefix, n);
+            char *nextprefix = prefix;
+            /* prefix grows by a nesting level each recursion (attacker
+               controls MIME nesting depth); stop growing numx once
+               appending would risk overflowing it, and just keep
+               reusing the last prefix that still fit */
+            if(strlen(prefix) + 16 < sizeof(numx)) {
+                sprintf(numx, "%s%d.", prefix, n);
+                nextprefix = numx;
+            }
             describe_mime(&(part->body),
-                          part->body.type == TYPEMULTIPART ? numx : prefix,
+                          part->body.type == TYPEMULTIPART ? nextprefix : prefix,
                           n,
                           n == alt_to_show || alt_to_show == 0 ? 1 : 0);
         }
@@ -323,12 +336,26 @@ describe_mime(body, prefix, num, should_show)
 
         format_mime_size(a->size, body);
 
-        sprintf(string, "%s%s%.*s%s",
-                type_desc(body->type, body->subtype, body->parameter, 0),
-                body->description != NULL ? ", \"" : "",
-                sizeof(string)-20, 
-                body->description != NULL ? body->description : "",
-                body->description != NULL ? "\"": "");
+        {
+            /* type_desc()'s output length varies (subtype/params are
+               attacker-controlled, up to ~112 bytes); the description's
+               %.*s precision must leave room for it, not assume a fixed
+               20-byte budget, or a long type_desc() plus a long
+               description together overflow string[] */
+            char *td = type_desc(body->type, body->subtype, body->parameter, 0);
+            int has_desc = body->description != NULL;
+            int avail = (int) sizeof(string) - 1 - (int) strlen(td) -
+                        (has_desc ? 4 : 0);
+            if(avail < 0)
+              avail = 0;
+
+            sprintf(string, "%s%s%.*s%s",
+                    td,
+                    has_desc ? ", \"" : "",
+                    avail,
+                    has_desc ? body->description : "",
+                    has_desc ? "\"": "");
+        }
 
         a->description = cpystr(string);
         a->body        = body;
@@ -344,13 +371,24 @@ describe_mime(body, prefix, num, should_show)
 	    has_name = 0;
         a->shown = ((a->body->type==TYPETEXT && !has_name) ||
 		a->body->type==TYPEMESSAGE) && a->can_display && should_show;
-        sprintf(a->number, "%s%d",prefix, num);
+        /* a->number[] is much smaller than numx[]/prefix's worst case
+           (see the nesting-depth comment above) -- truncate rather than
+           overflow when a deeply-nested prefix doesn't fit */
+        if(strlen(prefix) + 16 < sizeof(a->number))
+          sprintf(a->number, "%s%d",prefix, num);
+        else {
+            strncpy(a->number, prefix, sizeof(a->number)-1);
+            a->number[sizeof(a->number)-1] = '\0';
+        }
         (a+1)->description = NULL;
         if(body->type == TYPEMESSAGE) {
 	    if(body->subtype && strucmp(body->subtype, "rfc822") == 0){
 		body = body->contents.msg.body;
-		sprintf(numx, "%s%d.", prefix, num);
-		describe_mime(body, numx, 1, should_show);
+		if(strlen(prefix) + 16 < sizeof(numx)) {
+		    sprintf(numx, "%s%d.", prefix, num);
+		    describe_mime(body, numx, 1, should_show);
+		} else
+		    describe_mime(body, prefix, 1, should_show);
 	    }
         }
     }

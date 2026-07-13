@@ -1193,6 +1193,87 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       malloc's leftover bytes happening to differ. Verified: rebuilt
       clean, re-ran the valgrind repro — 0 errors, 0 contexts; full suite
       (9/9) still passes.
+- [x] Picked back up via the "Follow-up: buffer-overflow security audit"
+      standing item, with a broad grep-and-triage sweep (Explore agent)
+      over every `sprintf`/`strcat`/`strcpy`/`rfc822_cat`/
+      `rfc822_address_line` call into a fixed-size buffer across
+      `pine/*.c`, `pico/*.c`, and the compiled c-client files
+      (`mail.c`, `bezerk.c`, `mbox.c`, `dummy.c`, `rfc822.c`, `misc.c`,
+      `os_lnx.c`, `sm_unix.c`). First bug fixed from that sweep:
+      `pine/mailview.c`'s `describe_mime()` had three distinct
+      unbounded-write bugs sharing one function, all reachable simply
+      by *viewing* a crafted received message (no compose/forward/save
+      needed):
+      - `string[200]`: `sprintf(string, "%s%s%.*s%s", type_desc(...),
+        ..., sizeof(string)-20, body->description, ...)` budgeted the
+        `%.*s` precision as a flat "buffer size minus 20", implicitly
+        assuming `type_desc()`'s own output is always short. It isn't:
+        `type_desc()`'s `TYPEAPPLICATION` branches can return up to
+        ~112 bytes (e.g. `"Application/"` + a 100-byte attacker-chosen
+        subtype, uncapped anywhere in `rfc822_parse_content_header()`).
+        A part with both a long subtype and a long `Content-Description:`
+        (also uncapped upstream, straight `cpystr()`) overflows
+        `string[]` by roughly 100 bytes. Confirmed: reliably aborts
+        ("Bug in Pine detected: Received abort signal") on a plain
+        (non-ASan, non-valgrind) build with a 100-byte subtype + a
+        200-byte description — no valgrind/ASan needed to see this one.
+        Fixed by computing the precision from `type_desc()`'s actual
+        `strlen()` instead of a flat constant, so the total written
+        (`type_desc` output + `", \""` + truncated description + `"\""`)
+        can never exceed `sizeof(string)-1`.
+      - `numx[50]`: `sprintf(numx, "%s%d.", prefix, n)` builds a
+        dotted MIME part-number label (`"1.2.3."`) one nesting level at
+        a time, growing `prefix` by a few bytes per level with no depth
+        limit — the MIME nesting depth is entirely attacker-controlled.
+        Did *not* crash on a plain build or under plain valgrind (matches
+        this file's standing note that valgrind can miss a local array
+        overflowing into an adjacent same-frame stack variable) but
+        confirmed as a genuine `stack-buffer-overflow` (exact `sprintf`
+        call site) under AddressSanitizer, using a hand-built message
+        nested 40 levels deep in trivial (single-part-per-level)
+        `multipart/mixed` wrappers. Fixed by only growing `numx`/the
+        recursive `prefix` while `strlen(prefix) + 16 < sizeof(numx)`
+        still holds; once too deep to safely grow, the last prefix that
+        did fit is reused unchanged for all deeper levels (cosmetic
+        degradation of the displayed part number, not a crash).
+      - `alts[50]` (`MimeShow alts[50]`): indexed by a
+        `multipart/alternative` body's part count with *zero* bounds
+        check at all (the code's own comment flagged this: "BUG -- no
+        bounds checking on this"). Confirmed as a genuine
+        `stack-buffer-overflow` under AddressSanitizer using a crafted
+        `multipart/alternative` message with 80 parts. Fixed by capping
+        the indexing loop at `sizeof(alts)/sizeof(alts[0])` parts;
+        alternative parts beyond the cap just aren't considered when
+        picking which alternative to display.
+      - Same-function bonus fix: `a->number[20]` (`struct attachment`,
+        `pine/pine.h:519`) is written via `sprintf(a->number, "%s%d",
+        prefix, num)` using the same unbounded `prefix` chain as
+        `numx[50]` above, but `a->number` is only 20 bytes — tighter
+        than `numx`'s already-fixed 50-byte guard, and lives in the
+        `fs_get`'d `ps_global->atmts` array rather than the stack (so an
+        overflow here would corrupt a *heap* attachment-list entry, not
+        just a local). Fixed the same way: skip the `sprintf` and fall
+        back to a bounds-safe `strncpy`-and-NUL-terminate once
+        `strlen(prefix) + 16` would no longer fit in
+        `sizeof(a->number)`. The one other `sprintf(numx, ...)` call
+        site (the `TYPEMESSAGE`/`message/rfc822` recursion branch) got
+        the identical `strlen(prefix) + 16 < sizeof(numx)` guard.
+      Verified end-to-end: rebuilt clean (`./build lnx`); built a
+      temporary ASan-instrumented `bin/pine` (`OPTIMIZE=-fsanitize=address`
+      in `pine/makefile.lnx`, reverted afterward, not committed) to
+      confirm all three bugs before the fix and their absence after,
+      since this bug class isn't reliably caught by valgrind alone; full
+      smoketest suite (14/14, then 15/15 with the new test) passes both
+      before and after. Added `test/cases/test_describe_mime_overflow.py`
+      covering the `string[200]` bug (the one that crashes on a plain
+      build, so the standard harness can observe it without an ASan
+      build); confirmed it fails before the fix and passes after. The
+      `numx`/`alts` bugs aren't separately regression-tested since a
+      plain build doesn't reliably crash on them either way — would need
+      the harness to grow ASan-build support to usefully test, noted as
+      a possible follow-up rather than done here.
+      `text` grew 361079-360831 = 248 bytes (bounds-checking code, not a
+      cut) — expected and acceptable for closing a real crash bug.
 
 ### Drop the image-viewer attachment feature (`VAR_IMAGE_VIEWER`)
 - [x] Raised while surveying `pine/init.c`/`args.c` for one-shot startup

@@ -99,6 +99,73 @@ cuts, but required regardless) is now fully done; see
       `fcc_count` in `compose_stub.c`, populated by
       `fcc_candidate_list()` in `send.c`). `folders_for_fcc()` itself
       is confirmed to have zero remaining callers anywhere in the tree.
+      Update: ran the dedicated sweep this note called for (grep +
+      triage over every `sprintf`/`strcat`/`strcpy`/`rfc822_cat`/
+      `rfc822_address_line` call into a fixed buffer across `pine/*.c`,
+      `pico/*.c`, and the compiled c-client files). Findings, most
+      concerning first:
+      - [x] `pine/mailview.c`'s `describe_mime()` -- three real
+        overflow bugs (`string[200]`, `numx[50]`, `alts[50]`, plus a
+        bonus `a->number[20]` heap overflow), all reachable just by
+        *viewing* a crafted message. Fixed; full write-up in
+        `TODO-pdp11-done.md`.
+      - [ ] `pine/mailcmd.c`'s `export_message()` (~line 1430):
+        `sprintf(from, "%s%s%s", env->from->mailbox, ...)` into
+        `char from[MAX_ADDRESS+1]` (101 bytes) -- `env->from->mailbox`/
+        `host` come from parsing the message's own `From:` header with
+        no length cap anywhere (`rfc822_cpy`/`cpystr`), so a forged
+        oversized From address overflows this stack buffer via the
+        ordinary Export command. Not yet fixed.
+      - [ ] `pine/mailcmd.c`'s `save_attachment()` (~line 2638):
+        `strcpy(filename, param->value)` into
+        `char filename[MAXPATH+1]` (4097 bytes on this Linux build) --
+        `param->value` is an attachment's MIME `name=` parameter,
+        unbounded `cpystr()` from the remote message, copied *before*
+        the length-capped prompt/edit step (`optionally_enter`) ever
+        runs. Higher bar than the others (needs >4KB) but still a real
+        unbounded copy. Not yet fixed.
+      - [ ] `pine/send.c`'s `pine_write_body_header()` (~line 2537,
+        the "per-MIME-part header writer" this item originally named):
+        writes a MIME part's mini-header (Content-Type/Description/
+        Transfer-Encoding/params) into a fixed `char tmp[MAILTMPLEN]`
+        (1024 bytes) with *no* size accounting at all, unlike the
+        top-level header (`pine_rfc822_header`, which writes into the
+        dynamically-grown `tmp_20k_buf`, sized via
+        `pine_rfc822_header_size()`). Reachable via receive -> Forward
+        (declining "as MIME attachment", so `copy_body()` recurses
+        verbatim `cpystr()`s of the original part's description/
+        subtype/params) -> Send of a crafted multipart message whose
+        part has a long `Content-Description:`/parameter. Not yet
+        fixed -- the most involved of the remaining candidates, since
+        it needs the same kind of per-part size accounting
+        `pine_rfc822_header_size()` already does for the top level.
+      - [ ] `imap/ANSI/c-client/mail.c`'s `mail_valid_net_parse()`
+        (~line 373): `strcpy(mb->mailbox, t+1)` into `NETMBX.mailbox`
+        (`char[MAILTMPLEN]`, a stack struct at its one call site,
+        `pine/folder.c:1937`) -- unbounded copy of whatever follows a
+        `{host}` folder-spec's closing brace. Config/self-inflicted
+        (needs a `.pinerc` collection entry or typed folder name using
+        `{...}` syntax with a >1KB tail) rather than remote-attacker-
+        driven; overlaps the already-flagged "`{host}`-remote
+        folder-collection syntax" removal candidate below -- if that
+        syntax gets cut, this bug goes away with it, so worth deciding
+        together rather than patching in isolation.
+      - [ ] Lower-priority, needs a closer look but not confirmed
+        exploitable yet: `pine/context.c`'s `context_digest()` builds
+        its own `tmp[MAILTMPLEN]` character-by-character from a
+        `.pinerc` folder-collection string with no bound (only a
+        pathologically long, >1KB configured collection path would
+        trigger it); `imap/ANSI/c-client/bezerk.c`'s `bezerk_file()`
+        and `dummy.c`'s `dummy_file()` both do
+        `strcpy(tmp, name+1)` (also `tmp[MAILTMPLEN]`) for a `~`-prefixed
+        mailbox name with no slash before the 1024-byte mark -- same
+        "needs a contrived local config/folder name" bar as the
+        `mail_valid_net_parse()` finding above.
+      - False positive, checked and ruled out: `bezerk.c`'s
+        `LOCAL->buf` (the other site this item originally named) is
+        `fs_get`'d dynamically (always >= `CHUNK` = 8192 bytes, never
+        shrunk below it), and every `sprintf` into it writes only short
+        `%.30s`-capped or small-integer diagnostic text -- safe as is.
 - [ ] `pico/display.c`'s `resize_pico()` (~line 1693) has a similar
       uninitialized-`pscreen`-cell gap to the one just fixed in
       `vtinit()` above, but on the terminal-resize path: new rows added
