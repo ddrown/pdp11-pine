@@ -2318,3 +2318,67 @@ the fix; the heap-overflow detail itself was verified manually via
 valgrind as described above. Full smoketest suite: 25/25 passed.
 `bin/pico`'s `text` grew 112160 -> 112260 (+100 bytes); `bin/pine`
 unaffected (this code isn't linked into it).
+
+
+### Don't block Compose on the "Folder opened" status message — DONE
+
+Found while investigating why the smoketest suite felt slow (same
+investigation that led to the `~/mail` pre-creation fix in
+`test/smoketest.py` -- see that commit's message; this one is a real
+source change so it gets a write-up here instead of just a commit
+message). After fixing the `init_mail_dir()` sleep(4), `strace` still
+showed a 2-second `clock_nanosleep` on every test that composes
+shortly after startup. Traced with `bin/pine -d 9` (debug level 9)
+against a scratch `$HOME`: the debug log showed
+
+```
+q_status_message, Count 1, "Opening "INBOX"..."
+q_status_message, Count 1, "Folder "INBOX" opened with 0 messages"
+```
+
+right after startup. The second one is queued from
+`pine/mailcmd.c:2038`:
+
+```c
+q_status_message7(0, 2, 4, "%s \"%s\" opened with %s message%s%s", ...);
+```
+
+with `min_display_time=2`. Pine's normal main loop honors
+`min_display_time` non-blockingly (comparing wall-clock timestamps
+across `GetKey()` cycles, no `sleep()` involved -- see the
+`displayed_time`/`now`/`diff` bookkeeping in `status.c`). But
+`flush_status_messages()` (`pine/status.c`), whose *only* callers are
+the two sites in `pine_send()`'s composer loop
+(`pine/send.c:972`,`:990`), forced a real `sleep(currently_displayed.
+min_display_time)` for each queued message -- because curses is about
+to be torn down for the composer subprocess handoff and there's no
+more event loop to let that time pass naturally. Since a fresh
+`Session` always opens INBOX at startup (queuing this message) and
+nearly every test's first action is `send("c")` to compose, this hit
+on every test that didn't happen to interact with something else
+first.
+
+This is real interactive UW Pine behavior (not a regression from this
+fork's own changes), so fixing it was a product call rather than a
+mechanical one: asked the user whether to leave it, flag it as a
+future "deliberate simplification" candidate, or cut it now. Decision:
+cut it -- composing a new message doesn't need to block on how many
+messages are sitting in the folder just opened; that can be checked
+later. Fixed by dropping the `sleep()` call from
+`flush_status_messages()` (`pine/status.c`) entirely -- it still
+dequeues and prints each pending message once (so nothing is silently
+dropped), it just no longer blocks composing while waiting out each
+message's minimum display time. Since `flush_status_messages()` has no
+other caller, this is scoped exactly to the compose-entry path; it
+doesn't touch the normal (non-blocking) per-loop status-message
+display used everywhere else in the program.
+
+Verified via `strace -f -tt -T -e trace=clock_nanosleep` against
+`test_composer_wide_terminal`: the pine-side 2-second
+`clock_nanosleep` is gone (the only remaining one is the test's own
+`time.sleep(2)`, on `CLOCK_MONOTONIC` from Python itself, unrelated).
+Full smoketest suite: 25/25 passed. `bin/pine`'s `text` shrank
+362143 -> 362079 (-64 bytes) from the removed `sleep()` call site; no
+new regression test added since the observable difference is timing
+only (no distinct pass/fail condition beyond "compose still works",
+already covered by the existing composer tests).

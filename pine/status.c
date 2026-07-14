@@ -406,7 +406,15 @@ display_message(command)
 
 /*----------------------------------------------------------------------
      Display all the messages on the queue as quickly as possible
-  ----*/
+
+     This is only called from pine_send()'s composer loop, right before
+     the screen is handed over to the composer subprocess. It used to
+     sleep() for each message's min_display_time to guarantee the user
+     saw it (e.g. "Folder \"INBOX\" opened with N messages") before the
+     composer wiped it out -- but composing a new message doesn't need
+     to wait on a folder-status notice the user can check later, so
+     queued messages are drained and shown once here without blocking.
+  ----------------------------------------------------------------------*/
 void
 flush_status_messages()
 {
@@ -415,7 +423,6 @@ flush_status_messages()
         d_q_status_message();
         output_message(currently_displayed.text);
 	displayed_time = time(0);
-        sleep(currently_displayed.min_display_time);
     }
     message_is_displayed = 1;
 }
