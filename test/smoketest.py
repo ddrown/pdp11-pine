@@ -66,6 +66,14 @@ class Session:
         self.mbox_path = os.path.join(self.home, "testmbox")
         self.sendmail_log = None
 
+        # Pre-create ~/mail so pine's init_mail_dir() (pine/init.c) takes
+        # its "already exists" path instead of the "must create it" one --
+        # the latter does an unconditional `sleep(4)` after printing a
+        # one-line notice, on the theory that a real interactive user
+        # should have a few seconds to read it. Every fresh scratch HOME
+        # here would otherwise eat that 4s on every single test.
+        os.makedirs(os.path.join(self.home, "mail"), exist_ok=True)
+
         env = dict(os.environ)
         env["HOME"] = self.home
         env["TERM"] = "vt100"
@@ -85,9 +93,7 @@ class Session:
             # process -- unlike composing-then-postponing in one running
             # process, this doesn't benefit from any buffer growth an
             # earlier action in the same process already triggered.
-            mail_dir = os.path.join(self.home, "mail")
-            os.makedirs(mail_dir, exist_ok=True)
-            with open(os.path.join(mail_dir, "postponed-mail"), "w") as f:
+            with open(os.path.join(self.home, "mail", "postponed-mail"), "w") as f:
                 f.write(postponed_mail)
 
         spawn_cmd, spawn_argv = PINE_BIN, argv
