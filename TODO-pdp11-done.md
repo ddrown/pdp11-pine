@@ -2170,3 +2170,103 @@ These fixed global buffers alone can blow a PDP-11 data segment:
       stays green, 14/14 -- no regression test added, since this is
       pure removal of code with no caller anywhere in the tree (nothing
       observable changes for the harness to pin down).
+
+### `pico/display.c`'s `resize_pico()` uninitialized `pscreen`-cell gap — DONE
+
+`resize_pico()` (~line 1694) mirrors `vtinit()`'s per-row `malloc()`/
+`realloc()` pattern for both `vscreen` and `pscreen` on a terminal
+resize, but only `vscreen` got a "don't let any garbage in" fill
+(`vteeol()`, gated on `old_ncol < term.t_ncol`) for newly-added rows
+and the newly-widened tail of existing rows. `pscreen`'s equivalent
+rows -- freshly `malloc()`'d for brand-new rows, or `realloc()`'d
+(preserving only the old, narrower content) for existing ones -- were
+left with whatever the allocator happened to return, with no
+initialization at all.
+
+As `TODO-pdp11.md` already noted, this was long-dead code on this
+Linux build: a missing `#include <sys/ioctl.h>` (fixed during the `s`
+buffer-sizing pass, see above) had silently compiled out every
+`#ifdef TIOCGWINSZ` block, including both call sites of `resize_pico()`
+itself, so no real terminal resize ever reached it. With that fixed,
+a real resize (or the `test_composer_wide_terminal.py` regression test
+above) does reach it, making this gap genuinely live.
+
+**Reachability**: any real terminal resize while pico/pine's composer
+is on screen. `winch_handler()` (`pico/os_unix.c`) calls
+`resize_pico()` directly off `SIGWINCH`.
+
+**Fix**: added a fill loop mirroring `vscreen`'s `vteeol()` approach,
+right after each row's `pscreen[i] = vp;` assignment -- writes blank
+`CELL{' ', 0}` values across the same `(old_ncol < term.t_ncol)`-gated
+range `vscreen` already fills (`old_ncol` to `term.t_ncol` for
+existing rows, `0` to `term.t_ncol` for brand-new ones). Deliberately
+*not* a blanket `memset` like `vtinit()`'s fresh-init case uses,
+because `resize_pico()` sets `v_flag = VFCHG` (not 0) just before this
+-- a `memset` over the whole `VIDEO` struct would wipe that flag back
+to 0 and this row would never get redrawn.
+
+**Verification**: this class of bug (stale/uninitialized data read
+into a redraw diff, not a bounds violation) doesn't crash in a plain
+pty session, so it needed valgrind's uninitialized-value tracking
+rather than a plain before/after run. Driving it through `bin/pine`
+doesn't work for this, though -- since the composer redesign (see
+above), composing runs as a separate exec'd `pico` subprocess, and
+valgrind doesn't follow forked/exec'd children without
+`--trace-children=yes`. Ran the repro directly against standalone
+`bin/pico <file>` instead: `valgrind --track-origins=yes`, shrink the
+pty (15x40) then grow well past the original 24x80 (45x160). Before
+the fix: two "Conditional jump or move depends on uninitialised
+value(s)" errors in `updateline()` (`display.c:783`/`:805`), both
+`Uninitialised value was created by a heap allocation ... by
+resize_pico (display.c:1762)` -- i.e. exactly the `pscreen`
+malloc/realloc site. After the fix: both gone. (The same log also
+showed a separate, unrelated, pre-existing overflow -- see the new
+TODO item below -- present identically before and after this fix,
+confirming it isn't something this change touches.)
+
+Regression test added: `test/cases/test_composer_resize_grow.py`,
+mirroring `test_composer_wide_terminal.py`'s resize-while-composing
+pattern (shrink then grow past the original size). Since the harness
+has no valgrind integration, this test can only check the coarser
+regression (still alive, still responsive after the resize) -- the
+actual uninitialized-value elimination was confirmed manually as
+described above, not by this automated test.
+
+Full smoketest suite passes throughout (24/24 with the new test).
+`bin/pico`'s `text` grew 112078 -> 112160, +82 bytes for the fill
+loop; `bin/pine`'s size is unchanged (it no longer statically
+benefits or suffers from `display.c` size changes post-composer-
+subprocess-split in the same way).
+
+### New finding, not yet fixed: `bfind()`/`edinit()`'s `b_fname[NFILEN]` overflow in standalone `pico`
+
+Found as a side effect of the `resize_pico()` valgrind repro above --
+present in the log both before and after that fix, confirming it's an
+unrelated, pre-existing bug. `pico/main.c`'s startup path (the
+"open a file named on argv" case, *not* the `-P <handoff> <result>`
+composer-subprocess mode pine itself uses) does:
+
+```c
+strcpy(bp->b_fname, argv[carg]);
+```
+
+directly from the command-line argument with no length check.
+`b_fname` is `char[NFILEN]` (`pico/estruct.h`, `NFILEN` = 80) -- any
+file path longer than 79 characters passed to standalone `bin/pico
+<path>` overflows it. (Confirmed incidentally: the test scratch
+directory's own path in this environment is over 100 characters,
+which is what surfaced this in the `resize_pico()` repro above by
+accident -- not a contrived example.) Every *other* `b_fname` write in
+`pico/file.c` goes through `mlreply()`/`mlreplyd()`'s own
+caller-supplied max-length bound and is safe; this is the one place
+that bypasses that convention, because it's reading directly from
+`argv` rather than an interactive prompt.
+
+Not reachable from `pine`'s mail-composing flow at all -- pine invokes
+the composer via `pico -P <handoff> <result>`, a separate dispatch
+path (`pico/main.c`) that never touches `argv[carg]`/this code. Only
+affects direct standalone use of `bin/pico <file>` with a long path.
+Left unfixed for now (out of scope for the `resize_pico()` task that
+turned it up); worth a dedicated pass since a fix here is the same
+shape as every other overflow in this audit (bound the copy against
+`NFILEN`, or reject/truncate).

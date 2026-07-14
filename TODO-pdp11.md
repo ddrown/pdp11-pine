@@ -148,27 +148,32 @@ cuts, but required regardless) is now fully done; see
         `fs_get`'d dynamically (always >= `CHUNK` = 8192 bytes, never
         shrunk below it), and every `sprintf` into it writes only short
         `%.30s`-capped or small-integer diagnostic text -- safe as is.
-- [ ] `pico/display.c`'s `resize_pico()` (~line 1693) has a similar
-      uninitialized-`pscreen`-cell gap to the one just fixed in
-      `vtinit()` above, but on the terminal-resize path: new rows added
-      via `malloc`, and the grown tail of existing rows' `CELL` arrays
-      via `realloc`, are left uninitialized. `vscreen`'s equivalent gap
-      is already handled there (an explicit `vteeol()` call fills the
-      newly-grown column range, gated on `old_ncol < term.t_ncol`), but
-      there's no matching call for `pscreen`. Not fixed alongside
-      `vtinit()` because `resize_pico()` sets `v_flag = VFCHG` (not 0) on
-      these rows, so a blanket `memset` would wipe that flag too — the
-      correct fix needs to clear only the grown tail region (mirroring
-      `vscreen`'s `vteeol()` approach) rather than the whole-block
-      `memset` used in `vtinit()`, and touches resize/redraw logic that's
-      riskier to change without a resize-path regression test.
-      Note: `resize_pico()` was actually *dead code* on this Linux
-      build until the `s`-sizing pass (see `TODO-pdp11-done.md`) fixed
-      a missing `#include <sys/ioctl.h>` that had silently compiled out
-      every `#ifdef TIOCGWINSZ` block (including both call sites of
-      `resize_pico()` itself) -- so this uninitialized-memory gap is
-      now genuinely reachable via a real terminal resize, not just a
-      latent, unreachable bug.
+- [x] `pico/display.c`'s `resize_pico()` (~line 1693) had a similar
+      uninitialized-`pscreen`-cell gap to the one fixed in `vtinit()`,
+      on the terminal-resize path. Fixed with a fill loop mirroring
+      `vscreen`'s existing `vteeol()` approach (not a blanket `memset`,
+      since that would also wipe the `v_flag = VFCHG` just set on these
+      rows). Confirmed via `valgrind --track-origins=yes` against
+      standalone `bin/pico` (composing through `bin/pine` doesn't work
+      for this check -- the composer is a separate exec'd subprocess
+      valgrind won't follow without `--trace-children=yes`): two
+      "Conditional jump or move depends on uninitialised value(s)"
+      errors in `updateline()`, traced to `resize_pico()`'s `pscreen`
+      allocation, before the fix; both gone after. New regression test
+      `test/cases/test_composer_resize_grow.py`. Full write-up in
+      `TODO-pdp11-done.md`.
+- [ ] New finding from the `resize_pico()` valgrind repro above (not
+      fixed yet, out of scope for that task): `pico/main.c`'s startup
+      "open a file named on argv" path does
+      `strcpy(bp->b_fname, argv[carg])` with no length check --
+      `b_fname` is `char[NFILEN=80]`. Every other `b_fname` write in
+      `pico/file.c` goes through `mlreply()`/`mlreplyd()`'s bounded
+      prompt reader; this is the one place reading straight from
+      `argv`. Only reachable via direct standalone `bin/pico <path>`
+      use with a path over 79 characters -- pine's own composer uses a
+      separate `-P <handoff> <result>` dispatch path that never
+      touches this code, so not reachable from any mail-composing
+      flow. Full write-up in `TODO-pdp11-done.md`.
 
 ### `pine/` UI files: dead/vestigial code found while surveying send.c, mailcmd.c, folder.c, mailview.c
 - [ ] Read through the four largest files under `pine/` end to end

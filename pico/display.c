@@ -1766,6 +1766,23 @@ int  row, col;
 
 	vp->v_flag = VFCHG;
 	pscreen[i] = vp;
+	if(old_ncol < term.t_ncol){
+	    /*
+	     * New rows are malloc()'d and grown existing rows are
+	     * realloc()'d above -- either way the newly-added tail of
+	     * v_text (all of it for a brand new row, just the grown
+	     * column range for an existing one) comes back uninitialized.
+	     * Mirror vscreen's vteeol() fill above rather than a blanket
+	     * memset, since that would also clobber v_flag (just set to
+	     * VFCHG, not 0, unlike vtinit()'s fresh-init case).
+	     */
+	    register int pcol = (i < old_nrow) ? old_ncol : 0;
+	    CELL blank;
+	    blank.c = ' ';
+	    blank.a = 0;
+	    while (pcol < term.t_ncol)
+	      vp->v_text[pcol++] = blank;
+	}
     }
 
     if(!ResizeBrowser()){
