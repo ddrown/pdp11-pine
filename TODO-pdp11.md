@@ -162,18 +162,26 @@ cuts, but required regardless) is now fully done; see
       allocation, before the fix; both gone after. New regression test
       `test/cases/test_composer_resize_grow.py`. Full write-up in
       `TODO-pdp11-done.md`.
-- [ ] New finding from the `resize_pico()` valgrind repro above (not
-      fixed yet, out of scope for that task): `pico/main.c`'s startup
-      "open a file named on argv" path does
-      `strcpy(bp->b_fname, argv[carg])` with no length check --
-      `b_fname` is `char[NFILEN=80]`. Every other `b_fname` write in
-      `pico/file.c` goes through `mlreply()`/`mlreplyd()`'s bounded
-      prompt reader; this is the one place reading straight from
-      `argv`. Only reachable via direct standalone `bin/pico <path>`
-      use with a path over 79 characters -- pine's own composer uses a
-      separate `-P <handoff> <result>` dispatch path that never
-      touches this code, so not reachable from any mail-composing
-      flow. Full write-up in `TODO-pdp11-done.md`.
+- [x] New finding from the `resize_pico()` valgrind repro above, now
+      fixed: `pico/main.c`'s startup "open a file named on argv" path
+      did `strcpy(bp->b_fname, argv[carg])` with no length check --
+      `b_fname` is `char[NFILEN=80]`, and the enclosing `BUFFER` is a
+      plain `malloc(sizeof(BUFFER))` (`bfind()`, `pico/buffer.c`) with
+      `b_fname` not the last field, so a long enough argv overflowed
+      straight past the end of that heap block. `readin()`
+      (`pico/file.c`) had the identical unbounded
+      `strcpy(bp->b_fname, fname)` right after, called with the same
+      string. Both bounded to `NFILEN-1` with explicit NUL
+      termination. Only reachable via direct standalone
+      `bin/pico <path>` use with a path over 79 characters -- pine's
+      own composer uses a separate `-P <handoff> <result>` dispatch
+      path that never touches this code, so not reachable from any
+      mail-composing flow. Confirmed via `valgrind` (two "Invalid
+      write" heap-overflow errors, 0 bytes past a 152-byte block,
+      before the fix; clean after) and also reproduces as a bare
+      `SIGSEGV` with no instrumentation at all. New regression test
+      `test/cases/test_pico_standalone_longpath.py`. Full write-up in
+      `TODO-pdp11-done.md`.
 
 ### `pine/` UI files: dead/vestigial code found while surveying send.c, mailcmd.c, folder.c, mailview.c
 - [ ] Read through the four largest files under `pine/` end to end

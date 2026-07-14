@@ -197,7 +197,14 @@ main(int argc, char *argv[])
 	bp = curbp;			/* read in first file */
 	makename(bname, argv[carg]);
 	strcpy(bp->b_bname, bname);
-	strcpy(bp->b_fname, argv[carg]);
+	/*
+	 * argv[carg] is a raw command-line argument with no length cap,
+	 * unlike every other b_fname writer (mlreply()/mlreplyd() bound
+	 * their input to NFILEN); truncate rather than overflow
+	 * b_fname[NFILEN].
+	 */
+	strncpy(bp->b_fname, argv[carg], NFILEN-1);
+	bp->b_fname[NFILEN-1] = '\0';
 	if (readin(argv[carg], (viewflag==FALSE)) == ABORT) {
 	    strcpy(bp->b_bname, "main");
 	    strcpy(bp->b_fname, "");

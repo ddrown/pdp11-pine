@@ -2238,13 +2238,13 @@ loop; `bin/pine`'s size is unchanged (it no longer statically
 benefits or suffers from `display.c` size changes post-composer-
 subprocess-split in the same way).
 
-### New finding, not yet fixed: `bfind()`/`edinit()`'s `b_fname[NFILEN]` overflow in standalone `pico`
+### `bfind()`/`readin()`'s `b_fname[NFILEN]` overflow in standalone `pico` — DONE
 
 Found as a side effect of the `resize_pico()` valgrind repro above --
-present in the log both before and after that fix, confirming it's an
-unrelated, pre-existing bug. `pico/main.c`'s startup path (the
+present in the log both before and after that fix, confirming it was
+an unrelated, pre-existing bug. `pico/main.c`'s startup path (the
 "open a file named on argv" case, *not* the `-P <handoff> <result>`
-composer-subprocess mode pine itself uses) does:
+composer-subprocess mode pine itself uses) did:
 
 ```c
 strcpy(bp->b_fname, argv[carg]);
@@ -2253,20 +2253,68 @@ strcpy(bp->b_fname, argv[carg]);
 directly from the command-line argument with no length check.
 `b_fname` is `char[NFILEN]` (`pico/estruct.h`, `NFILEN` = 80) -- any
 file path longer than 79 characters passed to standalone `bin/pico
-<path>` overflows it. (Confirmed incidentally: the test scratch
+<path>` overflowed it. (Confirmed incidentally: the test scratch
 directory's own path in this environment is over 100 characters,
 which is what surfaced this in the `resize_pico()` repro above by
-accident -- not a contrived example.) Every *other* `b_fname` write in
-`pico/file.c` goes through `mlreply()`/`mlreplyd()`'s own
-caller-supplied max-length bound and is safe; this is the one place
-that bypasses that convention, because it's reading directly from
-`argv` rather than an interactive prompt.
+accident -- not a contrived example.) `readin()` (`pico/file.c`,
+called right after with the same `argv[carg]` string) had the
+identical unbounded `strcpy(bp->b_fname, fname)` as its very first
+operation. Every *other* `b_fname` write in `pico/file.c` goes through
+`mlreply()`/`mlreplyd()`'s own caller-supplied max-length bound and
+was already safe; these were the two places that bypassed that
+convention, because they read directly from `argv`/an unbounded
+parameter rather than an interactive prompt.
 
 Not reachable from `pine`'s mail-composing flow at all -- pine invokes
 the composer via `pico -P <handoff> <result>`, a separate dispatch
 path (`pico/main.c`) that never touches `argv[carg]`/this code. Only
 affects direct standalone use of `bin/pico <file>` with a long path.
-Left unfixed for now (out of scope for the `resize_pico()` task that
-turned it up); worth a dedicated pass since a fix here is the same
-shape as every other overflow in this audit (bound the copy against
-`NFILEN`, or reject/truncate).
+
+**Why this one didn't need the ASan-standalone-extraction workaround**:
+unlike `resize_pico()`'s stack-adjacent `CELL` gap, `b_fname` lives
+inside a `BUFFER` struct that's a plain `malloc(sizeof(BUFFER))`
+(`bfind()`, `pico/buffer.c`) with `b_fname` *not* the last field (16
+more bytes of `b_bname` follow it, then the malloc'd block ends) --
+so a long enough overflow runs straight off the end of the heap
+allocation, which valgrind's memcheck (and glibc malloc itself) can
+both detect directly. Confirmed via `valgrind` against standalone
+`bin/pico -z <150-A's>` before the fix:
+
+```
+==...== Invalid write of size 1
+==...==    at 0x484A924: strcpy (vg_replace_strmem.c:566)
+==...==    by 0x400CD0: main (in bin/pico)
+==...==  Address 0x4ac05e8 is 0 bytes after a block of size 152 alloc'd
+==...==    at 0x4840AE6: malloc (vg_replace_malloc.c:447)
+==...==    by 0x414B04: bfind (buffer.c:149)
+==...==    by 0x40DD74: edinit (pico.c:278)
+==...==    by 0x400C0E: main (in bin/pico)
+```
+
+(`152` matches `sizeof(BUFFER)` on this platform; a second, identical
+pair of errors came from `readin()`'s own copy at `file.c:245`.) It
+also reproduces as a bare, uninstrumented `SIGSEGV` -- no valgrind or
+ASan needed to see it crash, unlike the `resize_pico()` case -- since
+the overflow corrupts adjacent malloc chunk metadata that glibc's
+allocator later trips over.
+
+Fixed by bounding both copies to `NFILEN-1` with explicit NUL
+termination:
+
+```c
+strncpy(bp->b_fname, argv[carg], NFILEN-1);
+bp->b_fname[NFILEN-1] = '\0';
+```
+
+in `pico/main.c`, and the same pattern for `readin()`'s
+`strcpy(bp->b_fname, fname)` in `pico/file.c`. Verified clean after
+(`ERROR SUMMARY: 0 errors` under valgrind; no crash across argv
+lengths up to 5000 characters in a plain, uninstrumented run). New
+regression test `test/cases/test_pico_standalone_longpath.py`, which
+spawns `bin/pico` directly (not via `smoketest.Session`, which always
+drives `bin/pine`) with a 500-character argv path and asserts a clean
+exit rather than `SIGSEGV` -- the coarse, harness-observable half of
+the fix; the heap-overflow detail itself was verified manually via
+valgrind as described above. Full smoketest suite: 25/25 passed.
+`bin/pico`'s `text` grew 112160 -> 112260 (+100 bytes); `bin/pine`
+unaffected (this code isn't linked into it).

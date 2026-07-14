@@ -242,7 +242,13 @@ int	lockfl;		/* check for file locks? */
                 return (s);
         bp->b_flag &= ~(BFTEMP|BFCHG);
 	/* removed 'C' mode detection */
-        strcpy(bp->b_fname, fname);
+	/*
+	 * fname is unbounded here -- main.c's standalone-invocation path
+	 * passes argv[carg] straight through with no length check --
+	 * truncate rather than overflow b_fname[NFILEN].
+	 */
+	strncpy(bp->b_fname, fname, NFILEN-1);
+	bp->b_fname[NFILEN-1] = '\0';
         if ((s=ffropen(fname)) == FIOERR)       /* Hard file open.      */
                 goto out;
         if (s == FIOFNF) {                      /* File not found.      */
