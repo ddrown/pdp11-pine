@@ -82,7 +82,7 @@ char *context_string,*fqn;
   char context[MAILTMPLEN];
 
   if (context_string && *context_string && /* have a valid context? */
-      context_digest(context_string, context, NULL, NULL, NULL) == NULL){
+      context_digest(context_string, context, NULL, NULL) == NULL){
     delimiter = strstr(context, "%s");
 				/* determine prefix */
     if (prefix = (pfxlen = delimiter - context) ? strncpy (tmp,context,pfxlen)
@@ -126,25 +126,23 @@ char *context_string,*fqn;
 
 /* Context Manager context format digester
  * Accepts: context string and buffers for sprintf-suitable context,
- *          remote host (for display), remote context (for display), 
- *          and view string
+ *          remote context (for display), and view string
  * Returns: NULL if successful, else error string
  *
- * Comments: OK, here's what we expect a fully qualified context to 
+ * Comments: OK, here's what we expect a fully qualified context to
  *           look like:
  *
- * [*] [{host ["/"<proto>] [:port]}] [<cntxt>] "[" [<view>] "]" [<cntxt>]
+ * [<cntxt>] "[" [<view>] "]" [<cntxt>]
  *
- *         2) It's understood that double "[" or "]" are used to 
+ *         2) It's understood that double "[" or "]" are used to
  *            quote a literal '[' or ']' in a context name.
  *
- *         3) an empty view in context implies a view of '*', so that's 
+ *         3) an empty view in context implies a view of '*', so that's
  *            what get's put in the view string
  *
  */
 char *
-context_digest (context, scontext, host, rcontext, view)
-char *context, *scontext, *host, *rcontext, *view;
+context_digest(char *context, char *scontext, char *rcontext, char *view)
 {
     char *p, *viewp = view, tmp[MAILTMPLEN];
     int   i = 0;
@@ -158,21 +156,6 @@ char *context, *scontext, *host, *rcontext, *view;
 
     if(!rcontext && scontext)		/* place to collect rcontext ? */
       rcontext = tmp;
-
-    /* find hostname if requested and exists */
-    if(*p == '{' || (*p == '*' && *++p == '{')){
-	for(p++; *p && *p != '/' && *p != ':' && *p != '}' ; p++)
-	  if(host)
-	    *host++ = *p;		/* copy host if requested */
-
-	while(*p && *p != '}')		/* find end of imap host */
-	  p++;
-
-	if(*p == '\0')
-	  return("Unbalanced '}'");	/* bogus. */
-	else
-	  p++;				/* move into next field */
-    }
 
     for(; *p ; p++){			/* get thru context */
 	if(rcontext){
@@ -222,7 +205,6 @@ char *context, *scontext, *host, *rcontext, *view;
 	}
     }
 
-    if(host) *host = '\0';
     if(rcontext) rcontext[i] = '\0';
     if(viewp) {
 	if(viewp == view)
@@ -234,13 +216,6 @@ char *context, *scontext, *host, *rcontext, *view;
     if(scontext){			/* sprint'able context request ? */
 	if(*context == '*')
 	  *scontext++ = *context++;
-
-	if(*context == '{'){
-	    while(*context && *context != '}')
-	      *scontext++ = *context++;
-
-	    *scontext++ = '}';
-	}
 
 	for(p = rcontext; *p ; p++){
 	    if(*p == '[' && *(p+1) == ']'){
@@ -270,7 +245,7 @@ char *b, *c, *n;
 {
     char tmp[MAILTMPLEN];
 
-    if(context_digest(c, tmp, NULL, NULL, NULL) == NULL)
+    if(context_digest(c, tmp, NULL, NULL) == NULL)
       sprintf(b, tmp, n);		/* everythings ok,  */
     else
       strcpy(b, n);			/* don't apply bogus context */

@@ -1098,14 +1098,11 @@ folder_list_entry(fd, goal_row, index, context)
 			    (*context)->label[0], 
 			    ((*context)->use & CNTXT_SAVEDFLT)
 			        ? "** Default for Saves **" : "");
-		    strncpy(tmp_20k_buf, 
-			    tmp_20k_buf + fd->display_cols + 2, 
+		    strncpy(tmp_20k_buf,
+			    tmp_20k_buf + fd->display_cols + 2,
 			    strlen(tmp_20k_buf + fd->display_cols + 2));
-		    strncpy(tmp_20k_buf + fd->display_cols 
-			    - (((*context)->type & FTYPE_REMOTE) ? 8 : 7),
-			    ((*context)->type & FTYPE_REMOTE)? "(Remote)"
-			                                     : "(Local)",
-			    ((*context)->type & FTYPE_REMOTE) ? 8 : 7);
+		    strncpy(tmp_20k_buf + fd->display_cols - 7,
+			    "(Local)", 7);
 		}
 	    }
 	    else{
@@ -1850,8 +1847,8 @@ pretty_fn(folder)
 folder_exists(c_string, file)
     char *c_string, *file;
 {
-    char         fn[MAXPATH+1], host[MAXPATH+1], mbox[MAXPATH+1], *find_string;
-    int          ourstream = 0, rv = 0;
+    char         fn[MAXPATH+1], *find_string;
+    int          rv = 0;
     MAILSTREAM  *find_stream = NULL;
 
     if(c_string && *c_string && context_isambig(file))
@@ -1869,21 +1866,7 @@ folder_exists(c_string, file)
     }
 
     find_stream = mail_open(NULL, fn, OP_PROTOTYPE);
-    if(find_stream && mail_valid_net(fn, find_stream->dtb, host, mbox)){
-	if((find_stream = same_stream(fn, ps_global->mail_stream)) == NULL){
-	    if((find_stream = same_stream(fn, ps_global->inbox_stream))==NULL){
-		char tmp[MAXPATH];
-		sprintf(tmp, "{%s}", host);
-		ourstream++;
-		if((find_stream = mail_open(NULL, tmp, OP_HALFOPEN)) == NULL)
-		  return(0);	/* mail_open should've displayed error */
-	    }
-	}
-
-	find_string = mbox;
-    }
-    else
-      find_string = fn;
+    find_string = fn;
 
     find_folder_list = new_folder_list();
 
@@ -1891,8 +1874,6 @@ folder_exists(c_string, file)
     rv = folder_total(find_folder_list);
 
     free_folder_list(&find_folder_list);
-    if(ourstream)
-      mail_close(find_stream);
 
     return(rv);
 }
@@ -2096,54 +2077,6 @@ dump_contexts(fp)
 
 
 /*
- * returns with the folder's type's set
- *
- * WARNING: c-client naming knowledge is hardcoded here!
- *          This is based on our understanding of c-client naming 
- *	    conventions:
- *
- *		leading '{' means remote access
- *		{XXX/nntp}  means remote nntp access
- *		{XXX/imap}  means remote imap access
- *		{XXX/anonymous}  means anonymous access
-BUG? look into using mail.c:mail_valid_net()
- */
-void
-set_ftype(context, flags)
-    char           *context;
-    unsigned short *flags;
-{
-    char *p, tmp[MAXPATH];
-    long  i;
-
-    *flags = 0;					/* clear flags */
-
-    if(!context || *context == '\0')
-      return;
-
-    if(*context == '*')
-	context++;
-
-    if(*context == '{' && context[1] && context[1] != '}'
-       && (p = strindex(context, '}'))){
-	*flags |= FTYPE_REMOTE;
-	i = p - context;
-	strncpy(tmp, context, (int)i);
-	tmp[i] = '\0';
-
-	if((p = strindex(tmp, '/')) && strucmp(p+1, "nntp") == 0)
-	  *flags |= FTYPE_OLDTECH;
-
-	if(p && strucmp(p+1, "anonymous") == 0)
-	  *flags |= FTYPE_ANON;
-    }
-    else
-      *flags |= FTYPE_LOCAL;		/* if it's not remote... */
-}
-
-
-
-/*
  * new_context - creates and fills in a new context structure, leaving
  *               blank the actual folder list (to be filled in later as
  *               needed).  Also, parses the context string provided 
@@ -2159,7 +2092,7 @@ new_context(cntxt_string)
 {
     CONTEXT_S  *c;
     int         quoted = 0;
-    char        host[MAXPATH], rcontext[MAXPATH], *p, *nickname = NULL;
+    char        rcontext[MAXPATH], *p, *nickname = NULL;
 
     /*
      * do any context string parsing (like splitting user-supplied 
@@ -2191,7 +2124,7 @@ new_context(cntxt_string)
 	}
     }
 
-    if(p = context_digest(cntxt_string, NULL, host, rcontext, NULL)){
+    if(p = context_digest(cntxt_string, NULL, rcontext, NULL)){
 	q_status_message2(0,3,4,"\007Bad context, %s : %s", p, cntxt_string);
 	if(nickname)
 	  fs_give((void **)&nickname);
@@ -2201,29 +2134,14 @@ new_context(cntxt_string)
 
     c = (CONTEXT_S *) fs_get(sizeof(CONTEXT_S)); /* get new context   */
     memset((void *) c, 0, sizeof(CONTEXT_S));    /* and initialize it */
-    set_ftype(cntxt_string, &(c->type));
 
-    if(c->label[0] == NULL){
-	if(!nickname){			/* make one up! */
-	    sprintf(tmp_20k_buf, "%s%s%s",
-		    rcontext,
-		    (c->type & FTYPE_REMOTE) ? " on " : "",
-		    (c->type & FTYPE_REMOTE) ? host : "");
-	    c->label[0]   = cpystr(tmp_20k_buf);
-	}
-	else
-	  c->label[0] = nickname;
-    }
+    if(c->label[0] == NULL)
+      c->label[0] = nickname ? nickname : cpystr(rcontext);
 
     c->context        = cpystr(cntxt_string);
     c->use            = CNTXT_NOFIND;		/* do find later! */
 
-    dprint(2, (debugfile, "Context %s type:%s%s%s%s%s\n", c->context,
-	       (c->type&FTYPE_LOCAL)   ? " LOCAL"   : "",
-	       (c->type&FTYPE_REMOTE)  ? " REMOTE"  : "",
-	       (c->type&FTYPE_SHARED)  ? " SHARED"  : "",
-	       (c->type&FTYPE_OLDTECH) ? " OLDTECH"  : "",
-	       (c->type&FTYPE_ANON)    ? " ANON" : ""));
+    dprint(2, (debugfile, "Context %s\n", c->context));
 
     return(c);
 }
@@ -2247,14 +2165,13 @@ find_folders_in_context(context, search_string)
     CONTEXT_S *context;
     char      *search_string;
 {
-    char  host[MAXPATH], rcontext[MAXPATH], view[MAXPATH],
+    char  rcontext[MAXPATH], view[MAXPATH],
          *search_context, *rv;
-    int   local_open = 0;
 
     if((context->use&CNTXT_NOFIND) == 0 || (context->use&CNTXT_PARTFIND))
       return;				/* find already done! */
 
-    if(rv = context_digest(context->context, NULL, host, rcontext, view)){
+    if(rv = context_digest(context->context, NULL, rcontext, view)){
 	q_status_message2(0,2,2,"\007Bad context, %s : %s", rv,
 			  context->context);
 	return;
@@ -2284,46 +2201,12 @@ find_folders_in_context(context, search_string)
      *     Type      Search           Search returns
      *     ----      ------           --------------
      * local mail    mail/*           /usr/staff/mikes/mail/foo
-     * imap mail     {remote}mail/*   nothing (unless {} in mboxlist names)
-     * imap mail     mail/*           {remote}mail/foo
      * local news    *                foo.bar (if news spool local!)
-     * imap news     *                ????
-     * nntp news     *                foo.bar
-     * nntp news     [host]*          [host]foo.bar
      *
      */
 
-    if((context->type)&FTYPE_REMOTE){
-	search_context = rcontext;
-	sprintf(tmp_20k_buf, "%s{%s%s%s}", 
-		"", host,
-		(context->type&FTYPE_OLDTECH) ? "/nntp"      : "",
-		(context->type&FTYPE_ANON)    ? "/anonymous" : ""); 
-
-	/*
-	 * Try using a stream we've already got open...
-	 */
-	find_folder_stream = same_stream(tmp_20k_buf,ps_global->mail_stream);
-
-	if(!find_folder_stream 
-	   && ps_global->mail_stream != ps_global->inbox_stream)
-	  find_folder_stream = same_stream(tmp_20k_buf,ps_global->inbox_stream);
-
-	if(!find_folder_stream){	/* gotta open a new one */
-	    local_open++;
-	    find_folder_stream = mail_open(NULL, tmp_20k_buf, OP_HALFOPEN);
-	}
-
-	if(!find_folder_stream){
-	    dprint(1, (debugfile, "mail_open of %s FAILED!\n", tmp_20k_buf));
-	    context->use &= ~CNTXT_PARTFIND;	/* unset partial find bit */
-	    return;
-	}
-    }
-    else{
-        find_folder_stream     = NULL;
-	search_context = rcontext;
-    }
+    find_folder_stream = NULL;
+    search_context = rcontext;
 
     /*
      * For now use find_all as there's no distinguishing in pine
@@ -2340,9 +2223,6 @@ find_folders_in_context(context, search_string)
      * to do with the current context)
      */
     context_find_all(search_context, find_folder_stream, search_string);
-
-    if(local_open)
-      mail_close(find_folder_stream);
 
     context->use &= ~CNTXT_PARTFIND;	/* unset partial find bit */
 }

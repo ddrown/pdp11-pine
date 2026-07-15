@@ -430,16 +430,6 @@ struct ttyo {
 #define	CNTXT_NOFIND	0x80			/* no find done in context  */
 
 
-/*
- * Flags indicating folder collection type
- */
-#define	FTYPE_LOCAL	0x01			/* Local folders	  */
-#define	FTYPE_REMOTE	0x02			/* Remote folders	  */
-#define	FTYPE_SHARED	0x04			/* Shared folders	  */
-#define	FTYPE_OLDTECH	0x10			/* Not accessed via IMAP  */
-#define	FTYPE_ANON	0x20			/* anonymous access       */
-
-
 /*------------------------------
     Stucture to keep track of the various folder collections being
     dealt with.
@@ -450,7 +440,6 @@ typedef struct context {
     char           *nickname;			/* user provided nickname  */
     char            last_folder[MAXFOLDER+1];	/* last folder used        */
     void           *folders;			/* folder data             */
-    unsigned short  type;			/* type of collection      */
     unsigned short  use;			/* use flags for context   */
     unsigned short  num;			/* context number in list  */
     int		    d_line;			/* display line for labels */

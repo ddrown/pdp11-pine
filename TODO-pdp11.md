@@ -46,11 +46,11 @@ cuts, but required regardless) is now fully done; see
         (`int *status`, not `union wait *`) rather than assuming the
         cast is still correct; possibly a leftover from an older BSD
         `wait()` signature.
-      - 1x `-Wpointer-compare`: `pine/folder.c:1998` (line number as of
-        the `folder.c` dead-code sweep; was `:2067` before it), comparing
-        a pointer to `'\0'` (likely meant to dereference it first) --
-        worth a standalone look, smells like a real (if probably
-        harmless here) bug rather than a style nit.
+      - 1x `-Wpointer-compare`: `pine/folder.c:1979` (line number as of
+        the `{host}`-remote-syntax cut; was `:1998` before it, `:2067`
+        before that), comparing a pointer to `'\0'` (likely meant to
+        dereference it first) -- worth a standalone look, smells like
+        a real (if probably harmless here) bug rather than a style nit.
 
 ### `pine/` UI files: dead/vestigial code found while surveying send.c, mailcmd.c, folder.c, mailview.c
 -- DONE, see `TODO-pdp11-done.md`. All four files (`send.c`, `mailcmd.c`,
@@ -65,18 +65,15 @@ cuts, but required regardless) is now fully done; see
       target (no network, US-ASCII only). Cutting these is a product
       decision, not a bug fix, so listed separately from the confirmed
       dead code above.
-      **`{host}`-remote folder-collection syntax** (`pine/folder.c`,
-      line numbers as of the `folder.c` dead-code sweep):
-      `FTYPE_REMOTE`/`FTYPE_OLDTECH`/`FTYPE_ANON` detection in
-      `set_ftype()` (2112-2142), the remote branch of
-      `find_folders_in_context()` (2296-2322), the `(Remote)`/`(Local)`
-      labels in `folder_list_entry()` (1105-1108), and the
-      remote-stream-opening branch in `folder_exists()` (1873-1881).
-      Not structurally dead -- only reachable if a pinerc
-      `folder-collections`/`incoming-folders` line begins with `{`,
-      which nothing on a UUCP-only station would configure. Removing it
-      means deciding to disallow `{...}`-prefixed collection syntax
-      outright, not just deleting inert code.
+      **`{host}`-remote folder-collection syntax** -- DONE, see
+      `TODO-pdp11-done.md`. Cut fully (not just the four `folder.c`
+      sites originally named here): `pine/context.c`'s
+      `context_digest()` no longer parses a leading `{host...}`
+      prefix at all, and `pine/folder.c`'s `set_ftype()`/
+      `FTYPE_REMOTE`/`FTYPE_OLDTECH`/`FTYPE_ANON` handling in
+      `find_folders_in_context()`/`folder_list_entry()`/
+      `folder_exists()` is gone, along with the `type` field on
+      `CONTEXT_S` (`pine.h`) that stored those flags.
       **Magic-number MIME-type sniffing** (`pine/send.c`,
       `set_mime_types()`): GIF/JPEG/TIFF/PostScript/`.snd`/AppleFile/ZIP
       content detection -- vestigial from when the composer could

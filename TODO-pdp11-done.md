@@ -2802,3 +2802,93 @@ already covered by the existing composer tests).
       being compiled in (not preprocessor-gated), so deleting them
       produced a real size win. This closes out the "`pine/` UI files:
       dead/vestigial code" survey item across all four files.
+
+### `{host}`-remote folder-collection syntax -- cut, first of the "Deliberate-simplification candidates" (product decisions, not dead-code deletion)
+- [x] Decision made with the user: cut the `{host}`-remote collection
+      syntax outright, since the target has no TCP/IP at all (per
+      CLAUDE.md) -- not just make the four `pine/folder.c` sites the
+      TODO originally named unreachable, but disallow the syntax at
+      the config-parsing level. Investigation found the cut was more
+      cross-cutting than the TODO's file list suggested: the `{host}`
+      prefix isn't parsed only where it's acted on, it's baked into
+      the *general* context-string grammar in
+      `pine/context.c`'s `context_digest()` -- the single parser every
+      context string (local or not) goes through -- so a full cut
+      needed changes there too, not just in `folder.c`.
+      **`pine/context.c`**: `context_digest()` -- removed the `host`
+      output parameter and the `if(*p == '{' ...)` prefix-skip block
+      that consumed a leading `{host[/proto][:port]}` before the rest
+      of the context grammar; removed the trailing `if(host) *host =
+      '\0';` reset and the `scontext`-building `if(*context == '{')`
+      copy-through block (built a `{host}` prefix onto the
+      sprintf-able context string) since a context can no longer begin
+      with `{`. Grammar comment simplified from `[*] [{host
+      ["/"<proto>] [:port]}] [<cntxt>] "[" [<view>] "]" [<cntxt>]` to
+      `[<cntxt>] "[" [<view>] "]" [<cntxt>]`. Converted the function's
+      own signature to ANSI style
+      (`context_digest(char *context, char *scontext, char *rcontext,
+      char *view)`) per CLAUDE.md's opportunistic K&R-to-ANSI
+      guidance, since the signature was already being edited for the
+      parameter removal. Updated both in-file callers
+      (`context_fqn_to_an()`, `context_apply()`) to the new 4-arg form.
+      **`pine/folder.c`**: removed `set_ftype()` entirely (the
+      function that inspected a context string's `{host[/nntp]
+      [/anonymous]}` prefix to set `FTYPE_REMOTE`/`FTYPE_OLDTECH`/
+      `FTYPE_ANON`/`FTYPE_LOCAL` bits) and its call site in
+      `new_context()`; `new_context()`'s label-building collapsed from
+      the `FTYPE_REMOTE`-conditional `"%s%s%s", rcontext, " on ",
+      host` sprintf down to plain `cpystr(rcontext)`, and its trailing
+      `dprint()` no longer lists type flags since there's only one
+      type now. `find_folders_in_context()`: removed the
+      `(context->type)&FTYPE_REMOTE` branch that rebuilt a `{host[/nntp]
+      [/anonymous]}` stream-open string and tried to reuse/open a
+      remote `MAILSTREAM` (and the `local_open` bookkeeping that only
+      that branch used), keeping just the local `else` branch's
+      behavior (`find_folder_stream = NULL; search_context =
+      rcontext;`) unconditionally; trimmed the stale comment table
+      above it down to the two local-mail/local-news rows (the
+      imap/nntp rows described behavior that no longer exists in this
+      code path). `folder_list_entry()`: the `(Remote)`/`(Local)`
+      label ternary (width 8 vs. 7, text `"(Remote)"` vs. `"(Local)"`)
+      collapsed to always emit `"(Local)"`/7, since every collection
+      is local now. `folder_exists()`: removed the
+      `mail_valid_net()`-gated remote-stream-reuse-or-open block
+      (`same_stream()` against the current/inbox stream, falling back
+      to `mail_open(..., OP_HALFOPEN)` on a freshly-built `{host}`
+      string) along with the `host`/`mbox`/`ourstream` locals it alone
+      used, keeping just `find_string = fn` (what the existing `else`
+      branch already did for any non-remote-looking `fn`). Note:
+      `pine/pine.c`'s own two `mail_valid_net()` calls (checking an
+      *already-open* live stream's driver, unrelated to parsing
+      collection-config syntax) were left untouched -- out of scope
+      for this item.
+      **`pine/pine.h`**: removed the `FTYPE_LOCAL`/`FTYPE_REMOTE`/
+      `FTYPE_SHARED`/`FTYPE_OLDTECH`/`FTYPE_ANON` defines and the
+      `unsigned short type;` field from `CONTEXT_S` -- confirmed via
+      grep that every remaining reference to `->type` or `FTYPE_*` in
+      `pine/` was inside the sites just removed, so both the flags and
+      the struct field they were stored in were dead in tandem.
+      Not touched: the `{host}`-prefix handling implicit in
+      `context_fqn_to_an()`'s prefix/suffix matching comment (mentions
+      "`mail_find` on open stream returns `{host}context`") -- that's
+      generic FQN-vs-context mismatch recovery logic for c-client's
+      `mail_find`/`mail_find_all` callbacks, not itself a
+      remote-collection-syntax parser, so left alone as out of scope.
+      Verified: `./build clean && ./build lnx` clean (only the
+      pre-existing, already-tracked `-Wpointer-compare` bug at
+      `folder.c` remains, line number shifted from `:1998` to `:1979`
+      by this change's deletions -- updated the standing
+      compiler-warnings TODO entry accordingly); full smoketest suite
+      25/25. Size delta via `git stash`-based before/after clean
+      rebuild: `bin/pine`'s `text` shrank 358383 -> 356119 (-2264
+      bytes), `data`/`bss` unchanged (13416/15192) -- a real win, since
+      unlike the earlier `#ifdef DOS`-gated dead-code passes, this was
+      live, always-compiled code with no callers left once the syntax
+      was disallowed. No regression test added -- pure feature
+      removal with no distinct pass/fail behavior for the harness to
+      capture (a `.pinerc` `folder-collections` line starting with
+      `{` will now be parsed as a literal, non-special context string
+      instead of triggering remote handling, rather than being
+      rejected outright -- CLAUDE.md's config-generality
+      conventions don't require inventing new config validation for a
+      syntax variant this build no longer looks for).
