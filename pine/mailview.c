@@ -72,8 +72,6 @@ void       zero_atmts(struct attachment *);
 void	   zero_scroll_text(void);
 void       push_scroll_state();
 void       pop_scroll_state();
-void	   ScrollFile(int);
-int	   make_file_index();
 char      *show_multipart(MESSAGECACHE *, int);
 MimeShow   mime_show(BODY *);
 char      *part_desc(char *,BODY *, int);
@@ -91,8 +89,6 @@ void       zero_atmts();
 void	   zero_scroll_text();
 void       push_scroll_state();
 void       pop_scroll_state();
-void	   ScrollFile();
-int	   make_file_index();
 char      *show_multipart();
 MimeShow   mime_show();
 char      *part_desc();
@@ -159,30 +155,6 @@ mail_view_screen(pine_state)
 	if(mc && !mc->seen)	/* count state change in check_point */
 	  check_point_change();
 
-#ifdef	DOS
-	/* 
-	 * Handle big text for DOS here
-	 *
-	 * this size could be adaptive if we don't find a good
-	 * solution to the elt caching problem with mrc.
-	 *
-	 * judging from 1000+ message folders around here, it looks
-	 * like 9X% of messages fall in the < 8k range, so it
-	 * seems like this is as good a place to draw the line as any
-	 *
-	 * We ALSO need to divert all news articles we read to secondary
-	 * storage as its possible we're using c-client's NNTP driver
-	 * which returns BOGUS sizes UNTIL the whole thing is fetched.
-	 * Note: this is more a deficiency in NNTP than in c-client.
-	 */
-	if(mc->rfc822_size > MAX_MSG_INCORE 
-	   || strcmp(pine_state->mail_stream->dtb->name, "nntp") == 0){
-	    src = FileStar;
-	}
-	else{
-	    src = CharStar;
-	}
-#endif
 	store = so_get(src, NULL, EDIT_ACCESS);
 	gf_set_so_writec(&pc, store);
 
@@ -204,35 +176,11 @@ mail_view_screen(pine_state)
 		       pc);
 
 	} else {
-#ifdef	DOS
-	    /*
-	     * a little cheating here.  Setup dos_gets to put
-	     * what it receives in the file pointed to by
-	     * the storage object we've already allocated.
-	     * This'll save us having to copy files around.
-	     */
-	    if(src == FileStar){
-	        append_file = (FILE *)so_text(store);
-	        mailgets    = dos_gets;
-	        (void)mail_fetchheader(pine_state->mail_stream,
-		         pine_state->sort[pine_state->current_sorted_msgno]);
+	    so_puts(store, mail_fetchheader(pine_state->mail_stream,
+		     pine_state->sort[pine_state->current_sorted_msgno]));
 
-		(void)mail_fetchtext(pine_state->mail_stream,
-			 pine_state->sort[pine_state->current_sorted_msgno]);
-
-		append_file = NULL;
-		mailgets    = NULL;
-		mail_gc(pine_state->mail_stream, GC_TEXTS);
-	    }
-	    else
-#endif
-	    {
-		so_puts(store, mail_fetchheader(pine_state->mail_stream,
-			 pine_state->sort[pine_state->current_sorted_msgno]));
-
-		so_puts(store, mail_fetchtext(pine_state->mail_stream,
-			 pine_state->sort[pine_state->current_sorted_msgno]));
-	    }
+	    so_puts(store, mail_fetchtext(pine_state->mail_stream,
+		     pine_state->sort[pine_state->current_sorted_msgno]));
         }
 
         last_message_viewed  = ps_global->current_sorted_msgno;
@@ -610,22 +558,11 @@ format_message(msgno, env, body, flgs, pc)
               message isn't a MIME message 
           ---*/
 	void            *text2;
-#ifdef	DOS
-	/* for now, always fetch to disk.  This could be tuned to
-	 * check for message size, then decide to deal with it on disk...
-	 */
-	mailgets    = dos_gets;
-	append_file = NULL;		/* let dos_gets create tmp file */
-#endif
 
         if(text2 = (void *)mail_fetchtext(ps_global->mail_stream, msgno)){
 	    if(!gf_puts(NEWLINE, pc))
 	      goto write_error;
-#ifdef	DOS
-	    gf_set_readc(&gc, append_file, 0L, FileStar);
-#else
 	    gf_set_readc(&gc, text2, (unsigned long)strlen(text2), CharStar);
-#endif
 	    gf_filter_init();
 	    gf_link_filter(gf_nvtnl_local);
 	    if(decode_error = gf_pipe(gc, pc)){
@@ -634,13 +571,6 @@ format_message(msgno, env, body, flgs, pc)
 		if(!gf_puts(tmp_20k_buf, pc))
 		  goto write_error;
 	    }
-#ifdef	DOS
-	    if(append_file){
-		fclose(append_file);
-		append_file = NULL;
-		mail_gc(ps_global->mail_stream, GC_TEXTS);
-	    }
-#endif
 	}
 	else{
 	    if(!gf_puts(NEWLINE, pc)
@@ -650,9 +580,6 @@ format_message(msgno, env, body, flgs, pc)
 	      goto write_error;
 	}
 
-#ifdef	DOS
-	mailgets = NULL;		/* unset special switch */
-#endif
 	return(1);
     }
         
@@ -1181,10 +1108,8 @@ scrolltool(text, title, pages, style, source, att)
       km = &text_att_view_keymenu;
     }else if(style == MessageText) {
       km = &view_keymenu;
-#ifndef DOS
       if(F_OFF(F_ENABLE_PIPE,ps_global))
-#endif
-        clrbitn(VIEW_PIPE_KEY, bitmap);  /* always clear for DOS */
+        clrbitn(VIEW_PIPE_KEY, bitmap);
       if(F_OFF(F_ENABLE_BOUNCE,ps_global))
 	clrbitn(BOUNCE_KEY, bitmap);
       if(F_OFF(F_ENABLE_FLAG,ps_global))
@@ -1654,8 +1579,6 @@ search_text(q_line, start_line)
 static struct scroll_text {
     void *text;          /* Original text */
     char **text_lines;   /* Lines to display. Malloced once for life of Pine */
-    FILE  *findex;	 /* file containing line offsets in another file */
-    char  *fname;	 /* name of file containing line offsets */
     int top_text_line;   /* index into text array of line on top of screen */
     int num_lines;       /* Calculated number lines of text to display */
     int lines_allocated; /* size of array text_lines */
@@ -1664,12 +1587,8 @@ static struct scroll_text {
     int screen_other_lines;/* Line ons screen not used for scroll text */
     short *line_lengths;   /* Lengths of lines for display, not \0 terminatd*/
     SourceType source;	/* How to interpret "text" field */
-} st = {NULL, NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, NULL, CharStar},
+} st = {NULL, NULL, 0, 0, 0, 0, 0, 0, NULL, CharStar},
   scroll_stack;
-
-
-#define	PGSIZE (ps_global->ttyo->screen_rows - st.screen_other_lines)
-
 
 
 void
@@ -1678,8 +1597,6 @@ push_scroll_state()
     scroll_stack    = st;		/* save old state */
     st.text         = NULL;		/* prepare st struct for new data */
     st.text_lines   = NULL;
-    st.findex       = NULL;
-    st.fname        = NULL;
     st.top_text_line = st.num_lines = st.lines_allocated = st.screen_width = 0;
     st.screen_start_line = st.screen_other_lines = 0;
     st.line_lengths = NULL;
@@ -1732,7 +1649,7 @@ redraw_scroll_text()
 
     format_scroll_text();
 
-    offset = (st.source == FileStar) ? 0 : st.top_text_line;
+    offset = st.top_text_line;
 
     /*---- Actually display the text on the screen ------*/
     for(i = 0; i < ps_global->ttyo->screen_rows - st.screen_other_lines; i++){
@@ -1751,8 +1668,7 @@ redraw_scroll_text()
 
 
 /*----------------------------------------------------------------------
-  Free memory used as scrolling buffers for text on disk.  Also mark
-  text_lines as available
+  Mark text_lines as available
   ----*/
 void
 zero_scroll_text()
@@ -1760,28 +1676,7 @@ zero_scroll_text()
     register int i;
 
     for(i = 0; i < st.lines_allocated; i++)
-      if(st.source == FileStar && st.text_lines[i])
-	fs_give((void **)&st.text_lines[i]);
-      else
-	st.text_lines[i] = NULL;
-
-    if(st.source == FileStar && st.findex != NULL){
-	fclose(st.findex);
-	st.findex = NULL;
-	if(st.fname){
-	    unlink(st.fname);
-	    fs_give((void **)&st.fname);
-	}
-    }
-
-#ifdef	DOS
-    st.lines_allocated = 0;
-    if(st.text_lines)
-      fs_give((void **)&st.text_lines);
-
-    if(st.line_lengths)
-      fs_give((void **)&st.line_lengths);
-#endif
+      st.text_lines[i] = NULL;
 }
 
 
@@ -1809,11 +1704,8 @@ screen widths of 1-20 characters
 void
 format_scroll_text()
 {
-    int             i, line_len;
+    int             line_len;
     char           *p, **pp;
-#ifdef	X_NEW
-    char           *max_line;
-#endif
     register short  *ll;
     register char  **tl, **tl_end, *last_space;
 
@@ -1858,11 +1750,7 @@ format_scroll_text()
         /*------ Format the plain text ------*/
         for(p = (char *)st.text; *p; ) {
             *tl = p;
-#ifdef X_NEW
-            max_line = p + st.screen_width;
-            while(*p != '\r' && *p != '\n' && p < max_line && *p) p++;
-#else
-            line_len = 0;            
+            line_len = 0;
             last_space = NULL;
 
             while(*p) {
@@ -1908,8 +1796,7 @@ format_scroll_text()
                     }
                 }
             }
-        
-#endif
+
             *ll = p - *tl;
             ll++; tl++;
             if(tl >= tl_end) {
@@ -1932,150 +1819,10 @@ format_scroll_text()
 
 	st.num_lines = tl - st.text_lines;
     }
-    else {
-	/*------ Display text is in a file --------*/
-
-	/*
-	 * This is pretty much only useful under DOS where we can't fit
-	 * all of big messages in core at once.  This scheme makes
-	 * some simplifying assumptions:
-	 *  1. Lines are on disk just the way we'll display them.  That
-	 *     is, line breaks and such are left to the function that
-	 *     writes the disk file to catch and fix.
-	 *  2. We get away with this mainly because the DOS display isn't
-	 *     going to be resized out from under us.
-	 *
-	 * The idea is to use the already alloc'd array of char * as a 
-	 * buffer for sections of what's on disk.  We'll set up the first
-	 * few lines here, and read new ones in as needed in 
-	 * scroll_scroll_text().
-	 *  
-	 * but first, make sure there are enough buffer lines allocated
-	 * to serve as a place to hold lines from the file.
-	 */
-	if(st.lines_allocated < (2 * PGSIZE) + 1){
-	    /*
-	     * clear lines already alloc'd 
-	     */
-	    for(i = 0; i < st.lines_allocated; i++)
-	      if(st.text_lines[i]) 		/* clear alloc'd lines */
-		fs_give((void **)&st.text_lines[i]);
-
-	    st.lines_allocated = (2 * PGSIZE) + 1; /* resize */
-
-	    fs_resize((void **)&st.text_lines,
-		      st.lines_allocated * sizeof(char *));
-	    memset(st.text_lines, 0, st.lines_allocated * sizeof(char *));
-	    fs_resize((void **)&st.line_lengths,
-		      st.lines_allocated*sizeof(short));
-	}
-
-	for(i = 0; i <= PGSIZE; i++)
-	  if(st.text_lines[i] == NULL)
-	    st.text_lines[i] = (char *)fs_get(st.screen_width*sizeof(char));
-
-	tl = &st.text_lines[i];
-
-	st.num_lines = make_file_index();
-
-	ScrollFile(st.top_text_line);		/* then load them up */
-
-    }
 
     *tl = NULL;
 }
 
-
-
-
-/*
- * ScrollFile - scroll text into the st struct file making sure 'line'
- *              of the file is the one first in the text_lines buffer.
- *
- *   NOTE: talk about massive potential for tuning...
- *         Goes without saying this is still under constuction
- */
-void
-ScrollFile(line)
-int line;
-{
-    register int  i;
-             long x;
-
-    if(line == 0){		/* reset and load first couple of pages */
-	fseek((FILE *) st.text, 0L, 0);
-    }
-    else{
-	/*** do stuff to get the file pointer into the right place ***/
-	/*
-	 * BOGUS: this is painfully crude right now, but I just want to get
-	 * it going. 
-	 *
-	 * possibly in the near furture, an array of indexes into the 
-	 * file that are the offset for the beginning of each line will
-	 * speed things up.  Of course, this
-	 * will have limits, so maybe a disk file that is an array
-	 * of indexes is the answer.
-	 */
-	fseek((FILE *) st.findex, (size_t)(line-1) * sizeof(long), 0);
-	if(fread(&x, sizeof(long), (size_t)1, (FILE *)st.findex) != 1){
-	    return;
-	}
-
-	fseek((FILE *) st.text, x, 0);
-    }
-
-    for(i = 0; i < PGSIZE; i++){
-	if(!st.text_lines || !st.text_lines[i]
-	   || fgets(st.text_lines[i],st.screen_width,(FILE *)st.text) == NULL)
-	  break;
-
-	st.line_lengths[i] = strlen(st.text_lines[i]);
-    }
-
-    for(; i < PGSIZE; i++)
-      if(st.text_lines && st.text_lines[i]) /* blank out any unused lines */
-	*st.text_lines[i] = '\0';
-}
-
-
-/*
- * make_file_index - do a single pass over the file containing the text
- *                   to display, recording line lengths and offsets.
- *    NOTE: This is never really to be used on a real OS with virtual
- *          memory.  This is the whole reason st.findex exists.  Don't
- *          want to waste precious memory on a stupid array that could 
- *          be very large.
- */
-int
-make_file_index()
-{
-    register int l = 0;
-    long i = 0;
-
-    if(!st.findex){
-	if(!st.fname)
-	  st.fname = (char *)temp_nam(NULL, "pi");
-
-	if((st.findex = (void *)fopen(st.fname,"w+b")) == NULL)
-	  return(0);
-    }
-    else
-      fseek(st.findex, 0L, 0);
-
-    fseek((FILE *)st.text, 0L, 0);
-
-    fwrite((void *)&i, sizeof(long), (size_t)1, st.findex);
-    while(fgets(tmp_20k_buf, st.screen_width, (FILE *)st.text) != NULL){
-	i = ftell((FILE *)st.text);
-	fwrite((void *)&i, sizeof(long), (size_t)1, st.findex);
-	l++;
-    }
-
-    fseek((FILE *)st.text, 0L, 0);
-
-    return(l);
-}
 
 
 
@@ -2098,10 +1845,7 @@ scroll_scroll_text(new_top_line, redraw)
 
     format_scroll_text();
 
-    if(st.source == FileStar)
-      ScrollFile(new_top_line);		/* set up new st.text_lines */
-
-    /* --- 
+    /* ---
        Check out the scrolling situation. If we want to scroll, but BeginScroll
        says we can't then repaint,  + 10 is so we repaint most of the time.
       ----*/
@@ -2120,10 +1864,7 @@ scroll_scroll_text(new_top_line, redraw)
         /*------ scroll down ------*/
         while(new_top_line > st.top_text_line) {
             ScrollRegion(1);
-	    if(st.source == FileStar)
-	      l = num_display_lines - (new_top_line - st.top_text_line);
-	    else
-              l = st.top_text_line + num_display_lines;
+            l = st.top_text_line + num_display_lines;
             if(l < st.num_lines) {
                 len = min(st.line_lengths[l], st.screen_width);
                 PutLine0n8b(st.screen_start_line + num_display_lines - 1, 0,
@@ -2136,10 +1877,7 @@ scroll_scroll_text(new_top_line, redraw)
         while(new_top_line < st.top_text_line) {
             ScrollRegion(-1);
             st.top_text_line--;
-	    if(st.source == FileStar)
-	      l = st.top_text_line - new_top_line;
-	    else
-	      l = st.top_text_line;
+	    l = st.top_text_line;
 	    len = min(st.line_lengths[l], st.screen_width);
 	    PutLine0n8b(st.screen_start_line, 0, st.text_lines[l], len);
         }
@@ -2176,18 +1914,12 @@ search_scroll_text(start_line, word)
      int   start_line;
 {
     char tmp[MAX_SCREEN_COLS+1];
-    int  l, offset, dlines;
-
-    dlines = ps_global->ttyo->screen_rows - st.screen_other_lines;
-    offset = (st.source == FileStar) ? st.top_text_line + 1 : 0;
+    int  l;
 
     for(l = start_line+1; l < st.num_lines; l++) {
-	if(st.source == FileStar && l > offset + dlines)
-	  ScrollFile(offset += dlines);
-
-	strncpy(tmp, st.text_lines[l-offset], 
-		min(st.line_lengths[l-offset], MAX_SCREEN_COLS));
-	tmp[min(st.line_lengths[l-offset], MAX_SCREEN_COLS) + 1] = '\0';
+	strncpy(tmp, st.text_lines[l],
+		min(st.line_lengths[l], MAX_SCREEN_COLS));
+	tmp[min(st.line_lengths[l], MAX_SCREEN_COLS) + 1] = '\0';
         if(srchstr(tmp, word)!= NULL)
           break;
     }
@@ -2196,16 +1928,10 @@ search_scroll_text(start_line, word)
         return(l);
     }
 
-    if(st.source == FileStar)		/* wrap offset */
-      ScrollFile(offset = 0);
-
     for(l = 0; l < start_line; l++) {
-	if(st.source == FileStar && l > offset + dlines)
-	  ScrollFile(offset += dlines);
-
-	strncpy(tmp, st.text_lines[l-offset], 
-		min(st.line_lengths[l-offset], MAX_SCREEN_COLS));
-	tmp[min(st.line_lengths[l-offset], MAX_SCREEN_COLS) + 1] = '\0';
+	strncpy(tmp, st.text_lines[l],
+		min(st.line_lengths[l], MAX_SCREEN_COLS));
+	tmp[min(st.line_lengths[l], MAX_SCREEN_COLS) + 1] = '\0';
         if(srchstr(tmp, word)!= NULL)
           break;
     }

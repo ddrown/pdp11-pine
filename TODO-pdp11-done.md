@@ -2655,3 +2655,150 @@ already covered by the existing composer tests).
       sweep). No new regression test added -- this is dead-code removal
       with no behavior change to verify, not a bug fix. `bin/pine`'s
       `text` shrank 360663 -> 360151, -512 bytes.
+
+### `pine/mailview.c` routine dead-code sweep -- DONE (fourth file of the four-file survey, partial)
+- [x] Fourth and final installment of the "`pine/` UI files: dead/
+      vestigial code" survey item -- but only the routine, uncontroversial
+      portion; the `FileStar` disk-paged scroll-buffer engine
+      (`ScrollFile()`/`make_file_index()`/the `st.source == FileStar`
+      branches in `format_scroll_text()`/`scroll_scroll_text()`/
+      `search_scroll_text()`/`zero_scroll_text()`) was deliberately left
+      untouched, per this item's own caveat in `TODO-pdp11.md`: cutting
+      it is a design decision (repurpose for the PDP-11's own
+      large-message case vs. cut outright), not a mechanical dead-code
+      removal, so it remains open there. Removed in this pass, all
+      confirmed to be `#ifdef DOS`-gated (`DOS` is never defined
+      anywhere in this tree) or gated on the similarly-never-defined
+      `X_NEW` macro:
+      - `mail_view_screen()`'s two DOS blocks: the `mc->rfc822_size >
+        MAX_MSG_INCORE`-or-`nntp`-driver check that would set
+        `src = FileStar` (the *only* place in the file that ever set
+        `src` to anything but `CharStar` -- confirming `st.source` can
+        now never actually be `FileStar` at runtime, which is why the
+        `FileStar` branches noted above are structurally dead too, not
+        just theoretically), and the paired `dos_gets`/`append_file`
+        full-header fetch path.
+      - `format_message()`'s three DOS blocks in its no-BODY-structure
+        fallback path: the `mailgets`/`append_file` DOS-fetch-to-disk
+        setup, the `gf_set_readc()` DOS-`FileStar`-vs-Unix-`CharStar`
+        source split (kept the `CharStar` branch), and the
+        `append_file`-close/`mailgets`-reset cleanup pair.
+      - The `#ifndef DOS` wrapper around the view-screen key-menu's
+        `F_ENABLE_PIPE` check (same class of finding as the
+        `mailindx.c`-style keymenu-bitmap pattern noticed during the
+        `mailcmd.c` sweep -- `DOS` is never defined, so the check
+        already always ran; only the wrapper was dead).
+      - `zero_scroll_text()`'s `#ifdef DOS` block that unconditionally
+        freed `st.text_lines`/`st.line_lengths` and zeroed
+        `st.lines_allocated` on every call -- a DOS-only aggressive
+        free-and-reallocate-every-view memory strategy; on this (and
+        every other) build these arrays instead persist across views
+        and are only freed once, at real shutdown, by `end_scroll_text()`.
+      - `format_scroll_text()`'s `#ifdef X_NEW`/`#else` line-wrap-length
+        calculation split -- `X_NEW` is never defined anywhere in this
+        tree (confirmed by grep), so only the `#else` branch (the real
+        word-wrap algorithm handling tabs, ISO-2022 escapes via
+        `match_iso2022()`, and the bold/underline hack bytes) has ever
+        compiled; removed the dead `#ifdef X_NEW` branch and its now-
+        unused `max_line` local, keeping the `#else` branch's content
+        verbatim, including its `match_iso2022()` call -- that's tracked
+        separately as a low-priority "Deliberate-simplification
+        candidate" in `TODO-pdp11.md`, not touched here.
+      Verified: `./build clean && ./build lnx` clean both before and
+      after (baseline confirmed via `git stash`) -- zero warnings on
+      `mailview.c` in either build; full smoketest suite 25/25. No new
+      regression test added -- this is dead-code removal with no
+      behavior change to verify, not a bug fix. `bin/pine`'s `text`
+      stayed exactly 360151 bytes, unchanged -- expected and correct,
+      since every site removed here was inside an `#ifdef` branch that
+      was never taken (the preprocessor strips untaken branches before
+      the compiler ever sees them, so their presence or absence in the
+      source has zero effect on the compiled binary); this is unlike
+      the `send.c`/`mailcmd.c`/`folder.c` sweeps' savings, which came
+      from deleting functions that *were* being compiled in but had no
+      callers (dead by reachability, not by preprocessor gating).
+
+### `pine/mailview.c` FileStar disk-paged scroll-buffer engine -- investigated and removed, closing out the four-file survey
+- [x] The routine sweep above left the `FileStar` (disk-paged) branch
+      of the scroll-buffer engine open as a design decision: cut it
+      outright, or repurpose it for the PDP-11's own large-message
+      case, since a PDP-11 has even less RAM than the DOS box this
+      existed for. Investigated by reading `ScrollFile()`,
+      `make_file_index()`, and every `st.source == FileStar` branch
+      end to end before deciding. Findings, and why repurposing was
+      rejected in favor of deleting outright:
+      - The core idea -- an on-disk index of per-line byte offsets
+        (`st.findex`) so a big message's lines can be paged in from
+        disk a screenful at a time without an in-RAM array of offsets
+        for the whole message -- is genuinely still relevant to a
+        memory-constrained target. That part isn't why this was cut.
+      - But the concrete implementation is explicitly unfinished by its
+        own author's comments: `ScrollFile()`'s header comment reads
+        "BOGUS: this is painfully crude right now, but I just want to
+        get it going" and "NOTE: talk about massive potential for
+        tuning... Goes without saying this is still under
+        constuction" -- prototype-quality, not a shipped feature.
+      - `format_scroll_text()`'s own comment on the `FileStar` branch
+        says it "makes some simplifying assumptions: 1. Lines are on
+        disk just the way we'll display them" -- i.e. it skips the
+        word-wrap/tab-expansion/ISO-2022-escape-aware line-breaking
+        that the `CharStar` branch does (`match_iso2022()`, tab
+        columns, the bold/underline hack bytes), and nothing upstream
+        of it pre-wraps text to screen width before writing the temp
+        file `st.text` would point to. Reusing this as-is would have
+        displayed raw, un-reflowed lines for any large message
+        containing tabs, long lines, or ISO-2022 escapes -- a
+        regression, not a memory-saving feature.
+      - The same comment block adds "we get away with this mainly
+        because the DOS display isn't going to be resized out from
+        under us" -- no terminal-resize support, whereas this fork
+        already handles `SIGWINCH` resize elsewhere (see the
+        `resize_pico()` fix in this file's history) -- reusing it would
+        reintroduce a resize bug class already fixed in the composer.
+      - Conclusion: the mechanism's one conceptually-reusable idea (an
+        on-disk line-offset index) is not separable from an
+        implementation that's incomplete and would misformat text and
+        break on resize. A PDP-11 large-message strategy, if ever
+        needed, should be designed fresh against this codebase's real
+        word-wrap logic rather than resurrecting this prototype.
+      Removed, once the decision was made: `ScrollFile()` and
+      `make_file_index()` (both functions, entirely) and their four
+      forward declarations (ANSI/K&R prototype blocks); the
+      `st.findex`/`st.fname` fields from the `scroll_text` struct (and
+      their initializers in `push_scroll_state()`/the struct's static
+      initializer) -- both were solely for `ScrollFile()`'s on-disk
+      index bookkeeping; the `PGSIZE` macro (used only by the two
+      deleted functions and `format_scroll_text()`'s deleted branch);
+      `format_scroll_text()`'s entire `else` branch that built the
+      file-backed line buffer (with its now-stale "Display text is in
+      a file" comment) -- since `st.source` can only be `CharStarStar`
+      or `CharStar` now, this was unreachable; the `st.source ==
+      FileStar` conditionals in `redraw_scroll_text()`,
+      `scroll_scroll_text()` (two sites), `zero_scroll_text()`'s
+      per-line-vs-whole-array free logic, and `search_scroll_text()`'s
+      `offset`/`dlines` windowing logic (both instances, plus the
+      wrap-around `ScrollFile(offset = 0)` call) -- each collapsed to
+      the surviving non-`FileStar` behavior, and `search_scroll_text()`
+      simplified further since with `offset` always `0`, `l - offset`
+      is just `l`. Also fixed `zero_scroll_text()`'s now-inaccurate
+      header comment ("Free memory used as scrolling buffers for text
+      on disk") to match what it actually does post-removal. The
+      `FileStar` enum value itself (`pine.h`'s `SourceType`) was left
+      alone -- it's still legitimately used elsewhere for real
+      disk-backed storage objects (attachments, export, etc. via
+      `so_get(FileStar, ...)`), a completely different mechanism from
+      this scroll-buffer's now-removed disk-paging path.
+      Verified: `./build clean && ./build lnx` clean both before and
+      after (baseline confirmed via `git stash`) -- zero warnings on
+      `mailview.c`; full smoketest suite 25/25, including
+      `test_message_view_from_overflow` and `test_folder_index_view`
+      (exercise the message-viewing scroll path touched by this
+      removal). No new regression test added -- this is dead-code
+      removal with no behavior change to verify (since `st.source` was
+      already structurally always `CharStar`/`CharStarStar`), not a bug
+      fix. `bin/pine`'s `text` shrank 360151 -> 358383 (-1768 bytes),
+      `data` shrank 13448 -> 13416 (-32), `bss` shrank 15224 -> 15192
+      (-32) -- unlike the routine sweep above, these functions *were*
+      being compiled in (not preprocessor-gated), so deleting them
+      produced a real size win. This closes out the "`pine/` UI files:
+      dead/vestigial code" survey item across all four files.

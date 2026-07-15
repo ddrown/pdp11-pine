@@ -53,33 +53,11 @@ cuts, but required regardless) is now fully done; see
         harmless here) bug rather than a style nit.
 
 ### `pine/` UI files: dead/vestigial code found while surveying send.c, mailcmd.c, folder.c, mailview.c
-- [ ] Read through the four largest files under `pine/` end to end
-      looking for removal candidates. Findings split into two buckets:
-      confirmed-dead-or-DOS-only code (this section, safe mechanical
-      cuts) and reachable-but-pointless-for-this-target code that needs
-      a judgment call (next section).
-      **`pine/send.c`** -- DONE, see `TODO-pdp11-done.md`.
-      **`pine/mailcmd.c`** -- DONE, see `TODO-pdp11-done.md`.
-      **`pine/folder.c`** -- DONE, see `TODO-pdp11-done.md`.
-      **`pine/mailview.c`**: the `FileStar` (disk-paged) branch of the
-      scroll-buffer engine -- `ScrollFile()` (1960-2001),
-      `make_file_index()` (2013-2040), and the `FileStar` branches
-      inside `format_scroll_text()`, `scroll_scroll_text()`,
-      `search_scroll_text()`. The `src` variable that would select
-      `FileStar` is itself only ever set inside `#ifdef DOS` blocks in
-      `mail_view_screen()`, so on this (or any non-DOS) build `src`
-      stays `CharStar` for the whole file and this path can never
-      execute. Caveat before deleting outright: this existed to page
-      very large messages from disk on a memory-starved DOS box, and a
-      PDP-11 has *less* RAM than that DOS target did -- worth deciding
-      whether to repurpose this for the PDP-11's own large-message case
-      rather than just cut it; treat as a design decision, not a
-      routine dead-code sweep. Plus `#ifdef DOS` branches in
-      `mail_view_screen()` (162-185, 207-228: incore-vs-file storage
-      choice, `dos_gets`/`append_file` fetch path) and in
-      `zero_scroll_text()` (1739-1746).
-      `pine/send.c`/`mailcmd.c`/`folder.c` done (see above);
-      `mailview.c` not yet removed.
+-- DONE, see `TODO-pdp11-done.md`. All four files (`send.c`, `mailcmd.c`,
+   `folder.c`, `mailview.c`) fully swept, including the `mailview.c`
+   `FileStar` disk-paged scroll-buffer engine (investigated and cut
+   outright rather than repurposed -- see the done-file write-up for
+   why it wasn't a good repurposing candidate).
 
 ### Deliberate-simplification candidates in `pine/` UI files (need a decision, not just dead-code deletion)
 - [ ] Found alongside the dead-code sweep above: code that's live and
