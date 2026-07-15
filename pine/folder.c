@@ -115,11 +115,7 @@ MAILSTREAM *find_folder_stream;
 
 
 #ifdef ANSI
-CONTEXT_S *collection_lister(CONTEXT_S *, CONTEXT_S *, FolderFun);
-void       display_collections(int, int);
-void       create_collection_display();
 void       redraw_folder_screen();
-void       redraw_collection_screen();
 void       display_folder(FSTATE_S *, CONTEXT_S *, int, CONTEXT_S *, int);
 void       paint_folder_name(int, FSTATE_S *, int, CONTEXT_S *);
 char      *folder_list_entry(FSTATE_S *, int, int *, CONTEXT_S **);
@@ -131,7 +127,6 @@ char      *rename_folder(int, int, CONTEXT_S *);
 int        delete_folder(int, CONTEXT_S *, int *);
 int        search_folders(FSTATE_S *, int);
 int        compare_names(QSType *, QSType *);
-int        compare_sizes(QSType *, QSType *);
 void       create_folder_display(FSTATE_S *, int);
 CONTEXT_S *new_context(char *);
 void      *new_folder_list();
@@ -143,11 +138,7 @@ void       folder_delete(int, void *);
 
 
 #else  /* ANSI */
-CONTEXT_S *collection_lister();
-void       display_collections();
-void       create_collection_display();
 void       redraw_folder_screen();
-void       redraw_collection_screen();
 void       display_folder();
 void       paint_folder_name();
 void       folder_insert_index();
@@ -159,7 +150,6 @@ char      *rename_folder();
 int        delete_folder();
 int        search_folders();
 int        compare_names();
-int        compare_sizes();
 void       create_folder_display();
 CONTEXT_S *new_context();
 void      *new_folder_list();
@@ -211,46 +201,6 @@ folder_screen(pine_state)
     pine_state->next_screen = main_menu_screen;
     folder_lister(pine_state, FolderMaint, NULL, NULL, NULL);
     pine_state->prev_screen = folder_screen;
-}
-
-
-
-/*----------------------------------------------------------------------
-
- ----*/     
-
-folders_for_fcc(return_string)
-     char *return_string;
-{
-    char       tmp[MAXPATH];
-    int        rv;
-    CONTEXT_S *cntxt = ps_global->context_current;
-    /* Coming back from composer */
-    get_windsize(ps_global->ttyo);
-    init_signals();
-    clear_cursor_pos();
-    mark_status_dirty();
-
-    /*
-     * if folder_lister returns ambiguous name IF the chosen context
-     * matches the default save context, OTHERWISE it returns the 
-     * selected folder's fully qualified name.
-     *
-     * Note: this could stand to be cleaned up.  That is, it would be
-     * nice for the user to be shown the context along with the 
-     * folder name rather than the raw IMAP name.  Perhaps, someday
-     * adding understanding of nicknames perhaps with <nickname>folder
-     * syntax similar to the titlebar makes sense...
-     */
-    if(rv=folder_lister(ps_global, GetFcc, NULL, &cntxt, tmp)){
-	if(context_isambig(tmp) 
-	   && cntxt != default_save_context(ps_global->context_list))
-	  context_apply(return_string, cntxt->context, tmp);
-	else
-	  strcpy(return_string, tmp);
-    }
-
-    return(rv);
 }
 
 
@@ -399,10 +349,6 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
               case SaveMessage:
 	        set_titlebar("SAVE: SELECT FOLDER", 1, MessageNumber,
 			     ps->current_sorted_msgno, 0, 0);
-                break;
-
-              case GetFcc:
-                set_titlebar("FCC: SELECT FOLDER", 1, FolderName, 0, 0, 0);
                 break;
             }
 	}
@@ -671,9 +617,6 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
                 break;
               case SaveMessage:
                 helper(h_folder_save,"HELP FOR SAVING MESSAGES TO FOLDERS", 0);
-                break;
-              case GetFcc:
-                helper(h_folder_fcc, "HELP FOR SELECTING THE FCC", 1);
                 break;
             }
             if(ps_global->next_screen != SCREEN_FUN_NULL) {
@@ -1675,13 +1618,8 @@ compare_names(x, y)
 {
     char *a = *(char **)x, *b = *(char **)y;
     int r;
-#ifdef	DOS
-#define	STRCMP	strucmp
-#define	CMPI	UCMPI
-#else
 #define	STRCMP	strcmp
 #define	CMPI(X,Y)	((X)[0] - (Y)[0])
-#endif
 #define	UCMPI(X,Y)	((isupper((X)[0]) ? (X)[0] - 'A' + 'a' : (X)[0])  \
 			 - (isupper((Y)[0]) ? (Y)[0] - 'A' + 'a' : (Y)[0]))
 
@@ -1724,14 +1662,6 @@ Args: f_list  -- The folder list
 BUG - test this with one, two and three folders
 Returns: The folder display structure
   ----*/
-
-compare_sizes(f1, f2)
-     QSType *f1, *f2;
-{
-    return((*(struct folder **)f1)->name_len - 
-           (*(struct folder **)f2)->name_len);
-}
-
 
 
 /*----------------------------------------------------------------------
@@ -1884,12 +1814,8 @@ pretty_fn(folder)
     static char  pfn[MAXFOLDER * 2 + 1];
     char        *p;
 
-#ifdef	DOS
-    if(!ps_global->show_folders_dir || *folder == '\\' || 
-#else
     if(!ps_global->show_folders_dir || *folder == '/' || *folder == '~' ||
-#endif
-       *folder == '{' || *folder == '\0' 
+       *folder == '{' || *folder == '\0'
        || !strucmp(folder, ps_global->inbox_name))  {
 	if(!strucmp(folder, ps_global->inbox_name)){
 	    strcpy(pfn, ps_global->inbox_name);
@@ -1961,11 +1887,7 @@ folder_exists(c_string, file)
 
     find_folder_list = new_folder_list();
 
-#ifdef	OLDWAY
-    context_find(NULL, find_stream, find_string);
-#else
     context_find_all(NULL, find_stream, find_string);
-#endif
     rv = folder_total(find_folder_list);
 
     free_folder_list(&find_folder_list);
@@ -2417,17 +2339,7 @@ find_folders_in_context(context, search_string)
      * (probably only necessary to rebuild the section that has
      * to do with the current context)
      */
-#ifndef	OLDWAY
     context_find_all(search_context, find_folder_stream, search_string);
-#else
-    /*
-     * c-client's been modified to do basically an "ls" if there's
-     * no .mailboxlist and a context_find is requested.  Find_all
-     * still does the laborious open to validate each folder, but
-     * this is a nice compromise for now...
-     */
-    context_find(search_context, find_folder_stream, search_string);
-#endif
 
     if(local_open)
       mail_close(find_folder_stream);
@@ -2502,12 +2414,8 @@ folder_complete(context, name)
     int  i, match = -1, did_find;
     char tmp[MAXFOLDER], tmpname[MAXFOLDER], *a, *b; 
     FOLDER_S *f;
-#ifdef	DOS
-#define	STRUCMP	struncmp 		/* ignore case under DOS */
-#else
 #define	STRUCMP	strncmp
-#endif
-    
+
     if(*name == '\0' || !context_isambig(name))
       return(0);
 
@@ -2576,11 +2484,7 @@ folder_complete(context, name)
 typedef struct folder_list {
     unsigned   used;
     unsigned   allocated;
-#ifdef	DOSXXX
-    FILE      *folders;		/* tmpfile of binary */
-#else
     FOLDER_S **folders;		/* array of pointers to folder structs */
-#endif
 } FLIST;
 
 #define FCHUNK  64
@@ -2615,8 +2519,6 @@ FOLDER_S *
 new_folder(name)
     char *name;
 {
-#ifdef	DOSXXX
-#else
     FOLDER_S *tmp;
     size_t    l = strlen(name);
 
@@ -2625,7 +2527,6 @@ new_folder(name)
     strcpy(tmp->name, name);
     tmp->name_len = (unsigned char) l;
     return(tmp);
-#endif
 }
 
 
@@ -2646,16 +2547,7 @@ folder_entry(i, flist)
     int   i;
     void *flist;
 {
-#ifdef	DOSXXX
-    /*
-     * Manage entries within a limited amount of core (what a drag).
-     */
-
-    fseek((FLIST *)flist->folders, i * sizeof(FOLDER_S) + MAXPATH, 0);
-    fread(&folder, sizeof(FOLDER_S) + MAXPATH, (FLIST *)flist->folders);
-#else
     return((i >= ((FLIST *)flist)->used) ? NULL:((FLIST *)flist)->folders[i]);
-#endif
 }
 
 
@@ -2668,16 +2560,12 @@ void
 free_folder_list(flist)
     void **flist;
 {
-#ifdef	DOSXXX
-    fclose((*((FLIST **)flist))->folders); 	/* close folder tmpfile */
-#else
     register int i = (*((FLIST **)flist))->used;
 
     while(i--)
       fs_give((void **)&((*((FLIST **)flist))->folders[i]));
 
     fs_give((void **)&((*((FLIST **)flist))->folders));
-#endif
     fs_give(flist);
 }
 
@@ -2708,11 +2596,7 @@ folder_index(name, flist)
 
     while(f = folder_entry(i, flist)){
 	fname = (f->nickname) ? f->nickname : f->name;
-#ifdef	DOS
-	if(toupper(*name) == toupper(*fname) && strucmp(name, fname) == 0)
-#else
 	if(*name == *fname && strcmp(name, fname) == 0)
-#endif
 	  return(i);
 	else
 	  i++;
@@ -2766,11 +2650,7 @@ folder_is_nick(nickname, flist)
     FOLDER_S *f;
 
     while(f = folder_entry(i, flist)){
-#ifdef	DOS
-	if(f->nickname && strucmp(nickname, f->nickname) == 0)
-#else
 	if(f->nickname && strcmp(nickname, f->nickname) == 0)
-#endif
 	  return(f->name);
 	else
 	  i++;
@@ -2835,13 +2715,6 @@ folder_insert_index(folder, index, flist)
     int       index;
     void     *flist;
 {
-#ifdef	DOSXXX
-    FOLDER *tmp;
-
-    tmp = (FOLDER_S *)fs_get(sizeof(FOLDER_S) + (MAXFOLDER * sizeof(char)));
-
-
-#else
     register FOLDER_S **flp, **iflp;
 
     /* if index is beyond size, place at end of list */
@@ -2862,7 +2735,6 @@ folder_insert_index(folder, index, flist)
 
     ((FLIST *)flist)->folders[index] = folder;
     ((FLIST *)flist)->used          += 1;
-#endif
 }
 
 
@@ -2887,15 +2759,11 @@ folder_delete(index, flist)
 
     if((f = folder_entry(index, flist))->nickname)
       fs_give((void **)&(f->nickname));
-      
-#ifdef	DOSXXX
-    /* shift all entries after index up one.... */
-#else
+
     fs_give((void **)&(((FLIST *)flist)->folders[index]));
     for(i = index; i < ((FLIST *)flist)->used - 1; i++)
       ((FLIST *)flist)->folders[i] = ((FLIST *)flist)->folders[i+1];
 
 
     ((FLIST *)flist)->used -= 1;
-#endif
 }

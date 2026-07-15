@@ -2569,3 +2569,89 @@ already covered by the existing composer tests).
       verify (aside from the accepted cosmetic status-message change
       on the six deleted stub commands, noted above), not a bug fix.
       `bin/pine`'s `text` shrank 361631 -> 360663, -968 bytes.
+
+### `pine/folder.c` dead/vestigial code sweep -- DONE (third file of the four-file survey)
+- [x] Third installment of the "`pine/` UI files: dead/vestigial code"
+      survey item -- `pine/folder.c` only; `mailview.c` remains open in
+      `TODO-pdp11.md`. Removed, all confirmed to have zero callers/
+      reachability or to be permanently dead given this build's macro
+      configuration before deleting:
+      - `collection_lister`/`display_collections`/
+        `create_collection_display`/`redraw_collection_screen` -- each
+        forward-declared twice (once in the `#ifdef ANSI` prototype
+        block, once in the `#else` K&R block) but never defined or
+        called anywhere in the tree; an apparent stub for a
+        multi-collection browse dialog that was never built (confirmed
+        via grep across `pine/*.c`/`pico/*.c`). `redraw_folder_screen`,
+        forward-declared right alongside them, is real and unrelated
+        (defined and used later in the file) -- left untouched.
+      - `compare_sizes()` -- zero callers (confirmed no `qsort()` call
+        anywhere in the file; the real folder-list layout uses
+        `create_folder_display()`'s manual width heuristic instead),
+        plus its two now-dead forward declarations. Its misleading
+        position directly under a header comment describing
+        `create_folder_display()` (the *next* function down) was left
+        alone -- that comment belongs to `create_folder_display()`, not
+        to the deleted function.
+      - `folders_for_fcc()` and the `GetFcc` `FolderFun` enum value it
+        was the sole caller of -- confirmed dead once the composer
+        became a separate process (superseded by
+        `fcc_candidate_list()`/`compose_folders()`, see the "Run the
+        composer as a separate exec'd process" write-up above). Removed
+        the function itself, its two prototypes (`pine.h`'s ANSI/K&R
+        blocks), the `GetFcc` value from `typedef enum {OpenFolder,
+        SaveMessage, FolderMaint, GetFcc} FolderFun` (`pine.h`), and the
+        two explicit `case GetFcc:` labels inside `folder_lister()`'s
+        switches (the titlebar-text switch and the help-topic switch).
+        The `GetFcc`-reachable "save message" branch inside
+        `folder_lister()`'s big command-dispatch if/else-if/else chain
+        (an `else` fallback shared with `SaveMessage`, not a distinct
+        `case GetFcc:`) was left completely alone -- it doesn't
+        special-case `GetFcc` at all, so it continues working
+        unchanged for `SaveMessage` now that `GetFcc` can never occur.
+        Noticed but left alone as out of scope: `pine/helptext.c`'s
+        `h_folder_fcc` help-topic array (generated from `pine.hlp`) is
+        now unreachable too, since its only caller was the deleted
+        `case GetFcc:` help switch -- cutting it means editing the
+        tracked `pine.hlp` source and regenerating, a separate
+        generated-file workflow outside this sweep's scope.
+      - Every `#ifdef DOS`/`#ifdef DOSXXX`/`#ifdef OLDWAY` site in the
+        file (`DOS` is never defined anywhere in this tree, confirmed
+        same as the `send.c`/`mailcmd.c` sweeps; `DOSXXX` and `OLDWAY`
+        likewise never defined -- grepped the whole tree to confirm):
+        `compare_names()`'s `STRCMP`/`CMPI` DOS-vs-Unix macro split
+        (always `strcmp`/`((X)[0]-(Y)[0])` now); `pretty_fn()`'s
+        DOS-backslash-vs-Unix-slash/tilde path-separator check (kept
+        the Unix branch, which also handles `~` that the DOS branch
+        didn't); two separate `OLDWAY`-gated `context_find()`-vs-
+        `context_find_all()` choices (both always used
+        `context_find_all()` already -- `OLDWAY` was never defined --
+        so this was pure dead-branch removal, no `strlen`/behavior
+        change); `folder_complete()`'s `STRUCMP` DOS-vs-Unix macro
+        split (always `strncmp` now); the `FLIST` struct's
+        `DOSXXX`-gated `FILE *folders` (disk-tmpfile) member, which was
+        never compiled in favor of the real `FOLDER_S **folders` array
+        member; `new_folder()`/`folder_entry()`/`free_folder_list()`/
+        `folder_insert_index()`/`folder_delete()`'s paired `#ifdef
+        DOSXXX` bodies (`new_folder()`'s was completely empty on the
+        DOS side -- an unfinished stub, further evidence this path was
+        long abandoned) -- each collapsed to its surviving `#else`
+        array-based implementation; `folder_index()`/`folder_is_nick()`'s
+        DOS case-insensitive (`strucmp`/`toupper`) vs. Unix
+        case-sensitive (`strcmp`) comparison branches (kept the Unix,
+        case-sensitive branch in both, since that's what every non-DOS
+        build -- including this one -- has always actually run).
+      Verified: `./build clean && ./build lnx` clean both before and
+      after (baseline confirmed via `git stash`) -- `folder.c` itself
+      compiles with zero new warnings; its one pre-existing
+      `-Wpointer-compare` warning (`init_folders()` comparing
+      `VAR_FOLDER_SPEC[0]` to `'\0'`) is unrelated to this sweep and
+      simply shifted from line 2067 to 1998 as a result of the
+      deletions above it -- the standing compiler-warnings TODO item's
+      line reference was updated to match, not fixed here. Full
+      smoketest suite 25/25, including `test_compose_fcc_picker` and
+      `test_folder_index_view` (exercise `folder_lister()`/
+      `create_folder_display()`/`folder_entry()`, all touched by this
+      sweep). No new regression test added -- this is dead-code removal
+      with no behavior change to verify, not a bug fix. `bin/pine`'s
+      `text` shrank 360663 -> 360151, -512 bytes.

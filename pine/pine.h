@@ -748,7 +748,7 @@ struct date {
 
 
 
-typedef enum {OpenFolder, SaveMessage, FolderMaint, GetFcc} FolderFun;
+typedef enum {OpenFolder, SaveMessage, FolderMaint} FolderFun;
 typedef enum {FolderName, MessageNumber, TextPercent, PageNumber} TitleBarType;
 typedef enum {ComposerHelpText, HelpText, NewsText, MessageText, AttachText,
 		WhoText, NetNewsText} TextType;
@@ -846,7 +846,6 @@ void	 gf_translate_opt(unsigned char *, unsigned);
 
 /*--- folder.c ---*/
 void        folder_screen(struct pine *);
-int         folders_for_fcc(char *);
 char      **fcc_candidate_list(struct pine *, int *);
 int         folder_lister(struct pine *,FolderFun,CONTEXT_S *,CONTEXT_S **,
                           char *);
@@ -1167,7 +1166,6 @@ void	 gf_prefix_opt();
 
 /*--- folder.c ---*/
 void        folder_screen();
-int         folders_for_fcc();
 char      **fcc_candidate_list();
 int         folder_lister();
 char       *pretty_fn();

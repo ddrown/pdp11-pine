@@ -46,8 +46,9 @@ cuts, but required regardless) is now fully done; see
         (`int *status`, not `union wait *`) rather than assuming the
         cast is still correct; possibly a leftover from an older BSD
         `wait()` signature.
-      - 1x `-Wpointer-compare`: `pine/folder.c:2067`, comparing a
-        pointer to `'\0'` (likely meant to dereference it first) --
+      - 1x `-Wpointer-compare`: `pine/folder.c:1998` (line number as of
+        the `folder.c` dead-code sweep; was `:2067` before it), comparing
+        a pointer to `'\0'` (likely meant to dereference it first) --
         worth a standalone look, smells like a real (if probably
         harmless here) bug rather than a style nit.
 
@@ -59,28 +60,7 @@ cuts, but required regardless) is now fully done; see
       a judgment call (next section).
       **`pine/send.c`** -- DONE, see `TODO-pdp11-done.md`.
       **`pine/mailcmd.c`** -- DONE, see `TODO-pdp11-done.md`.
-      **`pine/folder.c`**: `collection_lister`/`display_collections`/
-      `create_collection_display`/`redraw_collection_screen` --
-      forward-declared twice (118-122, 146-150) but never defined or
-      referenced anywhere in the tree; an apparent stub for a
-      multi-collection browse dialog that was never built. Trivial:
-      delete the 8 prototype lines. `compare_sizes()` (1728-1733) plus
-      its two prototypes (134, 162) -- zero callers, and the `qsort()`
-      it was written for isn't called anywhere in the file (the real
-      folder-list layout uses `create_folder_display()`'s manual width
-      heuristic instead). `folders_for_fcc()` (222-254) and the
-      `GetFcc` code path it's the sole entry point for -- confirmed
-      dead above, superseded by `fcc_candidate_list()`/`compose_folders()`
-      once the composer became a separate process; every
-      `case GetFcc:` inside `folder_lister()`'s switches (titlebar
-      ~404, help ~675, save branch ~744-767) is unreachable too.
-      Moderate-effort removal since `GetFcc` cases are interleaved with
-      the still-live `FolderMaint`/`OpenFolder`/`SaveMessage` cases in
-      the same switches. Plus `#ifdef DOS`/`DOSXXX` sites across the
-      `FOLDER_S`/`FLIST` array layer (2570, 2609, 2640, 2662, 2829,
-      2882 -- an alternate disk-backed storage scheme for DOS's tiny
-      memory model) and case-insensitive-compare branches elsewhere
-      (1678, 1887, 2496, 2702, 2760).
+      **`pine/folder.c`** -- DONE, see `TODO-pdp11-done.md`.
       **`pine/mailview.c`**: the `FileStar` (disk-paged) branch of the
       scroll-buffer engine -- `ScrollFile()` (1960-2001),
       `make_file_index()` (2013-2040), and the `FileStar` branches
@@ -98,8 +78,8 @@ cuts, but required regardless) is now fully done; see
       `mail_view_screen()` (162-185, 207-228: incore-vs-file storage
       choice, `dos_gets`/`append_file` fetch path) and in
       `zero_scroll_text()` (1739-1746).
-      `pine/send.c`/`mailcmd.c` done (see above); `folder.c`/`mailview.c`
-      not yet removed.
+      `pine/send.c`/`mailcmd.c`/`folder.c` done (see above);
+      `mailview.c` not yet removed.
 
 ### Deliberate-simplification candidates in `pine/` UI files (need a decision, not just dead-code deletion)
 - [ ] Found alongside the dead-code sweep above: code that's live and
@@ -107,12 +87,13 @@ cuts, but required regardless) is now fully done; see
       target (no network, US-ASCII only). Cutting these is a product
       decision, not a bug fix, so listed separately from the confirmed
       dead code above.
-      **`{host}`-remote folder-collection syntax** (`pine/folder.c`):
+      **`{host}`-remote folder-collection syntax** (`pine/folder.c`,
+      line numbers as of the `folder.c` dead-code sweep):
       `FTYPE_REMOTE`/`FTYPE_OLDTECH`/`FTYPE_ANON` detection in
-      `set_ftype()` (2181-2211), the remote branch of
-      `find_folders_in_context()` (2365-2391), the `(Remote)`/`(Local)`
-      labels in `folder_list_entry()` (1162-1165), and the
-      remote-stream-opening branch in `folder_exists()` (1936-1949).
+      `set_ftype()` (2112-2142), the remote branch of
+      `find_folders_in_context()` (2296-2322), the `(Remote)`/`(Local)`
+      labels in `folder_list_entry()` (1105-1108), and the
+      remote-stream-opening branch in `folder_exists()` (1873-1881).
       Not structurally dead -- only reachable if a pinerc
       `folder-collections`/`incoming-folders` line begins with `{`,
       which nothing on a UUCP-only station would configure. Removing it
