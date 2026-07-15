@@ -55,7 +55,6 @@ static char rcsid[] = "$Id: mailcmd.c,v 4.128 1993/12/06 20:08:15 mikes Exp $";
      The meat and pototoes of mail processing here:
        - initial command processing and dispatch
        - save message
-       - capture address off incoming mail
        - jump to specific numbered message
        - open (broach) a new folder
        - search message headers (where is) command
@@ -116,9 +115,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
     static  int        bump_end_count = 0;
     CONTEXT_S         *tc;
     struct attachment *a;
-#ifdef	DOS
-    extern long coreleft();
-#endif
 
     dprint(4, (debugfile, "\n - process_cmd((%d)%c) -\n",
                                                  command, (char)command));
@@ -163,9 +159,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
         case PF3:
         case 'm':
           ps_global->next_screen = main_menu_screen;
-#ifdef	DOS
-	  flush_index_cache();		/* save room on PC */
-#endif
           dprint(2, (debugfile,"MAIL_CMD: going back to main menu"));
           break;
 
@@ -186,9 +179,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
               q_status_message(0, 1, 3, "\007No message to view");
             }else {
               ps_global->next_screen = mail_view_screen;
-#ifdef	DOS
-	      flush_index_cache();		/* save room on PC */
-#endif
             }
 	  }else {
 
@@ -440,9 +430,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
           if(ps_global->max_msgno <= 0) {
               q_status_message(0, 0, 2, "\007No message to reply to");
           }else {
-#ifdef	DOS
-	      flush_index_cache();		/* save room on PC */
-#endif
               reply(ps_global, mc->msgno, e, b);
               ps_global->mangled_screen = 1;
           }
@@ -471,9 +458,6 @@ do_forward:
               q_status_message(0, 0, 2,
                                "\007Folder is empty. No message to forward");
           }else {
-#ifdef	DOS
-	      flush_index_cache();		/* save room on PC */
-#endif
               forward(ps_global, mc->msgno, e, b);
               ps_global->mangled_screen = 1;
           }
@@ -494,9 +478,6 @@ do_quit:
         case 'c':
           ps_global->prev_screen = in_index ? mail_index_screen :
                                         mail_view_screen;
-#ifdef	DOS
-	  flush_index_cache();		/* save room on PC */
-#endif
           compose_screen(ps_global);
           ps_global->mangled_screen = 1;
           break;
@@ -506,9 +487,6 @@ do_quit:
 	case OPF5:
         case 'l':
           ps_global->next_screen = folder_screen;
-#ifdef	DOS
-	  flush_index_cache();		/* save room on PC */
-#endif
           dprint(2, (debugfile,"MAIL_CMD: going to folder/collection menu"));
           break;
 
@@ -520,13 +498,6 @@ do_quit:
 			? ps_global->context_last : ps_global->context_current;
 
           new_folder = broach_folder(question_line, 1, &tc);
-#ifdef	DOS
-	  if(new_folder && *new_folder == '{' && coreleft() < 20000){
-	      q_status_message(0, 0, 2,
-			       "\007Not enough memory to open IMAP folder");
-	      new_folder = NULL;
-	  }
-#endif
           if(new_folder != NULL) {
               dprint(9, (debugfile, "do_broach_folder (%s, %s)\n",
                          new_folder, tc->context));
@@ -542,26 +513,13 @@ do_quit:
         case 'i':
 do_index:
           if(!in_index) {
-#ifdef	DOS
-	      flush_index_cache();		/* save room on PC */
-#endif
               ps_global->next_screen = mail_index_screen;
           }else {
 	      if(command == OPF7)
-		  goto do_zoom;
+		  goto bogus;
 	      else
                   q_status_message(0, 1, 3, "\007Already in Index");
           }
-          break;
-
-
-          /*------- Zoom -----------*/
-do_zoom:
-        case 'z':
-	  if(F_OFF(F_ENABLE_ZOOM,ps_global))
-	    goto bogus;
-
-          q_status_message(1, 2, 3, "\007Zoom command not implemented yet");
           break;
 
 
@@ -634,16 +592,8 @@ do_save:
           }
           if(mango) 
             ps_global->mangled_screen = 1;
-          else 
+          else
             ps_global->mangled_footer = 1;
-#ifdef X_NEVER  /* Don't set seen flag on a save */
-          if(!mc->seen) {
-              sprintf(sequence, "%ld", ps_global->sort[current_sorted_msgno]);
-              mail_setflag(ps_global->mail_stream,sequence,"\\SEEN");
-              ps_global->status_changed = 1;
-              clear_index_cache_ent(current_sorted_msgno);
-          } 
-#endif            
           if(!mc->deleted && !READONLY_FOLDER){
               sprintf(sequence, "%ld", ps_global->sort[current_sorted_msgno]);
               mail_setflag(ps_global->mail_stream, sequence, "\\DELETED");
@@ -712,13 +662,6 @@ do_export:
           fflush(stdout);
 
           mail_expunge(ps_global->mail_stream);
-#ifdef X_FINISH
-          {
-              dprint(1, (debugfile, "**** expunge failed ****\n"));
-              q_status_message(1, 3, 5 "\007Expunge failed!");
-              break;
-          }
-#endif
           dprint(2,(debugfile,"expunge complete cur:%ld max:%ld\n",
                     mc==NULL ? 0 : mc->msgno, ps_global->max_msgno));
           /* mm_exists and mm_expunge take care of updating max_msgno*/
@@ -754,28 +697,6 @@ do_export:
                         "No messages to expunge from folder \"%s\"",
 			 pretty_fn(ps_global->cur_folder));
 	  }
-          break;
-
-
-          /*------- Unexclude -----------*/
-	case OOPF4:
-        case '&':
-	  if(!in_index)
-	    goto bogus;
-	  else
-            q_status_message(1, 2, 3,
-			"\007Unexclude not available for mail folders");
-          break;
-
-
-          /*------- Apply -----------*/
-	case OOPF5:
-        case 'a':
-	  if(!in_index || F_OFF(F_ENABLE_APPLY,ps_global))
-	    goto bogus;
-
-	  q_status_message(1, 2, 3,
-			   "\007Apply command not implemented yet");
           break;
 
 
@@ -872,38 +793,6 @@ do_sortindex:
                            ps_global->full_header ? "n" : "ff");
           a_changed = 1;
           break;
-
-
-          /*------- Bounce -----------*/
-	case OOPF10:
-        case 'b':
-          if(F_OFF(F_ENABLE_BOUNCE,ps_global))
-            goto bogus;
-
-          q_status_message(1, 2, 3, "\007Bounce command not implemented yet");
-          break;
-
-
-          /*------- Flag -----------*/
-	case OOPF11:
-        case '*':
-	  if(F_OFF(F_ENABLE_FLAG,ps_global))
-	    goto bogus;
-
-	  q_status_message(1, 2, 3, "\007Flag command not implemented yet");
-          break;
-
-
-#ifndef DOS
-          /*------- Pipe message -----------*/
-	case OOPF12:
-        case '|':
-	  if(F_ON(F_ENABLE_PIPE,ps_global)) {
-            q_status_message(1, 2, 3,
-		"\007Piping message into UNIX command not implemented yet");
-            break;
-	  }
-#endif
 
 
           /*--------- Default, unknown command ----------*/
@@ -1175,17 +1064,8 @@ save(folder, context, message, index_sorted_msgno)
     STRING      msg;
     MAILSTREAM *save_stream = NULL;
     SourceType  src;
-#ifdef	DOS
-    struct {			/* hack! stolen from dawz.c */
-	int fd;
-	unsigned long pos;
-    } d;
-    extern STRINGDRIVER dawz_string;
 
-    src = FileStar;
-#else
     src = CharStar;
-#endif
     /*
      * time to start depending on c-client for this!  Use context_append
      * and context_create to do the dirty work, but first, set up
@@ -1197,29 +1077,19 @@ save(folder, context, message, index_sorted_msgno)
 	return(0);
     }
 
-#ifdef	DOS
-    /* set append file and dos_gets */
-    mailgets    = dos_gets;
-    append_file = (FILE *) so_text(so);
-#endif
-
     if((tmp=mail_fetchheader(ps_global->mail_stream, message->msgno))==NULL){
 	so_give(&so);
 	return(0);
     }
-#ifndef	DOS
     else
       so_puts(so, tmp);
-#endif
 
     if((tmp=mail_fetchtext(ps_global->mail_stream, message->msgno)) == NULL){
 	so_give(&so);
 	return(0);
     }
-#ifndef	DOS
     else
       so_puts(so, tmp);
-#endif
 
     so_seek(so, 0L, 0);				/* just in case */
 
@@ -1228,13 +1098,7 @@ save(folder, context, message, index_sorted_msgno)
      * context_append...
      */
     /* set up string driver */
-#ifdef	DOS
-    d.fd  = fileno((FILE *)so_text(so));
-    d.pos = 0L;
-    INIT(&msg, dawz_string, (void *)&d, filelength(d.fd));
-#else
     INIT(&msg, mail_string, (void *)so_text(so), strlen((char *)so_text(so)));
-#endif
 
     save_folder = (strucmp(folder, ps_global->inbox_name) == 0)
                    ? ps_global->VAR_INBOX_PATH : folder;
@@ -1286,11 +1150,6 @@ save(folder, context, message, index_sorted_msgno)
     }
 
     ps_global->try_to_create = 0;		/* reset for next time */
-#ifdef	DOS
-    append_file = NULL;				/* reset DOS hacks */
-    mailgets    = NULL;				/* reset DOS hacks */
-    mail_gc(ps_global->mail_stream, GC_TEXTS);
-#endif
     so_give(&so);
     return(rv);
 }
@@ -1340,11 +1199,7 @@ export_message(q_line, sorted_msgno)
     filename[0] = '\0';
     while(1) {
         rc = optionally_enter(filename, q_line, 0, MAXPATH, 1, 0,
-#ifdef	DOS
-                         "File to save message text in: ",
-#else
                          "File (in home directory) to save message text in: ",
-#endif
                           NULL, help,0);
 
         /*--- Help ----*/
@@ -1372,7 +1227,6 @@ export_message(q_line, sorted_msgno)
             sleep(3);
             continue;
         }
-#ifndef	DOS
         if(full_filename[0] == '~') {
             if(fnexpand(full_filename, sizeof(full_filename)) == NULL) {
                 char *p = strindex(full_filename, '/');
@@ -1386,12 +1240,6 @@ export_message(q_line, sorted_msgno)
                 continue;
             }
         } else if(full_filename[0] != '/') {
-#else
-        if(full_filename[0] == '\\' || full_filename[1] == ':') {
-	    fixpath(full_filename, MAXPATH);
-	}
-	else{
-#endif
             build_path(full_filename, ps_global->home_dir, filename);
         }
 
@@ -1752,11 +1600,7 @@ do_broach_folder(new_folder, new_context)
     long        openmode;
     CONTEXT_S  *tc;
 
-#ifdef	DOS
-    openmode = OP_SHORTCACHE;
-#else
     openmode = 0L;
-#endif
 #ifdef	DEBUG
     if(debug > 8)
       openmode |= OP_DEBUG;
@@ -1823,11 +1667,6 @@ do_broach_folder(new_folder, new_context)
 
     /*--- Opening inbox, inbox has been already opened, the easy case ---*/
     if(open_inbox && ps_global->inbox_stream != NULL ) {
-#ifdef	OLDWAY
-        MsgNo first_unseen;
-#else
-	long i;
-#endif
         expunge_and_close(ps_global->mail_stream, ps_global->cur_folder);
 
 	ps_global->mail_stream              = ps_global->inbox_stream;
@@ -1993,18 +1832,8 @@ do_broach_folder(new_folder, new_context)
     ps_global->dead_stream          = 0;
     ps_global->dead_inbox           = 0;
 
-#ifdef	DOS
-    /*
-     * Doubling the array size is too costly under DOS for large 
-     * mailboxes.  Allocating a bit over what we need makes more sense.
-     */
-    if(ps_global->sort_allocated <= ps_global->max_msgno) {
-	while(ps_global->sort_allocated <= ps_global->max_msgno)
-	  ps_global->sort_allocated += 64;
-#else
     if(ps_global->sort_allocated < ps_global->max_msgno * 2) {
         ps_global->sort_allocated = ps_global->max_msgno * 2 + 1;
-#endif
         if(ps_global->sort)
           fs_resize((void **)&ps_global->sort,
                     (size_t)ps_global->sort_allocated * sizeof(long));
@@ -2043,17 +1872,6 @@ do_broach_folder(new_folder, new_context)
                       READONLY_FOLDER ?"\007 READONLY" :"",
                       NULL, NULL);
 
-#ifdef X_MAXMESSAGES /* Used when there was a limit to the number of messages*/
-    if(ps_global->max_msgno > (80 * MAXMESSAGES)/ 100) {
-        /* warn at 80% of capacity. warn early -- he might go on vacation */
-        char tmp[30];
-        strcpy(tmp, comatose(MAXMESSAGES));
-        q_status_message2(1, 3, 4,
-           "\007Warning! Folder has %s messages. Maximum allowed is %s",
-                         comatose(ps_global->max_msgno), tmp);
-    }
-#endif
-                      
     clear_index_cache();
 
     ps_global->mail_box_changed = 0;
@@ -2508,24 +2326,11 @@ detach(msg_no, body, part_no, len, pc, aux_filters)
 
     err_string[0] = '\0';
 
-#ifdef	DOS
-    if(body->size.bytes > MAX_MSG_INCORE
-       || strcmp(ps_global->mail_stream->dtb->name, "nntp") == 0){
-	src      = FileStar;
-	mailgets = dos_gets;
-    }
-    else
-      mailgets = NULL;
-#endif	/* DOS */
-
     /*
      * go grab the requested body part
      */
     contents = mail_fetchbody(ps_global->mail_stream,msg_no,part_no,&length);
     if(contents == NULL) {
-#ifdef	DOS
-        mailgets = NULL;
-#endif
 	sprintf(err_string, "Unable to access body part %s", part_no);
 	if (len != (long *)NULL)
 	    *len = 0;
@@ -2565,42 +2370,12 @@ detach(msg_no, body, part_no, len, pc, aux_filters)
 	gf_link_filter(gf_nvtnl_local);
     }
 
-#ifdef	LATER
-    dprint(9, (debugfile, "Attachment lengths: %ld (decoded)  %ud (encoded)\n",
-               *decoded_len, length));
-#endif
-
-    gf_set_readc(&gc,
-#ifdef	DOS
-		 /*
-		  * If we fetched this to a file, 
-		  * make sure we set up the storage
-		  * object's getchar function accordingly...
-		  */
-		 (src == FileStar) ? (char *)append_file :
-#endif
-		 contents,
-		 length, src);
+    gf_set_readc(&gc, contents, length, src);
 
     if(status = gf_pipe(gc, pc)) {
 	sprintf(err_string, "Formatting error: %s", status);
         rv = 0L;
     }
-
-#ifdef	DOS
-    /*
-     * free up file descriptor, and return tmpfile opened by
-     * dos_gets and returned via the global "append_file"...
-     */
-    if(src == FileStar){
-	if(append_file)
-	  fclose(append_file);
-
-	append_file = NULL;
-	mailgets    = NULL;
-	mail_gc(ps_global->mail_stream, GC_TEXTS);
-    }
-#endif
 
     if (len != (long *)NULL)
 	*len = rv;
@@ -2629,11 +2404,6 @@ save_attachment(qline, msgno, a)
     gf_io_t     pc;
     STORE_S    *store;
     char       *err;
-
-#ifdef NEVER
-    dprint(9, (debugfile, "save_attachments(length: %ld, name: %s)\n",
-               len, suggested_name == NULL ? "NULL" : suggested_name));
-#endif
 
     is_text = a->body->type == TYPETEXT;
 
@@ -2684,7 +2454,6 @@ save_attachment(qline, msgno, a)
             sleep(3);
             continue;
         }
-#ifndef	DOS
         if(full_filename[0] == '~') {
             if(fnexpand(full_filename, sizeof(full_filename)) == NULL) {
                 char *p = strindex(full_filename, '/');
@@ -2698,9 +2467,6 @@ save_attachment(qline, msgno, a)
                 continue;
             }
         } else if(full_filename[0] != '/') {
-#else
-        if(full_filename[0] != '\\' && full_filename[1] != ':') {
-#endif
             build_path(full_filename, ps_global->home_dir, filename);
         }
         break; /* Must have got an OK file name */
@@ -2799,20 +2565,12 @@ display_attachment(msgno, a)
 
         
     /*------ Write the attachment to a temporary file ------*/
-#ifdef	DOS
-    strcpy(filename, temp_nam(NULL, "im"));
-    if(a->body->subtype != NULL){
-	strcat(filename, ".");
-	strncat(filename, a->body->subtype, 3);
-    }
-#else
     {
 	char prefix[8];
 	sprintf(prefix, "att-%.3s",
 		(a->body->subtype) ? a->body->subtype : "unk");
         strcpy(filename, temp_nam(NULL, prefix));
     }
-#endif
 
     if((store = so_get(FileStar, filename, WRITE_ACCESS)) == NULL){
         q_status_message2(1, 3, 5,
@@ -2832,10 +2590,6 @@ display_attachment(msgno, a)
 
     so_give(&store);
 
-#ifdef	DOS
-    unlink(filename);
-    /* BUG? Clear c-client cache? */
-#endif
     return(0);
 }
 
@@ -2854,15 +2608,6 @@ display_text_att(msgno, a)
     (void)mail_fetchstructure(ps_global->mail_stream, msgno, NULL);
 
     /* initialize a storage object */
-#ifdef	DOS
-    if(a->body->size.bytes > MAX_MSG_INCORE
-       || strcmp(ps_global->mail_stream->dtb->name, "nntp") == 0){
-	src = FileStar;
-    }else {
-        src = CharStar;
-    }
-#endif
-
     store = so_get(src, NULL, EDIT_ACCESS);
     gf_set_so_writec(&pc, store);
 
@@ -2871,26 +2616,8 @@ display_text_att(msgno, a)
 	(void) decode_text(a, msgno, pc, QStatus, 1);
 
     } else {
-#ifdef	DOS
-	/*
-	 * This'll save us having to copy files around.
-	 * (see mailview.c)
-	 */
-	if(src == FileStar){
-	    append_file = (FILE *)so_text(store);
-	    mailgets    = dos_gets;
-	    (void)mail_fetchheader(ps_global->mail_stream, msgno);
-	    (void)mail_fetchtext(ps_global->mail_stream, msgno);
-	    append_file = NULL;
-	    mailgets    = NULL;
-	    mail_gc(ps_global->mail_stream, GC_TEXTS);
-	}
-	else
-#endif
-	{
-	    so_puts(store, mail_fetchheader(ps_global->mail_stream,msgno));
-	    so_puts(store, mail_fetchtext(ps_global->mail_stream,msgno));
-	}
+	so_puts(store, mail_fetchheader(ps_global->mail_stream,msgno));
+	so_puts(store, mail_fetchtext(ps_global->mail_stream,msgno));
     }
 
     scrolltool(so_text(store), "ATTACHMENT TEXT", (int *)NULL,

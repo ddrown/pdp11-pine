@@ -2471,3 +2471,101 @@ already covered by the existing composer tests).
       added -- this is dead-code removal with no behavior change to
       verify, not a bug fix. `bin/pine`'s `text` shrank
       362079 -> 361631, -448 bytes.
+
+### `pine/mailcmd.c` dead/vestigial code sweep -- DONE (second file of the four-file survey)
+- [x] Second installment of the "`pine/` UI files: dead/vestigial code"
+      survey item -- `pine/mailcmd.c` only; `folder.c`/`mailview.c`
+      remain open in `TODO-pdp11.md`. Removed, all confirmed to have
+      zero callers/reachability or to be permanently dead given this
+      build's macro configuration before deleting:
+      - The Zoom (`'z'`/`OPF7`-already-in-index), Unexclude (`'&'`/
+        `OOPF4`), Apply (`'a'`/`OOPF5`), Bounce (`'b'`/`OOPF10`), Flag
+        (`'*'`/`OOPF11`), and Pipe (`'|'`/`OOPF12`, itself inside a dead
+        `#ifndef DOS`) command-dispatch cases in `process_cmd()` --
+        stock Pine 3.89 never implemented any of these; each case body
+        only ever printed a "not implemented yet"/"not available"
+        status message, sometimes gated behind an `F_ENABLE_*` pinerc
+        flag that's still used elsewhere (`mailindx.c`/`mailview.c`'s
+        own copies of the same dead commands, and `init.c`'s pinerc
+        parsing) so those flag *definitions* were left alone -- only
+        the now-deleted case bodies' `F_ON`/`F_OFF` checks went away.
+        The `OPF7`-while-already-in-index path used to `goto do_zoom`
+        (the Zoom case's label) to print the same stub message; with
+        Zoom's case deleted this now `goto bogus`s instead, so it (and
+        every deleted command's key) falls into the generic "Command
+        ... not defined for this screen" message instead of a
+        command-specific "not implemented yet" one -- a cosmetic
+        behavior change accepted as part of fully cutting these dead
+        stubs, consistent with the TODO's own instruction to delete
+        the cases outright.
+      - The `#ifdef X_NEVER` seen-flag-setting block in the Save
+        Message case, and the `#ifdef X_FINISH` expunge-failure block
+        in the Expunge case (whose body didn't even compile as valid
+        C -- `q_status_message(1, 3, 5 "\007Expunge failed!")` is
+        missing a comma between the `5` and the string literal,
+        further evidence this branch has been dead and untested for a
+        long time) -- both macros are never defined anywhere in this
+        tree.
+      - The `#ifdef OLDWAY`/`#else` variable declaration in
+        `do_broach_folder()` (`MsgNo first_unseen;` vs `long i;`) --
+        `OLDWAY` is never defined, and the surviving `long i;` itself
+        turned out to be completely unused in the function (verified
+        by grepping the whole function body), so the entire
+        declaration -- both branches -- was dead weight.
+      - The `#ifdef X_MAXMESSAGES` "80% of capacity" warning block in
+        `do_broach_folder()` and the `#ifdef LATER` debug `dprint()` in
+        `detach()` -- both macros never defined.
+      - Every `#ifdef DOS`/`#ifndef DOS` site in the file: ~10 lone
+        `flush_index_cache()`/"save room on PC" calls scattered through
+        `process_cmd()`'s screen-switch cases; the `coreleft()`
+        IMAP-memory-check guard on `OPF6`'s folder-open path (plus its
+        now-dead `extern long coreleft()` declaration); `save()`'s
+        `dawz_string`/`d.fd` "hack! stolen from dawz.c" FCC
+        storage-object branch (always the `mail_string`/`so_text()`
+        branch now) and its paired `mailgets`/`append_file` DOS setup
+        and reset lines; `export_message()`'s DOS-specific prompt
+        string and its `fixpath()`-vs-`fnexpand()` tilde-expansion
+        branch (kept the Unix branch, which also runs the file-name
+        validity checks the DOS branch skipped entirely); `save_msg()`'s
+        equivalent tilde/`fixpath()` split in `save_attachment()`; the
+        `do_broach_folder()` `OP_SHORTCACHE`-vs-`0L` `openmode` split;
+        the doubling-vs-fixed-increment `sort_allocated` growth-rate
+        split (kept the doubling growth); `detach()`'s DOS/`nntp`
+        `MAX_MSG_INCORE`-check block (also contained one of the two
+        `nntp` driver-name string comparisons the TODO flagged --
+        confirmed double-dead, since no `nntp.c` exists in this tree
+        *and* the whole block was `#ifdef DOS`-only) and its
+        `mailgets`-reset/`append_file` ternary in `gf_set_readc()`/
+        free-on-exit block; `display_attachment()`'s `temp_nam()`
+        DOS-suffix-vs-prefix variant and its post-write `unlink()`;
+        and `display_text_att()`'s DOS `src` source-type selection
+        (the second `nntp` comparison the TODO flagged, same
+        double-dead reasoning) and its `append_file`/`mailgets`
+        full-header fetch path (kept the plain `so_puts()` branch).
+      - A stale header comment ("capture address off incoming mail")
+        that no longer describes any function in the file -- no
+        `capture_addr`-style function exists here or anywhere else in
+        the tree.
+      - Left alone, deliberately, as out of this sweep's scope: the
+        `#ifdef DEBUG` `OP_DEBUG` block in `do_broach_folder()` --
+        `DEBUG` *is* defined in this build (`pine/makefile.lnx`'s
+        `-DDEBUG`), so this is live code, not dead; `ps_global->restricted`
+        demo-mode lockdown checks in `export_message()`/
+        `save_attachment()` -- tracked separately under "Deliberate-
+        simplification candidates" in `TODO-pdp11.md`; and the
+        `F_ENABLE_*` flag *definitions* themselves (`pine.h`/`init.c`),
+        since `mailindx.c`/`mailview.c` still reference them for their
+        own copies of these dead commands (out of scope for this file).
+      Verified: `./build clean && ./build lnx` clean both before and
+      after (baseline confirmed via `git stash`) -- zero warnings on
+      `mailcmd.c` in either build, so this removal didn't fix or
+      introduce any compiler diagnostics; full smoketest suite 25/25,
+      including `test_export_message`/`test_export_message_from_overflow`
+      and `test_save_attachment_overflow` (exercise the tilde/`fixpath()`
+      split and the DOS temp-file-naming removal) and
+      `test_compose_fcc_picker` (exercises `save()`, unaffected by
+      removing its dead `dawz_string` branch). No new regression test
+      added -- this is dead-code removal with no behavior change to
+      verify (aside from the accepted cosmetic status-message change
+      on the six deleted stub commands, noted above), not a bug fix.
+      `bin/pine`'s `text` shrank 361631 -> 360663, -968 bytes.

@@ -58,22 +58,7 @@ cuts, but required regardless) is now fully done; see
       cuts) and reachable-but-pointless-for-this-target code that needs
       a judgment call (next section).
       **`pine/send.c`** -- DONE, see `TODO-pdp11-done.md`.
-      **`pine/mailcmd.c`**: the Zoom (558-565), Unexclude (760-768),
-      Apply (771-779), Bounce (877-884), Flag (887-894), and Pipe
-      (897-906) command-dispatch cases -- these only ever printed "not
-      implemented yet" in stock Pine 3.89, nothing to port; delete the
-      cases and their `F_ENABLE_*` feature-flag checks. Two `nntp`
-      driver-name string comparisons (2505, 2835) -- no `nntp.c` exists
-      anywhere in this tree (also nested inside dead DOS blocks, so
-      double-dead). Blocks gated on undefined macros --
-      `X_MAXMESSAGES`/`X_NEVER`/`X_FINISH`/`OLDWAY`/`LATER` (lines 639,
-      715, 1818, 2038, 2560) -- vestigial commented-alternative code
-      that never builds. A stale header comment (line 58) referencing an
-      address-capture function that no longer exists. Plus ~30
-      `#ifdef DOS` sites (short-cache open mode, `flush_index_cache()`
-      calls, the DOS FCC hack in `save()`, `dos_gets`/`append_file`,
-      `fixpath()`, a `temp_nam` DOS-suffix variant, a `coreleft()`
-      memory check).
+      **`pine/mailcmd.c`** -- DONE, see `TODO-pdp11-done.md`.
       **`pine/folder.c`**: `collection_lister`/`display_collections`/
       `create_collection_display`/`redraw_collection_screen` --
       forward-declared twice (118-122, 146-150) but never defined or
@@ -113,7 +98,7 @@ cuts, but required regardless) is now fully done; see
       `mail_view_screen()` (162-185, 207-228: incore-vs-file storage
       choice, `dos_gets`/`append_file` fetch path) and in
       `zero_scroll_text()` (1739-1746).
-      `pine/send.c` done (see above); `mailcmd.c`/`folder.c`/`mailview.c`
+      `pine/send.c`/`mailcmd.c` done (see above); `folder.c`/`mailview.c`
       not yet removed.
 
 ### Deliberate-simplification candidates in `pine/` UI files (need a decision, not just dead-code deletion)
