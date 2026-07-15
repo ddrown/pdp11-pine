@@ -1642,6 +1642,35 @@ These fixed global buffers alone can blow a PDP-11 data segment:
         tests). `text` grew 361863 -> 362143, +280 bytes for the six
         added guards across `mail.c`, `bezerk.c`, `dummy.c`,
         `context.c` (x3), and `folder.c`.
+      - Ctrl-T Fcc-folder-picker `s`-buffer concern (from the `s`-sizing
+        write-up above): confirmed moot while surveying `pine/folder.c`
+        for dead code. `pico/main.c` wires `Pmaster->folders` to
+        `compose_folders()` (`pico/compose_stub.c`), not
+        `folders_for_fcc()` -- the composer-subprocess redesign (see
+        "Run the composer as a separate exec'd process" below) replaced
+        the Ctrl-T Fcc picker's c-client `context_apply()` call with a
+        flat `FCCLIST`-over-the-handoff-file protocol (`fcc_list`/
+        `fcc_count` in `compose_stub.c`, populated by
+        `fcc_candidate_list()` in `send.c`). `folders_for_fcc()` itself
+        has zero remaining callers anywhere in the tree.
+      - False positive, checked and ruled out: `bezerk.c`'s `LOCAL->buf`
+        (the other site the original TODO note named) is `fs_get`'d
+        dynamically (always >= `CHUNK` = 8192 bytes, never shrunk below
+        it), and every `sprintf` into it writes only short `%.30s`-capped
+        or small-integer diagnostic text -- safe as is.
+- [x] Two more overflow instances turned up chasing later findings in
+      this same sweep, each with its own full write-up and regression
+      test elsewhere in this file: `pico/display.c`'s `resize_pico()`
+      uninitialized-`pscreen`-cell gap (see "`pico/display.c`'s
+      `resize_pico()` uninitialized `pscreen`-cell gap" elsewhere in
+      this file) and `bfind()`/`readin()`'s `b_fname[NFILEN]` overflow
+      in standalone `pico` (see "`bfind()`/`readin()`'s
+      `b_fname[NFILEN]` overflow in standalone `pico`" elsewhere in
+      this file).
+- [x] Sweep closed out: every `sprintf`/`strcat`/`strcpy`/`rfc822_cat`/
+      `rfc822_address_line` call into a fixed-size buffer across
+      `pine/*.c`, `pico/*.c`, and the compiled c-client files has now
+      been triaged. No further open instances of this bug class remain.
 
 ### Drop the image-viewer attachment feature (`VAR_IMAGE_VIEWER`)
 - [x] Raised while surveying `pine/init.c`/`args.c` for one-shot startup
