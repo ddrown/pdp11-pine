@@ -69,10 +69,8 @@ void      strings2outgoing(ENVELOPE *,BODY **,char *,char *,char *);
 int       append_message2(char *,ENVELOPE *,BODY *,AppendTypes,char *);
 void      parse_postponed_header(char *, char *, int);
 void      create_message_body(BODY **);
-#ifndef	DOS
 static    char *call_sendmail(ENVELOPE *, BODY *);
 static    int   call_system(char *);
-#endif
 
 /*
  * Pines version of c-client routines, but changed to allow
@@ -90,7 +88,6 @@ void      pine_free_body_data(BODY *);
 void      pine_free_body_part(PART **);
 void      set_mime_types(BODY *);
 int       call_mailer(char *, ENVELOPE *, BODY *);
-FileTypes file_type(void *, long);
 char     *mime_stats(BODY *);
 void      mime_recur(BODY *);
 
@@ -101,10 +98,8 @@ void	  strings2outgoing();
 void      create_message_body();
 int       append_message2();
 void      parse_postponed_header();
-#ifndef	DOS
 static char   *call_sendmail();
 static int     call_system();
-#endif	/* DOS */
 void      pine_write_body_header();
 void      pine_encode_body();
 void      pine_rfc822_header();
@@ -116,7 +111,6 @@ void      pine_free_body_data();
 void      pine_free_body_part();
 void      set_mime_types();
 int       call_mailer();
-FileTypes file_type();
 char     *mime_stats();
 void      mime_recur();
 #endif
@@ -137,16 +131,6 @@ void      mime_recur();
  * down rather than messing with damn copies.  FIX THIS!
  */
 static STORE_S *fcc_so = NULL;
-
-
-#ifdef	DOS
-/*
- * This variable is about the only place we can get the user's
- * IMAP server login name.  DOS requires it for the "From:" address
- * and pseudo-authenticaton warning...
- */
-extern char mm_login_user[];
-#endif
 
 
 /*----------------------------------------------------------------------
@@ -222,11 +206,7 @@ compose_mail(given_to)
 
     if(file_path[0] != '\0') {
         /*============== Continue postponed compostion ==============*/
-#ifdef	DOS
-	if((fp=fopen(file_path, "rb")) == NULL){
-#else
 	if((fp=fopen(file_path, "r")) == NULL){
-#endif
             q_status_message2(1, 3,4, 
                 "\007Error \"%s\" reading postponed composition in \"%s\"",
                               error_description(errno), file_path);
@@ -402,166 +382,6 @@ parse_postponed_header(text, fcc, fcc_size)
     }
 }
  
-
-#ifdef	DOS
-/*----------------------------------------------------------------------
-    Verify that the necessary pieces are around to allow for
-    message sending under DOS
-
-Args:  none
-
-The idea is to make sure pine knows enough to put together a valid 
-from line.  The things we MUST know are a user-id, user-domain and
-smtp server to dump the message off on.  Typically these are 
-provided in pine's configuration file, but if not, the user is
-queried here.
- ----*/
-int
-dos_valid_from()
-{
-    char        prompt[80], answer[60];
-    int         rc, i;
-    HelpType    help;
-
-    /*
-     * query for user name portion of address, use IMAP login
-     * name as default
-     */
-    if(!ps_global->VAR_USER_ID || ps_global->VAR_USER_ID[0] == '\0'){
-	if(mm_login_user[0])
-	  strcpy(answer, mm_login_user);
-	else
-	  answer[0] = '\0';
-
-	sprintf(prompt,"User-id for From address : "); 
-
-	help = NO_HELP;
-	while(1) {
-	    rc = optionally_enter(answer,-3,0,79,1,0,prompt,NULL,help,0);
-	    if(rc == 2)
-	      continue;
-
-	    if(rc == 3){
-		help = (help == NO_HELP) ? h_sticky_user_id : NO_HELP;
-		continue;
-	    }
-
-	    if(rc != 4)
-	      break;
-	}
-
-	if(rc == 1 || (rc == 0 && !answer)) {
-	    q_status_message(0, 0,2 ,"\007Send message cancelled");
-	    return(0);
-	}
-
-	/* save the name */
-	sprintf(prompt, "Preserve %s as \"user-id\" in PINERC", answer);
-	if(ps_global->blank_user_id && want_to(prompt,'y','n',NO_HELP,0)=='y'){
-	    set_variable(V_USER_ID, answer);
-	}
-	else{
-            fs_give((void **)&(ps_global->VAR_USER_ID));
-	    ps_global->VAR_USER_ID = cpystr(answer);
-	}
-    }
-
-    /* query for personal name */
-    if(!ps_global->VAR_PERSONAL_NAME || ps_global->VAR_PERSONAL_NAME[0]=='\0'){
-	answer[0] = '\0';
-	sprintf(prompt,"Personal name for From address : "); 
-
-	help = NO_HELP;
-	while(1) {
-	    rc = optionally_enter(answer,-3,0,79,1,0,prompt,NULL,help,0);
-	    if(rc == 2)
-	      continue;
-
-	    if(rc == 3){
-		help = (help == NO_HELP) ? h_sticky_personal_name : NO_HELP;
-		continue;
-	    }
-
-	    if(rc != 4)
-	      break;
-    	}
-
-	if(rc == 0 && answer){		/* save the name */
-	    sprintf(prompt, "Preserve %s as \"personal-name\" in PINERC",
-		    answer);
-	    if(ps_global->blank_personal_name
-	       && want_to(prompt, 'y', 'n', NO_HELP, 0) == 'y'){
-		set_variable(V_PERSONAL_NAME, answer);
-	    }
-	    else{
-        	fs_give((void **)&(ps_global->VAR_PERSONAL_NAME));
-		ps_global->VAR_PERSONAL_NAME = cpystr(answer);
-	    }
-	}
-    }
-
-    /* 
-     * query for host/domain portion of address, using IMAP
-     * host as default
-     */
-    if(ps_global->blank_user_domain 
-       || ps_global->maildomain == ps_global->localdomain
-       || ps_global->maildomain == ps_global->hostname){
-	if(ps_global->inbox_name[0] == '{'){
-	    for(i=0;ps_global->inbox_name[i+1] != '}'; i++)
-		answer[i] = ps_global->inbox_name[i+1];
-
-	    answer[i] = '\0';
-	}
-	else
-	  answer[0] = '\0';
-
-	sprintf(prompt,"Host/domain for From address : "); 
-
-	help = NO_HELP;
-	while(1) {
-	    rc = optionally_enter(answer,-3,0,79,1,0,prompt,NULL,help,0);
-	    if(rc == 2)
-	      continue;
-
-	    if(rc == 3){
-		help = (help == NO_HELP) ? h_sticky_domain : NO_HELP;
-		continue;
-	    }
-
-	    if(rc != 4)
-	      break;
-	}
-
-	if(rc == 1 || (rc == 0 && !answer)) {
-	    q_status_message(0, 0,2 ,"\007Send message cancelled");
-	    return(0);
-	}
-
-	/* save the name */
-	sprintf(prompt, "Preserve %s as \"user-domain\" in PINERC",
-		answer);
-	if(!ps_global->userdomain && !ps_global->blank_user_domain
-	   && want_to(prompt, 'y', 'n', NO_HELP, 0) == 'y'){
-	    set_variable(V_USER_DOMAIN, answer);
-	    fs_give((void **)&(ps_global->maildomain));	/* blast old val */
-	    ps_global->userdomain      = cpystr(answer);
-	    ps_global->maildomain      = ps_global->userdomain;
-	    ps_global->do_local_lookup = 0;
-	    lhostn                     = ps_global->maildomain;
-	}
-	else{
-            fs_give((void **)&(ps_global->maildomain));
-            ps_global->userdomain = cpystr(answer);
-	    ps_global->maildomain = ps_global->userdomain;
-	}
-    }
-
-    return(1);
-}
-#endif
-
-
 
 /*----------------------------------------------------------------------
     Support for running the composer as a separate exec'd process (see
@@ -938,14 +758,6 @@ pine_send(outgoing, body, editor_title, fcc, are_replying)
 	F_SET(F_USE_FK,ps_global,ps_global->orig_use_fkeys);
     }
 
-#ifdef	DOS
-    if(!dos_valid_from()){
-        q_status_message(1, 2, 4,
-             "Must provide Username for sending!");
-        return;
-    }
-#endif
-
     /*----- Fill in a few general parts of the envelope ----*/
     fccbuf = cpystr(fcc != NULL ? fcc : ps_global->VAR_DEFAULT_FCC);
     strcpy(bodyfile_path, temp_nam(NULL, "pinecmpb"));
@@ -1261,11 +1073,7 @@ call_mailer(fcc, envelope, body)
      */
     fcc_so = NULL;
     if(fcc && *fcc){
-#ifdef	DOS
-#define	FCC_SOURCE	FileStar
-#else
 #define	FCC_SOURCE	CharStar
-#endif
 
 	if((fcc_cntxt = default_save_context(ps_global->context_list)) == NULL)
 	  fcc_cntxt = ps_global->context_list;
@@ -1362,23 +1170,10 @@ call_mailer(fcc, envelope, body)
     else if(fcc_so){			/* if sent or only fcc, save it */
 	STRING      msg;
 	MAILSTREAM *fcc_stream = NULL;
-#ifdef	DOS
-	struct {			/* hack! stolen from dawz.c */
-	    int fd;
-	    unsigned long pos;
-	} d;
-	extern STRINGDRIVER dawz_string;
-#endif
 
 	so_seek(fcc_so, 0L, 0);
-#ifdef	DOS
-	d.fd  = fileno((FILE *)so_text(fcc_so));
-	d.pos = 0L;
-	INIT(&msg, dawz_string, (void *)&d, filelength(d.fd));
-#else
-	INIT(&msg, mail_string, (void *)so_text(fcc_so), 
+	INIT(&msg, mail_string, (void *)so_text(fcc_so),
 	     strlen((char *)so_text(fcc_so)));
-#endif
 
 	fcc_stream = context_same_stream(fcc_cntxt->context, fcc,
 					 ps_global->mail_stream);
@@ -1418,7 +1213,6 @@ call_mailer(fcc, envelope, body)
 
 
 
-#ifndef	DOS	
 /* ----------------------------------------------------------------------
       Fork off mailer process and pipe the message into it
 
@@ -1520,7 +1314,6 @@ call_system(command)
     dprint(9, (debugfile, "STATUS: %d\n", status));
     return(0);
 }
-#endif	/* !DOS */
 
 
 /*----------------------------------------------------------------------
@@ -1636,62 +1429,6 @@ create_message_body(b)
 
 
 /*----------------------------------------------------------------------
-
-Returns IsText:
-  If lines are less than 500 characters and thereis nothing with the 
-  8th bit on
-
-Returns IsText8:
-  If lines are less than 500 characters and less than 10% of characters
-  have 8th bit on
-
-Returns IsBinary
-  All other cases;
-
- ---*/
-FileTypes   
-file_type(f, len)
-    void *f;
-    long  len;
-{
-    long      max_line, eight_bit_chars;
-    char     *p, *line_start;
-    FileTypes rv;
-
-    max_line        = 0L;
-    line_start      = (char *)f;
-    eight_bit_chars = 0L;
-    
-    for(p = (char *)f; p < &(((char *)f)[len]); p++) {
-        if(*p == '\n') {
-            max_line = max(max_line, p - line_start);
-            line_start = p;
-        } else if(*p & 0x80){
-            eight_bit_chars++;
-        } else if(!*p) {
-            /* A NULL, must be binary */
-            return(IsBinary);
-        }
-    }
-    if(max_line > 500L)
-      rv = IsBinary;  /* Very long lines */
-    else if(eight_bit_chars == 0L)
-      rv = IsText;    /* short lines, no 8 bit */
-    else if((eight_bit_chars * 100L)/len < 10L)
-      rv = IsText8;   /* Short lines, < 10% 8 bit chars */
-    else
-      rv = IsBinary;   /* Short lines, > 10% 8 bit chars */
-    
-    dprint(4, (debugfile,
-               "file_type -- len: %ld max_line: %ld  8 bit chars: %ld  %s\n",
-               len, max_line, eight_bit_chars,
-               rv==IsText ? "IsText" : rv==IsBinary ? "IsBinary" : "IsText8"));
-    return(rv);
-}
-
-
-
-/*----------------------------------------------------------------------
     Output routine for rfc822_output_body
 
 Normally this is used for writing a message down a TCP stream, but
@@ -1708,16 +1445,12 @@ unix_puts(stream_x, string)
 
     /* Need error checking */
     for(p = string; *p; p++) {
-#ifdef	DOS
-        putc(*p, stream);
-#else
         if(*p == '\015' && *(p+1) == '\012') {
             putc('\n', stream);
             p++;
         } else {
             putc(*p, stream);
         }
-#endif
     }
     return(1); /* T for c-client */
 }
@@ -1759,13 +1492,8 @@ append_message2(folder, env, bod, type, fcc)
     int    rv, save_errno;
     FILE  *folder_stream;
     long   start_of_append;
-#ifdef	DOS
-#define	OTYPE	"w+b"
-#define	OMODE	(S_IREAD | S_IWRITE)
-#else
 #define	OTYPE   "w"
 #define	OMODE   0600
-#endif
 
     strcpy(filename, folder);
 
@@ -1838,9 +1566,7 @@ append_message2(folder, env, bod, type, fcc)
           fclose(folder_stream);
 
         save_errno = errno;
-#ifndef	DOS
         truncate(filename, start_of_append);
-#endif
         q_status_message2(1, 2, 4, "\007Error \"%s\" writing \"%s\"",
                           error_description(save_errno), pretty_fn(folder));
         dprint(1, (debugfile, "Error writing %s: %s\n",
@@ -2013,16 +1739,8 @@ set_mime_types(body)
                      can_be_ascii = 1L;
     STORE_S         *so = (STORE_S *)body->contents.binary;
     unsigned short   new_encoding = ENCOTHER;
-#ifdef ENCODE_FROMS
-    short            froms = 0,
-                     bmap  = 0x1;
-#endif
 
-#ifndef DOS
     buf = (unsigned char *)fs_get(RBUFSZ);
-#else
-    buf = (unsigned char *)tmp_20k_buf;
-#endif
     so_seek(so, 0L, 0);
 
     for(n = 0; n < RBUFSZ-1 && so_readc(&buf[n], so) != 0; n++)
@@ -2085,16 +1803,9 @@ set_mime_types(body)
     }
 
     if (body->encoding == ENCOTHER || body->type == TYPEOTHER) {
-#ifdef DOS /* for binary file detection */
-	int lastchar = '\0';
-#endif
 	p = bol = buf;
 	len = n;
 	while (n--) {
-/* Some people don't like quoted-printable caused by leading Froms */
-#ifdef ENCODE_FROMS
-	    Find_Froms(froms, bmap, *p);
-#endif
 	    if (*p == '\n') {
 		max_line = max(max_line, line_so_far + p - bol);
 		bol = p;
@@ -2129,18 +1840,6 @@ set_mime_types(body)
 		else
 		  break;
 	    }
-#ifdef DOS /* for binary file detection */
-#define BREAKOUT 300   /* a value that a character can't be */
-	    /* LF with no preceding CR, so binary */
-	    else if (*p == '\n' && lastchar != '\r') {
-		    lastchar = BREAKOUT;
-	    }
-#endif
-
-#ifdef DOS /* for binary file detection */
-	    if (lastchar != BREAKOUT)
-		lastchar = *p;
-#endif
 
 	    /* read another buffer in */
 	    if (n == 0) {
@@ -2152,20 +1851,6 @@ set_mime_types(body)
 	    }else {
 		p++;
 	    }
-#ifdef DOS /* for binary file detection */
-	    /* either a lone \r or lone \n indicate binary file */
-	    if (lastchar == '\r' || lastchar == BREAKOUT) {
-		if (lastchar == BREAKOUT || n == 0 || *p != '\n') {
-		    if (body->type == TYPEOTHER) {
-			body->type = TYPEAPPLICATION;
-			body->subtype = cpystr("octet-stream");
-		    }
-
-		    new_encoding = ENCBINARY;
-		    break;
-		}
-	    }
-#endif
 	}
     }
 
@@ -2231,12 +1916,6 @@ set_mime_types(body)
 	}
     }
 
-#ifdef ENCODE_FROMS
-    /* If there were From_'s at the beginning of a line */
-    if (froms && new_encoding != ENCBINARY)
-	new_encoding = ENC8BIT;
-#endif
-
     /* need to set the subtype, and possibly the charset */
     if(body->type == TYPETEXT && body->subtype == NULL) {
         PARAMETER *pm;
@@ -2268,18 +1947,9 @@ set_mime_types(body)
     if(body->encoding == ENCOTHER)
       body->encoding = new_encoding;
 
-#ifndef	DOS
     fs_give((void **)&buf);
-#endif
 }
 
-
-
-/*
- * these functions provide for attachment handling in DOS.  They
- * may at a later date be exended to pine in general.  It pretty
- * much depends on how the piping performs.
- */
 
 
 /*
@@ -2353,10 +2023,6 @@ pine_rfc822_header(header, env, body)
     ENVELOPE *env;
     BODY *body;
 {
-#ifdef	DOS
-  NETMBX netmbox;
-#endif
-
   if (env->remail) {		/* if remailing */
     long i = strlen (env->remail);
 				/* flush extra blank line */
@@ -2372,25 +2038,6 @@ pine_rfc822_header(header, env, body)
   rfc822_header_line (&header,"Subject",env,env->subject);
   rfc822_address_line (&header,"To",env,env->to);
   rfc822_address_line (&header,"cc",env,env->cc);
-#if	defined(DOS) && !defined(NOAUTH)
-  /*
-   * Add comforting "X-" header line indicating what sort of 
-   * authenticity the receiver can expect...
-   */
-
-  if(ps_global->mail_stream 
-     && mail_valid_net_parse(ps_global->mail_stream->mailbox, &netmbox)
-     && !netmbox.anoflag){
-      char   tmp[MAILTMPLEN];	/* place to write  */
-      char   last_char = netmbox.host[strlen(netmbox.host) - 1];
-
-      sprintf(tmp, "%s@%s%s%s", mm_login_user, isdigit(last_char) ? "[" : "",
-	      netmbox.host, isdigit(last_char) ? "]" : "");
-      rfc822_header_line (&header,"X-Sender",env,tmp);
-  }
-  else
-    rfc822_header_line (&header,"X-Warning",env,"UNAuthenticated Sender");
-#endif
   rfc822_address_line (&header,"bcc",env,env->bcc);
   rfc822_header_line (&header,"In-Reply-To",env,env->in_reply_to);
   rfc822_header_line (&header,"Message-ID",env,env->message_id);

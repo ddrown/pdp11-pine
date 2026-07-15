@@ -57,19 +57,7 @@ cuts, but required regardless) is now fully done; see
       confirmed-dead-or-DOS-only code (this section, safe mechanical
       cuts) and reachable-but-pointless-for-this-target code that needs
       a judgment call (next section).
-      **`pine/send.c`**: `file_type()` and the `FileTypes`/`IsText`/
-      `IsText8`/`IsBinary` typedef (~lines 1652-1690, declared
-      `pine.h:758`) -- zero callers anywhere in the repo, a leftover
-      from the since-removed compose-side attachment-typing code.
-      `ENCODE_FROMS`-guarded blocks in `set_mime_types()` (3 sites) --
-      the macro is commented out in every `osdep/os-*.h`, dead in any
-      configured build. Plus all `#ifdef DOS` sites (~28, confirmed
-      `DOS` is never `#define`d in any build this project uses -- only
-      the old `makefile.msc` toolchain references it), including all of
-      `dos_valid_from()` (406-562), the DOS FCC hack (`dawz_string`/
-      `d.fd`, 1365-1381), DOS binary-detection branches in
-      `set_mime_types`, and the DOS-only X-Sender/X-Warning header block
-      (2375-2393).
+      **`pine/send.c`** -- DONE, see `TODO-pdp11-done.md`.
       **`pine/mailcmd.c`**: the Zoom (558-565), Unexclude (760-768),
       Apply (771-779), Bounce (877-884), Flag (887-894), and Pipe
       (897-906) command-dispatch cases -- these only ever printed "not
@@ -125,7 +113,8 @@ cuts, but required regardless) is now fully done; see
       `mail_view_screen()` (162-185, 207-228: incore-vs-file storage
       choice, `dos_gets`/`append_file` fetch path) and in
       `zero_scroll_text()` (1739-1746).
-      Not yet removed, any of it.
+      `pine/send.c` done (see above); `mailcmd.c`/`folder.c`/`mailview.c`
+      not yet removed.
 
 ### Deliberate-simplification candidates in `pine/` UI files (need a decision, not just dead-code deletion)
 - [ ] Found alongside the dead-code sweep above: code that's live and

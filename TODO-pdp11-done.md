@@ -2411,3 +2411,63 @@ Full smoketest suite: 25/25 passed. `bin/pine`'s `text` shrank
 new regression test added since the observable difference is timing
 only (no distinct pass/fail condition beyond "compose still works",
 already covered by the existing composer tests).
+
+### `pine/send.c` dead/vestigial code sweep -- DONE (first file of the four-file survey)
+- [x] First installment of the "`pine/` UI files: dead/vestigial code"
+      survey item -- `pine/send.c` only; `mailcmd.c`/`folder.c`/
+      `mailview.c` remain open in `TODO-pdp11.md`. Removed, all
+      confirmed to have zero callers/reachability before deleting:
+      - `file_type()` (~1652-1690) and the `FileTypes`/`IsText`/
+        `IsText8`/`IsBinary` typedef (`pine.h:758`), plus its two
+        K&R/ANSI forward declarations -- zero callers anywhere in the
+        repo, a leftover from the since-removed compose-side
+        attachment-typing code.
+      - All three `#ifdef ENCODE_FROMS` blocks in `set_mime_types()`
+        (the `froms`/`bmap` locals, the `Find_Froms()` call, and the
+        trailing "if there were From_'s" encoding bump) -- confirmed
+        `ENCODE_FROMS` is commented out in every `pine/osdep/os-*.h`,
+        dead in any configured build.
+      - Every `#ifdef DOS`/`#ifndef DOS` site in the file: the DOS
+        "rb" vs "r" postponed-mail open mode; `dos_valid_from()`
+        (~406-562, the interactive user-id/personal-name/domain
+        prompt used only to build a DOS "From:" line) and its lone
+        call site in `pine_send()`, plus the now-unused
+        `extern char mm_login_user[]` declaration it needed (the
+        variable itself is still defined and used elsewhere, in
+        `pine/imap.c`); the `FCC_SOURCE` `FileStar`-vs-`CharStar`
+        macro split (always `CharStar` now); the `dawz_string`/`d.fd`
+        "hack! stolen from dawz.c" FCC-storage-object branch in
+        `pine_send()` (always the `mail_string`/`so_text()` branch
+        now); the DOS binary-detection branches in `set_mime_types()`
+        (`lastchar`/`BREAKOUT` lone-CR/LF-detection logic); the
+        DOS-only X-Sender/X-Warning header block in
+        `pine_rfc822_header()` (required a `NETMBX netmbox` local only
+        used there); `unix_puts()`'s DOS raw-`putc` branch (always
+        does CRLF-to-LF translation now); `append_message2()`'s
+        `OTYPE`/`OMODE` DOS-vs-Unix open-mode macro split (always
+        `"w"`/`0600` now) and its `truncate()`-on-error-cleanup call
+        (was `#ifndef DOS`, now unconditional); and the `#ifndef DOS`
+        wrapper around `call_sendmail()`/`call_system()`'s forward
+        declarations (the functions themselves were never
+        DOS-conditional, only their prototypes were). Also removed a
+        stale comment ("these functions provide for attachment
+        handling in DOS...") that no longer describes the functions
+        below it (`addr_list_size()`/`pine_rfc822_header_size()`,
+        unrelated general-purpose helpers).
+      - Left alone, deliberately: the magic-number MIME-type sniffing
+        block in `set_mime_types()` (GIF/JPEG/TIFF/PostScript/`.snd`/
+        AppleFile/ZIP detection) -- this is *not* DOS-only or dead, it
+        runs on every build; it's listed separately under "Deliberate-
+        simplification candidates" in `TODO-pdp11.md` since cutting it
+        is a product decision, not a dead-code removal.
+      Verified: `./build lnx` clean (no new warnings; the file's two
+      pre-existing `union wait *`/`wait()` warnings, unrelated to this
+      sweep, are the compiler-warnings TODO item's concern, not
+      this one's); full smoketest suite 25/25, including the
+      sendmail-stub-driven `test_send_body_header_overflow_via_sendmail`
+      (exercises `call_sendmail()`, unaffected by removing its dead
+      `#ifndef DOS` prototype wrapper) and the postponed-mail tests
+      (exercise the "rb"/"r" open-mode site). No new regression test
+      added -- this is dead-code removal with no behavior change to
+      verify, not a bug fix. `bin/pine`'s `text` shrank
+      362079 -> 361631, -448 bytes.

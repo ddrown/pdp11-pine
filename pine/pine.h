@@ -755,7 +755,6 @@ typedef enum {ComposerHelpText, HelpText, NewsText, MessageText, AttachText,
 typedef enum {CharStarStar, CharStar, FileStar,
 		TmpFileStar} SourceType;
 typedef enum {GoodTime, BadTime, VeryBadTime, DoItNow} CheckPointTime;
-typedef enum {IsText, IsText8, IsBinary} FileTypes;
 typedef enum {AppendPostpone, AppendInterrupted, AppendSendmail} AppendTypes;
 typedef enum {InLine, QStatus} DetachErrStyle;
 
