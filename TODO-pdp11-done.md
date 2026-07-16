@@ -2892,3 +2892,29 @@ already covered by the existing composer tests).
       rejected outright -- CLAUDE.md's config-generality
       conventions don't require inventing new config validation for a
       syntax variant this build no longer looks for).
+
+### `pine/folder.c`'s `-Wpointer-compare` warning -- fixed (standing compiler-warnings goal)
+- [x] `VAR_FOLDER_SPEC[0] == '\0'` (line number moved to `:1979` after
+      the `{host}`-remote-syntax cut just above, `:1998` before that,
+      `:2067` before that) compares a `char *` (`VAR_FOLDER_SPEC` is
+      the `.l` union member, documented in `pine.h` as "pointer to
+      list of string values", i.e. a NULL-terminated `char **`) against
+      the character constant `'\0'`. Confirmed this is legal C and not
+      a functional bug: `'\0'` is an `int` constant with value 0, which
+      the standard treats as a null pointer constant, so the comparison
+      is identical to `VAR_FOLDER_SPEC[0] == NULL` -- i.e. it correctly
+      checks "is the list's first slot the NULL terminator" (empty
+      list), the same NULL-terminated-array convention this same
+      function already relies on a few lines down (`for(i = 0;
+      ps_global->VAR_FOLDER_SPEC[i]; i++)`). The `'\0'` spelling was
+      just a misleading way to write a pointer-vs-NULL check (reads
+      like an accidental string-emptiness test), which is exactly what
+      triggered the warning. Fixed by writing the comparison as
+      `== NULL` -- same generated code, no behavior change, warning
+      gone since comparing a pointer against `NULL` (rather than a
+      character constant) is unambiguous.
+      Verified: `./build clean && ./build lnx` -- warning count dropped
+      180 -> 179, `folder.c` no longer appears in the warnings list;
+      full smoketest suite 25/25. No regression test added (no
+      behavior changed to observe -- this was a style/clarity fix, not
+      a bug fix).

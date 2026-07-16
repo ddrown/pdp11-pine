@@ -15,7 +15,7 @@ cuts, but required regardless) is now fully done; see
 `TODO-pdp11-done.md`.
 
 ### Standing goal: eliminate compiler warnings
-- [ ] `./build clean && ./build lnx` currently produces 180 warnings.
+- [ ] `./build clean && ./build lnx` currently produces 179 warnings.
       Not a single task to pull and finish -- an ongoing, opportunistic
       goal (see CLAUDE.md's "Code style: prefer ANSI-style function
       signatures"): when a function is already being touched for some
@@ -46,11 +46,6 @@ cuts, but required regardless) is now fully done; see
         (`int *status`, not `union wait *`) rather than assuming the
         cast is still correct; possibly a leftover from an older BSD
         `wait()` signature.
-      - 1x `-Wpointer-compare`: `pine/folder.c:1979` (line number as of
-        the `{host}`-remote-syntax cut; was `:1998` before it, `:2067`
-        before that), comparing a pointer to `'\0'` (likely meant to
-        dereference it first) -- worth a standalone look, smells like
-        a real (if probably harmless here) bug rather than a style nit.
 
 ### `pine/` UI files: dead/vestigial code found while surveying send.c, mailcmd.c, folder.c, mailview.c
 -- DONE, see `TODO-pdp11-done.md`. All four files (`send.c`, `mailcmd.c`,

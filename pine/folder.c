@@ -1976,7 +1976,7 @@ init_folders()
 
 /* BUG: gotta clean up global context_list before pine exits... */
 
-    if(!ps_global->VAR_FOLDER_SPEC || ps_global->VAR_FOLDER_SPEC[0] == '\0'){
+    if(!ps_global->VAR_FOLDER_SPEC || ps_global->VAR_FOLDER_SPEC[0] == NULL){
 	/*
 	 * THIS MAY NEED TUNING!  In the absence of any other info, 
 	 * assume all opens and saves are done relative to the
