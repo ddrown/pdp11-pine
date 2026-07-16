@@ -79,11 +79,13 @@ cuts, but required regardless) is now fully done; see
       7BIT/8BIT/BINARY `Content-Transfer-Encoding` for the user's
       typed text and setting `subtype=PLAIN`/`charset=US-ASCII` --
       was kept, just with the dead type-guessing stripped out.
-      **UW Message-ID size-stats decoration** (`pine/send.c`):
-      `update_message_id()`/`mime_stats`/`mime_recur`/`encode_bits`/
-      `logbase2` (~1859-1982, ~100 lines) -- cosmetic diagnostic token
-      spliced into the outgoing `Message-ID:` header, no functional
-      value to a single-user station.
+      **UW Message-ID size-stats decoration** -- DONE, see
+      `TODO-pdp11-done.md`. Removed `update_message_id()`/
+      `mime_stats()`/`mime_recur()`/`encode_bits()`/`logbase2()` and
+      their `call_mailer()` call site from `pine/send.c` entirely;
+      `generate_message_id()` (`pine/reply.c`) already produces a
+      fully valid, unique `Message-ID:` on its own (hostname + pid +
+      timestamp + counter char), so nothing else needed to change.
       **Restricted ("demo") mode lockdown** (`pine/send.c`
       `check_addresses()` 1181-1218; also `pine/mailcmd.c` 1334, 2695):
       recipient/attachment-save lockdown only reachable via a CLI flag

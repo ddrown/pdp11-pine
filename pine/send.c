@@ -88,8 +88,6 @@ void      pine_free_body_data(BODY *);
 void      pine_free_body_part(PART **);
 void      set_mime_types(BODY *);
 int       call_mailer(char *, ENVELOPE *, BODY *);
-char     *mime_stats(BODY *);
-void      mime_recur(BODY *);
 
 #else
 
@@ -111,8 +109,6 @@ void      pine_free_body_data();
 void      pine_free_body_part();
 void      set_mime_types();
 int       call_mailer();
-char     *mime_stats();
-void      mime_recur();
 #endif
 
 
@@ -1055,11 +1051,8 @@ call_mailer(fcc, envelope, body)
     q_status_message(0, 2, 4, "Sending mail.....");
     display_message('x'); 
 
-    /*---- recompute message-id to encode body info stats ----*/
     if(!envelope->message_id)		/* just in case! */
       envelope->message_id = cpystr(generate_message_id(ps_global));
-
-    update_message_id(envelope, mime_stats(body));
 
     /*----- write message to sent-mail file ----*/
     /*
@@ -1577,135 +1570,6 @@ append_message2(folder, env, bod, type, fcc)
       return(0);
 }
 
-
-
-/*----------------------------------------------------------------------
-  Insert the addition into the message id before first "@"
-  ----*/
-update_message_id(e, addition)
-    ENVELOPE *e;
-    char *addition;
-{
-    char *p, *q, *r, *new;
-
-    new = fs_get(strlen(e->message_id) + strlen(addition) + 5);
-    for(p = new, q = e->message_id; *q && *q != '@'; *p++ = *q++);
-    *p++ = '-';
-    for(r = addition; *r ; *p++ = *r++);
-    for(; *q; *p++ = *q++);
-    *p = *q;
-    fs_give((void **)&(e->message_id));
-    e->message_id = new;
-}
-
-
-
-
-static struct mime_count {
-    long size;
-    int text_parts;
-    int image_parts;
-    int message_parts;
-    int application_parts;
-    int audio_parts;
-    int  video_parts;
-} mc;
-
-char *
-mime_stats(body)
-    BODY *body;
-{
-    static char id[10];
-    mc. size = 0;
-    mc.text_parts = 0;
-    mc.image_parts = 0;
-    mc.message_parts = 0;
-    mc.application_parts = 0;
-    mc.audio_parts = 0;
-    mc.video_parts = 0;
-
-    mime_recur(body);
-
-    mc.text_parts        = min(8, mc.text_parts );
-    mc.image_parts       = min(8, mc.image_parts );
-    mc.message_parts     = min(8, mc.message_parts );
-    mc.application_parts = min(8, mc.application_parts );
-    mc.audio_parts       = min(8, mc.audio_parts );
-    mc.video_parts       = min(8, mc.video_parts );
-
-
-    id[0] = encode_bits(logbase2(mc.size));
-    id[1] = encode_bits(mc.text_parts);
-    id[2] = encode_bits(mc.message_parts);
-    id[3] = encode_bits(mc.application_parts);
-    id[4] = encode_bits(mc.video_parts);
-    id[5] = encode_bits(mc.audio_parts);
-    id[6] = encode_bits(mc.image_parts);
-    id[7] = '\0';
-    return(id);
-}
-    
-
-
-/*----------------------------------------------------------------------
-   ----*/
-void
-mime_recur(body)
-    BODY *body;
-{
-    PART *part;
-    switch (body->type) {
-      case TYPETEXT:
-        mc.text_parts++;
-        break;
-      case TYPEIMAGE:
-        mc.image_parts++;
-        break;
-      case TYPEMESSAGE:
-        mc.message_parts++;
-        break;
-      case TYPEAUDIO:
-        mc.audio_parts++;
-        break;
-      case TYPEAPPLICATION:
-        mc.application_parts++;
-        break;
-      case TYPEVIDEO:
-        mc.video_parts++;
-        break;
-      case TYPEMULTIPART:
-        for(part = body->contents.part; part != NULL; part = part->next) 
-          mime_recur(&(part->body));
-        break;
-    }
-    if(body->type != TYPEMULTIPART)
-      mc.size += body->size.bytes;
-}
-        
-int        
-encode_bits(bits)
-    int bits;
-{
-    if(bits < 10)
-      return(bits + '0');
-    else if(bits < 36)
-      return(bits - 10 + 'a');
-    else if (bits < 62)
-      return(bits - 36 + 'A');
-    else
-      return('.');
-}
-
-int
-logbase2(x)
-    long x;
-{
-    int base2;
-
-    for(base2 = 0; x != 0; base2++)
-      x /= 2;
-    return(base2);
-}
 
 
 /*

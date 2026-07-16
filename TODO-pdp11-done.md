@@ -2992,3 +2992,42 @@ already covered by the existing composer tests).
       real win since, like the `folder.c` `{host}`-remote cut before
       it, this was live compiled-in code with no reachable callers
       left, not a preprocessor-gated `#ifdef`.
+
+### UW Message-ID size-stats decoration -- cut, third of the "Deliberate-simplification candidates"
+- [x] `pine/send.c`'s `call_mailer()` called
+      `update_message_id(envelope, mime_stats(body))` right after
+      generating the outgoing `Message-ID:`, splicing a 7-character
+      stats token (log2 of total message size, plus clamped
+      text/message/application/video/audio/image part counts, each
+      base62-ish encoded via `encode_bits()`) into the id just before
+      its `@`. A UW diagnostic convenience (support staff could
+      eyeball rough message shape from the `Message-ID:` header
+      alone) with no effect on mail delivery or correctness.
+      Confirmed safe to remove outright: `generate_message_id()`
+      (`pine/reply.c:1296`) -- called right before this, and from five
+      other places in `reply.c` -- already builds a complete, unique
+      `Message-ID:` on its own from hostname + pid + timestamp +
+      counter character, with no dependency on the stats decoration.
+      Grepped for any other reader of `message_id` in the tree
+      (`mailindx.c`, `mailcmd.c`): both just print/compare it as an
+      opaque string, neither parses the stats token, so nothing
+      downstream depends on the decorated format either.
+      Removed: `update_message_id()`, `mime_stats()`, `mime_recur()`,
+      `encode_bits()`, `logbase2()` (all five functions, entirely),
+      the static `struct mime_count { ... } mc;` and `mime_stats()`'s
+      static `id[10]` buffer, the `mime_stats`/`mime_recur` forward
+      declarations (both ANSI and K&R blocks), and the
+      `update_message_id(envelope, mime_stats(body));` call site
+      (plus its now-inaccurate "recompute message-id to encode body
+      info stats" comment) in `call_mailer()`.
+      Verified: `./build clean && ./build lnx` clean, warning count
+      unchanged at 179; full smoketest suite 25/25. No regression test
+      added -- pure removal of a cosmetic decoration with no reachable
+      behavior to observe (the `Message-ID:` is still present, unique,
+      and RFC-valid, just without the stats token). Size delta via
+      `git stash`-based before/after clean rebuild: `bin/pine`'s `text`
+      shrank 355023 -> 353671 (-1352 bytes), `bss` shrank 15192 ->
+      15128 (-64 bytes, the removed static `mc`/`id` buffers),
+      `data` unchanged (13416) -- live compiled-in code with no
+      reachable callers left once removed, not a preprocessor-gated
+      cut.
