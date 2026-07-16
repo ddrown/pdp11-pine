@@ -2918,3 +2918,77 @@ already covered by the existing composer tests).
       full smoketest suite 25/25. No regression test added (no
       behavior changed to observe -- this was a style/clarity fix, not
       a bug fix).
+
+### Magic-number MIME-type sniffing -- cut, second of the "Deliberate-simplification candidates"
+- [x] Investigation before cutting: `pine/send.c`'s `set_mime_types()`
+      is called from exactly two places, both inside
+      `create_message_body()` -- `set_mime_types(*b)` for a plain
+      `TYPETEXT` body, and `set_mime_types(&((*b)->contents.part->body))`
+      for the text part of a MIME-forward-as-attachment `MULTIPART`
+      body (`reply.c`'s `body->contents.part->body.type = TYPETEXT;`).
+      Both call sites set `(*b)->encoding = ENCOTHER;` immediately
+      before calling, and both always pass a body whose `type` is
+      already `TYPETEXT`, never `TYPEOTHER`. Since the entire
+      magic-number sniffing block (GIF/JPEG/TIFF/PostScript/`.snd`/
+      AppleFile/ZIP detection, plus the `else` "PROBLEM" octet-stream
+      fallback for an empty read) was gated behind `if(body->type ==
+      TYPEOTHER)`, it was already fully dead code in every reachable
+      call today -- not just "vestigial" as the TODO's original
+      framing put it. Asked the user whether the function could be
+      cut entirely given this; answer was no -- past the sniffing
+      block, the function also determines the outgoing text's
+      `Content-Transfer-Encoding` (7BIT/8BIT/BINARY, based on scanning
+      for 8-bit characters/control chars/NULs/line length) and sets
+      `subtype=PLAIN`/`charset=US-ASCII` -- real, necessary work
+      for correctly encoding whatever the user actually typed or
+      pasted (e.g. accented characters, stray control bytes), so a
+      full removal would leave outgoing messages with no
+      `Content-Transfer-Encoding` and no MIME subtype.
+      Removed: the entire `if(n){ if(body->type==TYPEOTHER){
+      ...magic numbers...} } else { if(body->type==TYPEOTHER){
+      ...octet-stream fallback...} }` block. Then, since `body->type`
+      is provably always `TYPETEXT` at every remaining point in the
+      function, collapsed every downstream `if(body->type ==
+      TYPEOTHER)` dead branch and `(body->type==TYPETEXT) ? X : Y`
+      ternary down to its `TYPETEXT` arm: the NUL-byte handling in the
+      byte-scanning loop (`new_encoding = (body->type==TYPETEXT) ?
+      ENC8BIT : ENCBINARY; if(body->type==TYPETEXT) eight_bit_chars++;
+      else break;` -> unconditional `new_encoding = ENC8BIT;
+      eight_bit_chars++;`), the `max_line >= 1000L` branch's dead
+      `TYPEAPPLICATION`/`octet-stream` fallback and its ternary, the
+      `eight_bit_chars == 0L` branch's dead `body->type = TYPETEXT`
+      no-op, the `< 30%` branch's same no-op, and the final `else`
+      branch's dead `TYPEAPPLICATION`/`octet-stream` fallback. The
+      outer `if(body->encoding == ENCOTHER || body->type ==
+      TYPEOTHER)` guards (both call sites always pass `ENCOTHER`, so
+      always true) and the final `if(body->type == TYPETEXT &&
+      body->subtype == NULL)` condition were simplified the same way
+      (dropped the now-always-true `type` half of each). Kept
+      unchanged: the `!= ENCBINARY`/`== ENCOTHER` guards around
+      `new_encoding` assignment (these aren't part of the
+      type-guessing dead code -- they encode a real "don't downgrade
+      an already-upgraded encoding" precedence rule), the
+      `can_be_ascii`/control-character bookkeeping (unrelated to
+      magic-number type sniffing; tracked separately by the still-open
+      ISO-2022-handling TODO item), and the final `if(body->encoding
+      == ENCOTHER) body->encoding = new_encoding;` guard (a distinct,
+      still-meaningful "don't override a caller-supplied encoding"
+      contract, not dependent on the type invariant). Updated the
+      function's header comment to describe what it actually does now
+      (encoding/subtype determination for typed text only) instead of
+      the stale general-purpose "sniff the given storage object to
+      determine its type, subtype and encoding" description.
+      Verified: `./build clean && ./build lnx` clean, warning count
+      unchanged at 179 (the removed code was already live/compiled,
+      not preprocessor-gated, so no warnings were attached to it
+      either way); full smoketest suite 25/25, including
+      `test_base64_body` (exercises the encoding-selection logic this
+      touched). No regression test added -- pure dead-branch removal
+      with no reachable behavior change (the removed branches could
+      never fire given the confirmed `TYPETEXT`/`ENCOTHER`-only
+      callers), not a bug fix. Size delta via `git stash`-based
+      before/after clean rebuild: `bin/pine`'s `text` shrank 356119 ->
+      355023 (-1096 bytes), `data`/`bss` unchanged (13416/15192) -- a
+      real win since, like the `folder.c` `{host}`-remote cut before
+      it, this was live compiled-in code with no reachable callers
+      left, not a preprocessor-gated `#ifdef`.

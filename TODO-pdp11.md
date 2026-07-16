@@ -69,12 +69,16 @@ cuts, but required regardless) is now fully done; see
       `find_folders_in_context()`/`folder_list_entry()`/
       `folder_exists()` is gone, along with the `type` field on
       `CONTEXT_S` (`pine.h`) that stored those flags.
-      **Magic-number MIME-type sniffing** (`pine/send.c`,
-      `set_mime_types()`): GIF/JPEG/TIFF/PostScript/`.snd`/AppleFile/ZIP
-      content detection -- vestigial from when the composer could
-      attach arbitrary binary files; now the only body ever passed
-      through is the user's own typed text, which always resolves to
-      `TEXT/PLAIN; charset=US-ASCII`.
+      **Magic-number MIME-type sniffing** -- DONE, see
+      `TODO-pdp11-done.md`. Removed the GIF/JPEG/TIFF/PostScript/
+      `.snd`/AppleFile/ZIP magic-number detection block from
+      `pine/send.c`'s `set_mime_types()`, plus every other
+      `body->type == TYPEOTHER` dead branch it left behind (confirmed:
+      both real call sites always pass a `TYPETEXT`/`ENCOTHER` body).
+      The function's still-necessary job -- picking
+      7BIT/8BIT/BINARY `Content-Transfer-Encoding` for the user's
+      typed text and setting `subtype=PLAIN`/`charset=US-ASCII` --
+      was kept, just with the dead type-guessing stripped out.
       **UW Message-ID size-stats decoration** (`pine/send.c`):
       `update_message_id()`/`mime_stats`/`mime_recur`/`encode_bits`/
       `logbase2` (~1859-1982, ~100 lines) -- cosmetic diagnostic token
