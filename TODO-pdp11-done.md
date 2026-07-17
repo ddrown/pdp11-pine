@@ -3031,3 +3031,85 @@ already covered by the existing composer tests).
       `data` unchanged (13416) -- live compiled-in code with no
       reachable callers left once removed, not a preprocessor-gated
       cut.
+
+### Restricted ("demo") mode lockdown -- cut project-wide, fourth of the "Deliberate-simplification candidates"
+- [x] Investigated the full reach of `ps_global->restricted` before
+      cutting, since the TODO flagged this as needing a broader
+      decision than the two `send.c`/`mailcmd.c` sites it originally
+      named. Found the flag (settable only via the `-r` CLI flag --
+      UW's public-kiosk-demo-account mode, `pine/args.c`) actually
+      touches 7 files end to end: `pine/pine.h` (the `restricted:1`
+      bitfield), `pine/send.c` (`check_addresses()`'s mail-to-self-only
+      lockdown, and passing `P_SECURE` into the composer's
+      `pine_flags`), `pine/mailcmd.c` (blocking "export message to
+      file" and "save attachment"), `pine/pine.c` (blocking the
+      keyboard-lock command, hiding its keymenu entry, blocking
+      password-change), `pine/osdep/expnfldr` (blocking folder opens
+      by local path `./`/`~`), and the composer's own file-browser
+      lockdown fed through the `pine_flags`/`P_SECURE` handoff
+      protocol into `pico/pico.h`'s `MDSCUR` mode bit, checked in 5
+      sites across `pico/browse.c` (read directory, delete, copy,
+      rename, visit-parent) and 2 sites in `pico/file.c` (insert
+      file). Asked the user to confirm a project-wide cut given the
+      scope (a single-user PDP-11 station never runs UW's public-kiosk
+      demo configuration); confirmed.
+      Removed, in order: the `-r` case and its `args_help()` usage
+      line (`pine/args.c`); the `restricted:1` bitfield (`pine/pine.h`);
+      the `P_SECURE` pass-through and the entire restricted-mode block
+      in `check_addresses()` (`pine/send.c` -- kept the rest of that
+      function, the mailer-daemon confirmation prompt, untouched);
+      both restricted-mode early-returns in `mailcmd.c` (export
+      message, save attachment); the keyboard-lock command's
+      `if(ps_global->restricted) goto bleep;` guard, the
+      password-change block's `if(restricted){...}else{...}` (kept
+      just the `else` body -- `change_passwd()`/`ClearScreen()`/
+      `mangled_screen=1` -- inside the existing, untouched
+      `#ifdef DOS/#else/#endif` wrapper), and the keymenu-bit-clear
+      site, which needed a small logic inversion rather than a
+      straight deletion: it was `#ifndef NO_KEYBOARD_LOCK
+      if(restricted) #endif clrbitn(...)` (hide the lock keymenu entry
+      only in demo mode, given the keyboard-lock feature exists at
+      all); since `NO_KEYBOARD_LOCK` is a separate, still-live
+      compile-time knob unrelated to demo mode (confirmed via
+      `pine/os.h`'s `/* #define NO_KEYBOARD_LOCK */`, currently
+      commented out), the correct post-cut behavior is "hide the entry
+      only if the keyboard-lock feature doesn't exist at all," i.e.
+      `#ifdef NO_KEYBOARD_LOCK clrbitn(...) #endif` -- an inverted
+      guard, not a deletion, to preserve that still-meaningful
+      compile-time toggle (`pine/pine.c`); the local-path-open block
+      in `pine/osdep/expnfldr` (the real source fragment for the
+      generated `pine/osdep/os-lnx.c`/`pine/os.c` symlink target, per
+      CLAUDE.md's generated-file rule -- editing `os.c`/`os-lnx.c`
+      directly was refused by the write tooling since `os.c` is a
+      symlink).
+      `pico/pico.h`: removed the `P_SECURE`/`MDSCUR` flag definitions.
+      `pico/browse.c`: removed all 5 `gmode&MDSCUR` guards (read
+      directory, delete, copy, rename, visit-parent), 3 of which were
+      combined with a `homeless()` check (is the target outside the
+      user's home directory tree); `pico/file.c`: removed both
+      `gmode&MDSCUR` guards (collapsing each `if(MDSCUR){...}
+      else{...}` to just the `else` body -- normal file-read/insert
+      behavior, unconditionally). Once all `MDSCUR`+`homeless()` sites
+      were gone, `homeless()` itself (`pico/os_unix.c`) had zero
+      remaining callers -- removed the function and its two `extern`
+      declarations (ANSI and K&R blocks) in `pico/efunc.h`.
+      Not touched: `address_is_us()` (`pine/addrutil.c`), still used
+      by `mailindx.c`/`reply.c` for unrelated reply-address logic --
+      confirmed via grep before leaving it alone, since
+      `check_addresses()`'s deleted block was its only
+      restricted-mode-specific caller.
+      Verified: `./build clean && ./build lnx` clean (confirmed
+      `pine/osdep/os-lnx.c` regenerates correctly from the fixed
+      `expnfldr` fragment via `osdep/makedep`); warning count dropped
+      179 -> 178 (one fewer K&R-style-definition warning, from the
+      deleted `homeless()`); full smoketest suite 25/25. No regression
+      test added -- pure feature removal with no distinct pass/fail
+      behavior for the harness to capture (there's no CLI flag left to
+      reach the removed code paths from at all). Size delta via `git
+      stash`-based before/after clean rebuild: `bin/pine`'s `text`
+      shrank 353671 -> 352767 (-904 bytes), `bin/pico`'s `text` shrank
+      112260 -> 111366 (-894 bytes), `data` shrank 6380 -> 6372 (-8
+      bytes); `bss` unchanged on both binaries -- live compiled-in
+      code with no reachable callers left once the `-r` flag (the only
+      way to ever set `restricted`) was gone, not a preprocessor-gated
+      cut.

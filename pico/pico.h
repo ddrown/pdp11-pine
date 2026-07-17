@@ -171,7 +171,6 @@ typedef struct pico_struct {
 #define	P_LOCALLF	0x8000		/* use local vs. NVT EOL	 */
 #define	P_BODY		0x4000		/* start composer in body	 */
 #define	P_FKEYS		MDFKEY		/* run in function key mode 	 */
-#define	P_SECURE	MDSCUR		/* run in restricted (demo) mode */
 #define	P_SUSPEND	MDSSPD		/* allow ^Z suspension		 */
 
 
@@ -185,7 +184,6 @@ typedef struct pico_struct {
 #define	MDVIEW		0x0010		/* read-only buffer		*/
 #define MDOVER		0x0020		/* overwrite mode		*/
 #define MDFKEY		0x0040		/* function key  mode		*/
-#define MDSCUR		0x0080		/* secure (for demo) mode	*/
 #define MDSSPD		0x0100		/* suspendable mode		*/
 #define MDTOOL		0x0400		/* "tool" mode (quick exit)	*/
 #define MDBRONLY	0x0800		/* indicates standalone browser	*/

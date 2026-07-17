@@ -796,23 +796,6 @@ int *l;
 
 
 /*
- * homeless - returns true if given file does not reside in the current
- *            user's home directory tree. 
- */
-int
-homeless(f)
-char *f;
-{
-    char *home;
-    int   len;
-
-    home = gethomedir(&len);
-    return(strncmp(home, f, len));
-}
-
-
-
-/*
  * errstr - return system error string corresponding to given errno
  *          Note: strerror() is not provided on all systems, so it's 
  *          done here once and for all.

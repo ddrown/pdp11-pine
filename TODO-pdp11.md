@@ -86,12 +86,16 @@ cuts, but required regardless) is now fully done; see
       `generate_message_id()` (`pine/reply.c`) already produces a
       fully valid, unique `Message-ID:` on its own (hostname + pid +
       timestamp + counter char), so nothing else needed to change.
-      **Restricted ("demo") mode lockdown** (`pine/send.c`
-      `check_addresses()` 1181-1218; also `pine/mailcmd.c` 1334, 2695):
-      recipient/attachment-save lockdown only reachable via a CLI flag
-      (UW's public-demo-account kiosk mode) -- irrelevant to a
-      single-user PDP-11 station. Bundle with any broader decision on
-      whether restricted-mode is cut project-wide.
+      **Restricted ("demo") mode lockdown** -- DONE, see
+      `TODO-pdp11-done.md`. Cut project-wide, not just the
+      `send.c`/`mailcmd.c` sites originally named here: the `-r` CLI
+      flag (`pine/args.c`), the `restricted:1` bitfield (`pine/pine.h`),
+      every `ps_global->restricted` check (`send.c`, `mailcmd.c`,
+      `pine.c`, `pine/osdep/expnfldr`), and the `P_SECURE`/`MDSCUR`
+      composer file-browser lockdown it fed through the
+      composer-subprocess handoff protocol (`pico/pico.h`,
+      `pico/browse.c`, `pico/file.c`, plus the now-callerless
+      `homeless()` helper in `pico/os_unix.c`).
       **Multi-collection navigation** (`pine/mailcmd.c`):
       `CNTXT_INCMNG`/`next_folder()` ^P/^N navigation scattered through
       delete/tab-to-next-unread/folder-open. Not remote-specific, but

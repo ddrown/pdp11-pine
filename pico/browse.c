@@ -199,12 +199,6 @@ char *dir, *fn, *sz;			/* dir, name and optional size */
 
     child[0] = '\0';
 
-    if((gmode&MDSCUR) && homeless(dir)){
-	emlwrite("\007Can't read %s in restricted mode", dir);
-	sleep(2);
-	return(0);
-    }
-
     /* build contents of cell structures */
     if((gmp = getfcells(dir)) == NULL)
       return(-1);
@@ -451,12 +445,7 @@ char *dir, *fn, *sz;			/* dir, name and optional size */
 		break;
 	    }
 
-	    if(gmode&MDSCUR){				/* not allowed! */
-		emlwrite("Delete not allowed in restricted mode",NULL);
-		break;
-	    }
-
-	    sprintf(child, "%s%c%s", gmp->dname, C_FILESEP, 
+	    sprintf(child, "%s%c%s", gmp->dname, C_FILESEP,
 		    gmp->current->fname);
 
 	    i = 0;
@@ -560,11 +549,6 @@ char *dir, *fn, *sz;			/* dir, name and optional size */
 			break;
 		    }
 
-		    if((gmode&MDSCUR) && homeless(child)){
-			emlwrite("Restricted mode browsing limited to home directory",NULL);
-			break;
-		    }
-
 		    if(isdir(child, (long *) NULL)){
 			if((mp = getfcells(child)) == NULL){
 			    /* getfcells should explain what happened */
@@ -591,11 +575,6 @@ char *dir, *fn, *sz;			/* dir, name and optional size */
 	  case 'M':
 	    if(gmp->current->mode){
 		emlwrite("\007Can't copy a directory", NULL);
-		break;
-	    }
-
-	    if(gmode&MDSCUR){				/* not allowed! */
-		emlwrite("Copy not allowed in restricted mode",NULL);
 		break;
 	    }
 
@@ -710,11 +689,6 @@ char *dir, *fn, *sz;			/* dir, name and optional size */
 		break;
 	    }
 
-	    if(gmode&MDSCUR){				/* not allowed! */
-		emlwrite("Rename not allowed in restricted mode",NULL);
-		break;
-	    }
-
 	    while(!i){
 
 		wkeyhelp("GC0000000000", "Get Help,Cancel");
@@ -816,11 +790,6 @@ char *dir, *fn, *sz;			/* dir, name and optional size */
 
 			    if((p=strrchr(s, C_FILESEP)) != NULL){
 				*p = '\0';
-
-				if((gmode&MDSCUR) && homeless(s)){
-				    emlwrite("\007Can't visit parent in restricted mode", NULL);
-				    break;
-				}
 
 				strcpy(child, &p[1]);
 				if(p == s

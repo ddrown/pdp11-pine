@@ -635,7 +635,6 @@ struct pine {
     unsigned     show_folders_dir:1;	/* show folders dir path when showing
                                                    folder names */
     unsigned     io_error_on_stream:1;	/* last write on mail_stream failed */
-    unsigned     restricted:1;
     unsigned     reverse_sort:1;
     unsigned     current_reverse_sort:1;
     unsigned     save_by_from:1;

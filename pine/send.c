@@ -790,7 +790,6 @@ pine_send(outgoing, body, editor_title, fcc, are_replying)
 	pine_flags  = 0;
 	pine_flags |= (F_ON(F_CAN_SUSPEND,ps_global)) ? P_SUSPEND : 0;
 	pine_flags |= (F_ON(F_USE_FK,ps_global)) ? P_FKEYS : 0;
-	pine_flags |= (ps_global->restricted ? P_SECURE : 0);
 	pine_flags |= (are_replying || second_time) ? P_BODY : 0;
 
         dprint(9, (debugfile, "flags: %x\n", pine_flags));
@@ -990,19 +989,6 @@ check_addresses(e)
     ENVELOPE *e;
 {
     ADDRESS *a;
-
-    /*---- Restricted mode can only send mail back -----*/
-    if(ps_global->restricted) {
-        if(!address_is_us(e->to, ps_global) ||
-          (e->cc != NULL &&
-           !address_is_us(e->cc,ps_global)) ||
-          (e->bcc != NULL &&
-           !address_is_us(e->bcc,ps_global))){
-            q_status_message(1, 2, 4,
-                             "Restricted demo version of Pine. You may only send mail to yourself");
-            return(1);
-        }
-    }
 
     /*---- Is he/she trying to send mail to the mailer-daemon ----*/
     for(a = e->to; a != NULL; a = a->next) 

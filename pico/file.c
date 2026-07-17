@@ -79,11 +79,6 @@ int f, n;
         if ((s=mlreply("Read file: ", fname, NFILEN, QFFILE)) != TRUE)
                 return(s);
 
-	if(gmode&MDSCUR){
-	    emlwrite("File reading disabled in secure mode",NULL);
-	    return(0);
-	}
-
         return(readin(fname, TRUE));
 }
 
@@ -155,16 +150,9 @@ int f, n;
 		      strcpy(dir, gethomedir(NULL));
 
 		    if((s = FileBrowse(dir, fname, NULL)) == 1){
-			if(gmode&MDSCUR){
-			    emlwrite("Can't insert file in restricted mode",
-				     NULL);
-			    sleep(2);
-			}
-			else{
-			    strcat(dir, S_FILESEP);
-			    strcat(dir, fname);
-			    retval = ifile(dir);
-			}
+			strcat(dir, S_FILESEP);
+			strcat(dir, fname);
+			retval = ifile(dir);
 			bye++;
 		    }
 		    else
@@ -194,13 +182,8 @@ int f, n;
             }
             else{
 		bye++;
-		if(gmode&MDSCUR){
-		    emlwrite("Can't insert file in restricted mode",NULL);
-		}
-		else{
-		    fixpath(fname, NFILEN);
-		    retval = ifile(fname);
-		}
+		fixpath(fname, NFILEN);
+		retval = ifile(fname);
             }
         }
         curwp->w_flag |= WFMODE|WFHARD;

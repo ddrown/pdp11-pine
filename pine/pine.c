@@ -929,9 +929,6 @@ main_menu_screen(pine_state)
           /*---------- Keyboard lock ----------*/
 	  case PF10:
 	  case 'k':
-            if(ps_global->restricted)
-              goto bleep;
-
             (void)lock_keyboard();
 	    ClearScreen();
 	    pine_state->mangled_screen = 1;
@@ -1123,10 +1120,9 @@ show_main_screen(pine_state, quick_draw, what, km)
 
       setbitmap(bitmap);
 
-#ifndef NO_KEYBOARD_LOCK
-      if(ps_global->restricted)
+#ifdef NO_KEYBOARD_LOCK
+      clrbitn(KBLOCK_KEY, bitmap);
 #endif
-        clrbitn(KBLOCK_KEY, bitmap);
 
       /* put brackets around the default action */
       label[0] = '[';  label[1] = '\0';
@@ -1268,16 +1264,9 @@ do_setup_task(command)
 	display_message('x');
         sleep(3);
 #else
-        if(ps_global->restricted){
-	    q_status_message(1, 3, 5,
-	    "Password change unavailable in restricted demo version of Pine.");
-            display_message('x');
-            sleep(3);
-        }else {
-	    change_passwd();
-	    ClearScreen();
-	    ps_global->mangled_screen = 1;
-	}
+	change_passwd();
+	ClearScreen();
+	ps_global->mangled_screen = 1;
 #endif	/* DOS */
         break;
 

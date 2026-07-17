@@ -125,9 +125,6 @@ Loop: while(--ac > 0 && **++av == '-') {
 		 case 'z':
 		   F_TURN_ON(F_CAN_SUSPEND,pine_state);
 		   break;
-		 case 'r':
-		   pine_state->restricted = 1;
-		   break;
 		 case 'o':
 		   pine_state->open_readonly_on_startup = 1;
 		   break;
@@ -269,7 +266,6 @@ args_help()
 	printf("\t -h \t\tHelp - give this list of options\n");
 	printf("\t -k \t\tKeys - Force use of function keys\n");
 	printf("\t -z \t\tSuspend - allow use of ^Z suspension\n");
-        printf("\t -r \t\tRestricted - can only send mail to one self\n");
         printf("\t -sort <sort> \tSort - Specify sort order of folder:\n");
         printf("\t\t\t        subject, arrival, date, from, size, /reverse\n");
         printf("\t -i\t\tIndex - Go directly to index, bypassing mail menu\n");

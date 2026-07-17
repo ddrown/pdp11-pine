@@ -1190,11 +1190,6 @@ export_message(q_line, sorted_msgno)
          return(0);
     }
 
-    if(ps_global->restricted){
-	q_status_message(1, 1, 3, "Pine demo can't export messages to files");
-	return(0);
-    }
-
     help = NO_HELP;
     filename[0] = '\0';
     while(1) {
@@ -2471,12 +2466,6 @@ save_attachment(qline, msgno, a)
         }
         break; /* Must have got an OK file name */
     }
-
-    if(ps_global->restricted) {
-        q_status_message(1, 2, 4, "\007Pine demo can't save attachments");
-        return;
-    }
-     
 
     /*----------- Write the contents to the file -------------*/
     if(can_access(full_filename, ACCESS_EXISTS) == 0) {
