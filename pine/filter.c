@@ -502,29 +502,6 @@ gf_set_readc(gc, txt, len, src)
 
 /*
  * setup to use and return a pointer to the generic
- * putc function
- */
-void
-gf_set_writec(pc, txt, len, src)
-    gf_io_t       *pc;
-    void          *txt;
-    unsigned long  len;
-    SourceType     src;
-{
-    gf_out.n = len;
-    if(src == FileStar){
-	gf_out.file = (FILE *)txt;
-	*pc = gf_fwritec;
-    }
-    else{
-	gf_out.txtp = (char *)txt;
-	*pc = gf_swritec;
-    }
-}
-
-
-/*
- * setup to use and return a pointer to the generic
  * getc function
  */
 void
@@ -1717,41 +1694,3 @@ gf_translate_opt(xlatetab, xlatetablen)
 }
 #endif
 
-/*
- * display something indicating we're chewing on something
- *
- * NOTE : IF ANY OTHER FILTERS WRITE THE DISPLAY, THIS WILL NEED FIXING
- */
-void
-gf_busy(f, c, flg)
-    FILTER_S *f;
-    int       c, flg;
-{
-    static short x = 0;
-
-    if(flg == GF_DATA){
-	if(!((++(f->f1))&0x7ff)){ 	/* ding the bell every 2K chars */
-	    MoveCursor(0, 1);
-	    f->f1 = 0;
-	    if((++x)&0x04) x = 0;
-	    Writechar((x == 0) ? '/' : 	/* CHEATING! */
-		     (x == 1) ? '-' :
-			(x == 2) ? '\\' : '|');
-	}
-
-	(*f->next->f)(f->next, c, GF_DATA);
-    }
-    else if(flg == GF_EOD){
-	MoveCursor(0, 1);
-	Writechar(' ');
-	EndInverse();
-	(*f->next->f)(f->next, 0, GF_EOD);
-    }
-    else if(flg == GF_RESET){
-	f->f1 = 0;
-        x = 0;
-	StartInverse();
-    }
-
-    fflush(stdout);
-}

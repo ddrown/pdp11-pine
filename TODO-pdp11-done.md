@@ -3411,3 +3411,31 @@ already covered by the existing composer tests).
 - **Size delta**: `bin/pine`'s `text` 343015 -> 342383 (-632 bytes),
   `data`/`bss` unchanged; `bin/pico` unchanged (context.c is pine-side
   only).
+
+### `gf_set_writec()` and `gf_busy()` -- confirmed dead and removed
+
+- **What they were**: `pine/filter.c`'s `gf_set_writec()` is the
+  output-side twin of `gf_set_readc()` (both configure a `gf_io_t`
+  function pointer to either the file-backed or string-backed
+  primitive), but only `gf_set_readc` has real callers (4 call sites
+  across `reply.c`/`mailcmd.c`/`mailview.c`/`send.c`) -- nothing in the
+  tree ever calls `gf_set_writec`. `gf_busy()` is a filter matching the
+  standard `void (FILTER_S *, int, int)` filter shape (a busy-spinner
+  effect, cycling `/`/`-`/`\`/`|` in the corner every 2K characters),
+  but unlike every other real filter in this file it's never actually
+  installed into a filter chain -- checked every `gf_link_filter()`
+  call site and every `filters[]`/`aux_filter[]` array assignment
+  across `reply.c`/`mailview.c`/`send.c`/`mailcmd.c` (the same
+  registration idioms that produced 8 false positives earlier in this
+  audit) and `gf_busy` appears in none of them.
+- **Verified**: both re-checked against `c-client/` too (given the
+  `mm_bboard` false-positive lesson) -- no hits there either. `./build
+  lnx` clean before touching anything. Deleted both function bodies
+  from `filter.c` and their prototypes (ANSI + K&R blocks) from
+  `pine.h`. `./build clean && ./build lnx` clean afterward, 177
+  warnings (unchanged). Full smoketest suite 25/25 (unchanged -- no
+  observable behavior difference, neither function was reachable from
+  any code path).
+- **Size delta**: `bin/pine`'s `text` 342383 -> 341855 (-528 bytes),
+  `data`/`bss` unchanged; `bin/pico` unchanged (filter.c is pine-side
+  only).

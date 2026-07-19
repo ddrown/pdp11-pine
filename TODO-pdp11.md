@@ -46,7 +46,7 @@ DONE elsewhere or referenced in passing below.
 ### gcov-flagged dead-code candidates in `pine/*.c` (no call site found anywhere)
 - [ ] Compiled from a `python3 test/run_smoketests.py --coverage` run
       cross-referenced with `ctags`/`grep` across `pine/`+`pico/`: 19
-      functions originally flagged this way (14 remaining below, 5
+      functions originally flagged this way (12 remaining below, 7
       done) that gcov shows as 0% executed *and* have no real
       call site anywhere in the tree, direct or by bare name/function-
       pointer (the smoketest suite's 25 cases don't come close to
@@ -84,7 +84,11 @@ DONE elsewhere or referenced in passing below.
       three didn't) and removed. (`mm_bboard`, originally grouped with
       these three, turned out to be a live c-client callback -- see
       note above.)
-      `pine/filter.c`: `gf_set_writec` (508), `gf_busy` (1726).
+      `pine/filter.c`: `gf_set_writec` (508), `gf_busy` (1726) -- DONE,
+      see `TODO-pdp11-done.md`; both confirmed dead (`gf_set_writec`'s
+      sibling `gf_set_readc` has 4 real callers, it had none; `gf_busy`
+      is a filter never registered via `gf_link_filter()`/any filter
+      array, unlike every other real filter here) and removed.
       `pine/strings.c`: `sqzspaces` (134), `strcat_nocr` (342),
       `crlf2lf` (385), `month_num` (440), `enth_string` (959),
       `rfc822date_to_ctime` (1015), `lf2crlf` (1037).
