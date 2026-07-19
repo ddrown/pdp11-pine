@@ -48,15 +48,12 @@ void context_fqn_to_an ();
 short context_isambig ();
 char *context_digest ();
 void context_apply ();
-void context_find ();
 void context_find_all ();
 long context_create ();
 MAILSTREAM *context_open ();
 long context_rename ();
 long context_delete ();
 long context_append ();
-long context_subscribe ();
-long context_unsubscribe ();
 MAILSTREAM *context_same_stream();
 
 #endif /* _CONTEXT_INCLUDED */

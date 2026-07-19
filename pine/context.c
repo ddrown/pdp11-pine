@@ -278,37 +278,6 @@ char *s;
     return (short) (c == '.' || isalnum (c));
 }
 
-/* Context Manager find list of subscribed mailboxes
- * Accepts: context
- *	    mail stream
- *	    pattern to search
- */
-
-void context_find (context, stream, pat)
-char *context;MAILSTREAM *stream;char *pat;
-{
-  char tmp[MAILTMPLEN];
-				/* must be within context */
-  if (!context_isambig (pat)) {
-    /*
-     * pat is a caller-typed folder/Fcc name with no length cap upstream
-     * -- bound both the log message and the copy below rather than
-     * overflow tmp.
-     */
-    sprintf (tmp,"Find of mailbox outside context: %.900s",pat);
-    mm_log (tmp,(long) NIL);
-    strncpy(tmp, pat, MAILTMPLEN-1);	/* allow find for now */
-    tmp[MAILTMPLEN-1] = '\0';
-  }
-  else{
-    current_context = context;	/* note current context */
-    context_apply (tmp,context,pat); /* build fully-qualified name */
-  }
-
-  mail_find (stream,tmp);/* try to do the find */
-}
-
-
 /* Context Manager find list of all mailboxes
  * Accepts: context
  *	    mail stream
@@ -484,39 +453,6 @@ char *context;MAILSTREAM *stream;char *name;STRING *msg;
   return mail_append (stream,s,msg);
 }
 
-
-/* Context Manager subscribe
- * Accepts: context
- *	    mail stream
- *	    mailbox name to delete
- * Returns: T on success, NIL on failure
- */
-
-long context_subscribe (context, stream, name)
-char *context;MAILSTREAM *stream;char *name;
-{
-  char *s,tmp[MAILTMPLEN];	/* build FQN from ambiguous name */
-  if (context_isambig (name)) context_apply (s = tmp,context,name);
-  else s = name;		/* fully-qualified name */
-  return mail_subscribe (stream,s);
-}
-
-
-/* Context Manager unsubscribe
- * Accepts: context
- *	    mail stream
- *	    mailbox name to delete
- * Returns: T on success, NIL on failure
- */
-
-long context_unsubscribe (context, stream, name)
-char *context;MAILSTREAM *stream;char *name;
-{
-  char *s,tmp[MAILTMPLEN];	/* build FQN from ambiguous name */
-  if (context_isambig (name)) context_apply (s = tmp,context,name);
-  else s = name;		/* fully-qualified name */
-  return mail_unsubscribe (stream,s);
-}
 
 
 /*

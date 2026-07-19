@@ -46,7 +46,7 @@ DONE elsewhere or referenced in passing below.
 ### gcov-flagged dead-code candidates in `pine/*.c` (no call site found anywhere)
 - [ ] Compiled from a `python3 test/run_smoketests.py --coverage` run
       cross-referenced with `ctags`/`grep` across `pine/`+`pico/`: 19
-      functions originally flagged this way (17 remaining below, 2
+      functions originally flagged this way (14 remaining below, 5
       done) that gcov shows as 0% executed *and* have no real
       call site anywhere in the tree, direct or by bare name/function-
       pointer (the smoketest suite's 25 cases don't come close to
@@ -61,21 +61,29 @@ DONE elsewhere or referenced in passing below.
       `.gcov` detail but leaves the `.gcda` counters in place).
       **None of these are proven dead yet** -- each needs the same
       trace-before-delete verification as every other cut in
-      `TODO-pdp11-done.md` before removal (this list already had 8
+      `TODO-pdp11-done.md` before removal (this list already had 9
       false positives -- `gf_wrap`/`gf_rich2plain`/`gf_8bit_qp`/
       `gf_qp_8bit`/`gf_binary_b64`/`folder_screen`/`build_header_cache`/
       `term_signal` -- pulled back out after a closer look found they're
       registered by bare name via `gf_link_filter()`/a callback-pointer
       assignment/`signal()`, not called directly, so grepping for
-      `name(` alone missed them).
+      `name(` alone missed them -- plus `mm_bboard`, pulled out when
+      checking the context.c trio below found the original audit's
+      cross-reference grep never covered `c-client/`, and `mm_bboard`
+      is one of c-client's standard mail-callback names, called
+      directly by `c-client/dummy.c` twice; all other remaining
+      candidates below were individually re-checked against `c-client/`
+      too and have no hit there).
       `pine/init.c:1647 init_driver` and `pine/pine.c:1538 count_unseen`
       -- DONE, see `TODO-pdp11-done.md`; both confirmed dead (no
       reference of any kind, not even a header prototype) and removed.
-      `pine/context.c`: `mm_bboard` (59), `context_find` (287),
-      `context_subscribe` (495), `context_unsubscribe` (512) -- possibly
-      leftover bboard/newsgroup-subscribe support from before news was
-      excluded from the c-client build (see this file's "In progress /
-      already done" note in `TODO-pdp11-done.md`).
+      `pine/context.c`: `context_find` (287), `context_subscribe` (495),
+      `context_unsubscribe` (512) -- DONE, see `TODO-pdp11-done.md`;
+      confirmed dead (siblings `context_find_all`/`context_create`/
+      `context_rename`/`context_delete` all have real callers, these
+      three didn't) and removed. (`mm_bboard`, originally grouped with
+      these three, turned out to be a live c-client callback -- see
+      note above.)
       `pine/filter.c`: `gf_set_writec` (508), `gf_busy` (1726).
       `pine/strings.c`: `sqzspaces` (134), `strcat_nocr` (342),
       `crlf2lf` (385), `month_num` (440), `enth_string` (959),

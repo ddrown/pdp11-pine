@@ -3372,3 +3372,42 @@ already covered by the existing composer tests).
 - **Size delta**: `bin/pine`'s `text` 343415 -> 343015 (-400 bytes),
   `data`/`bss` unchanged; `bin/pico` unchanged (both cut functions were
   pine-side).
+
+### `context_find()`, `context_subscribe()`, `context_unsubscribe()` -- confirmed dead and removed; `mm_bboard()` pulled back out as a false positive
+
+- **What they were**: `pine/context.c`'s "Context Manager" layer wraps
+  c-client's `mail_find`/`mail_find_all`/`mail_create`/`mail_rename`/
+  `mail_delete`/`mail_append`/`mail_subscribe`/`mail_unsubscribe` with
+  context-aware ambiguous-name resolution, one wrapper per c-client op,
+  all prototyped together in `context.h`. Three of these wrappers had
+  no caller anywhere: `context_find` (287; sibling `context_find_all`
+  is the one pine's UI actually calls, from `folder.c`'s Find-folder
+  and search-folders commands), `context_subscribe` (495) and
+  `context_unsubscribe` (512) (no subscribe/unsubscribe UI exists in
+  this build). Confirmed by checking their four siblings
+  (`context_create`/`context_rename`/`context_delete`/
+  `context_find_all`) all *do* have real call sites in `mailcmd.c`/
+  `send.c`/`folder.c` -- these three are asymmetric, not part of some
+  larger unused subsystem.
+- **`mm_bboard` false positive caught during this investigation**: the
+  original gcov audit grouped `mm_bboard` (context.c:59) with these
+  three as "possibly leftover bboard/newsgroup-subscribe support," but
+  `mm_bboard` is one of c-client's fixed-name mail callbacks (like
+  `mm_searched`/`mm_expunged`/`mm_diskerror` in `mailbox.c`, already
+  correctly excluded from the tier-1 list) -- `c-client/mail.h`
+  declares it as an extern the application must define, and
+  `c-client/dummy.c` calls it directly (twice, while pattern-matching
+  bboard-style names during a folder scan). The original audit's
+  cross-reference grep only covered `pine/`+`pico/`, never
+  `c-client/`, so it missed this call site entirely. Re-checked all
+  other remaining tier-1 candidates against `c-client/` too (none had
+  a hit there) before trusting the rest of the list.
+- **Verified**: `./build lnx` clean before touching anything. Deleted
+  the three function bodies (`context.c`) and their `context.h`
+  prototypes. `./build clean && ./build lnx` clean afterward, 177
+  warnings (unchanged). Full smoketest suite 25/25 (unchanged -- no
+  observable behavior difference, none of the three were reachable
+  from any code path).
+- **Size delta**: `bin/pine`'s `text` 343015 -> 342383 (-632 bytes),
+  `data`/`bss` unchanged; `bin/pico` unchanged (context.c is pine-side
+  only).
