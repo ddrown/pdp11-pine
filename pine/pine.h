@@ -278,7 +278,7 @@
 #define V_USER_DOMAIN              2
 #define V_SMTP_SERVER              3  /* disabled, always sends via local sendmail */
 #define V_INBOX_PATH               4
-#define V_INCOMING_FOLDERS         5
+#define V_INCOMING_FOLDERS         5  /* disabled, multi-collection support removed */
 #define V_FOLDER_SPEC              6
 #define V_NEWS_SPEC                7  /* disabled, news reading removed */
 #define V_DEFAULT_FCC              8
@@ -315,7 +315,6 @@
 #define VAR_USER_ID                  vars[V_USER_ID].current_val.p
 #define VAR_USER_DOMAIN              vars[V_USER_DOMAIN].current_val.p
 #define VAR_INBOX_PATH               vars[V_INBOX_PATH].current_val.p
-#define VAR_INCOMING_FOLDERS         vars[V_INCOMING_FOLDERS].current_val.l
 #define VAR_FOLDER_SPEC              vars[V_FOLDER_SPEC].current_val.l
 #define VAR_DEFAULT_FCC              vars[V_DEFAULT_FCC].current_val.p
 #define VAR_MAIL_DIRECTORY           vars[V_MAIL_DIRECTORY].current_val.p
@@ -421,18 +420,15 @@ struct ttyo {
 /*
  * Flags to indicate context (i.e., folder collection) use
  */
-#define	CNTXT_PRIME	0x01			/* primary collection	    */
-#define	CNTXT_SECOND	0x02			/* secondary collection     */
 #define	CNTXT_PSEUDO	0x08			/* fake folder entry exists */
-#define	CNTXT_INCMNG	0x10			/* inbox collection	    */
-#define	CNTXT_SAVEDFLT	0x20			/* default save collection  */
 #define	CNTXT_PARTFIND	0x40			/* partial find done        */
 #define	CNTXT_NOFIND	0x80			/* no find done in context  */
 
 
 /*------------------------------
-    Stucture to keep track of the various folder collections being
-    dealt with.
+    Stucture describing the single folder collection this build
+    supports (see TODO-pdp11-done.md: multi-collection support was
+    cut, so unlike stock Pine there's no linked list of these).
   ----*/
 typedef struct context {
     char           *context;			/* context string	   */
@@ -441,10 +437,8 @@ typedef struct context {
     char            last_folder[MAXFOLDER+1];	/* last folder used        */
     void           *folders;			/* folder data             */
     unsigned short  use;			/* use flags for context   */
-    unsigned short  num;			/* context number in list  */
     int		    d_line;			/* display line for labels */
     MAILSTREAM     *proto;			/* prototype driver        */
-    struct context *next;			/* next context struct	   */
 } CONTEXT_S;
 
 
@@ -590,11 +584,9 @@ struct pine {
     char        *return_string;
     char        *error_message;
 
-    CONTEXT_S   *context_list;		/* list of user defined contexts */
+    CONTEXT_S   *context_list;		/* the single folder collection  */
     CONTEXT_S   *context_current;	/* default open context          */
-    CONTEXT_S   *context_last;		/* most recently open context    */
     CONTEXT_S   *context_write;		/* default save context          */
-    unsigned     context_index;		/* current folder's index        */
 
     char         inbox_name[MAXFOLDER+1];
     MAILSTREAM  *inbox_stream;
@@ -834,7 +826,6 @@ void	 gf_translate_opt(unsigned char *, unsigned);
 
 /*--- folder.c ---*/
 void        folder_screen(struct pine *);
-char      **fcc_candidate_list(struct pine *, int *);
 int         folder_lister(struct pine *,FolderFun,CONTEXT_S *,CONTEXT_S **,
                           char *);
 char       *pretty_fn(char *);
@@ -844,13 +835,11 @@ int         folder_complete(CONTEXT_S *, char *);
 void        init_folders();
 void       *find_folders(char *, char *);
 void        find_folders_in_context(CONTEXT_S *, char *);
-CONTEXT_S  *default_save_context(CONTEXT_S *);
 FOLDER_S   *folder_entry(int, void *);
 FOLDER_S   *new_folder(char *);
 int         folder_insert(int, FOLDER_S *, void *);
 int         folder_index(char *, void *);
 char       *folder_is_nick(char *, void *);
-char       *next_folder(char *, char *, CONTEXT_S *);
 
 /*-- help.c --*/
 void helper(char *text[], char *title, int);
@@ -1154,14 +1143,12 @@ void	 gf_prefix_opt();
 
 /*--- folder.c ---*/
 void        folder_screen();
-char      **fcc_candidate_list();
 int         folder_lister();
 char       *pretty_fn();
 int         folder_exists();
 void        init_folders();
 void       *find_folders();
 void        find_folders_in_context();
-CONTEXT_S  *default_save_context();
 int         folder_create();
 int         folder_complete();
 FOLDER_S   *folder_entry();
@@ -1169,7 +1156,6 @@ FOLDER_S   *new_folder();
 int         folder_insert();
 int         folder_index();
 char       *folder_is_nick();
-char       *next_folder();
 
 /*-- help.c --*/
 void helper();

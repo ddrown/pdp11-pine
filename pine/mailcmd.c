@@ -243,19 +243,8 @@ process_cmd(command, in_index, orig_command, force_mailchk)
               ps_global->current_sorted_msgno = current_sorted_msgno;
           }else{
 	      sprintf(prompt, "\007No m%s",
-		      (ps_global->max_msgno > 0) ? "ore messages" 
+		      (ps_global->max_msgno > 0) ? "ore messages"
 						 : "essages in folder");
-
-	      if(ps_global->context_current->use&CNTXT_INCMNG){
-		  char nextfolder[MAXPATH];
-
-		  strcpy(nextfolder, ps_global->cur_folder);
-		  if(next_folder(nextfolder, nextfolder,
-				 ps_global->context_current))
-		    strcat(prompt, ".  Press TAB for next folder.");
-		  else
-		    strcat(prompt, ".  No more folders to TAB to.");
-	      }
 
 	      q_status_message(0, 0, 1, prompt);
 
@@ -322,8 +311,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
 	  }
 
 	  is_unread = 1;
-	  if(F_ON(F_DEL_SKIPS_DEL,ps_global)
-	     || (ps_global->context_current->use & CNTXT_INCMNG))
+	  if(F_ON(F_DEL_SKIPS_DEL,ps_global))
 	    new_sorted_mess_num = next_sorted_un(ps_global->mail_stream,
 						 current_sorted_msgno + 1,
 						 &is_unread, 1);
@@ -341,20 +329,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
 
 	  if(prompt[0])
 	    strcat(prompt, "deleted");
-
-	  if((ps_global->context_current->use & CNTXT_INCMNG)
-	     && !is_unread){
-	      char nextfolder[MAXPATH];
-
-	      if(prompt[0] == '\0')
-		strcat(prompt, "Last undeleted message");
-
-	      strcpy(nextfolder, ps_global->cur_folder);
-	      if(next_folder(nextfolder,nextfolder,ps_global->context_current))
-		strcat(prompt, ".  Press TAB for next folder.");
-	      else
-		strcat(prompt, ".  No more folders to TAB to.");
-	  }
 
 	  if(prompt[0])
 	    q_status_message(0,1,3, prompt);
@@ -494,8 +468,7 @@ do_quit:
           /*---------- Open specific new folder ----------*/
         case OPF6:
         case 'g':
-	  tc = ps_global->context_last
-			? ps_global->context_last : ps_global->context_current;
+	  tc = ps_global->context_current;
 
           new_folder = broach_folder(question_line, 1, &tc);
           if(new_folder != NULL) {
@@ -740,44 +713,10 @@ do_sortindex:
 	   * go on to the next folder...
 	   */
 	  if(!is_unread || ps_global->max_msgno <= 0){
-	      char ret = 'n';
-
-	      if((ps_global->context_current->use&CNTXT_INCMNG)
-		 && context_isambig(ps_global->cur_folder)){
-		  char nextfolder[MAXPATH];
-		  int  another = 0;
-
-		  strcpy(nextfolder, ps_global->cur_folder);
-		  while(next_folder(nextfolder, nextfolder,
-				    ps_global->context_current)){
-
-		      sprintf(prompt, "%sView next %s \"%s\"",
-			      (another++) ? "" : "No more messages.  ",
-			      "folder",
-			      nextfolder);
-
-		      if((ret=want_to(prompt,'y','x',NO_HELP,0)) == 'y'){
-			  if(do_broach_folder(nextfolder,
-					      ps_global->context_current) > 0)
-			    ps_global->next_screen = mail_index_screen;
-			  break;
-			  }
-
-		      if(ret == 'x'){
-			  q_status_message(0,0,1,"\007Command cancelled");
-			  break;
-		      }
-		  }
-
-		  if(another == 0 || ret == 'n')
-		    q_status_message1(0, 0, 1, "No more %ss", "folder");
-	      }
-	      else{
-		  if(ps_global->max_msgno > 0)
-		    q_status_message1(0, 0, 1, "No more %s messages", "new");
-		  else
-		    q_status_message(0, 1, 3, "\007No message in folder");
-	      }
+	      if(ps_global->max_msgno > 0)
+		q_status_message1(0, 0, 1, "No more %s messages", "new");
+	      else
+		q_status_message(0, 1, 3, "\007No message in folder");
 	  }
 
           break;
@@ -832,10 +771,10 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
 {
     char       new_folder[MAXFOLDER+1], prompt[MAXFOLDER+80], *p;
     HelpType   help;
-    int        rc, saveable_count = 0;
+    int        rc;
     static     char folder[MAXFOLDER+1] = {'\0'};
     static     CONTEXT_S *last_context = NULL;
-    CONTEXT_S *cntxt = NULL, *tc;
+    CONTEXT_S *cntxt = NULL;
     ESCKEY_S   ekey[5];
     ENVELOPE  *env;
 
@@ -847,8 +786,7 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
     }
 
     /* start with the default save context */
-    if((cntxt = default_save_context(ps_global->context_list)) == NULL)
-       cntxt = ps_global->context_list;
+    cntxt = ps_global->context_list;
 
     if((ps_global->save_by_from || ps_global->save_by_sender ||
 	ps_global->save_by_recipient) && 
@@ -894,28 +832,12 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
     else
       strcpy(folder, DEFAULT_SAVE);
 
-    /* how many context's can be saved to... */
-    for(tc = ps_global->context_list; tc; tc = tc->next)
-      saveable_count++;
-
     /* set up extra command option keys */
     rc = 0;
     ekey[rc].ch      = (F_ON(F_USE_FK,ps_global)) ? PF4 + rc : ctrl('T');
     ekey[rc].rval    =  2;
     ekey[rc].name    = "^T";
     ekey[rc++].label = "To Fldrs";
-
-    if(saveable_count > 1){
-	ekey[rc].ch      =  (F_ON(F_USE_FK,ps_global)) ? PF4 + rc : ctrl('P');
-	ekey[rc].rval    =  10;
-	ekey[rc].name    = "^P";
-	ekey[rc++].label = "Prev Collection";
-
-	ekey[rc].ch      = (F_ON(F_USE_FK,ps_global)) ? PF4 + rc : ctrl('N');
-	ekey[rc].rval    =  11;
-	ekey[rc].name    = "^N";
-	ekey[rc++].label = "Next Collection";
-    }
 
     if(F_ON(F_ENABLE_TAB_COMPLETE,ps_global)){
 	ekey[rc].ch      = (F_ON(F_USE_FK,ps_global)) ? PF4 + rc : TAB;
@@ -929,13 +851,7 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
     *new_folder = '\0';
     help = NO_HELP;
     while(1) {
-	/* only show collection number if more than one available */
-	if(ps_global->context_list->next){
-	    sprintf(prompt, "SAVE to folder in <%.25s> [%s] : ",
-		    cntxt->label[0], folder);
-	}
-	else
-	  sprintf(prompt, "SAVE to folder [%s] : ", folder);
+	sprintf(prompt, "SAVE to folder [%s] : ", folder);
 
         rc = optionally_enter(new_folder, screen_line, 0, MAXFOLDER, 1, 0,
                               prompt, ekey, help, 0);
@@ -961,27 +877,6 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
 	}
 	else if(rc == 3){
             help = (help == NO_HELP) ? h_oe_save : NO_HELP;
-	}
-	else if(rc == 10){			/* Previous collection */
-	    CONTEXT_S *start;
-	    start = cntxt;
-	    tc    = cntxt;
-
-	    while(1){
-		if((tc = tc->next) == NULL)
-		  tc = ps_global->context_list;
-
-		if(tc == start)
-		  break;
-
-		cntxt = tc;
-	    }
-	}
-	else if(rc == 11){			/* Next collection */
-	    tc = cntxt;
-
-	    if((cntxt = cntxt->next) == NULL)
-	      cntxt = ps_global->context_list;
 	}
 	else if(rc == 12){			/* file name completion! */
 	    if(!folder_complete(cntxt, new_folder))
@@ -1015,18 +910,9 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
     }
 
     if(rc = save(new_folder, cntxt, message, index_sorted_msgno)){
-	if(ps_global->context_list->next && context_isambig(new_folder)){
-	    sprintf(tmp_20k_buf, 
-		    "Message %s copied to \"%.15s%s\" in <%.15s%s>",
-		    long2string(index_sorted_msgno), new_folder,
-		    (strlen(new_folder) > 15) ? "..." : "",
-		    cntxt->label[0],
-		    (strlen(cntxt->label[0]) > 15) ? "..." : "");
-	}
-	else
-	  sprintf(tmp_20k_buf, "Message %s copied to folder \"%.27s%s\"",
-		  long2string(index_sorted_msgno), new_folder,
-		  (strlen(new_folder) > 27) ? "..." : "");
+	sprintf(tmp_20k_buf, "Message %s copied to folder \"%.27s%s\"",
+		long2string(index_sorted_msgno), new_folder,
+		(strlen(new_folder) > 27) ? "..." : "");
 
 	if(!READONLY_FOLDER)
 	  strcat(tmp_20k_buf, " and marked deleted");
@@ -1124,16 +1010,8 @@ save(folder, context, message, index_sorted_msgno)
 	/*
 	 * already exists?
 	 */
-	if(ps_global->context_list->next && context_isambig(save_folder)){
-	    sprintf(tmp_20k_buf,
-		    "Folder \"%.15s%s\" in <%.15s%s> doesn't exist. Create",
-		    save_folder, (strlen(save_folder) > 15) ? "..." : "",
-		    context->label[0],
-		    (strlen(context->label[0]) > 15) ? "..." : "");
-	}
-	else
-	  sprintf(tmp_20k_buf,"Folder \"%.40s\" doesn't exist.  Create",
-		  save_folder);
+	sprintf(tmp_20k_buf,"Folder \"%.40s\" doesn't exist.  Create",
+		save_folder);
 
         if(want_to(tmp_20k_buf, 'y', 'n', NO_HELP, 0) != 'y'){
             q_status_message(0, 1, 3, "\007Save message cancelled");
@@ -1410,7 +1288,7 @@ broach_folder(qline, allow_list, context)
     char        expanded[MAXPATH+1],
                 prompt[MAXFOLDER+80],
                *last_folder;
-    CONTEXT_S  *tc, *tc2;
+    CONTEXT_S  *tc;
     FOLDER_S   *f;
     ESCKEY_S    ekey[5];
     int         rc, inbox;
@@ -1442,18 +1320,6 @@ broach_folder(qline, allow_list, context)
     ekey[rc].name    = (allow_list) ? "^T" : "";
     ekey[rc++].label = (allow_list) ? "ToFldrs" : "";
 
-    if(ps_global->context_list->next){
-	ekey[rc].ch      =  (F_ON(F_USE_FK,ps_global)) ? PF4 + rc : ctrl('P');
-	ekey[rc].rval    =  10;
-	ekey[rc].name    = "^P";
-	ekey[rc++].label = "Prev Collection";
-
-	ekey[rc].ch      = (F_ON(F_USE_FK,ps_global)) ? PF4 + rc : ctrl('N');
-	ekey[rc].rval    =  11;
-	ekey[rc].name    = "^N";
-	ekey[rc++].label = "Next Collection";
-    }
-
     if(F_ON(F_ENABLE_TAB_COMPLETE,ps_global)){
 	ekey[rc].ch      = (F_ON(F_USE_FK,ps_global)) ? PF4 + rc : TAB;
 	ekey[rc].rval    =  12;
@@ -1483,13 +1349,7 @@ broach_folder(qline, allow_list, context)
 	    }
 	}
 
-	/* only show collection number if more than one available */
-	if(ps_global->context_list->next){
-	    sprintf(prompt, "GOTO folder in <%.20s> %s%s: ",
-		    tc->label[0], expanded, *expanded ? " " : "");
-	}
-	else
-	  sprintf(prompt, "GOTO folder %s: ", expanded, *expanded ? " " : "");
+	sprintf(prompt, "GOTO folder %s: ", expanded, *expanded ? " " : "");
 
         rc = optionally_enter(new_folder, qline, 0, MAXFOLDER, 1 ,0, prompt,
                               ekey, help, 0);
@@ -1515,16 +1375,6 @@ broach_folder(qline, allow_list, context)
 	}
 	else if(rc == 3){
             help = help == NO_HELP ? h_oe_broach : NO_HELP;
-	}
-	else if(rc == 10){			/* Previous collection */
-	    tc2 = ps_global->context_list;
-	    while(tc2->next && tc2->next != tc)
-	      tc2 = tc2->next;
-
-	    tc = tc2;
-	}
-	else if(rc == 11){			/* Next collection */
-	    tc = (tc->next) ? tc->next : ps_global->context_list;
 	}
 	else if(rc == 12){			/* file name completion! */
 	    if(!folder_complete(tc, new_folder))
@@ -1652,12 +1502,6 @@ do_broach_folder(new_folder, new_context)
 	    dprint(2, (debugfile, "broach_folder: nickname for %s is %s\n",
 		       expanded_file, new_folder));
 	}
-	else if ((new_context->use & CNTXT_INCMNG)
-		 && (folder_index(new_folder, new_context->folders) < 0)){
-	    q_status_message1(1, 2, 4,
-			    "\007Can't find Incoming Folder %s.", new_folder);
-	    return(0);
-	}
     }
 
     /*--- Opening inbox, inbox has been already opened, the easy case ---*/
@@ -1684,11 +1528,9 @@ do_broach_folder(new_folder, new_context)
 	/*
 	 * remember last context and folder
 	 */
-	if(context_isambig(ps_global->cur_folder)){
-	    ps_global->context_last = ps_global->context_current;
+	if(context_isambig(ps_global->cur_folder))
 	    strcpy(ps_global->context_current->last_folder,
 		 ps_global->cur_folder);
-	}
 
 	strcpy(ps_global->cur_folder, ps_global->inbox_name);
 	ps_global->context_current = ps_global->context_list;
@@ -1844,10 +1686,8 @@ do_broach_folder(new_folder, new_context)
       strcpy(ps_global->context_current->last_folder,ps_global->cur_folder);
 
     strcpy(ps_global->cur_folder, new_folder);
-    if(new_context){
-	ps_global->context_last = ps_global->context_current;
+    if(new_context)
 	ps_global->context_current = new_context;
-    }
 
     /*
      * and set the right "save" context (the collection of folders
@@ -1880,9 +1720,7 @@ do_broach_folder(new_folder, new_context)
 						      ps_global->max_msgno);
 	  ps_global->start_entry = 0;
 	/* if it is an incoming mailbox, goto first unseen */
-        }else if((open_inbox ||
-	           (context_isambig(ps_global->cur_folder) &&
-		    (ps_global->context_current->use & CNTXT_INCMNG))) &&
+        }else if(open_inbox &&
 			  (first_unseen = first_sorted_unread(m)) >= 0) {
           ps_global->current_sorted_msgno = first_unseen;
         }else {
@@ -1949,9 +1787,7 @@ expunge_and_close(stream, folder)
 		ret = want_to(prompt_b, 'y', 0, NO_HELP, 0);
 	      }
 	      if(F_ON(F_AUTO_READ_MSGS,ps_global) || ret == 'y') {
-	        save_context = default_save_context(ps_global->context_list);
-	        if(!save_context)
-		  save_context = ps_global->context_list;
+	        save_context = ps_global->context_list;
 
 		FETCH_ALL_FLAGS(stream);
 		saved_msgs = 0;

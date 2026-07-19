@@ -6,7 +6,7 @@
  * see main.c), this file supplies everything the resulting process
  * needs that would otherwise come from pine directly: the handoff/
  * result file formats, and trivial standalone implementations of the
- * PICO struct's 8 callbacks (see pico.h). None of this links against
+ * PICO struct's callbacks (see pico.h). None of this links against
  * c-client -- the handoff/result files carry plain strings pine has
  * already built (via outgoing2strings()/strings2outgoing(), unchanged
  * on pine's side), and the message body crosses via a plain text file
@@ -23,9 +23,6 @@
 #include	"efunc.h"
 
 #define	FIELDTAGLEN	31
-
-static char **fcc_list = NULL;
-static int    fcc_count = 0;
 
 
 /*
@@ -95,7 +92,6 @@ char *path;
     FILE *fp;
     PICO *pm;
     char *flagbuf;
-    int   i;
 
     if((fp = fopen(path, "r")) == NULL)
       return(NULL);
@@ -130,30 +126,6 @@ char *path;
     pm->fcclen = strlen(pm->fccbuf);
     pm->pine_flags = (unsigned)atoi(flagbuf);
     free(flagbuf);
-
-    /* FCCLIST <n>\n followed by n lines, one folder name each */
-    {
-	char listhdr[64];
-
-	if(fgets(listhdr, sizeof(listhdr), fp) != NULL
-	   && sscanf(listhdr, "FCCLIST %d", &fcc_count) == 1 && fcc_count > 0){
-	    fcc_list = (char **)calloc((size_t)fcc_count, sizeof(char *));
-	    for(i = 0; i < fcc_count; i++){
-		char line[512];
-
-		if(fgets(line, sizeof(line), fp) == NULL){
-		    fcc_count = i;
-		    break;
-		}
-
-		line[strcspn(line, "\n")] = '\0';
-		if((fcc_list[i] = (char *)malloc(strlen(line) + 1)) != NULL)
-		  strcpy(fcc_list[i], line);
-	    }
-	}
-	else
-	  fcc_count = 0;
-    }
 
     fclose(fp);
     return(pm);
@@ -274,38 +246,3 @@ char *src, *dest, **errmsg;
 }
 
 
-int
-compose_folders(return_string)
-char *return_string;
-{
-    char prompt[256];
-    char answer[256];
-    int  i, n;
-
-    if(fcc_count == 0){
-	emlwrite("No folder list available", NULL);
-	return(0);
-    }
-
-    strcpy(prompt, "Fcc");
-    for(i = 0; i < fcc_count && i < 8; i++){
-	char tag[40];
-
-	sprintf(tag, " %d)%.20s", i + 1, fcc_list[i]);
-	if(strlen(prompt) + strlen(tag) < sizeof(prompt) - 24)
-	  strcat(prompt, tag);
-    }
-    strcat(prompt, " (number or name): ");
-
-    answer[0] = '\0';
-    if(mlreply(prompt, answer, sizeof(answer), 0) != TRUE || answer[0] == '\0')
-      return(0);
-
-    n = atoi(answer);
-    if(n >= 1 && n <= fcc_count)
-      strcpy(return_string, fcc_list[n - 1]);
-    else
-      strcpy(return_string, answer);
-
-    return(1);
-}

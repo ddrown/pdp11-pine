@@ -123,7 +123,6 @@ main(int argc, char *argv[])
 	pm->showmsg   = compose_showmsg;
 	pm->newmail   = compose_newmail;
 	pm->buildaddr = compose_buildaddr;
-	pm->folders   = compose_folders;
 
 	result = pico(pm);
 	compose_write_result(argv[3], result, pm);

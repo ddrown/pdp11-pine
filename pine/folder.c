@@ -93,7 +93,7 @@ screen changes size in which case it may recalculate the folder_display.
  */
 typedef struct folder_screen_state
 {
-    CONTEXT_S *context_list;		/* list of context's to display */
+    CONTEXT_S *context_list;		/* the single context to display */
     CONTEXT_S *context;			/* current context              */
     int        folder_index;		/* current index in context     */
     int        display_cols;		/* number of columns on display   */
@@ -205,50 +205,6 @@ folder_screen(pine_state)
 
 
 
-/*----------------------------------------------------------------------
-    Build a flat list of Fcc-picker candidates for the composer
-    subprocess (see pine/send.c's run_composer_subprocess()).
-
-  Args: ps -- the usual pine_state
-        np -- returns the number of candidates
-
-  Result: fs_get'd array of context nickname/label strings (not
-          fs_get'd copies -- callers must not outlive ps->context_list),
-          or NULL if there are no contexts configured.
-
-  The composer runs as a separate process with no access to
-  ps->context_list, so it can't browse into a collection's folders the
-  way folder_lister()/folders_for_fcc() do today -- it can only offer
-  the configured collections themselves. On this target's expected
-  single/few-collection local-mbox setup that's a reasonable trade
-  (see TODO-pdp11-done.md); typing a folder name directly into the Fcc
-  field still works exactly as before regardless.
- ----*/
-char **
-fcc_candidate_list(ps, np)
-    struct pine *ps;
-    int         *np;
-{
-    CONTEXT_S *c;
-    char     **list;
-    int        n = 0;
-
-    for(c = ps->context_list; c; c = c->next)
-      n++;
-
-    if(n == 0){
-	*np = 0;
-	return(NULL);
-    }
-
-    list = (char **)fs_get(n * sizeof(char *));
-    n = 0;
-    for(c = ps->context_list; c; c = c->next)
-      list[n++] = c->nickname ? c->nickname : c->context;
-
-    *np = n;
-    return(list);
-}
 
 
 
@@ -279,7 +235,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
     int              ch, orig_ch, mangled_footer, mangled_header,
                      rv, quest_line, rc, old_folder_index;
     unsigned short   new_col;
-    CONTEXT_S       *old_folder_context, *tc;
+    CONTEXT_S       *old_folder_context;
     char            *new_file, *cur_name, *new_fold;
     FOLDER_S        *f;
     struct key_menu *km;
@@ -300,15 +256,9 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 					   ? ps_global->context_current
 					   : ps_global->context_list;
 
-    if(F_ON(F_EXPANDED_FOLDERS,ps_global)){
-	for(tc = ps_global->context_list; tc ; tc = tc->next)
-	  find_folders_in_context(tc, NULL);
-    }
-    else if(do_what != FolderMaint || !ps_global->context_list->next)
-      find_folders_in_context(fs.context, NULL);
+    find_folders_in_context(fs.context, NULL);
 
-/* BUG? eliminate context_index from pine struct??? */
-    if((fs.folder_index = folder_index(ps->cur_folder, 
+    if((fs.folder_index = folder_index(ps->cur_folder,
 				       fs.context->folders)) < 0)
       fs.folder_index = 0;
 
@@ -363,16 +313,6 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 	if(old_folder_index!=fs.folder_index || old_folder_context!=fs.context)
 	  display_folder(&fs, fs.context, fs.folder_index,
 			 old_folder_context, old_folder_index);
-
-	if(old_folder_context && old_folder_context != fs.context){
-	    q_status_message1(0, 0, 3, "Now in collection <%s>", 
-			      fs.context->label[0]);
-
-	    if(do_what == FolderMaint && (old_folder_context 
-		   && ((old_folder_context->use&CNTXT_PSEUDO)
-		       != (fs.context->use&CNTXT_PSEUDO))))
-	      mangled_footer++;
-	}
 
 	if(mangled_footer && ps_global->ttyo->screen_rows > 3) {
 	    setbitmap(bitmap);
@@ -456,16 +396,6 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 	    if(fs.folder_index > 0 && ALL_FOUND(fs.context)){
 		fs.folder_index--;
 	    }
-	    else if(fs.context_list != fs.context){
-		for(tc = fs.context_list; tc->next != fs.context;
-		    tc = tc->next);
-
-		fs.context = tc;
-		if(ALL_FOUND(fs.context) && folder_total(fs.context->folders))
-		  fs.folder_index = folder_total(fs.context->folders) - 1;
-		else
-		  fs.folder_index = 0;
-	    }
 	    else
 	      q_status_message(0,0,1,"\007Already on first folder.");
 
@@ -481,11 +411,6 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 	    if(fs.folder_index + 1 < folder_total(fs.context->folders)
 	       && ALL_FOUND(fs.context)){
 		fs.folder_index++;
-	    }
-	    else if(fs.context->next){	/* next context?*/
-
-		fs.context = fs.context->next;
-		fs.folder_index = 0;
 	    }
 	    else
 	      q_status_message(0,0,1,"\007Already on last folder.");
@@ -672,8 +597,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 		  break;
 
                 if(do_broach_folder(cur_name, fs.context) == 1) {
-		    for(tc = fs.context_list; tc ; tc = tc->next)
-		      free_folders_in_context(tc);
+		    free_folders_in_context(fs.context_list);
 
                     ps_global->redrawer = (void(*)())NULL;
                     ps_global->next_screen = mail_index_screen;
@@ -702,8 +626,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 			                        : "NULL"));
 	        }
 
-		for(tc = fs.context_list; tc ; tc = tc->next)
-		  free_folders_in_context(tc);
+		free_folders_in_context(fs.context_list);
 
                 ps_global->redrawer = (void (*)())NULL;
 	        return(rv);
@@ -731,8 +654,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 	      goto bleep;
 
 	    ps_global->redrawer = (void (*)())NULL;
-	    for(tc = fs.context_list; tc ; tc = tc->next)
-	      free_folders_in_context(tc);
+	    free_folders_in_context(fs.context_list);
 
 	    return(0);
 
@@ -743,8 +665,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
             if(do_what != FolderMaint)
                 goto bleep;
 
-	    for(tc = fs.context_list; tc ; tc = tc->next)
-	      free_folders_in_context(tc);
+	    free_folders_in_context(fs.context_list);
 
             ps_global->redrawer = (void (*)())NULL;
             ps_global->next_screen = quit_screen;
@@ -758,8 +679,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
                 goto bleep;
 
 	    ps_global->redrawer = (void (*)())NULL;
-	    for(tc = fs.context_list; tc ; tc = tc->next)
-	      free_folders_in_context(tc);
+	    free_folders_in_context(fs.context_list);
 
             ps_global->next_screen = compose_screen;
 	    return(0);
@@ -772,8 +692,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 	      goto bleep;
 
 	    ps_global->redrawer = (void (*)())NULL;
-	    for(tc = fs.context_list; tc ; tc = tc->next)
-	      free_folders_in_context(tc);
+	    free_folders_in_context(fs.context_list);
 
 	    ps_global->next_screen = mail_index_screen;
             q_status_message(0, 1, 2, "Returning to current index");
@@ -1059,7 +978,7 @@ folder_list_entry(fd, goal_row, index, context)
     CONTEXT_S **context;
 {
     char     *s;
-    int       row, label, ftotal;
+    int       row, ftotal;
 
     if(goal_row > fd->last_row) 	/* return blanks past last entry */
       return("");
@@ -1067,59 +986,12 @@ folder_list_entry(fd, goal_row, index, context)
     goal_row = max(0, goal_row);
     row      = 0;
     *index   = 0;
-    for(*context = fs.context_list;
-	(*context)->next && (*context)->next->d_line < goal_row;
-	*context = (*context)->next)
-      row = (*context)->next->d_line;
-
-    s        = NULL;
-    label    = (ps_global->context_list->next) ? 1 : 0;
+    *context = fs.context_list;
 
     while(1){
-	if(label > 0){
-	    if(row < (*context)->d_line){
-		memset((void *)tmp_20k_buf,'-',fd->display_cols*sizeof(char));
-		tmp_20k_buf[fd->display_cols] = '\0';
-		s = (row + 1 == (*context)->d_line) ? tmp_20k_buf : "" ;
-	    }
-	    else if(label++ < 2){
-		s = tmp_20k_buf;
-		if((*context)->use & CNTXT_INCMNG){
-		    sprintf(tmp_20k_buf, "%s", (*context)->label[0]);
-		}
-		else{
-		    memset((void *)tmp_20k_buf, ' ', 
-			   fd->display_cols * sizeof(char));
-		    tmp_20k_buf[fd->display_cols] = '\0';
-
-		    sprintf(tmp_20k_buf + fd->display_cols + 2,
-			    "%s-collection <%s>  %s",
-			    "Folder",
-			    (*context)->label[0], 
-			    ((*context)->use & CNTXT_SAVEDFLT)
-			        ? "** Default for Saves **" : "");
-		    strncpy(tmp_20k_buf,
-			    tmp_20k_buf + fd->display_cols + 2,
-			    strlen(tmp_20k_buf + fd->display_cols + 2));
-		    strncpy(tmp_20k_buf + fd->display_cols - 7,
-			    "(Local)", 7);
-		}
-	    }
-	    else{
-		label = -1;
-		continue;
-	    }
-	}
-	else if((ftotal = folder_total((*context)->folders))
+	if((ftotal = folder_total((*context)->folders))
 		&& row < (int)folder_entry(0, (*context)->folders)->d_line){
-	    if(label < 0){
-		memset((void *)tmp_20k_buf,'-',fd->display_cols*sizeof(char));
-		tmp_20k_buf[fd->display_cols] = '\0';
-		s = tmp_20k_buf;
-		label = 0;
-	    }
-	    else
-	      s = "";
+	    s = "";
 	}
 	else{
 	    s          = NULL;
@@ -1135,15 +1007,8 @@ folder_list_entry(fd, goal_row, index, context)
 
 	    if(*index >= ftotal){
 		*index = 0;
-		if((*context)->next){
-		    *context = (*context)->next;
-		    label      = 1;
-		    continue;		/* go take care of labels */
-		}
-		else{
-		    s = "";			/* dropped off end of list */
-		    break;
-		}
+		s = "";			/* dropped off end of list */
+		break;
 	    }
 	}
 
@@ -1207,12 +1072,6 @@ add_new_folder(quest_line, cntxt)
     MAILSTREAM     *create_stream;
 
     dprint(4, (debugfile, "\n - add_new_folder - \n"));
-
-    if(cntxt->use & CNTXT_INCMNG){
-	q_status_message1(0,2,3, 
-	      "\007Can't add new folder to <%s>.", cntxt->label[0]);
-	return(NULL);
-    }
 
     add_folder[0] = '\0';
     help          = NO_HELP;
@@ -1437,12 +1296,6 @@ delete_folder(index, cntxt, mangled_header)
     FOLDER_S   *fp;
     int         ret, close_opened = 0;
 
-    if(cntxt->use & CNTXT_INCMNG){
-	q_status_message1(1,2,4, "\007Can't delete folders in <%s> yet.",
-			 cntxt->label[0]);
-	return(0);
-    }
-
     if(!folder_total(cntxt->folders)){
 	q_status_message(0,2,4,
 			 "\007Empty folder collection.  No folder to delete!");
@@ -1536,13 +1389,12 @@ search_folders(fd, ask_line)
     char            prompt[MAX_SEARCH+50], nsearch_string[MAX_SEARCH+1];
     static char     search_string[MAX_SEARCH+1];
     HelpType        help;
-    CONTEXT_S      *t_context;
     FOLDER_S       *f;
     int             rc, t_index;
 
     help              = NO_HELP;
     nsearch_string[0] = '\0';
-    if(!folder_total((t_context = fd->context)->folders)){
+    if(!folder_total(fd->context->folders)){
 	q_status_message(0,2,4,
 			"\007Empty folder collection.  No folders to search!");
 	return(0);
@@ -1574,24 +1426,20 @@ search_folders(fd, ask_line)
     /*----- Search the bottom half of list ------*/
     rc = 0;
     while(1){
-	if(t_index + 1 >= folder_total(t_context->folders)){
+	if(t_index + 1 >= folder_total(fd->context->folders)){
 	    t_index = 0;
-	    if(!(t_context = t_context->next)){
-		t_context = fd->context_list; 	/* wrap the search */
-		rc = 1;
-	    }
+	    rc = 1;			/* wrapped the search */
 	}
 	else
 	  t_index++;
 
-	if(t_index == fd->folder_index && t_context == fd->context)
+	if(t_index == fd->folder_index)
 	  return(0);
 
-	f = folder_entry(t_index, t_context->folders);
+	f = folder_entry(t_index, fd->context->folders);
         if(srchstr((f->nickname) ? f->nickname : f->name,
 		   search_string)){
 	    fd->folder_index   = t_index;
-	    fd->context        = t_context;
 	    return(rc + 1);
 	}
     }
@@ -1686,110 +1534,91 @@ create_folder_display(fold_disp, screen_cols)
 	return;
     }
 
-    row                      = (ps_global->context_list->next) ? 1 : 0;
+    row                      = 0;
     c_list                   = fold_disp->context_list;
     fold_disp->top_row       = 0;
     fold_disp->display_cols  = screen_cols;
-    fold_disp->display_rows  = ps_global->ttyo->screen_rows 
+    fold_disp->display_rows  = ps_global->ttyo->screen_rows
                                  - FOLDER_LIST_BOTTOM_LINES - 1
                                  - FOLDER_LIST_HEADER_LINES;
-    while(c_list != NULL){
-	/*--- 
-	  Figure out the column width to use for display. What we want is a 
-	  column width that looks nice for most of the folder names, but
-	  not to make the columns super wide because of a few folder names
-	  of exceptional length. This is done by sorting the lengths of the
-	  existing folders and using a width that will suit 95% of the 
-	  entries. 
 
-	  The miminum columns width used is 20.
-	 ----*/
-	if(!ALL_FOUND(c_list)){
-	    length = strlen(CLICKHERE);
+    /*---
+      Figure out the column width to use for display. What we want is a
+      column width that looks nice for most of the folder names, but
+      not to make the columns super wide because of a few folder names
+      of exceptional length. This is done by sorting the lengths of the
+      existing folders and using a width that will suit 95% of the
+      entries.
+
+      The miminum columns width used is 20.
+     ----*/
+    if(!ALL_FOUND(c_list)){
+	length = strlen(CLICKHERE);
+    }
+    else if(!folder_total(c_list->folders) || (c_list->use&CNTXT_PSEUDO)){
+	length = strlen(CLICKHERETOO);
+    }
+    else{
+	length = 0;		/* start from scratch */
+	for(index = 0; index < folder_total(c_list->folders); index++){
+	    length = max(length,
+			 (int)folder_entry(index,
+					   c_list->folders)->name_len + 1);
 	}
-	else if(!folder_total(c_list->folders) || (c_list->use&CNTXT_PSEUDO)){
-	    length = strlen(CLICKHERETOO);
+    }
+
+    length = max(20, length);
+
+    /*----
+      Now we go through the display list and fill in the rows and columns.
+      If the entry is just a text entry then it is centered. If it is
+      a folder name it is fit in after the preceed one if possible. If
+      not it is put on the line boundrieds
+     ---*/
+
+    /* then assign positions for each folder name */
+    col = 0;
+    if(!ALL_FOUND(c_list)){
+	if(c_list->use & CNTXT_PSEUDO){
+	    f = folder_entry(0, c_list->folders);
 	}
 	else{
-	    length = 0;		/* start from scratch */
-	    for(index = 0; index < folder_total(c_list->folders); index++){
-		length = max(length, 
-			     (int)folder_entry(index,
-					       c_list->folders)->name_len + 1);
-	    }
+	    f = new_folder(CLICKHERE);
+	    folder_insert(0, f, c_list->folders);
+	    c_list->use |= CNTXT_PSEUDO;
 	}
 
-	length = max(20, length);
+	f->d_line = row;
+	f->d_col  = max(0, (screen_cols - (int)f->name_len)/2);
+    }
+    else if(!folder_total(c_list->folders) || (c_list->use&CNTXT_PSEUDO)){
+	if(c_list->use & CNTXT_PSEUDO)
+	  folder_delete(0, c_list->folders); /* may be CLICKHERE */
 
+	f = new_folder(CLICKHERETOO);
+	folder_insert(0, f, c_list->folders);
+	c_list->use |= CNTXT_PSEUDO; /* let others know entry's bogus */
+	f->d_line    = row;
+	f->d_col     = max(0, (screen_cols - (int)f->name_len)/2);
+    }
+    else{
+	for(index = 0; index < folder_total(c_list->folders); index++){
+	    f = folder_entry(index, c_list->folders);
 
-	/*---- 
-	  Now we go through the display list and fill in the rows and columns.
-	  If the entry is just a text entry then it is centered. If it is
-	  a folder name it is fit in after the preceed one if possible. If 
-	  not it is put on the line boundrieds
-         ---*/
-
-	if(ps_global->context_list->next){
-	    /* leave a line for each label... */
-	    for(index = 0; c_list->label[index] != NULL; index++){
-		if(index == 0)
-		  c_list->d_line = row;	/* remember which row to start on */
-
+	    if(col + (int)f->name_len >= screen_cols){
+		col = 0;
 		row++;
 	    }
 
-	    row++;			/* one blank line after labels */
-	    row++;			/* one more blank line after labels */
+	    f->d_line = (unsigned int) row;
+	    f->d_col  = (unsigned int) col;
+
+	    for(goal = 0; goal < (int) f->name_len; goal += length)
+	      col += length;
 	}
-
-	/* then assign positions for each folder name */
-	col = 0;
-	if(!ALL_FOUND(c_list)){
-	    if(c_list->use & CNTXT_PSEUDO){
-		f = folder_entry(0, c_list->folders);
-	    }
-	    else{
-		f = new_folder(CLICKHERE);
-		folder_insert(0, f, c_list->folders);
-		c_list->use |= CNTXT_PSEUDO;
-	    }
-
-	    f->d_line = row;
-	    f->d_col  = max(0, (screen_cols - (int)f->name_len)/2);
-	}
-	else if(!folder_total(c_list->folders) || (c_list->use&CNTXT_PSEUDO)){
-	    if(c_list->use & CNTXT_PSEUDO)
-	      folder_delete(0, c_list->folders); /* may be CLICKHERE */
-
-	    f = new_folder(CLICKHERETOO);
-	    folder_insert(0, f, c_list->folders);
-	    c_list->use |= CNTXT_PSEUDO; /* let others know entry's bogus */
-	    f->d_line    = row;
-	    f->d_col     = max(0, (screen_cols - (int)f->name_len)/2);
-	}
-	else{
-	    for(index = 0; index < folder_total(c_list->folders); index++){
-		f = folder_entry(index, c_list->folders);
-
-		if(col + (int)f->name_len >= screen_cols){
-		    col = 0;
-		    row++;
-		}
-
-		f->d_line = (unsigned int) row;
-		f->d_col  = (unsigned int) col;
-
-		for(goal = 0; goal < (int) f->name_len; goal += length)
-		  col += length;
-	    }
-	}
-
-	fold_disp->last_row = row++;
-	row++;				/* add a blank line */
-	row++;				/* add another blank line */
-
-	c_list = c_list->next; 	/* format the next section... */
     }
+
+    fold_disp->last_row = row;
 }
 
 
@@ -1892,157 +1721,46 @@ folder_exists(c_string, file)
 void
 init_folders()
 {
-    CONTEXT_S  *tc, *top = NULL, *trailing = NULL;
+    CONTEXT_S  *tc;
     FOLDER_S   *f;
-    int         num = 1, i, no_inbox = 0, prime = 0;
 
     if(!ps_global->VAR_FOLDER_SPEC){		/* shouldn't happen */
 	q_status_message(0,2,2,"No Folder Collections Specified");
 	return;
     }
 
-    /*
-     * Build context that's a list of folders the user's defined
-     * as receiveing new messages.  At some point, this should
-     * probably include adding a prefix with the new message count.
-     */
-    if(ps_global->VAR_INCOMING_FOLDERS && ps_global->VAR_INCOMING_FOLDERS[0]
-       && (tc = new_context("Incoming-Folders []"))){ /* fake new context */
-	tc->use    &= ~CNTXT_NOFIND; 	/* mark all entries found */
-	tc->use    |= CNTXT_INCMNG;	/* mark this as incoming collection */
-	tc->proto   = default_driver(tc->context);
-	tc->num     = 0;
-	tc->folders = new_folder_list();
-	if(tc->label[0])
-	  fs_give((void **)&tc->label[0]);
-
-	tc->label[0] = cpystr("Incoming Message Folders");
-
-	top = trailing = tc;
-	if(ps_global->VAR_INBOX_PATH){
-	    f = new_folder(ps_global->VAR_INBOX_PATH);
-	    f->nickname = cpystr(ps_global->inbox_name);
-	    f->name_len = strlen(f->nickname);
-	    folder_insert(-1, f, tc->folders);
-	}
-
-	for(i = 0; ps_global->VAR_INCOMING_FOLDERS[i] ; i++){
-	    char *p, *folder_string;
-	    int   quoted = 0;
-
-	    /*
-	     * Parse folder line for nickname and folder name.
-	     * No nickname on line is OK.
-	     */
-	    tmp_20k_buf[0] = '\0';
-	    folder_string  = ps_global->VAR_INCOMING_FOLDERS[i];
-	    for(p = folder_string; *p ; p++){
-		if(*p == '"')			/* quoted label? */
-		  quoted = (quoted) ? 0 : 1;
-
-		if(*p == '\\' && *(p+1) == '"')	/* escaped quote? */
-		  p++;				/* skip it... */
-
-		if(isspace(*p) && !quoted){	/* space delimits nic/folder */
-		    char *p1 = tmp_20k_buf;
-
-		    for(; folder_string < p ; folder_string++){
-			if(*folder_string == '\\' && *(folder_string+1) == '"')
-			  *p1++ = *++folder_string;
-			else if(*folder_string != '"')
-			  *p1++ = *folder_string;
-		    }
-
-		    *p1 = '\0';			/* tie off nickname */
-		    while(isspace(*p))		/* find start of folder */
-		      p++;
-
-		    folder_string = p;		/* point to context start */
-		    break;			/* pop out of here */
-		}
-	    }
-
-	    f = new_folder(folder_string);
-	    if(tmp_20k_buf[0]){
-		f->nickname = cpystr(tmp_20k_buf);
-		f->name_len = strlen(f->nickname);
-	    }
-
-	    folder_insert(-1, f, tc->folders);
-	}
-    }
-    else
-      no_inbox++;
-
-/* BUG: gotta clean up global context_list before pine exits... */
-
-    if(!ps_global->VAR_FOLDER_SPEC || ps_global->VAR_FOLDER_SPEC[0] == NULL){
+    if(!ps_global->VAR_FOLDER_SPEC[0]){
 	/*
-	 * THIS MAY NEED TUNING!  In the absence of any other info, 
+	 * THIS MAY NEED TUNING!  In the absence of any other info,
 	 * assume all opens and saves are done relative to the
 	 * home directory.  So, insert such a context here...
 	 */
-	if(ps_global->VAR_FOLDER_SPEC == NULL){
-	    ps_global->VAR_FOLDER_SPEC = (char **)fs_get(2 * sizeof(char *));
-	    memset((void *)ps_global->VAR_FOLDER_SPEC, 0, 2 * sizeof(char *));
-	}
-
-	if(ps_global->VAR_FOLDER_SPEC[0])
-	  fs_give((void **)&(ps_global->VAR_FOLDER_SPEC[0]));
-
 	ps_global->VAR_FOLDER_SPEC[0] = cpystr("[]");
     }
 
     /*
-     * Build list of folder colletions.  We're always guarenteed
-     * at least one default folder spec (the default).  new_context()
-     * has the job of parsing and such.  It'll also write any bogus 
-     * format messages.  
+     * This build supports exactly one folder collection; only the
+     * first folder-collections value is used.  new_context() has the
+     * job of parsing it, and writes any bogus format messages.
      */
-    for(i = 0; ps_global->VAR_FOLDER_SPEC[i] ; i++){
-	if(tc = new_context(ps_global->VAR_FOLDER_SPEC[i])){
-	    if(!prime++){
-		tc->use     |= CNTXT_PRIME;
-		tc->use     |= CNTXT_SAVEDFLT;
-	    }
-	    else
-	      tc->use  |= CNTXT_SECOND;
+    if(tc = new_context(ps_global->VAR_FOLDER_SPEC[0])){
+	tc->proto   = default_driver(tc->context);
+	tc->folders = new_folder_list();
 
-	    tc->proto   = default_driver(tc->context);
-	    tc->num     = num++;
-	    tc->folders = new_folder_list();
-	    if(top)
-	      trailing->next = tc;
-	    else
-	      top = tc;
-
-	    /*
-	     * if there's no incoming folder list, associate the 
-	     * name "INBOX" with first context in the list.  This
-	     * the good old pre-collection behavior
-	     */
-	    if(no_inbox){		/* no folder list,  fake it. */
-		if(ps_global->VAR_INBOX_PATH){
-		    f = new_folder(ps_global->VAR_INBOX_PATH);
-		    f->nickname = cpystr(ps_global->inbox_name);
-		    f->name_len = strlen(f->nickname);
-		}
-		else
-		  f = new_folder(ps_global->inbox_name);
-
-		folder_insert(-1, f, tc->folders);
-
-		no_inbox = 0;		/* but, only once! */
-	    }
-
-	    trailing = tc;
+	/* associate the name "INBOX" with the collection */
+	if(ps_global->VAR_INBOX_PATH){
+	    f = new_folder(ps_global->VAR_INBOX_PATH);
+	    f->nickname = cpystr(ps_global->inbox_name);
+	    f->name_len = strlen(f->nickname);
 	}
+	else
+	  f = new_folder(ps_global->inbox_name);
+
+	folder_insert(-1, f, tc->folders);
     }
 
-    ps_global->context_list    = top;	/* init pointers */
-    ps_global->context_current = 
-      (ps_global->VAR_INCOMING_FOLDERS && ps_global->VAR_INCOMING_FOLDERS[0]) ?
-	top->next : top;
+    ps_global->context_list    = tc;	/* init pointers */
+    ps_global->context_current = tc;
 
 #ifdef	DEBUG
     if(debug > 7)
@@ -2060,15 +1778,13 @@ dump_contexts(fp)
     int i = 0;
     CONTEXT_S *c = ps_global->context_list;
 
-    while(fp && c != NULL){
+    if(fp && c != NULL){
 	fprintf(fp, "\n***** context %s\n", c->context);
 	for(i=0;c->label[i] != NULL;i++)
 	  fprintf(fp,"LABEL: %s\n", c->label[i]);
-	
+
 	for(i = 0; i < folder_total(c->folders); i++)
 	  fprintf(fp, "  %d) %s\n", i + 1, folder_entry(i,c->folders)->name);
-	
-	c = c->next;
     }
 }
 #endif
@@ -2245,9 +1961,6 @@ free_folders_in_context(cntxt)
 {
     int i, j, total = folder_total(cntxt->folders);
 
-    if(cntxt->use & CNTXT_INCMNG)	/* special case! */
-      return;
-
     j = 0;				/* current niknamed folder */
     for(i = 0; i < total; i++){
 	if(folder_entry(j, cntxt->folders)->nickname)
@@ -2261,22 +1974,6 @@ free_folders_in_context(cntxt)
 }
 
 
-
-/*
- * default_save_context - return the default context for saved messages
- */
-CONTEXT_S *
-default_save_context(cntxt)
-    CONTEXT_S *cntxt;
-{
-    while(cntxt)
-      if((cntxt->use) & CNTXT_SAVEDFLT)
-	return(cntxt);
-      else
-	cntxt = cntxt->next;
-
-    return(NULL);
-}
 
 
 
@@ -2483,33 +2180,6 @@ folder_index(name, flist)
     }
 
     return(-1);
-}
-
-
-
-/*
- * next_folder - given a current folder in a context, return the next in
- *               the list, or NULL if no more or there's a problem.
- */
-char *
-next_folder(next, current, cntxt)
-    char      *current, *next;
-    CONTEXT_S *cntxt;
-{
-    int         index;
-    FOLDER_S    *f;
-
-    find_folders_in_context(cntxt, NULL);
-    index = folder_index(current, cntxt->folders);
-    if((index < folder_total(cntxt) - 1) 
-	&& (f = folder_entry(index + 1, cntxt->folders)))
-      strcpy(next, f->nickname ? f->nickname : f->name);
-    else
-      *next = '\0';
-
-    free_folders_in_context(cntxt);
-
-    return((*next) ? next : NULL);
 }
 
 

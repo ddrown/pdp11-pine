@@ -253,7 +253,6 @@ main(argc, argv)
     ps_global->cur_folder[0]   = '\0';
     ps_global->context_list    = NULL;
     ps_global->context_current = NULL;
-    ps_global->context_index   = 0;
     ps_global->sort            = (long *)fs_get(2 * sizeof(long));
     ps_global->sort_allocated  = 2;
     ps_global->sort_order      = SortArrival;

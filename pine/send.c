@@ -563,8 +563,7 @@ run_composer_subprocess(anchor, to, cc, bcc, sub, fcc, bodyfile, flags,
     extern char version_buff[];
     char     handoff_path[MAXPATH + 1], result_path[MAXPATH + 1];
     FILE    *fp;
-    char   **fcclist;
-    int      n_fcc, i, pid, r, status, editor_result;
+    int      pid, r, status, editor_result;
     SigType (*isig)(), (*qsig)(), (*hsig)();
 
     strcpy(handoff_path, temp_nam(NULL, "pinecmph"));
@@ -584,13 +583,6 @@ run_composer_subprocess(anchor, to, cc, bcc, sub, fcc, bodyfile, flags,
     write_field(fp, "FCC", fcc);
     write_field(fp, "BODYFILE", bodyfile);
     { char flagbuf[16]; sprintf(flagbuf, "%u", flags); write_field(fp, "FLAGS", flagbuf); }
-
-    fcclist = fcc_candidate_list(ps_global, &n_fcc);
-    fprintf(fp, "FCCLIST %d\n", n_fcc);
-    for(i = 0; i < n_fcc; i++)
-      fprintf(fp, "%s\n", fcclist[i]);
-    if(fcclist)
-      fs_give((void **)&fcclist);
 
     fclose(fp);
 
@@ -1054,24 +1046,17 @@ call_mailer(fcc, envelope, body)
     if(fcc && *fcc){
 #define	FCC_SOURCE	CharStar
 
-	if((fcc_cntxt = default_save_context(ps_global->context_list)) == NULL)
-	  fcc_cntxt = ps_global->context_list;
+	fcc_cntxt = ps_global->context_list;
 
-	/* 
+	/*
 	 * check for fcc's existance...
 	 */
 	if(context_isambig(fcc)){
 	    int  ok = 1;
 	    find_folders_in_context(fcc_cntxt, fcc);
 	    if(folder_index(fcc, fcc_cntxt->folders) < 0){
-		if(ps_global->context_list->next){
-		    sprintf(tmp_20k_buf,
-		      "Folder \"%.20s\" in <%.30s> doesn't exist. Create",
-			    fcc, fcc_cntxt->label[0]);
-		}
-		else
-		  sprintf(tmp_20k_buf,
-			  "Folder \"%.40s\" doesn't exist.  Create", fcc);
+		sprintf(tmp_20k_buf,
+			"Folder \"%.40s\" doesn't exist.  Create", fcc);
 
 		if(want_to(tmp_20k_buf, 'y', 'n', NO_HELP, 0) != 'y'){
 		    q_status_message(0, 1, 3, "\007Fcc of message rejected");

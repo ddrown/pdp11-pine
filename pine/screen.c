@@ -567,19 +567,7 @@ set_titlebar(title, display_on_screen, style, current_message, current_pl,
     if(as.context_name)
       fs_give((void **)&as.context_name);
 
-    /*
-     * Handle setting up the context if appropriate.
-     */
-    if(ps_global->context_current && context_isambig(ps_global->cur_folder)
-       && ps_global->context_list->next && strucmp(as.folder_name, "inbox")){
-	/*
-	 * if there's more than one context and the current folder
-	 * is in it (ambiguous name), set the context name...
-	 */
-	as.context_name = cpystr(ps_global->context_current->label[0]);
-    }
-    else
-      as.context_name = cpystr("");
+    as.context_name = cpystr("");
 
     if(current_message < 0)
       current_message = 0;		/* BUG Don't like this */

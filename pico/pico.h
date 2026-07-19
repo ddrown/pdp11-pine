@@ -139,7 +139,6 @@ typedef struct pico_struct {
     void  (*clearcur)(void);		/* Pine's clear cursor position func */
     void  (*keybinit)(int);		/* Pine's keyboard initializer  */
     int   (*raw_io)(int);			/* Pine's Raw() */
-    int   (*folders)(char *);			/* Pine's folders_for_fcc */
     int   (*buildaddr)(char *, char *, char **);		/* Pine's build_address */
     long  (*newmail)(int *, int, int);			/* Pine's report_new_mail */
 #ifdef	DOS

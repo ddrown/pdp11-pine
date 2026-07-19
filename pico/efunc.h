@@ -69,7 +69,6 @@ extern	void  compose_helper(char *[], char *, int);
 extern	void  compose_showmsg(int);
 extern	long  compose_newmail(int *, int, int);
 extern	int   compose_buildaddr(char *, char *, char **);
-extern	int   compose_folders(char *);
 
 /* basic.c */
 extern	int gotobol(int, int);
@@ -283,7 +282,6 @@ extern	void  compose_helper();
 extern	void  compose_showmsg();
 extern	long  compose_newmail();
 extern	int   compose_buildaddr();
-extern	int   compose_folders();
 
 /* basic.c */
 extern	int gotobol();

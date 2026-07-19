@@ -53,15 +53,15 @@
  * Shrunk from the original 16384 after auditing every writer of `s`
  * (see TODO-pdp11-done.md): wkeyhelp() (pico/display.c) is now bounded
  * against sizeof(s) itself regardless of terminal width, so it no
- * longer drives this number. The one call site still assumed to need
- * more than a short/NLINE-bounded string is composer.c's Ctrl-T
- * Fcc-folder-picker, which round-trips through pine's
- * folders_for_fcc()/context_apply() (pine/folder.c, pine/context.c) --
- * those use local buffers up to MAXPATHLEN (4096 on this Linux dev
- * build) plus a MAILTMPLEN(1024)-sized context pattern. Sized to 8192
- * (2x MAXPATHLEN) to comfortably cover that combined worst case with
- * headroom, without having fully audited/fixed that path yet (folded
- * into the still-open general buffer-overflow-audit TODO item).
+ * longer drives this number. Sized to 8192 (2x MAXPATHLEN) to cover
+ * the largest remaining writer with headroom, without having fully
+ * audited/fixed that path yet (folded into the still-open general
+ * buffer-overflow-audit TODO item). NOTE: this used to also need to
+ * cover composer.c's Ctrl-T Fcc-folder-picker's round trip through
+ * pine's folders_for_fcc()/context_apply(), but that picker and the
+ * multi-collection support it depended on are gone now (see
+ * TODO-pdp11-done.md) -- SLEN may be a further shrink candidate, not
+ * yet re-audited for this.
  */
 #define	SLEN	8192			/* size of global scratch string s */
 

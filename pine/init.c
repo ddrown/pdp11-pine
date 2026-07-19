@@ -107,9 +107,7 @@ a bit more readable...
 
 #define	INBOX_TEXT	"inbox-path specifies the name/path/location of your INBOX.  Example:\n# inbox-path={carson.u.washington.edu}inbox (INBOX on a remote computer)\n# Normal Unix default is the local INBOX (usually /user/spool/mail/$USER)"
 
-#define	INCOMING_TEXT	"incoming-folders are those other than INBOX that receive new messages.\n# Folder syntax: optnl-label {optnl-imap-hostname}folder-path\n# Use only if you filter incoming email into multiple files or receive\n# email on several different machines.\n# Example:\n# incoming-folders=Consulting       {carson.u.washington.edu}filter/to-help,\n#                  Widget-Project   {carson.u.washington.edu}filter/to-widget,\n#                  Old-Student-Acct {imap.berkeley.edu}inbox"
-
-#define	FOLDER_TEXT	"folder-collections specifies a list of folder collections wherein saved\n# messages are stored. The first collection is the default for saves.\n# Collection syntax: optnl-label {optnl-imap-hostname}optnl-directory-path[]\n# Example:\n# folder-collections=Saved-Email    {foo.bar.edu}mail/[],\n#                    Widget-Project widget/[],  <-- Valid only in Unix Pine\n#                    Local-PC       mail\\[]     <-- Valid only in PC-Pine"
+#define	FOLDER_TEXT	"folder-collections specifies the single folder collection wherein saved\n# messages are stored (only the first value is used; this build supports\n# exactly one collection).\n# Collection syntax: optnl-label optnl-directory-path[]\n# Example:\n# folder-collections=Saved-Email    mail/[]"
 
 #define	DEFAULT_FCC_TEXT "default-fcc specifies where a copy of outgoing mail is saved.  If this is\n# not a path name, it will be in the the default collection for saves.\n# Unix Pine default is normally \"sent-mail\" in the default folder collection.\n# PC-Pine default is \"SENTMAIL\" (stored as SENTMAIL.MTX)\n# Example of remote case: {carson.u.washington.edu}sent-mail\n# To suppress saving of outgoing mail, set: default-fcc=\"\""
 
@@ -161,8 +159,8 @@ static struct variable variables[] = {
   "Smtp-server is disabled, outgoing mail is always sent via local sendmail"},
 {"inbox-path",                 0, 1, 0, 1, 1, 0, 
   INBOX_TEXT},
-{"incoming-folders",           0, 1, 0, 1, 1, 1,
-  INCOMING_TEXT},
+{"incoming-folders",           1, 1, 0, 1, 1, 1,
+  "Incoming-folders is disabled, multi-collection support has been removed"},
 {"folder-collections",         0, 1, 0, 1, 1, 1,
   FOLDER_TEXT},
 {"news-collections",           1, 1, 0, 1, 1, 1,
@@ -403,8 +401,6 @@ init_vars(ps)
 	lvalue[1] = NULL;
 	set_variable_list(V_FOLDER_SPEC, lvalue);
     }
-
-    set_current_val(vars, V_INCOMING_FOLDERS, TRUE);
 
     set_current_val(vars, V_SORT_KEY, TRUE);
     if(decode_sort(ps, VAR_SORT_KEY) == -1) {

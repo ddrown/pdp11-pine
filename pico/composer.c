@@ -621,18 +621,6 @@ int f, n;
 	    }
 	    break;
 
-	  case (CTRL|'T') :			/* address book. */
-	    if(ods.cur_e == FCCHDR){
-		if((*Pmaster->folders)(s))		/* pine call */
-		  strcpy(headents[FCCHDR].hd_text->text, s);
-	    }
-	    else{
-		(*term.t_beep)();
-		continue;
-	    }
-	    PaintBody(0);
-	    continue;
-
 	  case (CTRL|'G'):			/* HELP */
 	    ComposerHelp(ods.cur_e);		/* fall through... */
 
@@ -2259,19 +2247,7 @@ int row, col, n;
 void
 ShowPrompt()
 {
-    switch(ods.cur_e){
-      case TOHDR:
-      case CCHDR:
-      case BCCHDR:
-	wkeyhelp("GCR0KOXD00U0", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,UnDel Line");
-	break;
-      case FCCHDR:
-	wkeyhelp("GCR0KOXD00UT", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,UnDel Line,To Fldrs");
-	break;
-      default:
-	wkeyhelp("GCR0KOXD00U0", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,UnDel Line");
-	break;
-    }
+    wkeyhelp("GCR0KOXD00U0", "Get Help,Cancel,Rich Hdr,Del Line,Postpone,Send,Del Char,UnDel Line");
 }
 
 

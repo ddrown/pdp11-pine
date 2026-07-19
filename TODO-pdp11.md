@@ -96,11 +96,20 @@ cuts, but required regardless) is now fully done; see
       composer-subprocess handoff protocol (`pico/pico.h`,
       `pico/browse.c`, `pico/file.c`, plus the now-callerless
       `homeless()` helper in `pico/os_unix.c`).
-      **Multi-collection navigation** (`pine/mailcmd.c`):
-      `CNTXT_INCMNG`/`next_folder()` ^P/^N navigation scattered through
-      delete/tab-to-next-unread/folder-open. Not remote-specific, but
-      worth deciding whether multi-mailbox collections stay in scope at
-      all before cutting -- not dead today, still fully wired.
+      **Multi-collection navigation** -- DONE, see `TODO-pdp11-done.md`.
+      Cut project-wide (bigger than the `mailcmd.c` navigation the TODO
+      originally named): `CONTEXT_S` is no longer a linked list (its
+      `next` field is gone), `struct pine`'s `context_list`/
+      `context_current`/`context_write` now always point at the same
+      single collection, and every piece of UI built around switching
+      or cycling between multiple collections is gone (`folder.c`'s
+      Left/Right-arrow collection browsing and per-collection header
+      rows in the Folder List screen, `mailcmd.c`'s ^P/^N
+      collection-cycling in the SAVE and GOTO prompts, the
+      `incoming-folders` "TAB to next folder" feature and its
+      `CNTXT_INCMNG` flag, the composer's ^T Fcc-collection picker and
+      its `FCCLIST` handoff-file protocol field). `folder-collections`
+      in `.pinerc` now only honors its first value.
       **ISO-2022 escape-sequence handling** (`pine/mailview.c`):
       the escape table and `match_iso2022()` (868-890), used only in
       `format_scroll_text()`'s line-width accounting (1833-1845) to

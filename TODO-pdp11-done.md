@@ -3113,3 +3113,146 @@ already covered by the existing composer tests).
       code with no reachable callers left once the `-r` flag (the only
       way to ever set `restricted`) was gone, not a preprocessor-gated
       cut.
+
+### Multi-collection navigation -- cut project-wide, fifth of the "Deliberate-simplification candidates"
+- [x] The TODO flagged this item as needing a scope decision before
+      cutting ("worth deciding whether multi-mailbox collections stay
+      in scope at all"), so investigated the full reach of
+      `CONTEXT_S`/`context_list` before touching anything (an
+      `Explore` subagent surveyed it first, since the item was
+      expected to span more files than the ones the TODO originally
+      named). Findings: no Setup/Collection-List *editor* screen
+      exists in this codebase (the usual UW Pine one was already
+      stubbed out and deleted in an earlier pass -- collections are
+      configured only via `.pinerc`, never interactively); no address
+      book or per-collection signature file (both already removed/
+      never per-collection); so the true footprint was `context_list`
+      traversal/switching logic in `folder.c`, `mailcmd.c`, `send.c`,
+      `screen.c`, `pine.c`, `pine.h`, and `pico/compose_stub.c` --
+      roughly 190-210 lines out of ~14,600 across those files. Asked
+      the user two scope questions and got "cut fully" both times: (1)
+      cut the general `folder-collections` multi-collection machinery
+      entirely, keeping only single-collection folder-management code,
+      and (2) also cut `incoming-folders`/`CNTXT_INCMNG` (a *separate*
+      `.pinerc` variable/feature from `folder-collections`, for
+      TAB-cycling between several inbox-like mailbox files -- distinct
+      enough from "named collections A/B/C" that it needed its own
+      call, per the TODO's own note that it was "cleanly separable").
+      **`pine/pine.h`**: `CONTEXT_S.next` (the list linkage) removed
+      entirely -- a build now has exactly one `CONTEXT_S`, never a
+      list. Removed the now-meaningless `CNTXT_PRIME`/`CNTXT_SECOND`
+      flags (confirmed dead independent of this cut: set in
+      `init_folders()` but never read anywhere), `CNTXT_INCMNG` (the
+      incoming-folders marker), `CNTXT_SAVEDFLT` (redundant once
+      there's only one collection -- it was always "the" default),
+      and the `num` field (write-only, confirmed via grep: set but
+      never read, likely already vestigial). Removed `struct pine`'s
+      `context_last` (only ever existed to let `do_broach_folder()`
+      remember "the collection you were in before switching to
+      another one" -- meaningless with one collection) and
+      `context_index` (already fully dead before this cut: only ever
+      set to 0, never read anywhere, with `folder.c`'s own `/* BUG?
+      eliminate context_index from pine struct??? */` comment flagging
+      exactly this).
+      **`pine/folder.c`** (the largest and riskiest file, since it
+      both builds the collection and implements the Folder List
+      screen that browses it): `init_folders()` rewritten from a
+      ~160-line loop that built the synthetic "Incoming Message
+      Folders" pseudo-collection from `incoming-folders` plus chained
+      every `folder-collections` entry via `->next`, down to building
+      exactly one `CONTEXT_S` from `VAR_FOLDER_SPEC[0]` (extra
+      configured values are now silently ignored) and attaching INBOX
+      to it directly (the code's own old comment called this "the good
+      old pre-collection behavior" -- now simply *the* behavior).
+      `folder_lister()`/`folder_list_entry()`/`create_folder_display()`:
+      removed the Left/Right-arrow collection-boundary browsing, the
+      "Now in collection <label>" status message (confirmed dead even
+      before deletion -- `fs.context` never changes after the first
+      draw once there's nothing to switch to, so the message could
+      never fire), and the per-collection header-row-drawing branch in
+      `folder_list_entry()` (also confirmed dead first: it was gated
+      by a `label` counter that starts at 0 and is only ever set
+      nonzero from inside that same branch or the `(*context)->next`
+      branch -- both unreachable once there's one collection, so the
+      whole thing was already provably a no-op, not just redundant).
+      `search_folders()`: removed the cross-collection wrap-to-next-
+      context walk (now wraps within the single collection's folder
+      list only). `add_new_folder()`/`delete_folder()`: removed their
+      `CNTXT_INCMNG` "can't add/delete in the incoming collection"
+      guards. `free_folders_in_context()`: removed its `CNTXT_INCMNG`
+      early-return special case. `default_save_context()` and
+      `next_folder()` (the whole point of the "next folder" TAB
+      feature) deleted outright -- both fully replaced by direct
+      `ps_global->context_list` references at their call sites, since
+      with one collection there's nothing left for either to compute.
+      **`pine/mailcmd.c`**: removed the three `CNTXT_INCMNG`-gated
+      "Press TAB for next folder" / "View next folder" prompts (^N at
+      end of folder, delete-last-message, TAB-skip-to-next-unread);
+      the ^P/^N collection-cycling key handlers and their "only show
+      if >1 collection" gates in both `save_msg()`'s SAVE prompt and
+      `broach_folder()`'s GOTO prompt (each had its own independently-
+      implemented cycling loop -- both removed the same way); the
+      `context_last` bookkeeping in `do_broach_folder()`; and the
+      dead `(new_context->use & CNTXT_INCMNG) && ...` conjunct in the
+      first-unread-message-on-open logic (folded down to just
+      `open_inbox`, its other half).
+      **`pine/send.c`**: `call_mailer()`'s Fcc handling simplified to
+      use `ps_global->context_list` directly (was
+      `default_save_context()` with a NULL fallback to the same
+      thing); dropped the ">1 collection" message-wording gate for the
+      "Folder doesn't exist, create?" prompt. Removed
+      `fcc_candidate_list()`'s caller in `run_composer_subprocess()`
+      and the `FCCLIST <n>` handoff-file block it wrote (see the
+      composer side below).
+      **`pine/screen.c`**: `set_titlebar()`'s ">1 collection" gate for
+      showing the collection name removed -- the titlebar's
+      `as.context_name` is now always `""`.
+      **Composer side** (`pico/`): the ^T Fcc-collection picker
+      (`pico/compose_stub.c`'s `compose_folders()`, added by the
+      earlier "composer as a separate process" work specifically to
+      let the subprocess offer a numbered menu of collection
+      nicknames pine precomputed) is gone along with the whole
+      `FCCLIST` handoff-file field and `fcc_list`/`fcc_count` statics
+      it parsed -- with exactly one collection it degenerated to a
+      useless 1-item menu. Removed the `PICO.folders` callback field
+      (`pico/pico.h`) and its wiring (`pico/main.c`), the `CTRL|'T'`
+      case in `pico/composer.c`'s composer command switch (falls
+      through to the default "Unknown command: ^%c" beep now -- the
+      Fcc field is still directly editable as plain text, it just has
+      no picker), and `ShowPrompt()`'s `FCCHDR`-specific key-help
+      string (folded into the same one every other header field
+      shows, since there's no longer a `^T` to advertise). Updated the
+      stale rationale comment on `pico/edef.h`'s `SLEN` (the global
+      scratch-buffer size), which cited this exact ^T round-trip as
+      its worst-case-size justification -- noted `SLEN` may now be a
+      further shrink candidate, folded into the still-open general
+      buffer-audit TODO item rather than acted on here (buffer
+      right-sizing needs its own dedicated verification pass per
+      CLAUDE.md, not a side effect of a feature cut).
+      **`pine/init.c`**: `incoming-folders` converted to a disabled
+      stub variable (`is_obsolete=1`, matching the established pattern
+      for other removed features like `news-collections`/
+      `address-book`), and its `set_current_val()` call at startup
+      removed (also matching precedent -- none of the other disabled
+      variables have one either). `folder-collections`' help text
+      rewritten to document the single-collection reality instead of
+      showing a 2-collection example.
+      **Test suite**: deleted
+      `test/cases/test_compose_fcc_picker.py` -- it was a regression
+      test for the exact ^T Fcc-picker round-trip this cut removes,
+      written for behavior that no longer exists rather than a bug
+      that could recur.
+      Verified: `./build clean && ./build lnx` clean; warning count
+      177 (was 178 before this cut); full smoketest suite 24/24 (25
+      minus the deleted picker test). Manually drove the Folder List
+      screen (`L`), the GOTO folder prompt (`G`, confirmed no stray
+      Prev/Next Collection keys), and the SAVE prompt (`s`, confirmed
+      it now shows only `^T To Fldrs` with no collection-cycling keys)
+      through a pty, since several of the touched code paths (the
+      arrow-key collection browsing, the SAVE/GOTO cycling keys) had
+      no existing smoketest coverage. Size delta via `git stash`-based
+      before/after clean rebuild: `bin/pine`'s `text` shrank 352767 ->
+      343999 (-8768 bytes, the largest single cut of this
+      simplification pass so far), `data`/`bss` unchanged; `bin/pico`'s
+      `text` shrank 111366 -> 110098 (-1268 bytes), `data` shrank 6372
+      -> 6364 (-8 bytes), `bss` unchanged.
