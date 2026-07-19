@@ -1529,32 +1529,6 @@ sorted_msgno(pine_state, num)
 
 
 /*----------------------------------------------------------------------
-    Count the unread message on a stream
-
-  Args: stream -- The stream/folder to look at message status
-
- Result: Message number of first unread message
-  ----------------------------------------------------------------------*/
-count_unseen(stream)
-     MAILSTREAM *stream;
-{
-    MESSAGECACHE *mc;
-    int           unseen_count, i;
-
-    FETCH_ALL_FLAGS(stream);
-
-    unseen_count = 0;
-    for(i = 1 ; i <= stream->nmsgs; i++) {
-	mc = mail_elt(stream, (long)(ps_global->sort[i]));
-        if(!mc->seen)
-          unseen_count++;
-    }
-    return(unseen_count);
-}
-
-
-
-/*----------------------------------------------------------------------
   See if stream can be used for a mailbox name (courtesy of Mark Crispin)
 
    Accepts: mailbox name

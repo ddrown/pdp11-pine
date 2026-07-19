@@ -1641,40 +1641,6 @@ init_mail_dir(dir)
 }
 
 
-/*----------------------------------------------------------------------
-
-  ----*/
-init_driver(ps, driver_list)
-    struct pine *ps;
-    DRIVER      *driver_list;
-{
-#ifdef FIRST_FOLDER_TRY
-    DRIVER *d;
-
-    if(strucmp(ps->VAR_LOCAL_MAIL_FORMAT, "none") == 0) {
-        ps->local_proto = NULL;
-        return;
-    }
-
-    for(d = driver_list; d->next != NULL; d = d->next) {
-        if(strucmp(d->name, ps->VAR_LOCAL_MAIL_FORMAT) == 0)
-          break;
-    }
-    
-    if(d->next == NULL) {
-        fprintf(stderr, "Unknown local mail format/driver: \"%s\"\n",
-                ps->VAR_LOCAL_MAIL_FORMAT);
-        exit(1);
-    }
-
-    ps->local_proto = (MAILSTREAM *)fs_get(sizeof(MAILSTREAM));
-    ps->local_proto->mailbox = NULL;
-    ps->local_proto->dtb = d;
-#endif
-}
-    
-
-    
 #ifdef DEBUG
 /*----------------------------------------------------------------------
      Initialize debugging - open the debug log file

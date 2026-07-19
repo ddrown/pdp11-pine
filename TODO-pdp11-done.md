@@ -3342,3 +3342,33 @@ already covered by the existing composer tests).
   343999 -> 343415 (-584 bytes), `data` 13416 -> 13224 (-192 bytes),
   `bss` 15128 -> 15096 (-32 bytes), total -808 bytes; `bin/pico`
   unchanged (the cut code was all pine-side).
+
+### `init_driver()` and `count_unseen()` -- first two gcov-flagged dead-code candidates, confirmed dead and removed
+
+- **What they were**: the first two items pulled from the
+  "gcov-flagged dead-code candidates" list added to `TODO-pdp11.md`
+  after the `--coverage` audit.
+  - `pine/init.c`'s `init_driver(ps, driver_list)`: its entire body was
+    wrapped in `#ifdef FIRST_FOLDER_TRY`, a macro never defined
+    anywhere in the tree (no `-D` build flag, no `#define`) -- so even
+    on the rare chance something did call it, it would compile down to
+    an empty function. Grep found exactly one match tree-wide (its own
+    definition line) for both the parenthesized-call pattern and a
+    bare-word pattern, so there's no function-pointer/callback-style
+    reference hiding either (the pattern that produced 8 false
+    positives in the original audit).
+  - `pine/pine.c`'s `count_unseen(stream)`: a normal, fully-implemented
+    function (counts unseen messages via `FETCH_ALL_FLAGS` +
+    `mail_elt()`), not gated behind any `#ifdef`. Also exactly one
+    tree-wide match (its own definition) under both grep patterns, and
+    no header prototype anywhere.
+- **Verification**: `./build lnx` confirmed clean before touching
+  anything. Deleted both function bodies. `./build clean && ./build
+  lnx` clean afterward, 177 warnings (unchanged). Full smoketest suite
+  25/25 (unchanged -- neither function was reachable from any code
+  path, so there's no observable behavior difference to lock in with a
+  new regression test, unlike the fixed-size-buffer-overflow class of
+  cuts).
+- **Size delta**: `bin/pine`'s `text` 343415 -> 343015 (-400 bytes),
+  `data`/`bss` unchanged; `bin/pico` unchanged (both cut functions were
+  pine-side).

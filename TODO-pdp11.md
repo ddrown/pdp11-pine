@@ -46,7 +46,8 @@ DONE elsewhere or referenced in passing below.
 ### gcov-flagged dead-code candidates in `pine/*.c` (no call site found anywhere)
 - [ ] Compiled from a `python3 test/run_smoketests.py --coverage` run
       cross-referenced with `ctags`/`grep` across `pine/`+`pico/`: 19
-      functions that gcov shows as 0% executed *and* have no real
+      functions originally flagged this way (17 remaining below, 2
+      done) that gcov shows as 0% executed *and* have no real
       call site anywhere in the tree, direct or by bare name/function-
       pointer (the smoketest suite's 25 cases don't come close to
       covering every command, so a much larger "zero-hit but has a
@@ -68,8 +69,8 @@ DONE elsewhere or referenced in passing below.
       assignment/`signal()`, not called directly, so grepping for
       `name(` alone missed them).
       `pine/init.c:1647 init_driver` and `pine/pine.c:1538 count_unseen`
-      have no reference of any kind, not even a header prototype --
-      best starting point.
+      -- DONE, see `TODO-pdp11-done.md`; both confirmed dead (no
+      reference of any kind, not even a header prototype) and removed.
       `pine/context.c`: `mm_bboard` (59), `context_find` (287),
       `context_subscribe` (495), `context_unsubscribe` (512) -- possibly
       leftover bboard/newsgroup-subscribe support from before news was
