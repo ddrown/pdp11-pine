@@ -3439,3 +3439,35 @@ already covered by the existing composer tests).
 - **Size delta**: `bin/pine`'s `text` 342383 -> 341855 (-528 bytes),
   `data`/`bss` unchanged; `bin/pico` unchanged (filter.c is pine-side
   only).
+
+### Seven dead `pine/strings.c` functions -- confirmed dead and removed
+
+- **What they were**: `sqzspaces()` (squeeze blanks out of a string),
+  `strcat_nocr()` (concatenate skipping `\r`), `crlf2lf()`/`lf2crlf()`
+  (CRLF<->LF conversion), `month_num()` (parse a `mmm-yyyy` string back
+  to a month number -- the inverse of `month_abbrev()`, which *is*
+  used), `enth_string()` (format a number as "1st"/"2nd"/"3rd"/"105th"),
+  and `rfc822date_to_ctime()` (reformat an RFC822 date string). All
+  seven had zero references anywhere in the tree beyond their own
+  definition, header prototype, and (for most of them) a mention in
+  `strings.c`'s own stale top-of-file function manifest comment --
+  confirmed via bare-word grep across `pine/`+`pico/`+`c-client/`
+  (the last one specifically because of the `mm_bboard` false-positive
+  lesson from the context.c cut). `month_num`'s extra grep hit was a
+  same-named but unrelated local parameter in the neighboring
+  `month_abbrev()`, not a call.
+- **What changed**: deleted all seven function bodies from
+  `pine/strings.c` along with their doc comments (cleaning up one
+  orphaned half-comment left over from deleting `strcat_nocr` --
+  its comment header and `sstrcpy()`'s were back-to-back and had been
+  split across the deletion boundary), removed their entries from the
+  file's own top-of-file function manifest, and removed both the ANSI
+  and K&R prototype declarations from `pine/pine.h`.
+- **Verified**: `./build lnx` clean before touching anything. `./build
+  clean && ./build lnx` clean afterward, 177 warnings (unchanged).
+  Full smoketest suite 25/25 (unchanged -- no observable behavior
+  difference, none of the seven were reachable from any code path).
+- **Size delta**: `bin/pine`'s `text` 341855 -> 340359 (-1496 bytes),
+  `bss` 15096 -> 15032 (-64 bytes, from the two removed static return
+  buffers `enth[10]`/`dout[30]`), `data` unchanged; `bin/pico`
+  unchanged (strings.c is pine-side only).

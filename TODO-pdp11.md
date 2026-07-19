@@ -46,7 +46,7 @@ DONE elsewhere or referenced in passing below.
 ### gcov-flagged dead-code candidates in `pine/*.c` (no call site found anywhere)
 - [ ] Compiled from a `python3 test/run_smoketests.py --coverage` run
       cross-referenced with `ctags`/`grep` across `pine/`+`pico/`: 19
-      functions originally flagged this way (12 remaining below, 7
+      functions originally flagged this way (5 remaining below, 14
       done) that gcov shows as 0% executed *and* have no real
       call site anywhere in the tree, direct or by bare name/function-
       pointer (the smoketest suite's 25 cases don't come close to
@@ -91,7 +91,10 @@ DONE elsewhere or referenced in passing below.
       array, unlike every other real filter here) and removed.
       `pine/strings.c`: `sqzspaces` (134), `strcat_nocr` (342),
       `crlf2lf` (385), `month_num` (440), `enth_string` (959),
-      `rfc822date_to_ctime` (1015), `lf2crlf` (1037).
+      `rfc822date_to_ctime` (1015), `lf2crlf` (1037) -- DONE, see
+      `TODO-pdp11-done.md`; all seven confirmed dead (no reference
+      anywhere beyond their own definition/prototype/stale doc-comment
+      manifest entry) and removed.
       `pine/ttyout.c`: `InsertChar` (754), `DeleteChar` (781),
       `PutLine3` (1146), `CleartoEOS` (1255).
 

@@ -1017,7 +1017,6 @@ int radio_buttons(char *, int, int, char *, char **, int, int, HelpType, int);
 
 /*-- strings.c --*/
 char *rplstr(char *, int, char *);
-void sqzspaces(char *);
 void removing_trailing_white_space(char *);
 void removing_leading_white_space(char *);
 int strucmp(char *, char *);
@@ -1025,12 +1024,9 @@ int struncmp(char *, char *, int);
 char *srchstr(char *, char *);
 char *strindex(char *, int);
 char *strrindex(char *, int);
-char *strcat_nocr(char *, char *);
 void sstrcpy(char **, char *);
-void crlf2lf(char *);
 char *month_abbrev(int);
 char *week_abbrev(int);
-int   month_num(char *);
 void  parse_date(char *, struct date *);
 int   compare_dated(struct date *, struct date *);
 void  convert_to_gmt(struct date *);
@@ -1038,11 +1034,8 @@ char *pretty_command(int);
 char *repeat_char(int, int);
 char *comatose(long);
 char *byte_string(long);
-char *enth_string(int);
 char *long2string(long);
 char *int2string(int);
-char *rfc822date_to_ctime(char *);
-char *lf2crlf(char *);
 
 /*-- ttyin.c--*/
 int read_char(int);
@@ -1324,7 +1317,6 @@ int radio_buttons();
 
 /*-- strings.c --*/
 char *rplstr();
-void sqzspaces();
 void removing_trailing_white_space();
 void removing_leading_white_space();
 int strucmp();
@@ -1332,21 +1324,15 @@ int struncmp();
 char *srchstr();
 char *strindex();
 char *strrindex();
-char *strcat_nocr();
 void sstrcpy();
-void crlf2lf();
 char *month_abbrev();
 char *week_abbrev();
-int   month_num();
 char *pretty_command();
 char *repeat_char();
 char *comatose();
 char *byte_string();
-char *enth_string();
 char *long2string();
 char *int2string();
-char *rfc822date_to_ctime();
-char *lf2crlf();
 
 /*-- ttyin.c--*/
 int read_char();

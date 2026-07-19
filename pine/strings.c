@@ -54,25 +54,20 @@ static char rcsid[] = "$Id: strings.c,v 4.6 1993/07/31 00:48:18 hubert Exp $";
     strings.c
     Misc extra and useful string functions
       - rplstr         replace a substring with another string
-      - sqzspaces      Squeeze out the extra blanks in a string
-      - remove_trailing_white_space 
-      - remove_leading_white_space 
+      - remove_trailing_white_space
+      - remove_leading_white_space
       - strucmp        A case insensitive strcmp
       - struncmp       A case insensitve strncmp
       - srchstr        Search a string for a sub string
       - strindex       Replacement for strchr/index
       - strrindex      Replacement for strrchr/rindex
-      - strcat_nocr    Concatenate one string to another i
       - sstrcpy        Copy one string onto another, advancing dest'n pointer
-      - crlf2lf        Convert carriage return line feeds to line feeds
       - month_abbrev   Return three letter abbreviations for months
-      - month_num      Calculate month number from month/year string
       - cannon_date    Formalize format of a some what formatted date
       - pretty_command Return nice string describing character
       - blanks         Returns a string n blanks long
       - comatose       Format number with nice commas
       - byte_string    Format number of bytes with Kb, Mb, Gb or bytes
-      - enth-string    Format number i.e. 1: 1st, 983: 983rd....
 
  ====*/
 
@@ -128,24 +123,6 @@ int dl;
 
 
 /*----------------------------------------------------------------------
-     Squeeze out blanks 
-  ----------------------------------------------------------------------*/
-void
-sqzspaces(string)
-     char *string;
-{
-    register char *a, *b;
-
-    for(a = string, b = string; *a ; *b++ = *a++) {
-        while(*a && isspace(*a))
-          a++;
-    }
-    *b = '\0';
-}
-
-
-
-/*----------------------------------------------------------------------  
        Remove trailing white space from a string in place
   
   Args: string -- string to remove space from
@@ -331,34 +308,6 @@ strrindex(buffer, ch)
 
 
 /*----------------------------------------------------------------------
-       Concatenate strings, not copying carriage returns
-
-  Input: s1 -- string to add on to the end of
-         s2 -- string to add 
-
-  Result: strings are concatenated and resulting string is returned
-  -----*/
-char *           
-strcat_nocr(s1, s2)
-     char *s1, *s2;
-{
-    char *start = s1;
-    /*-- get to end of s1 --*/
-    while(*s1) s1++;
-
-    while(*s2)
-      if(*s2 != '\r')
-	*s1++ = *s2++;
-      else
-	s2++;
-
-    *s1 = *s2;
-
-    return(start);
-}
-
-
-/*----------------------------------------------------------------------
   copy the source string onto the destination string returning with
   the destination string pointer at the end of the destination text
 
@@ -375,26 +324,6 @@ sstrcpy(d, s)
 }
 
 
-/*----------------------------------------------------------------------
-  Turn a string with carriage return/line feeds in it into one with out.
-  It's done in place because the string will shrink
-
-  Args: string to operate on
-  ----*/     
-void
-crlf2lf(string)
-     char *string;
-{
-    register char *p,*q;
-
-    for(p = string, q = string; *p ; *q++ = *p++)
-	if(*p == '\r' && *(p+1) == '\n')
-	  p++;
-    *q = '\0';
-}
-
-
-    
 char *xdays[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", NULL};
 
 char *
@@ -427,36 +356,6 @@ days_in_month(month, year)
 }
     
 
-
-/*----------------------------------------------------------------------
-      Return month number of month named in string
-  
-   Args: s -- string with 3 letter month abbreviation of form mmm-yyyy
- 
- Result: Returns month number with January, year 1900, 2000... being 0;
-         -1 if no month/year is matched
- ----*/
-int
-month_num(s)
-     char *s;
-{
-    int month, year;
-    int i;
-
-    for(i = 0; i < 12; i++){
-        if(struncmp(month_abbrev(i+1), s, 3) == 0)
-          break;
-    }
-    if(i == 12)
-      return(-1);
-
-    year = atoi(s + 4);
-    if(year == 0)
-      return(-1);
-
-    month = (year < 100 ? year + 1900 : year)  * 12 + i;
-    return(month);
-}
 
 /*----------------------------------------------------------------------
   parse_date
@@ -950,48 +849,6 @@ byte_string(bytes)
 
 
 
-/*----------------------------------------------------------------------
-    Print a string corresponding to the number given:
-      1st, 2nd, 3rd, 105th, 92342nd....
- ----*/
-
-char *
-enth_string(i)
-     int i;
-{
-    static char enth[10];
-
-    switch (i % 10) {
-        
-      case 1:
-        if( (i % 100 ) == 11)
-          sprintf(enth,"%dth", i);
-        else
-          sprintf(enth,"%dst", i);
-        break;
-
-      case 2:
-        if ((i % 100) == 12)
-          sprintf(enth, "%dth",i);
-        else
-          sprintf(enth, "%dnd",i);
-        break;
-
-      case 3:
-        if(( i % 100) == 13)
-          sprintf(enth, "%dth",i);
-        else
-          sprintf(enth, "%drd",i);
-        break;
-
-      default:
-        sprintf(enth,"%dth",i);
-        break;
-    }
-    return(enth);
-}
-
-
 char *
 long2string(l)
      long l;
@@ -1011,54 +868,3 @@ int2string(i)
 }
 
 
-char *
-rfc822date_to_ctime(din)
-     char *din;
-{
-    static char dout[30];
-
-    if(din == NULL)
-      return(NULL);
-
-    sprintf (dout," Ukn %.3s %.2s %.8s 19%.2s",din+3,din,din+10,din+9);
-
-    return(dout);
-}
-
-
-
-/*----------------------------------------------------------------------
-    Convert the \n's in buffer to \r\n's. The returns a pointer to a 
-newly malloced buffer, since the result will be larger than what is
-passed in.
- ----*/
-
-char *
-lf2crlf(orig_string)
-     char *orig_string;
-{
-    register char *p, *q, *new_buf;
-    int            lfs;
-
-    /*--- First count up the line feeds ----*/
-    for(p = orig_string, lfs = 0; *p; p++)
-      if(*p == '\n')
-        lfs++;
-
-    new_buf = (char *)fs_get(p - orig_string + lfs + 5);
-
-    for(q = new_buf, p = orig_string; *p; p++) {
-        if(*p == '\n') {
-            *q++ = '\r';
-            *q++ = '\n';
-        } else {
-            *q++ = *p;
-        }
-    }
-    *q = *p; /* Copy the terminating NULL */
-    return(new_buf);
-}
-        
-    
-
-    
