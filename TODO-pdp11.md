@@ -91,3 +91,76 @@ DONE elsewhere or referenced in passing below.
       `pine/ttyout.c`: `InsertChar` (754), `DeleteChar` (781),
       `PutLine3` (1146), `CleartoEOS` (1255).
 
+### Fold `c-client/dummy.c` into `bezerk.c`, drop the rest
+
+- [ ] Investigated while answering "is dummy.c's fallback logic needed,
+      don't we just need mbox+bezerk?": `mbox.c` isn't even in the
+      picture (see the separate TODO item below) -- the two drivers
+      pine actually `mail_link()`s are `bezerkdriver` and `dummydriver`
+      (`pine/pine.c:345-346`), and `bezerk.c` is *not* self-sufficient
+      without `dummy.c`:
+      - `bezerk_find`/`bezerk_find_all` literally call
+        `dummy_find`/`dummy_find_all` -- the only implementation of the
+        directory-scanning wildcard folder search lives in `dummy.c`,
+        used by pine's Folder List / Find Folder screens.
+      - `bezerk_valid()` requires the target file to already exist
+        (`stat()` must succeed). Any mailbox that doesn't exist yet
+        (new Save-folder, new Fcc target, etc.) falls through to
+        `dummy_valid()` (matches anything), whose job is to fail with
+        the *correct* message -- including the `[TRYCREATE] Must
+        create mailbox before append` hint c-client's create-on-append
+        convention depends on (`dummy_open`/`dummy_append`) -- rather
+        than crashing or misbehaving.
+      Everything else in `dummy.c` is provably unreachable rather than
+      load-bearing: `dummy_open()` unconditionally `return NIL`s, so no
+      stream can ever actually be opened with `dtb == &dummydriver`,
+      which means the ~14 message-manipulation driver-table slots
+      (`fetchfast`/`fetchflags`/`fetchstructure`/`fetchheader`/
+      `fetchtext`/`fetchbody`/`setflag`/`clearflag`/`search`/`ping`/
+      `check`/`expunge`/`copy`/`move`/`gc`) can never be invoked --
+      each is just a `fatal("Impossible dummy_X")` one-liner kept only
+      to satisfy the `DRIVER` struct's fixed layout. `subscribe`/
+      `unsubscribe`/`subscribe_bboard`/`unsubscribe_bboard`/`create`/
+      `delete` are six more one-liners (`return NIL`) sharing the
+      identical signature `long(MAILSTREAM*, char*)`.
+      **Proposed shape**: move the load-bearing pieces
+      (`dummy_find`/`dummy_find_bboards`/`dummy_find_all`/
+      `dummy_find_all_bboards`/`dummy_file`/the `dummy_open`+
+      `dummy_append` TRYCREATE-hint error paths) directly into
+      `bezerk.c` as `bezerk_`-prefixed statics (or just call them
+      inline where `bezerk_find`/etc. currently forward to `dummy_*`),
+      stop `mail_link`-ing a separate `dummydriver` entirely, and
+      delete `dummy.c`/`dummy.h` and the now-orphaned `DRIVER
+      dummydriver` struct along with the ~20 unreachable/duplicate
+      stub functions. Also check `bezerk_find_bboards`/
+      `bezerk_find_all_bboards`/`bezerk_subscribe_bboard`/
+      `bezerk_unsubscribe_bboard` -- these currently just forward to
+      the equivalent `dummy_*_bboard` calls, which are themselves
+      already known-dead now that pine's own bboard/news UI is gone
+      (see `TODO-pdp11-done.md`'s NNTP/news-strip item) -- likely
+      candidates to drop rather than migrate.
+      **Needs its own trace-before-delete pass** per CLAUDE.md's
+      verification discipline: confirm nothing else in `c-client/`
+      references `dummydriver`/`dummy_*` by name (`maildrivers` linked
+      list traversal, etc.) before deleting, not just pine's own
+      `mail_link()` call sites.
+
+### Is `c-client/mbox.c` dead weight in the build?
+
+- [ ] `c-client/makefile.lnx` compiles `mbox.o` into `c-client.a`, but
+      pine never `mail_link()`s `mboxdriver` -- only `bezerkdriver` and
+      `dummydriver` are linked (`pine/pine.c:345-346`), and grepping
+      `pine/*.c` for `mboxdriver`/`mbox_valid` turns up nothing outside
+      `mbox.c` itself. Since `c-client.a` is a static archive, an
+      unreferenced member normally isn't pulled into the final link --
+      but worth confirming with `nm bin/pine | grep mbox_` (or a
+      before/after `size` comparison from actually removing `mbox.o`
+      from the archive) whether it's really contributing zero bytes
+      today, or whether something incidental (e.g. a stray direct
+      reference, or the object still getting pulled in some other way)
+      is dragging it in anyway. If it's already contributing nothing,
+      this is a build-file cleanup (drop `mbox.o` from
+      `c-client/makefile.lnx`) rather than a code cut; if it's
+      surprisingly present in the binary, that's a real, unexpected
+      win to chase down.
+
