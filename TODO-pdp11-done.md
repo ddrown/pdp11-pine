@@ -3256,3 +3256,89 @@ already covered by the existing composer tests).
       simplification pass so far), `data`/`bss` unchanged; `bin/pico`'s
       `text` shrank 111366 -> 110098 (-1268 bytes), `data` shrank 6372
       -> 6364 (-8 bytes), `bss` unchanged.
+
+### ISO-2022 escape-sequence handling -- cut, sixth of the "Deliberate-simplification candidates"
+
+- **What it was**: `pine/mailview.c` carried a table of X11R5-derived
+  ISO-2022 charset-shift escape sequences (`iso2022_escapes[]`) and a
+  `match_iso2022()` matcher, used by `format_scroll_text()`'s
+  line-width accounting to avoid counting an ISO-2022 escape
+  sequence's bytes toward the displayed line width -- a residual i18n
+  accommodation with no purpose under this build's US-ASCII-only
+  mandate (the TODO's original framing, ~25 lines, one file).
+- **Scope grew once the shared symbol was traced** (same pattern as
+  the multi-collection item): `match_iso2022()` is a plain global
+  function (no header prototype, called via implicit K&R linkage), so
+  it had two more call sites the TODO note didn't mention:
+  - `pine/ttyout.c`'s `PutLine0n8b()` called it directly to compute an
+    escape length, passed through to `Writechar(ch, esc_len)`'s
+    caller-supplied-length parameter -- the *only* caller across the
+    whole tree that ever passed a nonzero second argument; every other
+    of the ~40 `Writechar()` call sites always passed `0`. `Writechar`
+    threaded that length through a static `esc_len` counter used
+    purely to suppress column-advance for however many subsequent
+    characters `new_esc_len` said to skip.
+  - `pine/filter.c`'s `gf_iso_filter()`/`gf_iso_filter_opt()`
+    (`gf_iso_match` static), an ISO-2022-stripping stream filter --
+    already dead code, wrapped in `#ifdef notdef /* not using this
+    anymore */` since before this project forked pine, so it never
+    compiled either way, but it's the same feature and referenced the
+    function being deleted.
+  - A real latent bug found in the process: `PutLine0n8b()`'s `len`
+    local was set only inside the `*line == '\033'` branch, then
+    reused **uninitialized** in the `else` branch for every other
+    character on a line that never happened to start with an escape --
+    i.e. `Writechar(c, len)` for ordinary text could pass an
+    indeterminate stack value as an escape-skip length. Removing the
+    ISO-2022 special case removes the bug along with it (both branches
+    now just call the simplified single-argument `Writechar(c)`).
+- **What changed**:
+  - `pine/mailview.c`: deleted `iso2022_escapes[]` and
+    `match_iso2022()`. `format_scroll_text()`'s `*p == '\033'` case in
+    the line-wrap loop no longer branches on a (now nonexistent) match
+    result -- it always takes what used to be the "plain escape"
+    fallback: count the escape byte as one column and move on.
+  - `pine/ttyout.c`: `Writechar()` loses its `new_esc_len` parameter
+    and the `esc_len` static entirely; every call site across the tree
+    (`mailbox.c`, `imap.c`, `screen.c`, `mailcmd.c`, `pine.c`,
+    `ttyin.c`, `status.c`, `filter.c`, `ttyout.c` itself) updated to
+    the one-argument form. Converted `Writechar`'s definition to ANSI
+    style while touching it (per CLAUDE.md's opportunistic-conversion
+    guidance). `PutLine0n8b()` drops its `\033`-special-case branch and
+    the now-pointless `len` local (fixing the uninitialized-read bug
+    above as a side effect); a raw ESC byte in displayed text now
+    falls through to the same "unprintable control char -> `?`"
+    handling every other control character already got, instead of
+    being passed through to the terminal untouched.
+  - `pine/filter.c`: deleted the entire dead `#ifdef notdef` block
+    (`gf_iso_filter()`/`gf_iso_filter_opt()`/`gf_iso_match`), and fixed
+    the one live `Writechar()` call site it neighbored
+    (`gf_busy_filter`'s spinner) to the new one-argument form.
+  - `pine/pine.h`: `Writechar()`'s ANSI prototype drops its second
+    `int` parameter; `gf_iso_filter()`/`gf_iso_filter_opt()`'s
+    prototypes (both ANSI and K&R blocks) removed.
+  - Left alone: `pine/pine.def`'s `_match_iso2022`/`_gf_iso_filter`/
+    `_gf_iso_filter_opt` export entries -- that file only feeds the
+    unmaintained DOS/Windows `makefile.msc` target, out of scope per
+    CLAUDE.md (same precedent as the stray `_default_save_context`
+    entry noted in the multi-collection write-up above).
+- **Observable behavior change** (accepted, not a bug): a raw ESC byte
+  appearing in a displayed message body is no longer treated as
+  possibly-zero-width -- it renders as a literal `?` and takes one
+  column, exactly like any other control character. Under the
+  US-ASCII mandate this can only happen from a stray/malformed byte in
+  a message body, not from any charset pine still supports.
+- **New regression test**:
+  `test/cases/test_message_view_iso2022_escape.py` -- views a message
+  whose body embeds a raw `\033(B` sequence between two marker words
+  and confirms the escape renders as `?` (locking in the new
+  behavior) with no crash/garbling of the surrounding text.
+- **Verified**: `./build clean && ./build lnx` clean, 177 warnings
+  (unchanged from before this cut -- `Writechar`'s K&R-style
+  definition warning was already counted; converting it to ANSI style
+  didn't change the total since it's still one function). Full
+  smoketest suite 25/25 (24 existing + the new test). Size delta via
+  `git stash`-based before/after clean rebuild: `bin/pine`'s `text`
+  343999 -> 343415 (-584 bytes), `data` 13416 -> 13224 (-192 bytes),
+  `bss` 15128 -> 15096 (-32 bytes), total -808 bytes; `bin/pico`
+  unchanged (the cut code was all pine-side).

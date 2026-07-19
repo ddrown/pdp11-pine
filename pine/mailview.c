@@ -825,35 +825,6 @@ match_charset(text_char_set)
 
 
 
- 
-/*------------------------------------------------------------------
-   This list of iso 2022 escapes is taken from the X11R5 source with only
-  a remote understanding of what this all means
-  ----*/
-static char *iso2022_escapes[] = {
-    "\033(B",   "\033(J",   "\033)I",   "\033-A",   "\033-B",
-    "\033-C",   "\033-D",   "\033-F",   "\033-G",   "\033-H",
-    "\033-L",   "\033-M",   "\033-$(A", "\033$)A",  "\033$(B",
-    "\033$)B",  "\033$(C",  "\033$)C",  "\033$(D",  "\033$)D",
-    "\033$B",   "\033$@",
-    NULL};
-
-match_iso2022(esc_seq)
-     char *esc_seq;
-{
-    char **p;
-
-    for(p = iso2022_escapes;
-        *p != NULL && struncmp(esc_seq, *p, strlen(*p));
-/* BUG: make sure this shouldn't be CASE SENSITIVE */
-/* may be why some people see bugs once in a while!! */
-        p++);
-    if(*p == NULL)
-      return(0);
-    else
-      return(strlen(*p));
-}
-
 
 
 /*
@@ -1757,18 +1728,11 @@ format_scroll_text()
                 if(*p == '\r' || *p == '\n') {
                     break;
                 } else if(*p == '\033') {
-                    int x;
-                    if(x = match_iso2022(p))  {
-                        /* Don't count 2022 escape in length */
-                        while(x--)
-                          p++;
-                    } else {
-                        /* A plain escape, not sure what it means in the 
-                           text, but count it's length anyway to be safe 
-                         */
-                        p++;
-                        line_len++;
-                    }
+                    /* A plain escape, not sure what it means in the
+                       text, but count it's length anyway to be safe
+                     */
+                    p++;
+                    line_len++;
                 } else if(*p == '\t') {
 		    while(line_len < st.screen_width - 1 
 			  && ((++line_len)&0x07) != 0) /* add tab's spaces */

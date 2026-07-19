@@ -1243,8 +1243,8 @@ optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
               goto bleep;
             if(F_ON(F_CAN_SUSPEND,ps_global)) {
                 EndInverse();
-                Writechar('\n', 0);
-                Writechar('\n', 0);
+                Writechar('\n');
+                Writechar('\n');
                 do_suspend(ps_global);
                 return_v = 4;
             } else {
@@ -1329,7 +1329,7 @@ line_paint(offset, passwd)
 	extra = 0;
 	MoveCursor(dline.row, dline.col);
 	while(extra++ < dline.dlen)
-	  Writechar(' ', 0);
+	  Writechar(' ');
 
 	MoveCursor(dline.row, dline.col);
 	return;
@@ -1348,7 +1348,7 @@ line_paint(offset, passwd)
 	pfp = &dline.dl[1];
 	if(dline.dl[0] != '<'){
 	    MoveCursor(dline.row, dline.col);
-	    Writechar(dline.dl[0] = '<', 0);
+	    Writechar(dline.dl[0] = '<');
 	}
     }
     else{
@@ -1356,7 +1356,7 @@ line_paint(offset, passwd)
 	pfp = dline.dl;
 	if(dline.dl[0] == '<'){
 	    MoveCursor(dline.row, dline.col);
-	    Writechar(dline.dl[0] = ' ', 0);
+	    Writechar(dline.dl[0] = ' ');
 	}
     }
 
@@ -1365,7 +1365,7 @@ line_paint(offset, passwd)
 	pbp = pfp + (long)(dline.dlen-(dline.vbase ? 2 : 1));
 	if(pbp[1] != '>'){
 	    MoveCursor(dline.row, dline.col+dline.dlen);
-	    Writechar(pbp[1] = '>', 0);
+	    Writechar(pbp[1] = '>');
 	}
     }
     else{
@@ -1374,7 +1374,7 @@ line_paint(offset, passwd)
 	pbp = &dline.dl[dline.dlen];
 	if(pbp[0] == '>'){
 	    MoveCursor(dline.row, dline.col+dline.dlen);
-	    Writechar(pbp[0] = ' ', 0);
+	    Writechar(pbp[0] = ' ');
 	}
     }
 
@@ -1405,9 +1405,9 @@ line_paint(offset, passwd)
 
 	while(pfp <= pbp){
 	    if(vfp <= vbp && *vfp)
-              Writechar(*pfp = *vfp++, 0);
+              Writechar(*pfp = *vfp++);
 	    else
-	      Writechar(*pfp = ' ', 0);
+	      Writechar(*pfp = ' ');
 
 	    pfp++;
 	}

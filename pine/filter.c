@@ -1396,113 +1396,6 @@ gf_rich2plain_opt(plain)
 
 
 
-#ifdef notdef  /* not using this anymore */
-/*
- * ISO-ESCAPE CODE matching filter
- */
-
-/*
- * options to be used by iso_filter (NOTE: if this filter is ever 
- * used more than once in a pipe, all instances will have the same
- * option value)
- */
-static int gf_iso_match = 0;
-
-
-/*
- * filter's out any non-displayable characters except those associated
- * with known charset shifts
- */
-void
-gf_iso_filter(f, c, flg)
-    FILTER_S *f;
-    int       c, flg;
-{
-    register char *p;
-
-    if(flg == GF_DATA){
-	switch(f->f1){
-	  case CESCP :			/* process chars after escape */
-	    if(c == '\033'){		/* dump whats there and start over */
-		for(p = f->line; p < f->linep; p++)
-		  (*f->next->f)(f->next, (*p == '\033') ? '_' : *p, GF_DATA);
-
-		f->linep = f->line;
-		*(f->linep)++ = '\033';
-	    }
-	    else {			/* match or not too big ? */
-		*(f->linep)++ = c;
-		*(f->linep) = '\0';
-		if(match_iso2022(f->line)){
-		    f->f1 = DFL;
-		    for(p = f->line; p < f->linep; p++)
-		      (*f->next->f)(f->next, *p, GF_DATA);
-
-		    f->linep = f->line;
-		}
-		else{
-		    if(f->linep - f->line > 6){
-			/* search is over for now */
-			f->f1 = DFL;
-			for(p = f->line; p < f->linep; p++)
-			  (*f->next->f)(f->next, 
-					(*p == '\033') ? '_' : *p, 
-					GF_DATA);
-
-			f->linep = f->line;
-		    }
-		    /* else we wait for the next character */
-		}
-	    }
-	    
-	    break;
-
-	  case DFL    :			/* just */
-	  default     :
-	    if(gf_iso_match == 0 || c <= 0x80) {
-		if(c == '\033'){
-		    f->f1 = CESCP;
-		    f->linep = f->line;
-		    *(f->linep)++ = '\033';
-		}
-		else
-		  (*f->next->f)(f->next, c, GF_DATA);
-	    } 
-	    else 
-	      (*f->next->f)(f->next, '_', GF_DATA);
-
-	    break;
-	}
-    }
-    else if(flg == GF_EOD){
-	f->n = f->linep - f->line;
-	while(f->n)
-	  (*f->next->f)(f->next, f->line[(f->n)--], GF_DATA);
-
-	fs_give((void **)&(f->line));
-	(*f->next->f)(f->next, 0, GF_EOD);
-    }
-    else if(flg == GF_RESET){
-	f->f1 = DFL;
-	f->linep = f->line = (char *)fs_get(10 * sizeof(char));
-    }
-
-}
-
-
-/*
- * function to call from other modules to set options for iso_filter
- */
-void
-gf_iso_filter_opt(match)
-    int match;
-{
-    gf_iso_match = match;
-}
-#endif  /* not using this anymore */
-
-
-
 /*
  * LINEWRAP FILTER - insert CRLF's at end of nearest whitespace before
  * specified line width
@@ -1842,15 +1735,15 @@ gf_busy(f, c, flg)
 	    f->f1 = 0;
 	    if((++x)&0x04) x = 0;
 	    Writechar((x == 0) ? '/' : 	/* CHEATING! */
-		     (x == 1) ? '-' : 
-			(x == 2) ? '\\' : '|', 0);
+		     (x == 1) ? '-' :
+			(x == 2) ? '\\' : '|');
 	}
 
 	(*f->next->f)(f->next, c, GF_DATA);
     }
     else if(flg == GF_EOD){
 	MoveCursor(0, 1);
-	Writechar(' ', 0);
+	Writechar(' ');
 	EndInverse();
 	(*f->next->f)(f->next, 0, GF_EOD);
     }

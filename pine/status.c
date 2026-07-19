@@ -597,7 +597,7 @@ radio_buttons(prompt, line, column, buttons, labels, deefault, on_ctrl_C,
           default:
             for(p = buttons; ch!=(int)*p && *p!='\0'; p++);/* Which button */
             if(*p == '\0') {
-                Writechar('\007', 0);
+                Writechar('\007');
                 break;
             }
             dprint(9, (debugfile, "label %d %s\n", p - buttons,
@@ -616,7 +616,7 @@ radio_buttons(prompt, line, column, buttons, labels, deefault, on_ctrl_C,
 		goto out_of_loop;
 	    }
 
-	    Writechar('\007', 0);
+	    Writechar('\007');
 	    break;
 
 
@@ -660,7 +660,7 @@ radio_buttons(prompt, line, column, buttons, labels, deefault, on_ctrl_C,
             
           case ctrl('Z'):
             if(!have_job_control() || F_OFF(F_CAN_SUSPEND,ps_global)) {
-                Writechar('\007', 0);
+                Writechar('\007');
             } else {
                 EndInverse();
                 do_suspend(ps_global);
@@ -729,7 +729,7 @@ draw_radio_prompt(l, c, q, help_on, help_text)
     x = c + strlen(q);
     MoveCursor(l, x);
     while(x++ < ps_global->ttyo->screen_cols)
-      Writechar(' ', 0);
+      Writechar(' ');
     if(help_on) 
       radio_help(l, c, help_text);
     MoveCursor(l, c + strlen(q));

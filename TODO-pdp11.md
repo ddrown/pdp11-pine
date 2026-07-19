@@ -10,10 +10,6 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-Buffer right-sizing (`tmp_20k_buf`, `s`, `temp_format` -- not feature
-cuts, but required regardless) is now fully done; see
-`TODO-pdp11-done.md`.
-
 ### Standing goal: eliminate compiler warnings
 - [ ] `./build clean && ./build lnx` currently produces 179 warnings.
       Not a single task to pull and finish -- an ongoing, opportunistic
@@ -46,79 +42,4 @@ cuts, but required regardless) is now fully done; see
         (`int *status`, not `union wait *`) rather than assuming the
         cast is still correct; possibly a leftover from an older BSD
         `wait()` signature.
-
-### `pine/` UI files: dead/vestigial code found while surveying send.c, mailcmd.c, folder.c, mailview.c
--- DONE, see `TODO-pdp11-done.md`. All four files (`send.c`, `mailcmd.c`,
-   `folder.c`, `mailview.c`) fully swept, including the `mailview.c`
-   `FileStar` disk-paged scroll-buffer engine (investigated and cut
-   outright rather than repurposed -- see the done-file write-up for
-   why it wasn't a good repurposing candidate).
-
-### Deliberate-simplification candidates in `pine/` UI files (need a decision, not just dead-code deletion)
-- [ ] Found alongside the dead-code sweep above: code that's live and
-      reachable in principle but functionally pointless given this
-      target (no network, US-ASCII only). Cutting these is a product
-      decision, not a bug fix, so listed separately from the confirmed
-      dead code above.
-      **`{host}`-remote folder-collection syntax** -- DONE, see
-      `TODO-pdp11-done.md`. Cut fully (not just the four `folder.c`
-      sites originally named here): `pine/context.c`'s
-      `context_digest()` no longer parses a leading `{host...}`
-      prefix at all, and `pine/folder.c`'s `set_ftype()`/
-      `FTYPE_REMOTE`/`FTYPE_OLDTECH`/`FTYPE_ANON` handling in
-      `find_folders_in_context()`/`folder_list_entry()`/
-      `folder_exists()` is gone, along with the `type` field on
-      `CONTEXT_S` (`pine.h`) that stored those flags.
-      **Magic-number MIME-type sniffing** -- DONE, see
-      `TODO-pdp11-done.md`. Removed the GIF/JPEG/TIFF/PostScript/
-      `.snd`/AppleFile/ZIP magic-number detection block from
-      `pine/send.c`'s `set_mime_types()`, plus every other
-      `body->type == TYPEOTHER` dead branch it left behind (confirmed:
-      both real call sites always pass a `TYPETEXT`/`ENCOTHER` body).
-      The function's still-necessary job -- picking
-      7BIT/8BIT/BINARY `Content-Transfer-Encoding` for the user's
-      typed text and setting `subtype=PLAIN`/`charset=US-ASCII` --
-      was kept, just with the dead type-guessing stripped out.
-      **UW Message-ID size-stats decoration** -- DONE, see
-      `TODO-pdp11-done.md`. Removed `update_message_id()`/
-      `mime_stats()`/`mime_recur()`/`encode_bits()`/`logbase2()` and
-      their `call_mailer()` call site from `pine/send.c` entirely;
-      `generate_message_id()` (`pine/reply.c`) already produces a
-      fully valid, unique `Message-ID:` on its own (hostname + pid +
-      timestamp + counter char), so nothing else needed to change.
-      **Restricted ("demo") mode lockdown** -- DONE, see
-      `TODO-pdp11-done.md`. Cut project-wide, not just the
-      `send.c`/`mailcmd.c` sites originally named here: the `-r` CLI
-      flag (`pine/args.c`), the `restricted:1` bitfield (`pine/pine.h`),
-      every `ps_global->restricted` check (`send.c`, `mailcmd.c`,
-      `pine.c`, `pine/osdep/expnfldr`), and the `P_SECURE`/`MDSCUR`
-      composer file-browser lockdown it fed through the
-      composer-subprocess handoff protocol (`pico/pico.h`,
-      `pico/browse.c`, `pico/file.c`, plus the now-callerless
-      `homeless()` helper in `pico/os_unix.c`).
-      **Multi-collection navigation** -- DONE, see `TODO-pdp11-done.md`.
-      Cut project-wide (bigger than the `mailcmd.c` navigation the TODO
-      originally named): `CONTEXT_S` is no longer a linked list (its
-      `next` field is gone), `struct pine`'s `context_list`/
-      `context_current`/`context_write` now always point at the same
-      single collection, and every piece of UI built around switching
-      or cycling between multiple collections is gone (`folder.c`'s
-      Left/Right-arrow collection browsing and per-collection header
-      rows in the Folder List screen, `mailcmd.c`'s ^P/^N
-      collection-cycling in the SAVE and GOTO prompts, the
-      `incoming-folders` "TAB to next folder" feature and its
-      `CNTXT_INCMNG` flag, the composer's ^T Fcc-collection picker and
-      its `FCCLIST` handoff-file protocol field). `folder-collections`
-      in `.pinerc` now only honors its first value.
-      **ISO-2022 escape-sequence handling** (`pine/mailview.c`):
-      the escape table and `match_iso2022()` (868-890), used only in
-      `format_scroll_text()`'s line-width accounting (1833-1845) to
-      avoid counting escape sequences toward display width. Small
-      (~25 lines), self-contained, harmless if left, but a residual
-      i18n accommodation under the US-ASCII-only mandate. Low priority.
-      Not yet decided or removed, any of it.
-      (Separately, not a cut-list item: `pine/mailview.c`'s
-      `describe_mime()` has an unbounded `MimeShow alts[50]` array --
-      the code's own comment says "BUG -- no bounds checking" -- this
-      belongs in the fixed-size-buffer audit section above, not here.)
 

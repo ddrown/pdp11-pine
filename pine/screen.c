@@ -170,7 +170,7 @@ output_keymenu(km, bm, row, column)
             c = k->column + strlen(temp);
 
             if(++c < max_column)
-              Writechar(' ', 0);
+              Writechar(' ');
 
             strcpy(temp, k->label);
             if(c + strlen(temp) >= max_column)

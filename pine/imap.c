@@ -583,14 +583,14 @@ mm_diskerror (stream, errcode, serious)
     MoveCursor(line, 0);
     CleartoEOLN();
     StartInverse();
-    Writechar('\007', 0);
+    Writechar('\007');
     sprintf(q,  "Serious error saving mail folder \"%s\":",
                     pretty_fn(stream ? stream->mailbox : ""));
     PutLine0(line, 0, q);
     ch = strlen(q); /* Use ch temporarily */
     MoveCursor(line, ch);
     while(ch++ < ps_global->ttyo->screen_cols - 1)
-      Writechar(' ', 0);
+      Writechar(' ');
 /*    sprintf(q, "%-*.*s", ps_global->ttyo->screen_cols - 1,
             ps_global->ttyo->screen_cols - 1,
             ps_global->last_error);
@@ -602,16 +602,16 @@ mm_diskerror (stream, errcode, serious)
         sprintf(q,  "Press return to retry saving or press ! to get to system prompt: ");
     }
     PutLine0(line+2, 0, q);
-    Writechar('\007', 0);
+    Writechar('\007');
     ch = strlen(q); /* Use ch temporarily */
     MoveCursor(line+2, ch);
     while(ch++ < ps_global->ttyo->screen_cols - 1)
-      Writechar(' ', 0);
+      Writechar(' ');
     MoveCursor(line+2, strlen(q));
 
     ch = read_char(0);
     while(!(ch == F_ON(F_CAN_SUSPEND,ps_global) ? ctrl('Z') : '!' || ch == '\r')) {
-        Writechar('\007', 0);
+        Writechar('\007');
         ch = read_char(0);
     }
     switch(ch) {

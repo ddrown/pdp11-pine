@@ -562,8 +562,8 @@ NewLine()
 {
    /** move the cursor to the beginning of the next line **/
 
-    Writechar('\n', 0);
-    Writechar('\r', 0);
+    Writechar('\n');
+    Writechar('\r');
 }
 
 
@@ -756,10 +756,10 @@ InsertChar(c)
 {
     if(_insertchar != NULL && *_insertchar != '\0') {
 	tputs(_insertchar, 1, outchar);
-	Writechar(c, 0);
+	Writechar(c);
     } else if(_startinsert != NULL && *_startinsert != '\0') {
 	tputs(_startinsert, 1, outchar);
-	Writechar(c, 0);
+	Writechar(c);
 	tputs(_endinsert, 1, outchar);
     } else {
 	return(-1);
@@ -916,22 +916,17 @@ ScrollRegion(lines)
  Result: character output
          cursor position variables updated
   ----*/
-Writechar(ch, new_esc_len)
+Writechar(ch)
      register unsigned int ch;
-     int      new_esc_len;
 {
     register int nt;
-    static   int esc_len = 0;
 
     if(ps_global->in_init_seq)
         return;
 
     if(ch >= ' ') {
         putchar(ch);
-        if(esc_len > 0)
-          esc_len--;
-        else
-          _col++;
+        _col++;
 
     } else if(ch == '\n') {
         /*-- Don't have to watch out for auto wrap or newline glitch
@@ -939,13 +934,11 @@ Writechar(ch, new_esc_len)
           ---*/
         putchar('\n');
         _line = min(_line+1,ps_global->ttyo->screen_rows);
-        esc_len = 0;
 
     /* if return, move to column 0 */
     } else if(ch == '\r') {
         putchar('\r');
         _col = 0;
-        esc_len = 0;
 
     /* if backspace, move back  one space  if not already in column 0 */
     } else if (ch == BACKSPACE) {
@@ -964,27 +957,16 @@ Writechar(ch, new_esc_len)
 	  putchar(' ');
 	while(_col < ps_global->ttyo->screen_cols - 1 && ((++_col)&0x07) != 0);
 
-    } else if(ch == '\033'){
-        /* If we're outputting an escape here, it may be part of an iso2022
-           escape sequence in which case take up no space on the screen.
-           Unfortunately such sequences are variable in length.
-           */
-        esc_len = new_esc_len  - 1;
-        putchar(ch);
-
     } else {
-        /* Change any control characters to ?, except for ESC. Most of the
-           junk that might come through is handled in copy_text() before it
-           gets anywhere near here.
+        /* Change any control characters to ?. Most of the junk that
+           might come through is handled in copy_text() before it gets
+           anywhere near here.
            */
-        if(iscntrl(ch) && ch != '\033')
+        if(iscntrl(ch))
           ch = '?';
 
         putchar(ch);
-        if(esc_len > 0)
-          esc_len--;
-        else
-          _col++;
+        _col++;
     }
 
 
@@ -1026,7 +1008,7 @@ Write_to_screen(string)
       register char *string; 
 {
     while(*string)
-      Writechar(*string++, 0);
+      Writechar(*string++);
 }
 
 
@@ -1069,11 +1051,10 @@ PutLine0n8b(x, y, line, length)
      register char *line;
 {
     char *line_end;
-    int   len;
     unsigned char c;
 
     MoveCursor(x,y);
-    for(line_end = line + length;*line && line < line_end; line++) 
+    for(line_end = line + length;*line && line < line_end; line++)
       if(*line == '\01')
         StartBold();
       else if(*line == '\02')
@@ -1082,14 +1063,9 @@ PutLine0n8b(x, y, line, length)
         StartUnderline();
       else if(*line == '\04')
         EndUnderline();
-      else if(*line == '\033') {
-          /* check for iso-2022 escape */
-          len = match_iso2022(line);
+      else {
           c = (unsigned char)*line;
-          Writechar(c, len);
-      } else {
-          c = (unsigned char)*line;
-          Writechar(c, len);
+          Writechar(c);
       }
 }
 

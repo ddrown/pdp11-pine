@@ -1212,7 +1212,7 @@ setup_mini_menu(ql)
     s = radio_buttons(prompt, ql, 0, "noue", setup_names, 'e', 'x', help, 0);
     /* ^C */
     if(s == 'x') {
-	Writechar('\007', 0);
+	Writechar('\007');
 	s = 'e';
     }
 
@@ -1324,7 +1324,7 @@ quit_screen(pine_state)
     if(F_OFF(F_QUIT_WO_CONFIRM,pine_state) &&
        (ret=want_to("Really quit pine", 'y', 'x', h_oe_export, 0)) != 'y') {
 	if(ret == 'x')
-	  Writechar('\007', 0);
+	  Writechar('\007');
         pine_state->next_screen = pine_state->prev_screen;
         return;
     }

@@ -618,7 +618,7 @@ do_export:
 	        break;
 	      /* ^C */
 	      }else if(ret == 'x') {
-	        Writechar('\007', 0);
+	        Writechar('\007');
 	        break;
 	      }
 	    }
@@ -880,7 +880,7 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
 	}
 	else if(rc == 12){			/* file name completion! */
 	    if(!folder_complete(cntxt, new_folder))
-	      Writechar('\007', 0);
+	      Writechar('\007');
 
 	}
 	else if(rc != 4)
@@ -1378,7 +1378,7 @@ broach_folder(qline, allow_list, context)
 	}
 	else if(rc == 12){			/* file name completion! */
 	    if(!folder_complete(tc, new_folder))
-	      Writechar('\007', 0);
+	      Writechar('\007');
 	}
 	else if(rc != 4)
           break;
@@ -2075,7 +2075,7 @@ select_sort(ql)
         break;
       /* ^C */
       case 'x':
-	Writechar('\007', 0);
+	Writechar('\007');
         break;
     }
 
