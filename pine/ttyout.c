@@ -125,8 +125,7 @@ static char *_clearscreen, *_moveto, *_up, *_down, *_right, *_left,
             *_setinverse, *_clearinverse,
             *_setunderline, *_clearunderline,
             *_setbold,     *_clearbold,
-            *_cleartoeoln, *_cleartoeos,
-            *_startinsert, *_endinsert, *_insertchar, *_deletechar,
+            *_cleartoeoln,
             *_deleteline, *_insertline,
             *_scrollregion, *_scrollup, *_scrolldown,
             *_termcap_init, *_termcap_end;
@@ -208,11 +207,6 @@ config_screen(tt)
     _setbold           = tigetstr("bold");
     _clearbold         = tigetstr("sgr0");
     _cleartoeoln       = tigetstr("el");
-    _cleartoeos        = tigetstr("ed");
-    _deletechar        = tigetstr("dch1");
-    _insertchar        = tigetstr("ich1");
-    _startinsert       = tigetstr("smir");
-    _endinsert         = tigetstr("rmir");
     _deleteline        = tigetstr("dl1");
     _insertline        = tigetstr("il1");
     _scrollregion      = tigetstr("csr");
@@ -255,11 +249,6 @@ config_screen(tt)
     _setbold           = tgetstr("md", &ptr);
     _clearbold         = tgetstr("me", &ptr);
     _cleartoeoln       = tgetstr("ce", &ptr);
-    _cleartoeos        = tgetstr("cd", &ptr);
-    _deletechar        = tgetstr("dc", &ptr);
-    _insertchar        = tgetstr("ic", &ptr);
-    _startinsert       = tgetstr("im", &ptr);
-    _endinsert         = tgetstr("ei", &ptr);
     _deleteline        = tgetstr("dl", &ptr);
     _insertline        = tgetstr("al", &ptr);
     _scrollregion      = tgetstr("cs", &ptr);
@@ -744,56 +733,6 @@ EndBold()
 
 
 /*----------------------------------------------------------------------
-       Insert character on screen pushing others right
-
-   Args: c --  character to insert
-
- Result: charcter is inserted if possible
-         return -1 if it can't be done
-  ----------------------------------------------------------------------*/
-InsertChar(c)
-     int c;
-{
-    if(_insertchar != NULL && *_insertchar != '\0') {
-	tputs(_insertchar, 1, outchar);
-	Writechar(c);
-    } else if(_startinsert != NULL && *_startinsert != '\0') {
-	tputs(_startinsert, 1, outchar);
-	Writechar(c);
-	tputs(_endinsert, 1, outchar);
-    } else {
-	return(-1);
-    }
-    return(0);
-}
-
-
-
-/*----------------------------------------------------------------------
-         Delete n characters from line, sliding rest of line left
-
-   Args: n -- number of characters to delete
-
-
- Result: characters deleted on screen
-         returns -1 if it wasn't done
-  ----------------------------------------------------------------------*/
-DeleteChar(n)
-     int n;
-{
-    if(_deletechar == NULL || *_deletechar == '\0')
-      return(-1);
-
-    while(n) {
-	tputs(_deletechar, 1, outchar);
-	n--;
-    }
-    return(0);
-}
-
-
-
-/*----------------------------------------------------------------------
   Go into scrolling mode, that is set scrolling region if applicable
 
    Args: top    -- top line of region to scroll
@@ -1132,28 +1071,6 @@ PutLine2(x,y, line, arg1, arg2)
 
 
 /*----------------------------------------------------------------------
-      Printf style output line to the screen at given position, 3 args
-
- Args:  x -- column position on the screen
-        y -- column position on the screen
-        line -- printf style line of text to output
-
- Result: text is output
-         cursor position is update
-  ----------------------------------------------------------------------*/
-void
-/*VARARGS3*/
-PutLine3(x,y, line, arg1, arg2, arg3)
-     int x,y;
-     char *line;
-     void *arg1, *arg2, *arg3;
-{
-    sprintf(temp_format, line, arg1, arg2, arg3);
-    PutLine0(x, y, temp_format);
-}
-
-
-/*----------------------------------------------------------------------
       Printf style output line to the screen at given position, 4 args
 
  Args:  x -- column position on the screen
@@ -1243,28 +1160,6 @@ CleartoEOLN()
     	return;
 
     tputs(_cleartoeoln, 1, outchar);
-}
-
-
-
-/*----------------------------------------------------------------------
-     Clear screen to end of screen from current point
-
- Result: screen is cleared
-  ----*/
-CleartoEOS()
-{
-    int j;
-
-    if (!_cleartoeos) {
-        CleartoEOLN();
-        for(j = _line; j < _lines; j++){
-            MoveCursor(j, 0);
-            CleartoEOLN();
-        }
-    } else {
-        tputs(_cleartoeos, 1, outchar);
-    }
 }
 
 

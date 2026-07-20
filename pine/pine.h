@@ -1059,12 +1059,10 @@ void PutLine0(int, int, char *);
 void PutLine0n8b(int, int, char *, int);
 void PutLine1(int, int, char *, void *);
 void PutLine2(int, int, char *, void *, void *);
-void PutLine3(int, int, char *, void *, void *, void *);
 void PutLine4(int, int, char *, void *, void *, void *, void *);
 void PutLine5(int, int, char *, void *, void *, void *, void *, void *);
 int  CenterLine(int, char *);
 void CleartoEOLN(void);
-int  CleartoEOS(void);
 void ClearScreen(void);
 void MoveCursor(int, int);
 void NewLine(void);
@@ -1079,8 +1077,6 @@ void init_screen(void);
 void end_screen(void);
 void outchar(int);
 void clear_cursor_pos(void);
-int  InsertChar(int);
-int  DeleteChar(int);
 
 /*----- our own various library things, some from imap, other from ../lib --*/
 char *cpystr(char *);
@@ -1356,12 +1352,10 @@ void PutLine0();
 void PutLine0n8b();
 void PutLine1();
 void PutLine2();
-void PutLine3();
 void PutLine4();
 void PutLine5();
 int  CenterLine();
 void CleartoEOLN();
-int  CleartoEOS();
 void ClearScreen();
 void MoveCursor();
 void NewLine();
@@ -1376,8 +1370,6 @@ void init_screen();
 void end_screen();
 void outchar();
 void clear_cursor_pos();
-int  InsertChar();
-int  DeleteChar();
 
 /*----- our own various library things, some from imap, other from ../lib --*/
 char *cpystr();

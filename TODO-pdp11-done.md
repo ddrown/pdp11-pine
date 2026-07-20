@@ -3471,3 +3471,48 @@ already covered by the existing composer tests).
   `bss` 15096 -> 15032 (-64 bytes, from the two removed static return
   buffers `enth[10]`/`dout[30]`), `data` unchanged; `bin/pico`
   unchanged (strings.c is pine-side only).
+
+### `pine/ttyout.c`: `InsertChar()`, `DeleteChar()`, `PutLine3()`, `CleartoEOS()` -- last of the gcov-flagged dead-code list, confirmed dead and removed
+
+- **What they were**: `InsertChar()`/`DeleteChar()` are termcap
+  insert-char/delete-char wrappers, `PutLine3()` is the 3-arg member of
+  the `PutLine1`..`PutLine5` printf-style screen-output family, and
+  `CleartoEOS()` clears from the cursor to end of screen. All four had
+  zero references anywhere beyond their own definition and header
+  prototype. `PutLine3`'s siblings `PutLine1`/`PutLine2`/`PutLine4`/
+  `PutLine5` all have real callers (`pine.c`, `mailindx.c`, `screen.c`,
+  `other.c`) -- `PutLine3` alone was never needed by any actual format
+  string in the tree.
+- **Cascading dead state found and removed alongside them**: with
+  `InsertChar`/`DeleteChar`/`CleartoEOS` gone, the termcap-capability
+  static pointers `_insertchar`/`_startinsert`/`_endinsert`/
+  `_deletechar`/`_cleartoeos` (`ttyout.c`) became write-only -- assigned
+  from `tigetstr()`/`tgetstr()` at terminal-init time but never read by
+  anything else. Removed all five from the declaration line and both
+  the terminfo (`tigetstr`) and termcap (`tgetstr`) init blocks. The
+  `tgetstr(..., &ptr)` calls advance a shared buffer cursor rather than
+  writing to fixed offsets, so dropping entries from the middle of that
+  sequence doesn't disturb the capabilities still being read.
+- **Verified**: all four re-checked against `c-client/` too (none
+  found, as expected -- these are terminal-display functions, not
+  c-client callbacks). `./build lnx` clean before touching anything.
+  Deleted the four function bodies and the five now-write-only static
+  pointers from `ttyout.c`, and their prototypes (ANSI + K&R) from
+  `pine.h`. `./build clean && ./build lnx` clean afterward, 177
+  warnings (unchanged). Full smoketest suite 25/25 (unchanged -- no
+  observable behavior difference, none of the four were reachable from
+  any code path).
+- **Size delta**: `bin/pine`'s `text` 340359 -> 339607 (-752 bytes),
+  `bss` 15032 -> 15000 (-32 bytes), `data` unchanged; `bin/pico`
+  unchanged (ttyout.c is pine-side only).
+- **This closes out the gcov-flagged dead-code list** added to
+  `TODO-pdp11.md` after the `--coverage` audit: all 19 functions
+  flagged after the first correction pass are now accounted for -- 18
+  confirmed dead and removed across this and the four preceding
+  entries (2 in `init.c`/`pine.c`, 3 in `context.c`, 2 in `filter.c`, 7
+  in `strings.c`, 4 here in `ttyout.c`), and 1 (`mm_bboard`) turned out
+  to be a further false positive (a live c-client callback) caught
+  while verifying the `context.c` trio. Combined with the 8
+  filter/callback-registration false positives caught before this list
+  was first written to `TODO-pdp11.md`, the original gcov 0%-executed
+  set had 9 false positives total out of 27 initial candidates.
