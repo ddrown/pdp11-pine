@@ -36,6 +36,24 @@ See [`TODO-pdp11.md`](TODO-pdp11.md) for the still-open cut list and
 size measurements, and [`TODO-pdp11-done.md`](TODO-pdp11-done.md) for
 the detailed write-ups of every bug found and fixed along the way.
 
+## Naming
+
+Working names for an eventual release, picked to match the
+"smaller-than-the-original" jokes the upstream projects already made
+(pico → nano → pico's PDP-11 fork; Pine → "Pine Is Nearly Elm"):
+
+- The mail client (this Pine fork) would be called **Scion** — a
+  scion is a small cutting grafted from a parent tree to grow a new
+  one, which is what this is to Pine.
+- The composer (this pico fork) would be called **Atto** — continuing
+  the SI-prefix shrink joke one step past `femto` (already taken by
+  existing text editors): pico (10⁻¹²) → nano (10⁻⁹) → femto (10⁻¹⁵,
+  taken) → atto (10⁻¹⁸).
+
+Not yet reflected in file/directory names, build output, or code —
+this is a documentation-only placeholder until/unless a real rename
+happens.
+
 ## Building
 
 There's no PDP-11 cross-compiler in this environment, so day-to-day
