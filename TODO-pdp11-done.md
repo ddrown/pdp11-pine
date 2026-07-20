@@ -3593,7 +3593,7 @@ already covered by the existing composer tests).
   clean && ./build lnx` clean afterward, 177 warnings (unchanged). Full
   smoketest suite 25/25 (unchanged -- no observable behavior difference
   for any currently-tested path). Additionally drove a real pty session
-  (via `bwrap --bind <scratch-dir> /home/abob/mail`, since `myhomedir()`
+  (via `bwrap --bind <scratch-dir> ~/mail`, since `myhomedir()`
   in `c-client/os_lnx.c:195-198` resolves the real passwd-database home
   directory via `getpwuid()` rather than honoring smoketest.py's `HOME`
   env override -- a pre-existing test-isolation gap, tracked as a new
@@ -3608,3 +3608,50 @@ already covered by the existing composer tests).
 - **Size delta**: `bin/pine`'s `text` 339607 -> 338175 (-1432 bytes),
   `data`/`bss` unchanged; `bin/pico` unaffected (c-client is linked into
   `bin/pine` only).
+
+### `myhomedir()` now honors `$HOME`, fixing smoketest.py's isolation gap
+
+- **What it was**: `c-client/os_lnx.c:195-198`'s `myhomedir()` resolved
+  the real passwd-database home directory via `getpwuid(geteuid())`
+  unconditionally, never checking `getenv("HOME")`. Every default-
+  relative mailbox path (`dummy_file()`/`bezerk_file()`'s "any other
+  name" case, used for the default Fcc/Save folders) was built from
+  this, so `test/smoketest.py`'s `Session` setting `env["HOME"]` to a
+  scratch tempdir for isolation had no effect on those paths -- writes
+  silently landed in the real developer's actual `~/mail/` instead.
+  Discovered manually while verifying the dummy.c/bezerk.c cut above
+  (tracked as its own TODO item first, then fixed here per the user's
+  choice between "bwrap every test run" and "fix myhomedir()" -- the
+  latter was simpler, fixed the root cause directly, and is a
+  reasonable general correctness improvement given this project's
+  single-user, no-multi-tenancy target).
+- **What changed**: `myhomedir()` now checks `getenv("HOME")` first
+  (non-empty), falling back to `getpwuid(geteuid())->pw_dir` only if
+  unset -- same caching behavior as before (`hdname` static), just an
+  extra check ahead of the passwd lookup.
+- **Fallout in `test/smoketest.py`**: fixing the isolation gap exposed
+  that several tests (anything driving a real Send/Save) were silently
+  depending on the real `~/mail/sent-mail`/`~/mail/saved-messages`
+  already existing to avoid pine's "Folder ... doesn't exist. Create?"
+  prompt -- once writes stopped leaking into that already-populated
+  real directory, a fresh scratch `~/mail/` had neither file, and 2
+  tests failed hitting that unexpected prompt. Fixed by having
+  `Session.__init__` pre-create both as empty files alongside its
+  existing `~/mail` directory pre-creation, mirroring
+  `DF_DEFAULT_FCC`/`DEFAULT_SAVE` (`pine/os.h`).
+- **Verified**: `./build lnx` clean before touching anything. `./build
+  clean && ./build lnx` clean afterward, 177 warnings (unchanged, `+31`
+  bytes from the added `getenv()` check). Full smoketest suite:
+  regressed to 23/25 immediately after the `myhomedir()` fix alone
+  (exactly the newly-exposed "doesn't exist" prompt above), back to
+  25/25 after the `smoketest.py` pre-create fix. Manually re-verified
+  the exact save-to-new-folder flow from the previous cut's write-up,
+  this time *without* any `bwrap` involvement -- confirmed the folder
+  now correctly lands under the scratch `$HOME/mail/`, and separately
+  drove a real Forward+Send (mirroring
+  `test_send_body_header_overflow.py`'s Fcc-only pattern) and confirmed
+  via an exact byte-for-byte `md5sum` before/after comparison that the
+  real `~/mail/sent-mail` was completely untouched while the
+  scratch copy correctly received the forwarded message.
+- **Size delta**: `bin/pine`'s `text` 338175 -> 338206 (+31 bytes,
+  `getenv()` check), `data`/`bss` unchanged; `bin/pico` unaffected.

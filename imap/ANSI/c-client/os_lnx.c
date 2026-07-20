@@ -194,7 +194,10 @@ char *hdname = NIL;
 
 char *myhomedir ()
 {
-  return hdname ? hdname : (hdname = cpystr (getpwuid (geteuid ())->pw_dir));
+  char *home;
+  if (hdname) return hdname;
+  home = getenv ("HOME");
+  return hdname = cpystr ((home && *home) ? home : getpwuid (geteuid ())->pw_dir);
 }
 
 

@@ -43,17 +43,6 @@ DONE elsewhere or referenced in passing below.
         cast is still correct; possibly a leftover from an older BSD
         `wait()` signature.
 
-### Shrink `c-client/dummy.c`'s unreachable driver slots
-- DONE, see `TODO-pdp11-done.md`. The original "delete dummy.c
-  entirely, fold into bezerk.c" idea turned out unsafe (`mail.c`'s
-  `mail_valid()` hardcodes the driver name `"dummy"` to keep folder
-  creation's "already exists" check working) -- scoped down instead to
-  collapsing 24 of `dummydriver`'s 33 slots (proven unreachable by
-  tracing every dispatch path) into 6 shared stub functions, plus the
-  matching dead bboard-forwarding slots in `bezerk.c`. `mbox.c` needed
-  a small fixup to keep building (see the item below); `phile.c` has
-  the same pattern but isn't built at all.
-
 ### Make `dummy` a plain helper `mail.c`/`bezerk.c` calls, not a registered `DRIVER`
 
 - [ ] Raised after the driver-slot shrink above: dummy doesn't
@@ -107,30 +96,6 @@ DONE elsewhere or referenced in passing below.
       shared driver-chain infrastructure `mail.c` uses generically, not
       just the two locally-linked drivers, so it needs its own careful
       design/verification pass, not a quick follow-on.
-
-### smoketest.py's `HOME` env override doesn't isolate default-folder-path creation
-- [ ] Discovered while manually verifying the dummy.c/bezerk.c cut
-      above: `c-client/os_lnx.c:195-198`'s `myhomedir()` resolves the
-      real passwd-database home directory via `getpwuid(geteuid())`,
-      never checking `getenv("HOME")`. `test/smoketest.py`'s `Session`
-      sets `env["HOME"]` to a scratch tempdir for isolation, but any
-      code path that builds a mailbox path via `myhomedir()` (e.g.
-      `dummy_file()`/`bezerk_file()`'s default case, used whenever a
-      folder name isn't `-f`-given explicitly) ignores that override
-      and resolves against the *real* developer's home directory
-      instead. Confirmed by hand: saving a message to a new folder
-      name during manual pty testing actually created a real file
-      under the real `~/mail/`, not the scratch `$HOME/mail/` the test
-      harness assumes -- verified via `bwrap --bind <scratch-dir>
-      /home/abob/mail` to redirect it safely for repeat testing.
-      No existing smoketest currently exercises a default-relative
-      folder-creation path (all use `-f <explicit mbox path>`), so this
-      hasn't caused visible contamination yet, but any future test that
-      does (e.g. a regression test for the cut above) needs either the
-      same bwrap-bind-mount treatment `_wrap_with_sendmail_stub()`
-      already uses for sendmail, or some other harness-level fix, or it
-      will silently write into whoever's real home directory runs the
-      suite.
 
 ### Is `c-client/mbox.c` dead weight in the build?
 

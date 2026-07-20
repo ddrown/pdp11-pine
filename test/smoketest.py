@@ -72,7 +72,19 @@ class Session:
         # one-line notice, on the theory that a real interactive user
         # should have a few seconds to read it. Every fresh scratch HOME
         # here would otherwise eat that 4s on every single test.
-        os.makedirs(os.path.join(self.home, "mail"), exist_ok=True)
+        mail_dir = os.path.join(self.home, "mail")
+        os.makedirs(mail_dir, exist_ok=True)
+
+        # Pre-create empty default-fcc/default-save folders (DF_DEFAULT_FCC
+        # "sent-mail" / DEFAULT_SAVE "saved-messages", pine/os.h) so a Send
+        # or Save doesn't hit the "Folder ... doesn't exist. Create?"
+        # prompt this harness doesn't expect. Before c-client/os_lnx.c's
+        # myhomedir() was fixed to honor $HOME, every write to these
+        # default folders silently landed in the real developer's actual
+        # ~/mail (which already has them) instead of this scratch one --
+        # masking the fact that tests never handled this prompt.
+        for default_folder in ("sent-mail", "saved-messages"):
+            open(os.path.join(mail_dir, default_folder), "a").close()
 
         env = dict(os.environ)
         env["HOME"] = self.home
