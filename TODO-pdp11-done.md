@@ -3727,3 +3727,37 @@ already covered by the existing composer tests).
 - **Size delta**: `bin/pine`'s `text` 338206 -> 337286 (-920 bytes),
   `data` 12936 (-288 bytes; the removed `DRIVER dummydriver` struct
   literal itself), `bss` unchanged; `bin/pico` unaffected.
+
+### `c-client/mbox.c` was already dead weight -- confirmed and dropped from the build
+
+- **What it was**: `c-client/makefile.lnx` compiled `mbox.o` into
+  `c-client.a`, but pine never `mail_link()`s `mboxdriver` -- only
+  `bezerkdriver` is linked (`pine/pine.c`) -- and grepping `pine/*.c`
+  for `mboxdriver`/`mbox_valid` found nothing outside `mbox.c` itself.
+- **Verified**: `nm bin/pine | grep -i "mbox_\|mboxdriver"` produced
+  zero matches (confirmed `nm` itself was working correctly by also
+  checking for a known-present symbol, `bezerk_valid`, which showed up
+  fine) -- proving the static archive's unreferenced `mbox.o` member
+  was never actually pulled into the final link, exactly as expected.
+- **What changed**: removed `mbox.o` from `c-client.a`'s prerequisite
+  list and the `ar rc` command line in `c-client/makefile.lnx`, and
+  deleted the now-orphaned `mbox.o: mail.h mbox.h bezerk.h misc.h
+  osdep.h` dependency rule.
+- **Follow-up**: with `mbox.o` fully out of the build, deleted the
+  source files themselves (`git rm imap/ANSI/c-client/mbox.c mbox.h`)
+  rather than leaving known-uncompiled dead source sitting in the
+  tree. `makefile.lnx` (the only makefile this project's dev workflow
+  actually builds) had zero remaining references. The other-platform
+  makefiles (`makefile.osf`/`.sco`/`.bsi`/`.a32`/`.aix`/`.nxt`) still
+  mention `mbox.o`/`mbox.h` -- left alone, matching this project's
+  existing precedent for out-of-scope/unmaintained build targets (the
+  DOS/Windows `pine.def` stray-entry precedent from the ISO-2022 cut).
+- **Verified**: `./build clean && ./build lnx` clean both before and
+  after (makefile change, then file deletion), byte-for-byte identical
+  `bin/pine` size both times (`337286`/`12936`/`15000`, matching the
+  previous cut exactly) confirming `mbox.o` truly contributed zero
+  bytes. 177 warnings (unchanged). Full smoketest suite 25/25
+  (unchanged).
+- **Size delta**: none (confirms the object file was already
+  contributing nothing; this was a build-hygiene/dead-source-removal
+  fix, not a size win).

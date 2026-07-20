@@ -43,17 +43,6 @@ DONE elsewhere or referenced in passing below.
         cast is still correct; possibly a leftover from an older BSD
         `wait()` signature.
 
-### Make `dummy` a plain helper `mail.c`/`bezerk.c` calls, not a registered `DRIVER`
-- DONE, see `TODO-pdp11-done.md`. `dummydriver` is no longer
-  `mail_link()`-ed; `mail_valid()`'s `"dummy"`-name exclusion (and its
-  now-unused `nopen` parameter) is gone; `mail_open()`/`mail_append()`
-  call `dummy_open_failure()`/`dummy_append_failure()` directly when
-  nothing matches; `mail_find()`/`mail_find_all()`'s no-stream loop
-  calls `dummy_find()`/`dummy_find_all()` directly. `dummy.c` shrank
-  from ~17 functions to 5 plain helpers (`dummy_find`/`dummy_find_all`/
-  `dummy_open_failure`/`dummy_append_failure`/`dummy_file`) with no
-  `DRIVER` struct at all.
-
 ### Remove subscribe/unsubscribe entirely, simplify `dummy_find()` to just call `dummy_find_all()`
 
 - [ ] Raised while checking whether subscribe/unsubscribe means
@@ -98,23 +87,4 @@ DONE elsewhere or referenced in passing below.
       remove the `subscribe`/`unsubscribe` fields from the `DRIVER`
       struct definition itself, updating `bezerkdriver`'s literal (the
       one remaining struct) to drop those two positional entries.
-
-### Is `c-client/mbox.c` dead weight in the build?
-
-- [ ] `c-client/makefile.lnx` compiles `mbox.o` into `c-client.a`, but
-      pine never `mail_link()`s `mboxdriver` -- only `bezerkdriver` and
-      `dummydriver` are linked (`pine/pine.c:345-346`), and grepping
-      `pine/*.c` for `mboxdriver`/`mbox_valid` turns up nothing outside
-      `mbox.c` itself. Since `c-client.a` is a static archive, an
-      unreferenced member normally isn't pulled into the final link --
-      but worth confirming with `nm bin/pine | grep mbox_` (or a
-      before/after `size` comparison from actually removing `mbox.o`
-      from the archive) whether it's really contributing zero bytes
-      today, or whether something incidental (e.g. a stray direct
-      reference, or the object still getting pulled in some other way)
-      is dragging it in anyway. If it's already contributing nothing,
-      this is a build-file cleanup (drop `mbox.o` from
-      `c-client/makefile.lnx`) rather than a code cut; if it's
-      surprisingly present in the binary, that's a real, unexpected
-      win to chase down.
 

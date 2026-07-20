@@ -42,10 +42,10 @@ all: c-client.a
 clean:
 	rm -f *.o c-client.a osdep.* CFLAGS LDFLAGS
 
-c-client.a: mail.o bezerk.o mbox.o \
+c-client.a: mail.o bezerk.o \
 	dummy.o rfc822.o misc.o osdep.o sm_unix.o
 	rm -f c-client.a
-	ar rc c-client.a mail.o bezerk.o mbox.o \
+	ar rc c-client.a mail.o bezerk.o \
 	dummy.o rfc822.o misc.o osdep.o \
 	sm_unix.o
 	ranlib c-client.a
@@ -57,8 +57,6 @@ bezerk.o: mail.h bezerk.h rfc822.h misc.h osdep.h
 tenex.o: mail.h tenex.h rfc822.h misc.h osdep.h
 
 tenex2.o: mail.h tenex2.h rfc822.h misc.h osdep.h
-
-mbox.o: mail.h mbox.h bezerk.h misc.h osdep.h
 
 mh.o: mail.h mh.h rfc822.h misc.h osdep.h
 
