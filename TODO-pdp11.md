@@ -88,3 +88,45 @@ DONE elsewhere or referenced in passing below.
       struct definition itself, updating `bezerkdriver`'s literal (the
       one remaining struct) to drop those two positional entries.
 
+### Simplify `read_pinerc()` to a bootstrap-only stub (drop full `.pinerc` parsing)
+
+- [ ] gcov flagged `read_pinerc()` (`pine/init.c:1133`) as low-coverage.
+      Called twice per run (`init.c:328` for `SYSTEM_PINERC`/
+      `ParseGlobal`, `init.c:337` for the user's own `.pinerc`/
+      `ParseLocal`), and every currently-tested invocation only
+      exercises its very first branch: `read_file(filename) == NULL`
+      -> sets `first_time_user=1` (ParseLocal only) -> `return(-1)`
+      (`init.c:1146-1151`). `test/smoketest.py`'s `Session` always
+      points `-p` at a fresh, nonexistent scratch `.pinerc` and no
+      `test/cases/*.py` ever seeds one with real content, so the whole
+      rest of the function -- line/`pinerc_lines` counting and
+      allocation, the line-by-line parse loop (comment lines, blank/
+      continuation lines, variable-name lookup, obsolete-variable
+      handling, unused-variable skip, `=`-syntax-error detection, quote
+      stripping, comma-separated list parsing with continuation-line
+      joining via `parse_list()`), and the `ParseLocal`-vs-`ParseGlobal`
+      storage into `v->user_val`/`v->global_val` -- is dead as far as
+      this project's test suite is concerned.
+      **User has explicitly accepted this as a real functionality
+      loss for the size win**: unlike the other items in this file,
+      this is not proven dead code, it's a deliberate capability cut.
+      Once landed, a hand- or Setup-written `.pinerc` (mail directory,
+      feature list, signature file, etc.) will no longer be parsed --
+      every variable silently stays at its compiled-in default on
+      every run, for both the system-wide and per-user config files.
+      **Proposed cut**: collapse `read_pinerc()` down to just the
+      existing bootstrap branch (open the file; if it doesn't exist,
+      set `first_time_user`/return `-1` same as today), deleting
+      everything past that.
+      **Needs verification before landing**:
+      - Check for other callers of `parse_list()` before deleting it
+        too (it's currently only invoked from `read_pinerc()`'s list-
+        parsing branch).
+      - Check what else reads `pinerc_lines` (the per-line struct this
+        function builds) -- it looks like it's kept around for writing
+        an updated `.pinerc` back out (e.g. from Setup/config-save
+        screens); if so, that dependent code needs its own look rather
+        than silently receiving an empty/uninitialized list.
+      - Standard trace-before-delete pass: rebuild, full smoketest
+        suite, warning count, before/after `size`.
+
