@@ -44,58 +44,60 @@ DONE elsewhere or referenced in passing below.
         `wait()` signature.
 
 ### Make `dummy` a plain helper `mail.c`/`bezerk.c` calls, not a registered `DRIVER`
+- DONE, see `TODO-pdp11-done.md`. `dummydriver` is no longer
+  `mail_link()`-ed; `mail_valid()`'s `"dummy"`-name exclusion (and its
+  now-unused `nopen` parameter) is gone; `mail_open()`/`mail_append()`
+  call `dummy_open_failure()`/`dummy_append_failure()` directly when
+  nothing matches; `mail_find()`/`mail_find_all()`'s no-stream loop
+  calls `dummy_find()`/`dummy_find_all()` directly. `dummy.c` shrank
+  from ~17 functions to 5 plain helpers (`dummy_find`/`dummy_find_all`/
+  `dummy_open_failure`/`dummy_append_failure`/`dummy_file`) with no
+  `DRIVER` struct at all.
 
-- [ ] Raised after the driver-slot shrink above: dummy doesn't
-      conceptually need to be a `DRIVER` at all -- it's really a small
-      set of helper functions (`dummy_find`/`dummy_find_all`'s
-      directory-scan search, `dummy_open`/`dummy_append`'s
-      correct-error-message + `[TRYCREATE]` hint) that `bezerk.c`
-      already calls directly as plain functions in two cases
-      (`bezerk_find`/`bezerk_find_all`). If the whole thing worked that
-      way, there'd be no `DRIVER` struct to keep populated at all, and
-      the remaining 9 load-bearing functions could shrink to plain
-      helpers with no signature-matching stub games needed.
-      **The catch**: `c-client/mail.c`'s own generic `mail_create()`/
-      `mail_delete()`/`mail_rename()` distinguish "a real driver already
-      handles this mailbox" from "only the catch-all placeholder
-      matched" by checking the literal driver name `"dummy"` inside
-      `mail_valid()` (its `nopen` flag) -- that's specifically what
-      requires dummy to remain a second, distinctly-named entry in the
-      driver chain today.
-      **Refined design** (simpler than editing `mail_valid()`'s
-      exclusion in place): stop `mail_link()`-ing `dummydriver`
-      entirely, so `maildrivers` only ever contains `bezerkdriver`.
-      `bezerk_valid()` stays strict (requires the file to really
-      exist) -- unchanged. With dummy out of the chain,
-      `mail_valid()`'s loop naturally returns NIL for a nonexistent
-      local mailbox with no special-casing needed at all, so the
-      `nopen && !strcmp(factory->name,"dummy")` check can simply be
-      deleted -- `mail_create`/`mail_delete`/`mail_rename`'s "already
-      exists" checks then work correctly for free. The dummy fallback
-      behavior only needs to be added explicitly, as plain function
-      calls (not through a `DRIVER` struct), in the handful of `mail.c`
-      entry points that actually want it when nothing matched:
-      - `mail_open()`: call dummy's error-reporting helper (today's
-        `dummy_open()` logic) when `mail_valid()` returns NIL, instead
-        of just `mail_valid()`'s own generic "no such mailbox" message.
-      - `mail_append()`: same, for the `[TRYCREATE]`-hint behavior
-        (today's `dummy_append()`).
-      - `mail_find()`/`mail_find_all()`'s no-stream case: today this
-        loop iterates every registered driver and calls each one's
-        `find`/`find_all` slot directly (`d->find_all(NIL,pat)`), and
-        `dummy_find_all` is currently the *only* one of those that does
-        anything when `stream` is NIL (`bezerk_find_all`'s forwarding
-        is itself gated on `stream` being non-NIL) -- so removing dummy
-        from the chain would silently break "search all mailboxes with
-        no open stream" unless this loop also gets an explicit direct
-        call to the dummy search helpers added.
-      **Scope**: touches `c-client/mail.c` in three specific spots
-      (`mail_valid()`, `mail_open()`, `mail_append()`, plus
-      `mail_find()`/`mail_find_all()`) instead of the single name-string
-      check today -- each change is simple and explicit, but it's still
-      shared driver-chain infrastructure `mail.c` uses generically, not
-      just the two locally-linked drivers, so it needs its own careful
-      design/verification pass, not a quick follow-on.
+### Remove subscribe/unsubscribe entirely, simplify `dummy_find()` to just call `dummy_find_all()`
+
+- [ ] Raised while checking whether subscribe/unsubscribe means
+      anything for local mbox/bezerk mailboxes (it's not purely an
+      IMAP/NNTP concept -- `bezerk_subscribe()`/`bezerk_unsubscribe()`
+      (`bezerk.c`) are real, calling `sm_subscribe()`/`sm_unsubscribe()`
+      (`c-client/sm_unix.c`), which read/write a per-user
+      `~/.mailboxlist` file). But nothing in `pine/*.c` calls
+      `context_subscribe()`/`context_unsubscribe()` or
+      `mail_subscribe()`/`mail_unsubscribe()` anywhere (confirmed by
+      grep -- zero hits), so `~/.mailboxlist` is never created in this
+      build, and `dummy_find()`'s subscription-database check
+      (`dummy.c`) always takes its "no database" branch and falls
+      straight through to `dummy_find_all()`. The whole subscribe/
+      unsubscribe path is dead weight end to end.
+      **Proposed cut**: delete `sm_subscribe()`/`sm_unsubscribe()`/
+      `sm_read()` from `sm_unix.c` (and their prototypes in `mail.h`)
+      entirely; delete `bezerk_subscribe()`/`bezerk_unsubscribe()` from
+      `bezerk.c`, replacing their `DRIVER` slots with the same kind of
+      unreachable-stub treatment already used elsewhere in this driver-
+      shrinking effort (see `TODO-pdp11-done.md`). Since no subscription
+      database can ever exist once `sm_subscribe()` is gone,
+      `dummy_find()` degenerates to exactly `dummy_find_all()`'s body --
+      delete `dummy_find()` and repoint its callers (`bezerk_find()`,
+      and `mail_find()`'s no-stream fallback call once the "make dummy a
+      plain helper" item above lands) directly at `dummy_find_all()`.
+      `phile.c` has the same `sm_subscribe`/`sm_unsubscribe` calls but
+      isn't compiled in this build (not in `makefile.lnx`), so no
+      changes needed there.
+      Needs the standard trace-before-delete verification pass (rebuild,
+      full smoketest suite, check warning count) before landing.
+      **Goes further than just stubbing**: unlike other slots trimmed
+      in this driver-shrinking effort (where the `DRIVER` struct shape
+      was always kept, only the assigned functions swapped for shared
+      stubs), `mail_subscribe()`/`mail_unsubscribe()` themselves (the
+      generic `c-client/mail.c` dispatchers, not just bezerk's
+      implementations) have zero callers anywhere in `pine/*.c` *or*
+      `c-client/*.c` -- the whole concept is unreachable end to end, not
+      just one driver's implementation of it. So this can go all the
+      way: delete `mail_subscribe()`/`mail_unsubscribe()` from `mail.c`
+      (and their prototypes/`#define` shortenings in `mail.h`), then
+      remove the `subscribe`/`unsubscribe` fields from the `DRIVER`
+      struct definition itself, updating `bezerkdriver`'s literal (the
+      one remaining struct) to drop those two positional entries.
 
 ### Is `c-client/mbox.c` dead weight in the build?
 
