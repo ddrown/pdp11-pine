@@ -70,8 +70,7 @@ static char rcsid[] = "$Id: file.c,v 4.3 1993/08/20 02:01:43 mikes Exp $";
  * Bound to "C-X C-R".
  */
 int
-fileread(f, n)
-int f, n;
+fileread(int f, int n)
 {
         register int    s;
         char fname[NFILEN];
@@ -120,8 +119,7 @@ static char *writehelp[] = {
  * Bound to "C-X C-I".
  */
 int
-insfile(f, n)
-int f, n;
+insfile(int f, int n)
 {
         register int    s;
         char fname[NFILEN], dir[NFILEN];
@@ -202,9 +200,8 @@ int f, n;
  * set for the current buffer.
  */
 int
-readin(fname, lockfl)
-char    fname[];	/* name of file to read */
-int	lockfl;		/* check for file locks? */
+readin(char fname[],	/* name of file to read */
+       int lockfl)	/* check for file locks? */
 {
         register LINE   *lp1;
         register LINE   *lp2;
@@ -301,8 +298,7 @@ out:
  * with ITS EMACS. Bound to "C-X C-W".
  */
 int
-filewrite(f, n)
-int f, n;
+filewrite(int f, int n)
 {
         register WINDOW *wp;
         register int    s;
@@ -400,7 +396,7 @@ int f, n;
 		}
 
 		if(s > 1)
-		  emlwrite("Wrote %d lines", (void *)s);
+		  emlwrite("Wrote %d lines", (void *)(long)s);
 		else
 		  emlwrite("Wrote 1 line", NULL);
         }
@@ -418,8 +414,7 @@ int f, n;
  * get called by "C-Z".
  */
 int
-filesave(f, n)
-int f, n;
+filesave(int f, int n)
 {
         register WINDOW *wp;
         register int    s;
@@ -445,7 +440,7 @@ int f, n;
                         wp = wp->w_wndp;
                 }
 		if(s > 1){
-		    emlwrite("Wrote %d lines", (void *)s);
+		    emlwrite("Wrote %d lines", (void *)(long)s);
 		}
 		else
 		  emlwrite("Wrote 1 line", NULL);
@@ -464,8 +459,7 @@ int f, n;
  * CHANGES: 1 Aug 91: returns number of lines written or -1 on error, MSS
  */
 int
-writeout(fn)
-char    *fn;
+writeout(char *fn)
 {
         register int    s;
         register LINE   *lp;
@@ -543,8 +537,7 @@ char *writetmp(int f, int n)
  * prompt if you wish.
  */
 int
-filename(f, n)
-int f, n;
+filename(int f, int n)
 {
         register WINDOW *wp;
         register int    s;
@@ -573,8 +566,7 @@ int f, n;
  * status of the read.
  */
 int
-ifile(fname)
-char    fname[];
+ifile(char fname[])
 {
         register LINE   *lp0;
         register LINE   *lp1;

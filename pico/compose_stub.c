@@ -29,9 +29,7 @@
  * write_field - write one length-prefixed field to a handoff/result file
  */
 void
-write_field(fp, tag, buf)
-FILE *fp;
-char *tag, *buf;
+write_field(FILE *fp, char *tag, char *buf)
 {
     long len = buf ? strlen(buf) : 0L;
 
@@ -49,9 +47,7 @@ char *tag, *buf;
  *              or short read.
  */
 char *
-read_field(fp, tag)
-FILE *fp;
-char *tag;
+read_field(FILE *fp, char *tag)
 {
     char got_tag[FIELDTAGLEN + 1];
     char linebuf[FIELDTAGLEN + 24];
@@ -86,8 +82,7 @@ char *tag;
  *                        stub functions.
  */
 PICO *
-compose_read_handoff(path)
-char *path;
+compose_read_handoff(char *path)
 {
     FILE *fp;
     PICO *pm;
@@ -139,10 +134,7 @@ char *path;
  *                        call, so it isn't repeated here.
  */
 void
-compose_write_result(path, status, pm)
-char *path;
-int   status;
-PICO *pm;
+compose_write_result(char *path, int status, PICO *pm)
 {
     FILE *fp;
 
@@ -178,8 +170,7 @@ compose_clearcur()
 
 
 void
-compose_keybinit(fkeys)
-int fkeys;
+compose_keybinit(int fkeys)
 {
     /* Standalone terminal setup already happened, unconditionally,
      * in vtinit()/ttopen() -- nothing left to do per Pmaster. */
@@ -187,8 +178,7 @@ int fkeys;
 
 
 int
-compose_raw_io(state)
-int state;
+compose_raw_io(int state)
 {
     /* Only called by bktoshell()'s ^Z path. ttopen()/ttclose() already
      * skip touching termios whenever Pmaster is set (assuming it's
@@ -200,9 +190,7 @@ int state;
 
 
 void
-compose_helper(text, title, from_composer)
-char *text[], *title;
-int   from_composer;
+compose_helper(char *text[], char *title, int from_composer)
 {
     emlwrite("No help screens in this build -- see the pine(1) man page",
 	     NULL);
@@ -210,8 +198,7 @@ int   from_composer;
 
 
 void
-compose_showmsg(ch)
-int ch;
+compose_showmsg(int ch)
 {
     /* pine's display_message() replays queued status messages; there's
      * no such queue here, so there's nothing to show. */
@@ -219,9 +206,7 @@ int ch;
 
 
 long
-compose_newmail(cursor_moved, force, flags)
-int *cursor_moved;
-int  force, flags;
+compose_newmail(int *cursor_moved, int force, int flags)
 {
     /* No live mail-index in this process to poll -- new mail surfaces
      * normally on return to the mail-reading process instead. */
@@ -230,8 +215,7 @@ int  force, flags;
 
 
 int
-compose_buildaddr(src, dest, errmsg)
-char *src, *dest, **errmsg;
+compose_buildaddr(char *src, char *dest, char **errmsg)
 {
     /*
      * No c-client here to expand/canonicalize addresses -- copy the

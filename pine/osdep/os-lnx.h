@@ -259,7 +259,9 @@ int fgetpos(); int fsetpos();
 
 
 /*-- What argument does wait(2) take? Define this if it is a union -----*/
-#define HAVE_WAIT_UNION  /* the arg to wait is a union wait * */
+/* #define HAVE_WAIT_UNION  /* the arg to wait is a union wait * */
+   /* glibc's wait(2) takes int *, not union wait * -- union wait
+    * doesn't even exist in modern glibc headers. */
 
 
 /*-------- Is window resizing available? -------------------------------*/

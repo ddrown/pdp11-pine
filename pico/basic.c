@@ -242,8 +242,7 @@ forwline(int f, int n)
  * motion. No errors are possible. Bound to "C-P".
  */
 int
-backline(f, n)
-int f, n;
+backline(int f, int n)
 {
     register LINE   *dlp;
     register int    status;
@@ -288,8 +287,7 @@ int f, n;
  * combination to delimit the begining of a paragraph	
  */
 int
-gotobop(f, n)
-int f, n;	/* default Flag & Numeric argument */
+gotobop(int f, int n)	/* default Flag & Numeric argument */
 {
     if (n < 0)	/* the other way...*/
       return(gotoeop(f, -n));
@@ -333,9 +331,7 @@ int f, n;	/* default Flag & Numeric argument */
  * combination to delimit the begining of a paragraph
  */
 int
-gotoeop(f, n)
-int f, n;	/* default Flag & Numeric argument */
-
+gotoeop(int f, int n)	/* default Flag & Numeric argument */
 {
     register int suc;	/* success of last backchar */
 
@@ -382,8 +378,7 @@ int f, n;	/* default Flag & Numeric argument */
  * Used by "C-N" and "C-P".
  */
 int
-getgoal(dlp)
-register LINE   *dlp;
+getgoal(register LINE *dlp)
 {
     register int    c;
     register int    col;
@@ -418,9 +413,7 @@ register LINE   *dlp;
  * this zaps the top line in the display window, we have to do a hard update.
  */
 int
-forwpage(f, n)
-int             f;
-register int    n;
+forwpage(int f, register int n)
 {
     register LINE   *lp;
     register int    nl;
@@ -474,9 +467,7 @@ register int    n;
  * reason.
  */
 int
-backpage(f, n)
-int             f;
-register int    n;
+backpage(int f, register int n)
 {
     register LINE   *lp;
     register int    nl;
@@ -566,8 +557,7 @@ setmark(int f, int n)
  * "C-X C-X".
  */
 int
-swapmark(f, n)
-int f, n;
+swapmark(int f, int n)
 {
     register LINE   *odotp;
     register int    odoto;
@@ -595,8 +585,7 @@ int f, n;
  * unset it.
  */
 int
-setimark(f, n)
-int f, n;
+setimark(int f, int n)
 {
     curwp->w_imarkp = curwp->w_dotp;
     curwp->w_imarko = curwp->w_doto;
@@ -611,8 +600,7 @@ int f, n;
  * "C-X C-X".
  */
 int
-swapimark(f, n)
-int f, n;
+swapimark(int f, int n)
 {
     register LINE   *odotp;
     register int    odoto;

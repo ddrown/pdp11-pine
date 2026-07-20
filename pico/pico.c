@@ -129,8 +129,7 @@ char    *pico_anchor = NULL;
  *
  */
 int
-pico(pm)
-PICO *pm;
+pico(PICO *pm)
 {
     register int    c;
     register int    f;
@@ -266,8 +265,7 @@ PICO *pm;
  * header information editing.
  */
 int
-edinit(bname)
-char    bname[];
+edinit(char bname[])
 {
     register BUFFER *bp;
     register WINDOW *wp;
@@ -320,8 +318,7 @@ char    bname[];
  * look at it. Return the status of command.
  */
 int
-execute(c, f, n)
-int c, f, n;
+execute(int c, int f, int n)
 {
     register KEYTAB *ktp;
     register int    status;
@@ -389,7 +386,7 @@ int c, f, n;
     }
     
     if(c&CTRL)
-      emlwrite("\007Unknown Command: ^%c", (void *)(c&0xff));
+      emlwrite("\007Unknown Command: ^%c", (void *)(long)(c&0xff));
     else
       emlwrite("\007Unknown Command", NULL);
 
@@ -404,8 +401,7 @@ int c, f, n;
  * changed do a write on that buffer and exit emacs, otherwise simply exit.
  */
 int
-quickexit(f, n)
-int f, n;
+quickexit(int f, int n)
 {
     register BUFFER *bp;	/* scanning pointer to buffers */
 
@@ -428,8 +424,7 @@ int f, n;
  *                  return FALSE
  */
 int
-abort_composer(f, n)
-int f, n;
+abort_composer(int f, int n)
 {
     switch(mlyesno("Cancelling will abandon your mail message.  Cancel", 
 		    FALSE)){
@@ -452,8 +447,7 @@ int f, n;
  * suspend_composer - return to pine with what's been edited so far
  */
 int
-suspend_composer(f, n)
-int f, n;
+suspend_composer(int f, int n)
 {
     pico_all_done = COMP_SUSPEND;
 }
@@ -465,8 +459,7 @@ int f, n;
  * has been changed and not written out. Normally bound to "C-X C-C".
  */
 int
-wquit(f, n)
-int f, n;
+wquit(int f, int n)
 {
     register int    s;
 
@@ -528,8 +521,7 @@ int f, n;
  * Sometimes called as a routine, to do general aborting of stuff.
  */
 int
-ctrlg(f, n)
-int f, n;
+ctrlg(int f, int n)
 {
     (*term.t_beep)();
     if (kbdmip != NULL) {
@@ -591,9 +583,7 @@ func_init()
  * pico_help - help function for standalone composer
  */
 int
-pico_help(text, title, i)
-char *text[], *title;
-int i;
+pico_help(char *text[], char *title, int i)
 {
     register    int numline = 0;
     char        **p;
@@ -613,8 +603,7 @@ int i;
  *                and frees all lines associated with it!!!
  */
 int
-zottree(nodeptr)
-struct	KBSTREE	*nodeptr;
+zottree(struct KBSTREE *nodeptr)
 {
     if(nodeptr != NULL){
 	zottree(nodeptr->left);

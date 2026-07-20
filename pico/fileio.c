@@ -56,8 +56,7 @@ FILE    *ffp;                           /* File pointer, all functions. */
  * Open a file for reading.
  */
 int
-ffropen(fn)
-  char    *fn;
+ffropen(char *fn)
 {
     if ((ffp=fopen(fn, "r")) == NULL)
       return (FIOFNF);

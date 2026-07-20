@@ -108,9 +108,7 @@ NULL
  * folded out. The "pc" is from the pattern.
  */
 int
-eq(bc, pc)
-int bc;
-int pc;
+eq(int bc, int pc)
 {
     if ((curwp->w_bufp->b_mode & MDEXACT) == 0){
 	if (bc>='a' && bc<='z')
@@ -244,8 +242,7 @@ forwsearch(int f, int n)
  * the search string.
  */
 int
-readpattern(prompt)
-char *prompt;
+readpattern(char *prompt)
 {
 	register int s;
 	char tpat[NPAT+20];
@@ -269,14 +266,13 @@ char *prompt;
 }
 
 
+/* search forward for a <patrn> */
 int
-forscan(wrapt,patrn,leavep)	/*	search forward for a <patrn>	*/
-int	*wrapt;		/* boolean indicating search wrapped */
-char *patrn;		/* string to scan for */
-int leavep;		/* place to leave point
-				PTBEG = begining of match
-				PTEND = at end of match		*/
-
+forscan(int *wrapt,		/* boolean indicating search wrapped */
+	char *patrn,		/* string to scan for */
+	int leavep)		/* place to leave point
+				   PTBEG = begining of match
+				   PTEND = at end of match */
 {
 	register LINE *curline;		/* current line during scan */
 	register int curoff;		/* position within current line */
@@ -387,12 +383,9 @@ fail:;			/* continue to search */
 /* 	expandp:	expand control key sequences for output		*/
 
 int
-expandp(srcstr, deststr, maxlength)
-
-char *srcstr;	/* string to expand */
-char *deststr;	/* destination of expanded string */
-int maxlength;	/* maximum chars in destination */
-
+expandp(char *srcstr,		/* string to expand */
+	char *deststr,		/* destination of expanded string */
+	int maxlength)		/* maximum chars in destination */
 {
 	char c;		/* current char to translate */
 

@@ -222,7 +222,7 @@ main(int argc, char *argv[])
     curwp->w_flag |= WFMODE;		/* and force an update	*/
 
     if(timeout)
-      emlwrite("Checking for new mail every %D seconds", (void *)timeout);
+      emlwrite("Checking for new mail every %D seconds", (void *)(long)timeout);
 
     if(clerr){				/* post any errors on command line */
 	if(mpresf)			/* show earlier message though! */

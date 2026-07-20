@@ -172,10 +172,7 @@ int whelp(int f, int n)
  *
  */
 int
-wscrollw(begrow, endrow, textp, textlen)
-int	begrow, endrow;
-char	*textp[];
-int	textlen;
+wscrollw(int begrow, int endrow, char *textp[], int textlen)
 {
     register int	loffset = 0; 
     register int	prevoffset = -1; 
@@ -301,9 +298,7 @@ int	textlen;
  *                  2. if c matches, but in other mode, punt it
  */
 int
-normal(c, list, sc)
-int c, sc;
-int list[][2];
+normal(int c, int list[][2], int sc)
 {
     register int i;
 
@@ -330,8 +325,7 @@ int list[][2];
  * rebind - replace the first function with the second
  */
 void
-rebindfunc(a, b)
-int (*a)(int, int), (*b)(int, int);
+rebindfunc(int (*a)(int, int), int (*b)(int, int))
 {
     KEYTAB *kp;
 

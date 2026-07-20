@@ -177,8 +177,7 @@ static int ckm[12][2] = {
  *                  position in the header.
  */
 void
-InitMailHeader(mp)
-PICO  *mp;
+InitMailHeader(PICO *mp)
 {
     int	i;
     char *addrbuf;
@@ -267,9 +266,7 @@ PICO  *mp;
  *		   line structure.
  */
 int
-InitEntryText(address, h)
-char	*address;
-int	h;
+InitEntryText(char *address, int h)
 {
     struct  hdr_line	*curline;
     register  int	longest;
@@ -340,8 +337,7 @@ ResizeHeader()
  * HeaderOffset - return the character offset into the given header
  */
 int
-HeaderOffset(h)
-int	h;
+HeaderOffset(int h)
 {
     register struct hdr_line *l;
     int	     i = 0;
@@ -361,8 +357,7 @@ int	h;
  * HeaderFocus - put the dot at the given offset into the given header
  */
 int
-HeaderFocus(h, offset)
-int	h, offset;
+HeaderFocus(int h, int offset)
 {
     register struct hdr_line *l;
     register int    i;
@@ -405,8 +400,7 @@ int	h, offset;
  *		TRUE  if editing is finished
  */
 int
-HeaderEditor(f, n)
-int f, n;
+HeaderEditor(int f, int n)
 {
     register  int	retval = -1;		/* return value */
     register  int	i;
@@ -630,7 +624,7 @@ int f, n;
 
 	  default :				/* huh? */
 	    if(ch&CTRL)
-	      emlwrite("\007Unknown command: ^%c", (void *)(ch&0xff));
+	      emlwrite("\007Unknown command: ^%c", (void *)(long)(ch&0xff));
 	    else
 	  case BADESC:
 	      emlwrite("\007Unknown command", NULL);
@@ -667,8 +661,7 @@ int f, n;
  *		length, and HALLOC() will probably have to become a func.
  */
 int
-LineEdit(allowedit)
-int	allowedit;
+LineEdit(int allowedit)
 {
     register struct	hdr_line   *lp;		/* temporary line pointer    */
     register int	i;
@@ -735,7 +728,7 @@ int	allowedit;
             if(allowedit){
 		if(ods.cur_e == FCCHDR && !fallowc((char)ch)){
 		    /* no garbage in filenames */
-		    emlwrite("\007Can't have a '%c' in folder name",(void *)ch);
+		    emlwrite("\007Can't have a '%c' in folder name",(void *)(long)ch);
 		    continue;
 		}
 		if(ods.cur_e != SUBJHDR){	/* single spaced except subj.*/
@@ -1011,11 +1004,11 @@ int	allowedit;
  *		TRUE  if text below the first line is changed
  */
 int
-FormatLines(h, instr, maxlen, entry)
-struct  hdr_line  *h;				/* where to begin formatting */
-char	*instr;					/* input string */
-int	maxlen;					/* max chars on a line */
-int	entry;					/* which header field */
+FormatLines(struct hdr_line *h, char *instr, int maxlen, int entry)
+					/* h: where to begin formatting */
+					/* instr: input string */
+					/* maxlen: max chars on a line */
+					/* entry: which header field */
 {
     int		retval = FALSE;
     register	int	i, l, addr;
@@ -1252,9 +1245,8 @@ int	entry;					/* which header field */
  *       17 July 91 - fixed reshow to deal with arbitrarily large headers.
  */
 void
-PaintHeader(line, clear)
-int	line;					/* physical line on screen   */
-int	clear;					/* clear before painting */
+PaintHeader(int line, int clear)	/* line: physical line on screen */
+					/* clear: clear before painting */
 {
     register struct hdr_line	*lp;
     register char	*bufp;
@@ -1344,8 +1336,7 @@ int	clear;					/* clear before painting */
  *		in update()
  */
 void
-PaintBody(level)
-int	level;
+PaintBody(int level)
 {
     curwp->w_flag |= WFHARD;			/* make sure framing's right */
     if(level == 0)				/* specify what to update */
@@ -1388,8 +1379,7 @@ ArrangeHeader()
  *                  based on the level passed ...
  */
 int
-ComposerHelp(level)
-int	level;
+ComposerHelp(int level)
 {
     curwp->w_flag |= WFMODE;
     sgarbf = TRUE;
@@ -1410,8 +1400,7 @@ int	level;
  *                  painting header if need be.
  */
 int
-ToggleHeader(show)
-int show;
+ToggleHeader(int show)
 {
     /*
      * check to see if we need to display the header... 
@@ -1463,9 +1452,7 @@ HeaderLen()
  *                 entry, via side effect, that the next line is a part of
  *              2) NULL if no next line, leaving entry at LASTHDR
  */
-static struct hdr_line *next_line(entry, line)
-int *entry;
-struct hdr_line *line;
+static struct hdr_line *next_line(int *entry, struct hdr_line *line)
 {
     if(line == NULL)
       return(NULL);
@@ -1493,9 +1480,7 @@ struct hdr_line *line;
  *                 via side effect
  *              2) NULL if we can't go back further
  */
-static struct hdr_line *prev_line(entry, line)
-int *entry;
-struct hdr_line *line;
+static struct hdr_line *prev_line(int *entry, struct hdr_line *line)
 {
     if(line == NULL)
       return(NULL);
@@ -1635,8 +1620,7 @@ NewTop()
  *                       inverse value specified by state.
  */
 void
-display_delimiter(state)
-int	state;
+display_delimiter(int state)
 {
     register char    *bufp;
     static   short   ps = 0;			/* previous state */
@@ -1686,8 +1670,7 @@ int	state;
  *		easily be combined
  */
 int
-InvertPrompt(entry, state)
-int	entry, state;
+InvertPrompt(int entry, int state)
 {
     register char   *bufp;
     register int    i;
@@ -1771,8 +1754,7 @@ partial_entries()
  *             2) -1 if entry currently not on display
  */
 int
-entry_line(entry, lastchar)
-int	entry, lastchar;
+entry_line(int entry, int lastchar)
 {
     register int    p_line = COMPOSER_TOP_LINE;
     int    i;
@@ -1807,8 +1789,7 @@ int	entry, lastchar;
  *             2) -1 if entry currently not on display
  */
 int
-physical_line(l)
-struct hdr_line *l;
+physical_line(struct hdr_line *l)
 {
     register int    p_line = COMPOSER_TOP_LINE;
     register struct hdr_line    *lp;
@@ -1859,8 +1840,7 @@ struct hdr_line *l;
  *		-1 on error
  */
 int
-resolve_niks(entry)
-int	entry;
+resolve_niks(int entry)
 {
     register    int     retval = FALSE;
     register	int	i;
@@ -1980,9 +1960,7 @@ int	entry;
  *          end of the given line.  otherwise FALSE.
  */
 int
-strend(s, ch)
-char *s;
-int   ch;
+strend(char *s, int ch)
 {
     register char *b;
     register char  c;
@@ -2009,9 +1987,7 @@ int   ch;
  * strqchr - returns pointer to first non-quote-enclosed occurance of c in 
  *           the given string.  otherwise NULL.
  */
-char *strqchr(s, ch)
-char *s;
-int   ch;
+char *strqchr(char *s, int ch)
 {
     register char *b;
     register char  c;
@@ -2047,9 +2023,7 @@ int   ch;
  *		FALSE otherwise
  */
 int
-KillHeaderLine(l, append)
-struct	hdr_line    *l;
-int     append;
+KillHeaderLine(struct hdr_line *l, int append)
 {
     register char	*c;
 
@@ -2137,9 +2111,7 @@ SaveHeaderLines()
  *		Pointer to the best break point in s, or
  *		Pointer to the beginning of s if no break point found
  */
-char *break_point(s, l, ch)
-char *s;
-int  l, ch;
+char *break_point(char *s, int l, int ch)
 {
     register char *b;
     register char  c;
@@ -2189,8 +2161,7 @@ int  l, ch;
  *		FALSE otherwise
  */
 int
-hldelete(l)
-struct hdr_line  *l;
+hldelete(struct hdr_line *l)
 {
     register struct hdr_line *lp;
 
@@ -2229,8 +2200,7 @@ struct hdr_line  *l;
  *           on display are spaces
  */
 int
-is_blank(row, col, n)
-int row, col, n;
+is_blank(int row, int col, int n)
 {
     n += col;
     for( ;col < n; col++){
@@ -2334,8 +2304,7 @@ zotheader()
  * zotentry - free malloc'd space associated with the given linked list
  */
 void
-zotentry(l)
-register struct hdr_line *l;
+zotentry(register struct hdr_line *l)
 {
     register struct hdr_line *ld, *lf = l;
 
@@ -2353,8 +2322,7 @@ register struct hdr_line *l;
  *	      of the given line
  */
 void
-zotcomma(s)
-char *s;
+zotcomma(char *s)
 {
     register char *p;
 

@@ -483,8 +483,7 @@ GetKey()
  *         returns: BADESC, the escaped function, or 0 if not found.
  */
 int
-kbseq(c)
-int	*c;
+kbseq(int *c)
 {
     register char	b;
     register int	first = 1;
@@ -649,8 +648,7 @@ unsigned char okinfname[32] = {
  * fallowc - returns TRUE if c is allowable in filenames, FALSE otw
  */
 int
-fallowc(c)
-char c;
+fallowc(int c)
 {
     return(okinfname[c>>3] & 0x80>>(c&7));
 }
@@ -661,10 +659,7 @@ char c;
  *          FALSE otherwise.  By side effect returns length of file in l
  */
 int
-fexist(file, m, l)
-char *file;
-char *m;					/* files mode: r, w or rw */
-long *l;
+fexist(char *file, char *m, long *l)		/* files mode: r, w or rw */
 {
     struct stat	sbuf;
 
@@ -748,9 +743,7 @@ strlcpy(char *dst, char *src, size_t dstsize)
  *         silent on errors (we'll let someone else notice the problem;)).
  */
 int
-isdir(fn, l)
-char *fn;
-long *l;
+isdir(char *fn, long *l)
 {
     struct stat sbuf;
 
@@ -771,8 +764,7 @@ long *l;
  *              Note: home is malloc'd for life of pico
  */
 char *
-gethomedir(l)
-int *l;
+gethomedir(int *l)
 {
     static char *home = NULL;
     static short hlen = 0;
@@ -801,8 +793,7 @@ int *l;
  *          done here once and for all.
  */
 char *
-errstr(err)
-int err;
+errstr(int err)
 {
     return strerror(err);
 }
@@ -814,9 +805,7 @@ int err;
  *             malloc'd string.  n contains the number of names
  */
 char *
-getfnames(dn, n)
-char *dn;
-int  *n;
+getfnames(char *dn, int *n)
 {
     long           l;
     char          *names, *np, *p;
@@ -904,9 +893,7 @@ int  *n;
  * fioperr - given the error number and file name, display error
  */
 void
-fioperr(e, f)
-int  e;
-char *f;
+fioperr(int e, char *f)
 {
     switch(e){
       case FIOFNF:				/* File not found */
@@ -941,9 +928,7 @@ char *f;
  * pfnexpand - pico's function to expand the given file name if there is 
  *	       a leading '~'
  */
-char *pfnexpand(fn, len)
-char *fn;
-int  len;
+char *pfnexpand(char *fn, int len)
 {
     struct passwd *pw;
     register char *x, *y, *z;
@@ -980,9 +965,7 @@ int  len;
  * fixpath - make the given pathname into an absolute path
  */
 void
-fixpath(name, len)
-char *name;
-int  len;
+fixpath(char *name, int len)
 {
     register char *shft;
 
@@ -1011,9 +994,7 @@ int  len;
  *                         new path, by side effect, if things went OK
  */
 int
-compresspath(base, path, len)
-char *base, *path;
-int  len;
+compresspath(char *base, char *path, int len)
 {
     register int i;
     int  depth = 0;
@@ -1075,8 +1056,7 @@ int  len;
  * tmpname - return a temporary file name in the given buffer
  */
 void
-tmpname(name)
-char *name;
+tmpname(char *name)
 {
     sprintf(name, "/tmp/pico.%d", getpid());	/* tmp file name */
 }
@@ -1090,9 +1070,7 @@ char *name;
  * a better place than a line of code.
  */
 void
-makename(bname, fname)
-char    bname[];
-char    fname[];
+makename(char bname[], char fname[])
 {
     register char   *cp1;
     register char   *cp2;
@@ -1117,8 +1095,7 @@ char    fname[];
  *        if either isn't accessible or is a directory
  */
 int
-copy(a, b)
-char *a, *b;
+copy(char *a, char *b)
 {
     int    in, out, n, rv = 0;
     char   *cb;
@@ -1213,8 +1190,7 @@ char *a, *b;
  * (cannot create).
  */
 int
-ffwopen(fn)
-char    *fn;
+ffwopen(char *fn)
 {
     extern FILE *ffp;
 
@@ -1253,8 +1229,7 @@ ffclose()
  *	Hopefully it'll be easy to exec the command into a temporary file, 
  *	and return a file pointer to that opened file or something.
  */
-FILE *P_open(s)
-char *s;
+FILE *P_open(char *s)
 {
     return(popen(s, "r"));
 }
@@ -1266,8 +1241,7 @@ char *s;
  *
  */
 int
-P_close(fp)
-FILE *fp;
+P_close(FILE *fp)
 {
     return(pclose(fp));
 }
@@ -1282,8 +1256,7 @@ FILE *fp;
  *	returns the line on the screen, l, that the dot is currently on
  */
 int
-worthit(l)
-int *l;
+worthit(int *l)
 {
     int i;			/* l is current line */
     unsigned below;		/* below is avg # of ch/line under . */

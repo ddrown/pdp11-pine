@@ -408,12 +408,9 @@ inword()
         return (FALSE);
 }
 
+/* Fill the current paragraph according to the current fill column */
 int
-fillpara(f, n)	/* Fill the current paragraph according to the current
-		   fill column						*/
-
-int f, n;	/* deFault flag and Numeric argument */
-
+fillpara(int f, int n)	/* deFault flag and Numeric argument */
 {
 	register int c;			/* current char durring scan	*/
 	register int wordlen;		/* length of current word	*/
@@ -482,7 +479,7 @@ int f, n;	/* deFault flag and Numeric argument */
 			/* 
 			 * don't want to limit ourselves to only '.'
 			 */
-			dotflag = (int)strchr(".?!:;\"", c);	/* dot ? */
+			dotflag = (strchr(".?!:;\"", c) != NULL);	/* dot ? */
 			if (wordlen < NSTRING - 1)
 				wbuf[wordlen++] = c;
 		} else if (wordlen) {

@@ -63,8 +63,7 @@ int     tabsize;                        /* Tab size (0: use real tabs)  */
  * Set fill column to n.
  */
 int
-setfillcol(f, n)
-int f, n;
+setfillcol(int f, int n)
 {
     char	numbuf[16];
     register int s;
@@ -84,8 +83,7 @@ int f, n;
  * Normally this is bound to "C-X =".
  */
 int
-showcpos(f, n)
-int f, n;
+showcpos(int f, int n)
 {
     register LINE   *clp;
     register long   nch;
@@ -128,8 +126,7 @@ int f, n;
  * Return current column.  Stop at first non-blank given TRUE argument.
  */
 int
-getccol(bflg)
-int bflg;
+getccol(int bflg)
 {
     register int c, i, col;
 
@@ -299,8 +296,7 @@ backdel(int f, int n)
  *	      a greatly pared down version of its former self.
  */
 int
-killtext(f, n)
-int f, n;
+killtext(int f, int n)
 {
     register int	chunk;
 
@@ -330,8 +326,7 @@ int f, n;
  * check for errors. Bound to "C-Y".
  */
 int
-yank(f, n)
-int f, n;
+yank(int f, int n)
 {
     register int    c;
     register int    i;

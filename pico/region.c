@@ -237,8 +237,7 @@ upperregion(int f, int n)
  * conform thing later.
  */
 int
-getregion(rp)
-register REGION *rp;
+getregion(register REGION *rp)
 {
     register LINE   *flp;
     register LINE   *blp;
@@ -299,8 +298,7 @@ register REGION *rp;
  * set the highlight attribute accordingly on all characters in region
  */
 int
-markregion(attr)
-    int attr;
+markregion(int attr)
 {
     register LINE   *linep;
     register int    loffs;

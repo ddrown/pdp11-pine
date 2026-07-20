@@ -23,8 +23,7 @@ main() {
 }
 
 int
-readfile(fpin, fpout)
-FILE *fpin, *fpout;
+readfile(FILE *fpin, FILE *fpout)
 {
     char line[BUFSIZ+1];
     char tmp[BUFSIZ+1];

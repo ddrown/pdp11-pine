@@ -10,38 +10,14 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-### Standing goal: eliminate compiler warnings
-- [ ] `./build clean && ./build lnx` currently produces 179 warnings.
-      Not a single task to pull and finish -- an ongoing, opportunistic
-      goal (see CLAUDE.md's "Code style: prefer ANSI-style function
-      signatures"): when a function is already being touched for some
-      other reason, clean up its warning(s) too, rather than doing one
-      dedicated mechanical sweep. Breakdown as of this writing:
-      - 155x `-Wold-style-definition`: K&R-style function definitions
-        (params declared below the signature line rather than inline).
-        Nearly all in `pico/` (`display.c`, `composer.c`, `browse.c`,
-        `osdep.c`, `pico.c`, `line.c`, `basic.c`, `buffer.c`, `file.c`,
-        `search.c`, `random.c`, `region.c`, `window.c`, `word.c`,
-        `bind.c`, `tcap.c`, `fileio.c`, `main.c`, `compose_stub.c`),
-        plus one in `pine/osdep/includer.c`. Mechanical, low-risk,
-        exactly the ANSI-signature conversion CLAUDE.md describes.
-      - 12x `-Wint-to-pointer-cast` / 10x `-Wpointer-to-int-cast`: casts
-        between pointers and integers of different sizes, in
-        `pico/display.c`, `pico/composer.c`, `pico/browse.c`,
-        `pico/pico.c`, `pico/main.c`, `pico/line.c`, `pine/screen.c`,
-        `pine/signals.c`, `pine/misc.c`. These are 64-bit-vs-original-
-        32-bit-assumption artifacts (this codebase predates 64-bit
-        pointers) -- worth individually checking each site actually
-        fits in the truncated width rather than blanket-suppressing;
-        higher risk than the style-only warnings above, so don't batch
-        these in with opportunistic K&R cleanups without looking at
-        each one.
-      - 2x `-Wincompatible-pointer-types`: `pine/send.c:811` and
-        `:1513` both call `wait((union wait *)&status)` -- worth
-        checking against this build's actual libc `wait(2)` prototype
-        (`int *status`, not `union wait *`) rather than assuming the
-        cast is still correct; possibly a leftover from an older BSD
-        `wait()` signature.
+### Standing goal: eliminate compiler warnings -- DONE
+- [x] `./build clean && ./build lnx` now produces 0 warnings. Finished
+      by clearing the last 3 `-Wold-style-definition` warnings plus all
+      22 pointer/int-width cast warnings and both `wait(2)`
+      incompatible-pointer-type warnings -- see `TODO-pdp11-done.md`
+      for the per-site writeup, including one real bug found and fixed
+      (`pine/osdep/os-lnx.h`'s `HAVE_WAIT_UNION` was wrong for this
+      target's glibc).
 
 ### Remove the `DRIVER` dispatch abstraction entirely -- `bezerkdriver` is the only driver left
 

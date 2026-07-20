@@ -402,8 +402,7 @@ kpinsert(char *kstr, int kval)
  *              IC takes precedence.
  */
 int
-tcapinsert(ch)
-register char	ch;
+tcapinsert(register char ch)
 {
     if(IC != NULL){
 	putpad(IC);
@@ -520,8 +519,7 @@ o_scrollup(int row, int n)
  *            returns: true if it optimized output, false otherwise
  */
 int
-o_insert(c)
-char c;
+o_insert(char c)
 {
     if(inschar){
 	tcapinsert(c);
@@ -569,9 +567,9 @@ tcapeeop()
 }
 
 
+/* change reverse video status */
 int
-tcaprev(state)		/* change reverse video status */
-int state;	        /* FALSE = normal video, TRUE = reverse video */
+tcaprev(int state)	/* FALSE = normal video, TRUE = reverse video */
 {
     static int cstate = FALSE;
 

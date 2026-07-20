@@ -199,8 +199,7 @@ vttidy()
  * idea during the early stages.
  */
 void
-vtmove(row, col)
-int row, col;
+vtmove(int row, int col)
 {
     vtrow = row;
     vtcol = col;
@@ -214,8 +213,7 @@ int row, col;
  * column overflow is checked.
  */
 void
-vtputc(c)
-CELL c;
+vtputc(CELL c)
 {
     register VIDEO      *vp;
     CELL     ac;
@@ -251,8 +249,7 @@ CELL c;
  * the right margin.
  */
 void
-vtpute(c)
-CELL c;
+vtpute(CELL c)
 {
     register VIDEO      *vp;
     CELL                 ac;
@@ -757,11 +754,10 @@ updext()
  * RAINBOW version of this routine uses fast video.
  */
 int
-updateline(row, vline, pline, flags)
-int  row;
-CELL vline[];				/* what we want it to end up as */
-CELL pline[];				/* what it looks like now       */
-short *flags;				/* and how we want it that way  */
+updateline(int row, CELL vline[], CELL pline[], short *flags)
+					/* vline: what we want it to end up as */
+					/* pline: what it looks like now */
+					/* flags: and how we want it that way */
 {
     register CELL *cp1;
     register CELL *cp2;
@@ -879,8 +875,7 @@ short *flags;				/* and how we want it that way  */
  * any time there is a dirty window.
  */
 void
-modeline(wp)
-WINDOW *wp;
+modeline(WINDOW *wp)
 {
     if(Pmaster){
 	static char keys[13], labels[160];
@@ -1007,8 +1002,7 @@ WINDOW *wp;
  * random calls. Update "ttrow" and "ttcol".
  */
 void
-movecursor(row, col)
-int row, col;
+movecursor(int row, int col)
 {
     if (row!=ttrow || col!=ttcol) {
         ttrow = row;
@@ -1050,9 +1044,7 @@ mlerase()
  * is no default.
  */
 int
-mlyesno(prompt, dflt)
-char  *prompt;
-int   dflt;
+mlyesno(char *prompt, int dflt)
 {
     int  c;				/* input character */
 
@@ -1118,9 +1110,7 @@ int   dflt;
  * return. Handle erase, kill, and abort keys.
  */
 int
-mlreply(prompt, buf, nbuf, flg)
-char  *prompt, *buf;
-int    nbuf, flg;
+mlreply(char *prompt, char *buf, int nbuf, int flg)
 {
     return(mlreplyd(prompt, buf, nbuf, flg|QDEFLT));
 }
@@ -1154,10 +1144,7 @@ static int rfkm[12][2] = {
  *            in file names.
  */
 int
-mlreplyd(prompt, buf, nbuf, flg)
-char  *prompt;
-char  *buf;
-int    nbuf, flg;
+mlreplyd(char *prompt, char *buf, int nbuf, int flg)
 {
     register int    c;				/* current char       */
     register char   *b;				/* pointer in buf     */
@@ -1344,16 +1331,16 @@ emlwrite(char *message, void* arg)
 	    l += 1;
 	    break;
 	  case 'd':
-	    l += (long)dumbroot((int)arg, 10);
+	    l += (long)dumbroot((int)(long)arg, 10);
 	    break;
 	  case 'D':
 	    l += (long)dumblroot((long)arg, 10);
 	    break;
 	  case 'o':
-	    l += (long)dumbroot((int)arg, 8);
+	    l += (long)dumbroot((int)(long)arg, 8);
 	    break;
 	  case 'x':
-	    l += (long)dumbroot((int)arg, 16);
+	    l += (long)dumbroot((int)(long)arg, 16);
 	    break;
 	  case 's':
             l += strlen((char *)arg);
@@ -1374,19 +1361,19 @@ emlwrite(char *message, void* arg)
 	else if(*bufp == '%'){
 	    switch(*++bufp){
 	      case 'c':
-		pputc((char)(int)arg, 0);
+		pputc((char)(long)arg, 0);
 		break;
 	      case 'd':
-		mlputi((int)arg, 10);
+		mlputi((int)(long)arg, 10);
 		break;
 	      case 'D':
 		mlputli((long)arg, 10);
 		break;
 	      case 'o':
-		mlputi((int)arg, 16);
+		mlputi((int)(long)arg, 16);
 		break;
 	      case 'x':
-		mlputi((int)arg, 8);
+		mlputi((int)(long)arg, 8);
 		break;
 	      case 's':
 		pputs((char *)arg, 0);
@@ -1416,9 +1403,7 @@ emlwrite(char *message, void* arg)
  * loop. Set the "message line" flag TRUE.
  */
 void
-mlwrite(fmt, arg)
-char *fmt;
-void *arg;
+mlwrite(char *fmt, void *arg)
 {
     register int c;
     register char *ap;
@@ -1487,8 +1472,7 @@ void *arg;
  * position. This will not handle any negative numbers; maybe it should.
  */
 void
-mlputi(i, r)
-int i, r;
+mlputi(int i, int r)
 {
     register int q;
     static char hexdigits[] = "0123456789ABCDEF";
@@ -1511,9 +1495,7 @@ int i, r;
  * do the same except as a long integer.
  */
 void
-mlputli(l, r)
-long l;
-int  r;
+mlputli(long l, int r)
 {
     register long q;
 
@@ -1541,9 +1523,7 @@ int  r;
  *        n  is the number of lines to scrol
  */
 void
-scrolldown(wp, r, n)
-WINDOW *wp;
-int     r, n;
+scrolldown(WINDOW *wp, int r, int n)
 {
 #ifdef	TERMCAP
     register int i;
@@ -1584,9 +1564,7 @@ int     r, n;
  *            moves...
  */
 void
-scrollup(wp, r, n)
-WINDOW *wp;
-int     r, n;
+scrollup(WINDOW *wp, int r, int n)
 {
 #ifdef	TERMCAP
     register int i;
@@ -1628,8 +1606,7 @@ int     r, n;
  * either the positive or negative direction (depending on sign of n).
  */
 void
-pprints(x, y)
-int x, y;
+pprints(int x, int y)
 {
     register int i;
     register int j;
@@ -1661,9 +1638,7 @@ int x, y;
  *         current window, and by side effect the number of lines remaining
  */
 int
-doton(r, chs)
-int       *r;
-unsigned  *chs;
+doton(int *r, unsigned *chs)
 {
     register int  i = 0;
     register LINE *lp = curwp->w_linep;
@@ -1691,8 +1666,7 @@ unsigned  *chs;
  * resize_pico - given new window dimensions, allocate new resources
  */
 int
-resize_pico(row, col)
-int  row, col;
+resize_pico(int row, int col)
 {
     int old_nrow, old_ncol;
     register int i;
@@ -1872,9 +1846,8 @@ nlforw()
  *	   array, and keep track of the cursor
  */
 void
-pputc(c, a)
-int   c;				/* char to write */
-int   a;				/* and its attribute */
+pputc(int c, int a)			/* c: char to write */
+					/* a: and its attribute */
 {
     if((ttcol >= 0 && ttcol < term.t_ncol) 
        && (ttrow >= 0 && ttrow <= term.t_nrow)){
@@ -1891,9 +1864,8 @@ int   a;				/* and its attribute */
  * pputs - print a string and keep track of the cursor
  */
 void
-pputs(s, a)
-register char *s;			/* string to write */
-register int   a;			/* and its attribute */
+pputs(register char *s, register int a)	/* s: string to write */
+						/* a: and its attribute */
 {
     while (*s != '\0')
       pputc(*s++, a);
@@ -1924,8 +1896,7 @@ peeol()
  *        given line, l, and offset, o.
  */
 CELL *
-pscr(l, o)
-int l, o;
+pscr(int l, int o)
 {
     if((l >= 0 && l <= term.t_nrow) && (o >= 0 && o < term.t_ncol))
       return(&(pscreen[l]->v_text[o]));
@@ -1938,9 +1909,7 @@ int l, o;
  * pclear() - clear the physical screen from row x through row y
  */
 void
-pclear(x, y)
-register int x;
-register int y;
+pclear(register int x, register int y)
 {
     register int i;
 
@@ -1955,8 +1924,7 @@ register int y;
  * dumbroot - just get close 
  */
 int
-dumbroot(x, b)
-int x, b;
+dumbroot(int x, int b)
 {
     if(x < b)
       return(1);
@@ -1969,9 +1937,7 @@ int x, b;
  * dumblroot - just get close 
  */
 long
-dumblroot(x, b)
-long x;
-int  b;
+dumblroot(long x, int b)
 {
     if(x < b)
       return(1);
@@ -1985,8 +1951,7 @@ int  b;
  *            returns true if char written, false otherwise
  */
 int
-pinsert(c)
-CELL c;
+pinsert(CELL c)
 {
     register int   i;
     register CELL *p;
@@ -2040,10 +2005,7 @@ pdel()
  *           stripe.
  */
 void
-wstripe(line, column, pmt, key)
-int	line, column;
-char	*pmt;
-int      key;
+wstripe(int line, int column, char *pmt, int key)
 {
     register char *buf;
     register int  i = 0;
@@ -2093,9 +2055,7 @@ int      key;
  *             of the display (yet another pine clone)
  */
 void
-wkeyhelp(keys, helptxt)
-char	*keys;
-char	*helptxt;
+wkeyhelp(char *keys, char *helptxt)
 {
     char *obufp, *ibufp = helptxt, *kbufp = HelpKeyNames, *startp;
     char *bufend = s + sizeof(s) - 1;	/* leave room for the trailing NUL */

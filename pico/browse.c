@@ -188,8 +188,7 @@ NULL
  *                  -1 if there where problems
  */
 int
-FileBrowse(dir, fn, sz)
-char *dir, *fn, *sz;			/* dir, name and optional size */
+FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 {
     int status, i, j, c;
     int row, col;
@@ -430,7 +429,7 @@ char *dir, *fn, *sz;			/* dir, name and optional size */
 	  case 'x':			            /* user exits wrong */
 	  case 'X':
 	    if(!(gmode&MDBRONLY)){
-		emlwrite("\007Unknown command '%c'", (void *)c);
+		emlwrite("\007Unknown command '%c'", (void *)(long)c);
 		break;
 	    }
 
@@ -1037,9 +1036,9 @@ char *dir, *fn, *sz;			/* dir, name and optional size */
 
 	  default:				/* what? */
 	    if(c < 0xff)
-	      emlwrite("\007Unknown command: '%c'", (void *) c);
+	      emlwrite("\007Unknown command: '%c'", (void *)(long) c);
 	    else if(c & CTRL)
-	      emlwrite("\007Unknown command: ^%c", (void *)(c&0xff));
+	      emlwrite("\007Unknown command: ^%c", (void *)(long)(c&0xff));
 	    else
 	      emlwrite("\007Unknown command", NULL);
 	  case NODATA:				/* no op */
@@ -1054,8 +1053,7 @@ char *dir, *fn, *sz;			/* dir, name and optional size */
  * prettysz - return pointer to string containing nice
  *            human-readable rendering of a byte count
  */
-char *prettysz(l)
-long l;
+char *prettysz(long l)
 {
     static char b[32];
 
@@ -1077,8 +1075,7 @@ long l;
  * getfcells - make a master browser struct and fill it in
  *             return NULL if there's a problem.
  */
-struct bmaster *getfcells(dname)
-char *dname;
+struct bmaster *getfcells(char *dname)
 {
     int  i, 					/* various return codes */
          nentries = 0;				/* number of dir ents */
@@ -1227,9 +1224,7 @@ char *dname;
  *                       "<fname>       <size>  "
  */
 int
-PaintCell(x, y, l, cell, inverted)
-struct fcell *cell;
-int    x, y, l, inverted;
+PaintCell(int x, int y, int l, struct fcell *cell, int inverted)
 {
     char *p;					/* temp str pointer */
     int   i = 0,				/* current display count */
@@ -1282,9 +1277,7 @@ int    x, y, l, inverted;
  *               themselves
  */
 int
-PaintBrowser(mp, level)
-struct bmaster *mp;
-int level;
+PaintBrowser(struct bmaster *mp, int level)
 {
     int i, cl;
     struct fcell *tp;
@@ -1361,8 +1354,7 @@ BrowserKeys()
  *               go on a line of the display
  */
 int
-layoutcells(mp)
-struct bmaster *mp;
+layoutcells(struct bmaster *mp)
 {
     int i = 1;
 
@@ -1384,10 +1376,7 @@ struct bmaster *mp;
  *             return -1 on error
  */
 int
-PlaceCell(mp, cp, x, y)
-struct bmaster *mp;
-struct fcell *cp;
-int    *x, *y;
+PlaceCell(struct bmaster *mp, struct fcell *cp, int *x, int *y)
 {
     int cl = COMPOSER_TOP_LINE;			/* current line */
     int ci = 0;					/* current index on line */
@@ -1443,8 +1432,7 @@ int    *x, *y;
  * zotfcells - clean up malloc'd cells of file names
  */
 int
-zotfcells(hp)
-struct fcell *hp;
+zotfcells(struct fcell *hp)
 {
     struct fcell *tp;
 
@@ -1461,8 +1449,7 @@ struct fcell *hp;
  * zotmaster - blast the browser master struct
  */
 int
-zotmaster(mp)
-struct bmaster **mp;
+zotmaster(struct bmaster **mp)
 {
     zotfcells((*mp)->head);			/* free cells       */
     free((char *)(*mp)->names);			/* free file names  */
@@ -1475,9 +1462,7 @@ struct bmaster **mp;
  * FindCell - starting from the current cell find the first occurance of 
  *            the given string wrapping around if necessary
  */
-struct fcell *FindCell(mp, string)
-struct bmaster *mp;
-char   *string;
+struct fcell *FindCell(struct bmaster *mp, char *string)
 {
     struct fcell *tp, *fp;
 
@@ -1510,8 +1495,7 @@ char   *string;
  * sisin - case insensitive substring matching function
  */
 int
-sisin(s1, s2)
-char *s1, *s2;
+sisin(char *s1, char *s2)
 {
     register int j;
 
@@ -1531,8 +1515,7 @@ char *s1, *s2;
  * BrowserAnchor - draw the browser's anchor line.
  */
 void
-BrowserAnchor(dir)
-char *dir;
+BrowserAnchor(char *dir)
 {
     register char *p;
     register int  i, j, l;

@@ -181,7 +181,7 @@ long search (char *s,long c,char *pat,long patc)
    * and add 21 (case + overflow) to all the bytes.  If we have a resulting
    * carry, then we have a match.
    */
-  if (cc = ((int) s & 3)) {	/* any chars before word boundary? */
+  if (cc = ((long) s & 3)) {	/* any chars before word boundary? */
     c -= (cc = 4 - cc);		/* yes, calculate how many, account for them */
 				/* search through those */
     if (ssrc (&s,&cc,pat,(long) NIL)) return T;

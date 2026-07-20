@@ -83,8 +83,7 @@ unsigned ksize   = 0;                   /* # of bytes allocated in KB   */
  * message in the message line if no space.
  */
 LINE    *
-lalloc(used)
-register int    used;
+lalloc(register int used)
 {
     register LINE   *lp;
     register int    size;
@@ -94,7 +93,7 @@ register int    used;
       size = NBLOCK;                  /* line is for type-in. */
 
     if ((lp = (LINE *) malloc(sizeof(LINE)+(size*sizeof(CELL)))) == NULL) {
-	emlwrite("Cannot allocate %d bytes", (void *)size);
+	emlwrite("Cannot allocate %d bytes", (void *)(long)size);
 	return (NULL);
     }
 
@@ -110,8 +109,7 @@ register int    used;
  * conditions described in the above comments don't hold here.
  */
 void
-lfree(lp)
-register LINE   *lp;
+lfree(register LINE *lp)
 {
     register BUFFER *bp;
     register WINDOW *wp;
@@ -165,8 +163,7 @@ register LINE   *lp;
  * mode line needs to be updated (the "*" has to be set).
  */
 void
-lchange(flag)
-register int    flag;
+lchange(register int flag)
 {
     register WINDOW *wp;
 
@@ -193,8 +190,7 @@ register int    flag;
  * default flag and numeric argument 
  */
 void
-insspace(f, n)	
-int f, n;
+insspace(int f, int n)
 {
     linsert(n, ' ');
     backchar(f, n);
@@ -210,8 +206,7 @@ int f, n;
  * well, and FALSE on errors.
  */
 int
-linsert(n, c)
-int n, c;
+linsert(int n, int c)
 {
     register LINE   *dotp;
     register int     doto;
@@ -256,10 +251,7 @@ int n, c;
  *             the list of lines.
  */
 int
-geninsert(dotp, doto, linep, c, attb, n)
-LINE **dotp, *linep;
-short *doto;
-int    c, attb, n;
+geninsert(LINE **dotp, short *doto, LINE *linep, int c, int attb, int n)
 {
     register LINE  *lp1;
     register LINE  *lp2;
@@ -407,8 +399,7 @@ lnewline()
  * buffer. The "kflag" is TRUE if the text should be put in the kill buffer.
  */
 int
-ldelete(n, kflag)
-int n, kflag;
+ldelete(int n, int kflag)
 {
     register CELL   *cp1;
     register CELL   *cp2;
@@ -584,7 +575,7 @@ ldelnewline()
  * in case the buffer has grown to immense size. No errors.
  */
 void
-kdelete()
+kdelete(void)
 {
     if (kbufp != NULL) {
 	free((char *) kbufp);
@@ -601,8 +592,7 @@ kdelete()
  * later. Return TRUE if all is well, and FALSE on errors.
  */
 int
-kinsert(c)
-    int c;
+kinsert(int c)
 {
     register char   *nbufp;
 
@@ -627,8 +617,7 @@ kinsert(c)
  * until it gets a "-1" back.
  */
 int
-kremove(n)
-int n;
+kremove(int n)
 {
     if (n >= kused)
       return (-1);

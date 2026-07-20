@@ -64,8 +64,7 @@ int sgetline();
 
 
 int
-zotbuf(bp)	/* kill the buffer pointed to by bp */
-  register BUFFER *bp;
+zotbuf(register BUFFER *bp)	/* kill the buffer pointed to by bp */
 {
     register BUFFER *bp1;
     register BUFFER *bp2;
@@ -199,8 +198,7 @@ bfind(char *bname, int cflag, int bflag)
  * looks good.
  */
 int
-bclear(bp)
-register BUFFER *bp;
+bclear(register BUFFER *bp)
 {
         register LINE   *lp;
         register int    s = FALSE;
@@ -239,10 +237,7 @@ register BUFFER *bp;
  *           buffer, by calling zotedit.
  */
 int
-packbuf(buf, blen, lcrlf)
-char	**buf;
-int	*blen;
-int	lcrlf;				/* EOLs are local or CRLF */
+packbuf(char **buf, int *blen, int lcrlf)	/* EOLs are local or CRLF */
 {
     register int    s;
     register int    i = 0;
@@ -383,11 +378,7 @@ readbuf(char **buf)
  *            newline.
  */
 int
-sgetline(ibuf, nchars, obuf, blen)
-char	**ibuf;
-int	*nchars;
-char	*obuf;
-int	blen;
+sgetline(char **ibuf, int *nchars, char *obuf, int blen)
 {
     register char 	*len;
     register char 	*cbuf = *ibuf;

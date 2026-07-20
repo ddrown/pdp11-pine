@@ -858,7 +858,7 @@ update_titlebar_message(new_message_number)
         if(as.style == TextPercent) {
             PutLine5(0, as.cur_mess_col, "%s of %s %3d%% %s%s",
                      s_new, comatose((long)as.total_messages),
-                     (void *)CALC_PERCENT(as.current_line, as.total_lines),
+                     (void *)(long)CALC_PERCENT(as.current_line, as.total_lines),
                      BAR_STATUS(as.msg_state),
                      repeat_char(max(0, -l_change),' '));
             if(as.del_column >= 0) {
@@ -910,7 +910,7 @@ update_titlebar_percent(new_line_number)
      return;
 
     StartInverse();
-    PutLine1(0, as.percent_column, "%3d", (void *)new_percent);
+    PutLine1(0, as.percent_column, "%3d", (void *)(long)new_percent);
     EndInverse();
     fflush(stdout);
 }

@@ -150,7 +150,7 @@ end_signals()
     interrupt_ok();
 #else
     dprint(5, (debugfile, "end_signals\n"));
-    if((int)signal(SIGILL,  SIG_DFL) < 0) {
+    if(signal(SIGILL,  SIG_DFL) == SIG_ERR) {
         fprintf(stderr, "Error resetting signals: %s\n",
                 error_description(errno));
         exit(-1);

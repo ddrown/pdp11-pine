@@ -3886,3 +3886,236 @@ already covered by the existing composer tests).
   another -296 from dropping the file-existence check entirely), `bss`
   15000 -> 14968 (-32 bytes, the removed `pinerc_lines` static
   pointer), `data` unchanged; `bin/pico` unaffected.
+
+### 10 K&R-style function definitions converted to ANSI, fully clearing 4 `pico/` files
+
+- **What it was**: opportunistic pull from the standing "eliminate
+  compiler warnings" goal, per the user's direct request to fix a
+  batch of 10. Picked all `-Wold-style-definition` warnings from 4
+  small files so each one would end up fully cleared rather than
+  partially touched: `pico/window.c` (`refresh`, 1), `pico/bind.c`
+  (`wscrollw`/`normal`/`rebindfunc`, 3), `pico/region.c`
+  (`getregion`/`markregion`, 2), `pico/buffer.c`
+  (`zotbuf`/`bclear`/`packbuf`/`sgetline`, 4).
+- **What changed**: each function's K&R-style definition (params
+  declared below the signature line, e.g. `foo(a, b)\n  int a, b;\n{`)
+  converted to ANSI style (`foo(int a, int b)\n{`), preserving
+  `register` qualifiers and any trailing same-line comments (e.g.
+  `zotbuf`'s `/* kill the buffer pointed to by bp */`). Pure
+  signature-style rewrite, no logic changes.
+- **Verified**: `./build lnx` clean before touching anything. `./build
+  clean && ./build lnx` clean afterward -- `bin/pine`/`bin/pico` both
+  byte-for-byte identical in size (expected: ANSI vs. K&R style
+  produces identical generated code), confirming this was purely
+  cosmetic. Warning count 177 -> 167, and diffed the full warning list
+  before/after to confirm exactly the 10 targeted
+  `-Wold-style-definition` warnings disappeared and nothing new
+  appeared. Full smoketest suite 26/26 (unchanged -- no observable
+  behavior difference, pure style fix).
+- **Size delta**: none (`bin/pine`/`bin/pico` both byte-identical).
+
+### 20 more K&R-style function definitions converted to ANSI, fully clearing 6 more files
+
+- **What it was**: continuation of the opportunistic warning-cleanup
+  pull, per the user's direct request to fix another batch of 20.
+  Picked all remaining `-Wold-style-definition` warnings from
+  `pico/word.c` (`fillpara`, 1), `pico/tcap.c` (`tcapinsert`/
+  `o_insert`/`tcaprev`, 3), `pico/search.c` (`eq`/`readpattern`/
+  `forscan`/`expandp`, 4), `pico/fileio.c` (`ffropen`, 1),
+  `pine/osdep/includer.c` (`readfile`, 1), and all 10 in `pico/pico.c`
+  (`pico`/`edinit`/`execute`/`quickexit`/`abort_composer`/
+  `suspend_composer`/`wquit`/`ctrlg`/`pico_help`/`zottree`) -- fully
+  clearing all 6 files' `-Wold-style-definition` warnings (`pico.c`
+  still has one unrelated `-Wint-to-pointer-cast` warning left, out of
+  scope for this pass per the TODO's own risk note).
+- **What changed**: each function's K&R-style definition converted to
+  ANSI style, preserving `register` qualifiers and relocating
+  trailing/inline comments to sensible spots (e.g. `forscan`'s and
+  `expandp`'s multi-line per-parameter comments folded into an
+  ANSI-style multi-line parameter list; `tcaprev`'s two comments split
+  between a preceding doc-comment and a trailing one). Noticed and
+  left alone (out of scope, pre-existing, and inert): `pico/efunc.h`
+  has an `#ifdef ANSI ... #else ... #endif` split with a correct
+  ANSI-style prototype in the first branch and a stale K&R-style
+  fallback in the second (e.g. `o_insert`, `rebindfunc`) -- since this
+  build always defines `ANSI` (`-DANSI` in `pico/makefile.lnx`), the
+  stale branch is never actually compiled; clangd's "conflicting
+  types" diagnostic on those functions is a static-analysis artifact
+  from evaluating both `#ifdef` branches, not a real issue.
+- **Verified**: `./build lnx` clean before touching anything. `./build
+  clean && ./build lnx` clean afterward -- `bin/pine` byte-identical;
+  `bin/pico`'s `text` shrank slightly (110098 -> 110076, -22 bytes,
+  presumably minor code-gen/register-allocation differences from the
+  signature rewrites -- not byte-identical this time, unlike the
+  previous 10-warning batch, but not a concern for what's still a pure
+  signature-style change). Warning count 167 -> 147, diffed the full
+  warning list before/after to confirm exactly 20
+  `-Wold-style-definition` warnings disappeared and no other category
+  changed. Full smoketest suite 26/26 (unchanged -- no observable
+  behavior difference).
+- **Size delta**: `bin/pico`'s `text` 110098 -> 110076 (-22 bytes),
+  `data`/`bss` unchanged; `bin/pine` byte-identical.
+
+### 40 more K&R-style function definitions converted to ANSI, fully clearing 4 more files
+
+- **What it was**: continuation of the opportunistic warning-cleanup
+  pull, per the user's direct request to fix another batch of 40.
+  Picked all remaining `-Wold-style-definition` warnings from
+  `pico/random.c` (5), `pico/file.c` (8), `pico/basic.c` (9),
+  `pico/line.c` (9), and 9 of `pico/compose_stub.c`'s 10 -- fully
+  clearing the first four files and leaving exactly one function
+  (`compose_buildaddr`) in `compose_stub.c` for a future batch.
+- **What changed**: each function's K&R-style definition converted to
+  ANSI style, preserving `register` qualifiers and relocating inline
+  comments. A few opportunistic extras beyond the exact 40 gcov-flagged
+  ones, since they were sitting immediately adjacent to functions
+  already being touched: `pico/line.c`'s `kdelete(void)` (empty-parens
+  K&R form, not itself warning-flagged by gcc but cleaned up while
+  converting its neighbors `kinsert`/`kremove`). Noted in passing:
+  `pico/compose_stub.c` (new in this session, part of the composer-as-
+  separate-process work referenced in `TODO-pdp11-done.md`) confirms
+  that architecture is already implemented, not just planned.
+- **Verified**: `./build lnx` clean before touching anything. `./build
+  clean && ./build lnx` clean afterward -- `bin/pine` byte-identical;
+  `bin/pico`'s `text` shrank further (110076 -> 110006, -70 bytes).
+  Warning count 147 -> 107, diffed the full warning list before/after
+  to confirm exactly 40 `-Wold-style-definition` warnings disappeared
+  and no other category changed. Full smoketest suite 26/26 (unchanged
+  -- `test_composer_resize_grow`/`test_composer_wide_terminal`/
+  `test_compose_cancel`/`test_pico_standalone_longpath` all exercise
+  the composer-subprocess path this batch touched most, giving good
+  confidence beyond just the warning-count diff).
+- **Size delta**: `bin/pico`'s `text` 110076 -> 110006 (-70 bytes),
+  `data`/`bss` unchanged; `bin/pine` byte-identical.
+
+### 80 more K&R-style function definitions converted to ANSI, fully clearing 5 more files
+
+- **What it was**: continuation of the opportunistic warning-cleanup
+  pull, per the user's direct request to fix another batch of 80.
+  Picked all remaining `-Wold-style-definition` warnings from
+  `pico/compose_stub.c` (1, the last function left from the previous
+  batch -- `compose_buildaddr`), `pico/browse.c` (12), `pico/os_unix.c`
+  (18, the real source behind the generated `pico/osdep.c` -- see
+  CLAUDE.md's generated-files rule), `pico/composer.c` (26), and 23 of
+  `pico/display.c`'s 26 -- fully clearing the first four files and
+  leaving exactly 3 functions in `display.c` for a future batch.
+- **What changed**: each function's K&R-style definition converted to
+  ANSI style, preserving `register` qualifiers and relocating inline
+  comments (multi-parameter functions with a trailing per-parameter
+  comment got the comment moved to trail the whole signature line, one
+  comment per parameter on its own continuation line, e.g.
+  `updateline`/`FormatLines`/`PaintHeader`/`pputc`/`pputs`). One real
+  bug surfaced and fixed in passing: `pico/os_unix.c`'s `fallowc` was
+  K&R-defined with a `char c` parameter, but both its `efunc.h`
+  prototypes declare `int fallowc(int)` -- under K&R rules the `char`
+  argument is silently promoted to `int` at the call site so this never
+  broke anything, but converting the definition straight to
+  `fallowc(char c)` made it a strict ANSI prototype and gcc correctly
+  rejected the mismatch (`conflicting types for 'fallowc'`); fixed by
+  matching the definition's parameter type to the header's `int`
+  instead. `browse.c`'s `PaintCell` needed matching parameters by name
+  rather than K&R declaration order (the K&R block declared
+  `struct fcell *cell;` before `int x, y, l, inverted;`, despite `cell`
+  being 4th in the parameter list). Left 3 `-Wint-to-pointer-cast`
+  warnings in `browse.c` (lines 433/1040/1042) and 2 in `composer.c`
+  untouched -- different category, out of scope per
+  `TODO-pdp11.md`'s own caution against batching cast warnings in with
+  style-only K&R cleanups.
+- **Verified**: `./build clean && ./build lnx` clean before and after.
+  Warning count 107 -> 27, diffed the full categorized warning list
+  before/after to confirm exactly 80 `-Wold-style-definition` warnings
+  disappeared (83 -> 3) and no other category changed (12x
+  `-Wint-to-pointer-cast`, 10x `-Wpointer-to-int-cast`, 2x
+  `-Wincompatible-pointer-types` all unchanged). Full smoketest suite
+  26/26.
+- **Size delta**: `bin/pico`'s `text` 110006 -> 109994 (-12 bytes),
+  `data` 6364/`bss` 10624 unchanged from prior measurement; `bin/pine`
+  untouched by this batch (all 5 files are under `pico/`).
+
+### Remaining 27 warnings cleared -- `./build clean && ./build lnx` is now 0 warnings
+
+- **What it was**: per the user's direct request to finish off the
+  warning-cleanup goal entirely ("do the last 27"), rather than
+  stopping at the mechanical K&R/ANSI conversions. Cleared the last 3
+  `-Wold-style-definition` warnings (`pico/display.c`'s `pinsert`,
+  `wstripe`, `wkeyhelp` -- same mechanical conversion as every prior
+  batch), then, unlike those prior batches, went through each of the
+  remaining 22 `-Wint-to-pointer-cast`/`-Wpointer-to-int-cast` warnings
+  and both `-Wincompatible-pointer-types` ones individually, per
+  `TODO-pdp11.md`'s own explicit caution not to blanket-suppress these.
+- **The `void *arg`-as-scalar family (16 warnings)**: `pico/display.c`'s
+  `emlwrite()` and `pine/screen.c`'s `PutLine1()` both take a `void
+  *arg` parameter that's really printf-style scalar data (an `int` or
+  `long`) smuggled through a pointer-typed slot -- a 32-bit-era idiom
+  that assumed `sizeof(void*) == sizeof(int)`. Every call site
+  (`(void *)someint`) and every internal cast back
+  (`(int)arg`/`(char)(int)arg`) direct-cast between `void *` and a
+  narrower integer type, which gcc flags on this 64-bit dev host (LP64:
+  pointers are 8 bytes, `int` is 4). Fixed by routing every such cast
+  through an explicit `long` (this platform's pointer-width integer
+  type, and already the pattern the code used for its one genuinely
+  `long`-sized case, `%D`): `(void *)(long)intval` at call sites,
+  `(int)(long)arg`/`(char)(long)arg` inside the callees. Purely a
+  widening/narrowing-explicitness fix -- the actual values passed
+  (loop counters, key codes masked to `& 0xff`, a `timeout` int) always
+  fit in `int` at every call site, confirmed by reading each one
+  (`pico/line.c:96`, `pico/pico.c:389`, `pico/main.c:225`,
+  `pico/browse.c:432,1039,1041`, `pico/composer.c:627,731`,
+  `pine/screen.c:861,913`, plus `pico/display.c`'s 7 internal
+  `emlwrite()` casts). No behavior change on either this dev host or
+  the eventual PDP-11 target (where `int`/`long`/pointer widths differ
+  from here, but the explicit `long` step still round-trips correctly
+  either way).
+- **`pico/word.c:482`**: `dotflag = (int)strchr(...)` truncated a
+  `char *` down to `int` just to use it as a boolean a few lines later
+  (`if(dotflag && ...)`); nothing ever read it as a real pointer or
+  address value. Changed to `dotflag = (strchr(...) != NULL)` -- an
+  actual boolean instead of a truncated, meaningless integer, which is
+  both correct and warning-free (no cast at all).
+- **`imap/ANSI/c-client/misc.c:184`**: `search()`'s fast-path alignment
+  check did `(int) s & 3` to find how many bytes `s` is short of a
+  4-byte word boundary. Only the low 2 bits matter, which truncation to
+  any narrower integer type preserves regardless -- so this was never
+  an actual correctness bug, just an avoidable warning. Changed the
+  cast to `(long) s & 3` to match pointer width and silence it, with no
+  change in the computed value.
+- **`pine/signals.c:153`**: `end_signals()` checked `(int)signal(SIGILL,
+  SIG_DFL) < 0` to detect `signal(2)` failure -- casting the returned
+  function pointer to `int` and comparing against 0 relies on `SIG_ERR`
+  (`(void(*)(int))-1`) truncating to a negative `int`, which happens to
+  hold on this platform but is exactly the kind of pointer/int-width
+  assumption this whole audit exists to catch. Replaced with the
+  portable, direct comparison `signal(SIGILL, SIG_DFL) == SIG_ERR`,
+  which needs no cast and doesn't depend on `SIG_ERR`'s bit pattern.
+- **`pine/send.c:619,1271` -- real bug, not just a style warning**: both
+  sites conditionally call `wait((union wait *)&status)` under
+  `#ifdef HAVE_WAIT_UNION`, which `pine/osdep/os-lnx.h:262` had
+  defined. Checked this dev host's actual `<sys/wait.h>`: glibc's
+  `wait()` takes `int *`, and `union wait` isn't even declared in
+  glibc's headers anymore -- `HAVE_WAIT_UNION` was simply wrong for
+  this target (per `TODO-pdp11.md`'s own note, "possibly a leftover
+  from an older BSD `wait()` signature" -- confirmed). Disabled the
+  `#define` in `os-lnx.h` (commented out, matching every other
+  `os-*.h` platform header's convention for a disabled option, with a
+  note explaining why), which routes both call sites to the `#else`
+  branch's plain `wait(&status)` -- correct for this target and the
+  reason the warning existed in the first place. `os-lnx.h` is a real
+  tracked per-platform header (unlike the gitignored, build-generated
+  `os-lnx.c` covered by CLAUDE.md's generated-files rule), so this was
+  a direct, appropriate edit.
+- **Verified**: `./build clean && ./build lnx` clean before and after
+  every individual fix (rebuilt the specific `.o` after each site to
+  confirm that warning's disappearance with accurate line numbers,
+  same discipline as the K&R batches). Final full clean rebuild: **0
+  warnings** (107 -> 27 from the prior batch's mechanical pass -> 0
+  here). Full smoketest suite 26/26 throughout, including after the
+  `wait()` fix (composer-subprocess tests --
+  `test_compose_cancel`/`test_composer_resize_grow`/
+  `test_composer_wide_terminal`/`test_pico_standalone_longpath` --
+  exercise exactly the fork/exec/wait path that fix touches).
+- **Size delta**: `bin/pico`'s `text` 109994 -> 110002 (+8 bytes, the
+  extra `(long)` intermediate casts and `search()`'s widened
+  alignment-mask expression add a handful of instructions); `bin/pine`
+  876728 -> 876704 (-24 bytes, net effect of the `wait()`/`signal()`
+  simplifications outweighing the `(long)` casts added elsewhere in
+  `pine/`).

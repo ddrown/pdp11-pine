@@ -56,8 +56,7 @@ static char rcsid[] = "$Id: window.c,v 4.2 1993/04/15 00:34:26 mikes Exp $";
  * argument it recenters "." in the current window. Bound to "C-L".
  */
 int
-refresh(f, n)
-  int f, n;
+refresh(int f, int n)
 {
     /*
      * since pine mode isn't using the traditional mode line, sgarbf isn't
