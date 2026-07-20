@@ -36,12 +36,12 @@
 /*
  * dummy is no longer a registered DRIVER (see TODO-pdp11-done.md) --
  * these are now plain helper functions c-client/mail.c and bezerk.c
- * call directly: dummy_find()/dummy_find_all() do the real directory-
- * scanning wildcard folder search bezerk.c has no implementation of
- * its own, and dummy_open_failure()/dummy_append_failure() produce
- * the correct user-facing error text (including the "[TRYCREATE]"
- * hint) when mail_open()/mail_append() find no driver willing to
- * claim a mailbox name.
+ * call directly: dummy_find_all() does the real directory-scanning
+ * wildcard folder search bezerk.c has no implementation of its own,
+ * and dummy_open_failure()/dummy_append_failure() produce the correct
+ * user-facing error text (including the "[TRYCREATE]" hint) when
+ * mail_open()/mail_append() find no driver willing to claim a mailbox
+ * name.
  */
 
 #include <stdio.h>
@@ -54,25 +54,6 @@ extern int errno;		/* just in case */
 #include <sys/file.h>
 #include "dummy.h"
 #include "misc.h"
-
-/* Dummy find list of subscribed mailboxes
- * Accepts: mail stream
- *	    pattern to search
- */
-
-void dummy_find (MAILSTREAM *stream,char *pat)
-{
-  void *s = NIL;
-  char *t;
-  if (*pat == '{') return;	/* local only */
-  if (t = sm_read (&s)) { 	/* if have subscription database */
-    do if ((*t != '{') && (*t != '*') && strcmp (t,"INBOX") && pmatch (t,pat))
-      mm_mailbox (t);
-    while (t = sm_read (&s));	/* until no more subscriptions */
-  }
-  else dummy_find_all (stream,pat);
-}
-
 
 /* Dummy find list of all mailboxes
  * Accepts: mail stream

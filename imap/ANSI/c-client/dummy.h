@@ -35,7 +35,6 @@
 
 /* Function prototypes */
 
-void dummy_find (MAILSTREAM *stream,char *pat);
 void dummy_find_all (MAILSTREAM *stream,char *pat);
 void dummy_open_failure (char *name);
 long dummy_append_failure (MAILSTREAM *stream,char *mailbox);

@@ -263,7 +263,7 @@ void mail_find (MAILSTREAM *stream,char *pat)
     while (d = d->next);	/* until at the end */
 				/* plus dummy's own search, since no driver
 				   is registered under that name any more */
-    dummy_find (NIL,pat);
+    dummy_find_all (NIL,pat);
   }
 }
 
@@ -438,31 +438,6 @@ long mail_valid_net_parse (char *name,NETMBX *mb)
   return T;
 }
 
-/* Mail subscribe to mailbox
- * Accepts: mail stream
- *	    mailbox to add to subscription list
- * Returns: T on success, NIL on failure
- */
-
-long mail_subscribe (MAILSTREAM *stream,char *mailbox)
-{
-  DRIVER *factory = mail_valid (stream,mailbox,"subscribe to mailbox");
-  return factory ? (*factory->subscribe) (stream,mailbox) : NIL;
-}
-
-
-/* Mail unsubscribe to mailbox
- * Accepts: mail stream
- *	    mailbox to delete from subscription list
- * Returns: T on success, NIL on failure
- */
-
-long mail_unsubscribe (MAILSTREAM *stream,char *mailbox)
-{
- DRIVER *factory = mail_valid (stream,mailbox,"unsubscribe to mailbox");
-  return factory ? (*factory->unsubscribe) (stream,mailbox) : NIL;
-}
-
 
 /* Mail subscribe to bboard
  * Accepts: mail stream

@@ -43,11 +43,10 @@ clean:
 	rm -f *.o c-client.a osdep.* CFLAGS LDFLAGS
 
 c-client.a: mail.o bezerk.o \
-	dummy.o rfc822.o misc.o osdep.o sm_unix.o
+	dummy.o rfc822.o misc.o osdep.o
 	rm -f c-client.a
 	ar rc c-client.a mail.o bezerk.o \
-	dummy.o rfc822.o misc.o osdep.o \
-	sm_unix.o
+	dummy.o rfc822.o misc.o osdep.o
 	ranlib c-client.a
 
 mail.o: mail.h misc.h osdep.h
@@ -73,8 +72,6 @@ nntp.o: mail.h nntp.h smtp.h rfc822.h misc.h osdep.h
 rfc822.o: mail.h rfc822.h misc.h
 
 misc.o: mail.h misc.h osdep.h
-
-sm_unix.o: mail.h misc.h osdep.h
 
 osdep.o: mail.h osdep.h os_lnx.c
 	$(CC) $(CFLAGS) $(OSDEFS) -c os_lnx.c

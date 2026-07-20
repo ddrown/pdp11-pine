@@ -43,51 +43,6 @@ DONE elsewhere or referenced in passing below.
         cast is still correct; possibly a leftover from an older BSD
         `wait()` signature.
 
-### Remove subscribe/unsubscribe entirely, simplify `dummy_find()` to just call `dummy_find_all()`
-
-- [ ] Raised while checking whether subscribe/unsubscribe means
-      anything for local mbox/bezerk mailboxes (it's not purely an
-      IMAP/NNTP concept -- `bezerk_subscribe()`/`bezerk_unsubscribe()`
-      (`bezerk.c`) are real, calling `sm_subscribe()`/`sm_unsubscribe()`
-      (`c-client/sm_unix.c`), which read/write a per-user
-      `~/.mailboxlist` file). But nothing in `pine/*.c` calls
-      `context_subscribe()`/`context_unsubscribe()` or
-      `mail_subscribe()`/`mail_unsubscribe()` anywhere (confirmed by
-      grep -- zero hits), so `~/.mailboxlist` is never created in this
-      build, and `dummy_find()`'s subscription-database check
-      (`dummy.c`) always takes its "no database" branch and falls
-      straight through to `dummy_find_all()`. The whole subscribe/
-      unsubscribe path is dead weight end to end.
-      **Proposed cut**: delete `sm_subscribe()`/`sm_unsubscribe()`/
-      `sm_read()` from `sm_unix.c` (and their prototypes in `mail.h`)
-      entirely; delete `bezerk_subscribe()`/`bezerk_unsubscribe()` from
-      `bezerk.c`, replacing their `DRIVER` slots with the same kind of
-      unreachable-stub treatment already used elsewhere in this driver-
-      shrinking effort (see `TODO-pdp11-done.md`). Since no subscription
-      database can ever exist once `sm_subscribe()` is gone,
-      `dummy_find()` degenerates to exactly `dummy_find_all()`'s body --
-      delete `dummy_find()` and repoint its callers (`bezerk_find()`,
-      and `mail_find()`'s no-stream fallback call once the "make dummy a
-      plain helper" item above lands) directly at `dummy_find_all()`.
-      `phile.c` has the same `sm_subscribe`/`sm_unsubscribe` calls but
-      isn't compiled in this build (not in `makefile.lnx`), so no
-      changes needed there.
-      Needs the standard trace-before-delete verification pass (rebuild,
-      full smoketest suite, check warning count) before landing.
-      **Goes further than just stubbing**: unlike other slots trimmed
-      in this driver-shrinking effort (where the `DRIVER` struct shape
-      was always kept, only the assigned functions swapped for shared
-      stubs), `mail_subscribe()`/`mail_unsubscribe()` themselves (the
-      generic `c-client/mail.c` dispatchers, not just bezerk's
-      implementations) have zero callers anywhere in `pine/*.c` *or*
-      `c-client/*.c` -- the whole concept is unreachable end to end, not
-      just one driver's implementation of it. So this can go all the
-      way: delete `mail_subscribe()`/`mail_unsubscribe()` from `mail.c`
-      (and their prototypes/`#define` shortenings in `mail.h`), then
-      remove the `subscribe`/`unsubscribe` fields from the `DRIVER`
-      struct definition itself, updating `bezerkdriver`'s literal (the
-      one remaining struct) to drop those two positional entries.
-
 ### Simplify `read_pinerc()` to a bootstrap-only stub (drop full `.pinerc` parsing)
 
 - [ ] gcov flagged `read_pinerc()` (`pine/init.c:1133`) as low-coverage.

@@ -3761,3 +3761,64 @@ already covered by the existing composer tests).
 - **Size delta**: none (confirms the object file was already
   contributing nothing; this was a build-hygiene/dead-source-removal
   fix, not a size win).
+
+### Removed subscribe/unsubscribe entirely; `dummy_find()` collapsed into `dummy_find_all()`
+
+- **What it was**: `bezerk_subscribe()`/`bezerk_unsubscribe()`
+  (`bezerk.c`) are real, non-IMAP-specific implementations -- they
+  read/write a per-user `~/.mailboxlist` subscription database via
+  `sm_subscribe()`/`sm_unsubscribe()` (`c-client/sm_unix.c`). But
+  nothing in `pine/*.c` calls `mail_subscribe()`/`mail_unsubscribe()`
+  anywhere (`context_subscribe()`/`context_unsubscribe()` were already
+  confirmed dead and removed earlier in this same driver-shrinking
+  effort), and `mail_subscribe()`/`mail_unsubscribe()` themselves (the
+  generic `c-client/mail.c` dispatchers) have zero callers anywhere in
+  `pine/*.c` or `c-client/*.c` either -- the whole mechanism is
+  unreachable end to end, not just one driver's implementation of it.
+  Since `sm_subscribe()` can never be called, `~/.mailboxlist` can
+  never be created by this build, which means `dummy_find()`'s
+  subscription-database check (`sm_read()`) always takes its "no
+  database" branch and falls straight through to `dummy_find_all()` --
+  `dummy_find()` was already, in every real invocation, just an
+  elaborate way of calling `dummy_find_all()`.
+- **What changed**:
+  - `c-client/mail.h`: removed the `subscribe`/`unsubscribe` fields
+    from the `DRIVER` struct definition itself (not just stubbed --
+    confirmed nothing else references them), removed
+    `mail_subscribe`/`mail_unsubscribe`'s prototypes and `#define`
+    shortenings, and `sm_subscribe`/`sm_unsubscribe`/`sm_read`'s
+    prototypes. Left `subscribe_bboard`/`unsubscribe_bboard` alone --
+    out of scope for this cut (already-stubbed dead weight from an
+    earlier pass, not touched here).
+  - `c-client/mail.c`: deleted `mail_subscribe()`/`mail_unsubscribe()`
+    entirely.
+  - `c-client/bezerk.c`/`bezerk.h`: deleted `bezerk_subscribe()`/
+    `bezerk_unsubscribe()` and their two `bezerkdriver` struct slots
+    (the struct literal just has two fewer positional entries now,
+    matching the two fewer struct fields). `bezerk_find()` -- which
+    used to forward to `dummy_find()` -- now calls `dummy_find_all()`
+    directly.
+  - `c-client/dummy.c`/`dummy.h`: deleted `dummy_find()` entirely.
+    `mail.c`'s `mail_find()` no-stream fallback (added in the previous
+    cut) now calls `dummy_find_all()` directly instead of
+    `dummy_find()`. `dummy.c` is down to 4 plain helpers now
+    (`dummy_find_all`/`dummy_open_failure`/`dummy_append_failure`/
+    `dummy_file`).
+  - `c-client/sm_unix.c`: deleted entirely (`git rm`) -- its only three
+    functions (`sm_subscribe`/`sm_unsubscribe`/`sm_read`) were all
+    removed, leaving nothing else in the file. Removed from
+    `c-client/makefile.lnx`'s `c-client.a` target and its standalone
+    dependency rule. `sm_unix.c` is referenced by six other-platform
+    makefiles (`.sco`/`.a32`/`.bsi`/`.nxt`/`.aix`/`.osf`) -- left alone,
+    same out-of-scope precedent as `mbox.c`/`pine.def`.
+- **Verified**: `./build lnx` clean before touching anything. `./build
+  clean && ./build lnx` clean after the code changes (177 warnings,
+  unchanged) and again after deleting `sm_unix.c` (byte-for-byte
+  identical size both times, confirming the file deletion itself
+  changed nothing beyond what the code edits already had). Full
+  smoketest suite 25/25 (unchanged -- no observable behavior
+  difference, nothing reachable was touched).
+- **Size delta**: `bin/pine`'s `text` 337286 -> 334703 (-2583 bytes),
+  `data` 12936 -> 12904 (-32 bytes; the two struct-field removals
+  worth of `DRIVER` and `sm_unix.o`'s own static data), `bss`
+  unchanged; `bin/pico` unaffected.

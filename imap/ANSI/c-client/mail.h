@@ -356,10 +356,6 @@ DRIVER {
   void (*find_all) (MAILSTREAM *stream,char *pat);
 				/* find all bboards */
   void (*find_all_bboard) (MAILSTREAM *stream,char *pat);
-				/* subscribe to mailbox */
-  long (*subscribe) (MAILSTREAM *stream,char *mailbox);
-				/* unsubscribe from mailbox */
-  long (*unsubscribe) (MAILSTREAM *stream,char *mailbox);
 				/* subscribe to bboard */
   long (*subscribe_bboard) (MAILSTREAM *stream,char *mailbox);
 				/* unsubscribe to bboard */
@@ -470,8 +466,6 @@ extern mailcache_t mailcache;
 #define mail_valid mlvali
 #define mail_valid_net mlvaln
 #define mail_valid_net_parse mlvlnp
-#define mail_subscribe mlsub
-#define mail_unsubscribe mlusub
 #define mail_subscribe_bboard mlsubb
 #define mail_unsubscribe_bboard mlusbb
 #define mail_create mlcret
@@ -563,8 +557,6 @@ void mail_find_all_bboard (MAILSTREAM *stream,char *pat);
 DRIVER *mail_valid (MAILSTREAM *stream,char *mailbox,char *purpose);
 DRIVER *mail_valid_net (char *name,DRIVER *drv,char *host,char *mailbox);
 long mail_valid_net_parse (char *name,NETMBX *mb);
-long mail_subscribe (MAILSTREAM *stream,char *mailbox);
-long mail_unsubscribe (MAILSTREAM *stream,char *mailbox);
 long mail_subscribe_bboard (MAILSTREAM *stream,char *mailbox);
 long mail_unsubscribe_bboard (MAILSTREAM *stream,char *mailbox);
 long mail_create (MAILSTREAM *stream,char *mailbox);
@@ -623,7 +615,3 @@ void mail_free_elt (MESSAGECACHE **elt);
 void mail_free_lelt (LONGCACHE **lelt);
 void mail_free_envelope (ENVELOPE **env);
 void mail_free_address (ADDRESS **address);
-
-long sm_subscribe (char *mailbox);
-long sm_unsubscribe (char *mailbox);
-char *sm_read (void **sdb);

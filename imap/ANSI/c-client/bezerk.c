@@ -77,8 +77,6 @@ DRIVER bezerkdriver = {
   bezerk_dead_find,		/* find bboards -- unreachable */
   bezerk_find_all,		/* find all mailboxes */
   bezerk_dead_find,		/* find all bboards -- unreachable */
-  bezerk_subscribe,		/* subscribe to mailbox */
-  bezerk_unsubscribe,		/* unsubscribe from mailbox */
   bezerk_dead_mbx,		/* subscribe to bboard -- unreachable */
   bezerk_dead_mbx,		/* unsubscribe from bboard -- unreachable */
   bezerk_create,		/* create mailbox */
@@ -180,7 +178,7 @@ void *bezerk_parameters (long function,void *value)
 
 void bezerk_find (MAILSTREAM *stream,char *pat)
 {
-  if (stream) dummy_find (NIL,pat);
+  if (stream) dummy_find_all (NIL,pat);
 }
 
 
@@ -203,31 +201,6 @@ void bezerk_dead_find (MAILSTREAM *stream,char *pat)
 {
 }
 
-/* Berkeley mail subscribe to mailbox
- * Accepts: mail stream
- *	    mailbox to add to subscription list
- * Returns: T on success, NIL on failure
- */
-
-long bezerk_subscribe (MAILSTREAM *stream,char *mailbox)
-{
-  char tmp[MAILTMPLEN];
-  return sm_subscribe (bezerk_file (tmp,mailbox));
-}
-
-
-/* Berkeley mail unsubscribe to mailbox
- * Accepts: mail stream
- *	    mailbox to delete from subscription list
- * Returns: T on success, NIL on failure
- */
-
-long bezerk_unsubscribe (MAILSTREAM *stream,char *mailbox)
-{
-  char tmp[MAILTMPLEN];
-  return sm_unsubscribe (bezerk_file (tmp,mailbox));
-}
-
 /* Bezerk stub for the unreachable subscribe_bboard/unsubscribe_bboard
  * slots: never valid for Bezerk (mail_subscribe_bboard()/
  * mail_unsubscribe_bboard() build a "*"-prefixed candidate name that
