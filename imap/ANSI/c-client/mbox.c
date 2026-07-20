@@ -58,13 +58,13 @@ DRIVER mboxdriver = {
   mbox_valid,			/* mailbox is valid for us */
   bezerk_parameters,		/* manipulate parameters */
   bezerk_find,			/* find mailboxes */
-  bezerk_find_bboards,		/* find bboards */
+  bezerk_dead_find,		/* find bboards -- unreachable */
   bezerk_find_all,		/* find all mailboxes */
-  bezerk_find_all_bboards,	/* find all bboards */
+  bezerk_dead_find,		/* find all bboards -- unreachable */
   bezerk_subscribe,		/* subscribe to mailbox */
   bezerk_unsubscribe,		/* unsubscribe from mailbox */
-  bezerk_subscribe_bboard,	/* subscribe to bboard */
-  bezerk_unsubscribe_bboard,	/* unsubscribe from bboard */
+  bezerk_dead_mbx,		/* subscribe to bboard -- unreachable */
+  bezerk_dead_mbx,		/* unsubscribe from bboard -- unreachable */
   bezerk_create,		/* create mailbox */
   bezerk_delete,		/* delete mailbox */
   bezerk_rename,		/* rename mailbox */

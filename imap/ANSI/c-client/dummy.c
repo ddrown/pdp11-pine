@@ -50,38 +50,57 @@ extern int errno;		/* just in case */
 
 /* Driver dispatch used by MAIL */
 
+/*
+ * Slots commented "unreachable" below can never actually be invoked in
+ * this build and are served by one of a handful of shared stub
+ * functions (grouped by exact matching signature -- no unsafe casts):
+ *   - dummy_open() unconditionally fails, so no stream can ever persist
+ *     with dtb == &dummydriver, which means fetchfast/fetchflags/
+ *     fetchheader/fetchtext/setflag/clearflag/search/check/expunge/
+ *     copy/move/gc can never be dispatched to.
+ *   - c-client/mail.c's mail_valid() explicitly excludes the driver
+ *     named "dummy" whenever its nopen flag is set, which is how
+ *     mail_create()/mail_delete()/mail_rename()/mail_subscribe()/
+ *     mail_unsubscribe()/mail_subscribe_bboard()/
+ *     mail_unsubscribe_bboard() all resolve their driver -- so
+ *     create/delete/rename/subscribe/unsubscribe/subscribe_bboard/
+ *     unsubscribe_bboard can never be dispatched to either.
+ *   - pine's own bboard/newsgroup UI is gone (see TODO-pdp11-done.md),
+ *     so nothing ever calls mail_find_bboards()/mail_find_all_bboards()
+ *     -- find_bboards/find_all_bboards can never be dispatched to.
+ */
 DRIVER dummydriver = {
   "dummy",			/* driver name */
   (DRIVER *) NIL,		/* next driver */
   dummy_valid,			/* mailbox is valid for us */
   dummy_parameters,		/* manipulate parameters */
   dummy_find,			/* find mailboxes */
-  dummy_find_bboards,		/* find bboards */
+  dummy_dead_find,		/* find bboards -- unreachable */
   dummy_find_all,		/* find all mailboxes */
-  dummy_find_all_bboards,	/* find all bboards */
-  dummy_subscribe,		/* subscribe to mailbox */
-  dummy_unsubscribe,		/* unsubscribe from mailbox */
-  dummy_subscribe_bboard,	/* subscribe to bboard */
-  dummy_unsubscribe_bboard,	/* unsubscribe from bboard */
-  dummy_create,			/* create mailbox */
-  dummy_delete,			/* delete mailbox */
-  dummy_rename,			/* rename mailbox */
+  dummy_dead_find,		/* find all bboards -- unreachable */
+  dummy_dead_mbx,		/* subscribe to mailbox -- unreachable */
+  dummy_dead_mbx,		/* unsubscribe from mailbox -- unreachable */
+  dummy_dead_mbx,		/* subscribe to bboard -- unreachable */
+  dummy_dead_mbx,		/* unsubscribe from bboard -- unreachable */
+  dummy_dead_mbx,		/* create mailbox -- unreachable */
+  dummy_dead_mbx,		/* delete mailbox -- unreachable */
+  dummy_dead_mbx3,		/* rename mailbox -- unreachable */
   dummy_open,			/* open mailbox */
   dummy_close,			/* close mailbox */
-  dummy_fetchfast,		/* fetch message "fast" attributes */
-  dummy_fetchflags,		/* fetch message flags */
+  dummy_dead_find,		/* fetch message "fast" attributes -- unreachable */
+  dummy_dead_find,		/* fetch message flags -- unreachable */
   dummy_fetchstructure,		/* fetch message structure */
-  dummy_fetchheader,		/* fetch message header only */
-  dummy_fetchtext,		/* fetch message body only */
+  dummy_dead_fetch,		/* fetch message header only -- unreachable */
+  dummy_dead_fetch,		/* fetch message body only -- unreachable */
   dummy_fetchbody,		/* fetch message body section */
-  dummy_setflag,		/* set message flag */
-  dummy_clearflag,		/* clear message flag */
-  dummy_search,			/* search for message based on criteria */
+  dummy_dead_setflag,		/* set message flag -- unreachable */
+  dummy_dead_setflag,		/* clear message flag -- unreachable */
+  dummy_dead_find,		/* search for message based on criteria -- unreachable */
   dummy_ping,			/* ping mailbox to see if still alive */
-  dummy_check,			/* check for new messages */
-  dummy_expunge,		/* expunge deleted messages */
-  dummy_copy,			/* copy messages to another mailbox */
-  dummy_move,			/* move messages to another mailbox */
+  dummy_dead_stream,		/* check for new messages -- unreachable */
+  dummy_dead_stream,		/* expunge deleted messages -- unreachable */
+  dummy_dead_mbx3,		/* copy messages to another mailbox -- unreachable */
+  dummy_dead_mbx3,		/* move messages to another mailbox -- unreachable */
   dummy_append,			/* append string message to mailbox */
   dummy_gc			/* garbage collect stream */
 };
@@ -127,24 +146,6 @@ void dummy_find (MAILSTREAM *stream,char *pat)
 }
 
 
-/* Dummy find list of subscribed bboards
- * Accepts: mail stream
- *	    pattern to search
- */
-
-void dummy_find_bboards (MAILSTREAM *stream,char *pat)
-{
-  void *s = NIL;
-  char *t,tmp[MAILTMPLEN];
-  if (*pat == '{') return;	/* local only */
-				/* no-op if have a subscription database */
-  if (t = sm_read (&s)) {	/* if have subscription database */
-    do if ((*t == '*') && (t[1] != '{') && pmatch (t+1,pat)) mm_bboard (t+1);
-    while (t = sm_read (&s));	/* read subscription database */
-  }
-  else dummy_find_all_bboards (stream,pat);
-}
-
 /* Dummy find list of all mailboxes
  * Accepts: mail stream
  *	    pattern to search
@@ -176,120 +177,27 @@ void dummy_find_all (MAILSTREAM *stream,char *pat)
 				/* always an INBOX */
   if (pmatch ("INBOX",pat)) mm_mailbox ("INBOX");
 }
-
-/* Dummy find list of all bboards
- * Accepts: mail stream
- *	    pattern to search
+
+/* Dummy stub for the unreachable subscribe/unsubscribe/create/delete
+ * mailbox and bboard slots (see the comment above dummydriver's
+ * initializer)
  */
 
-void dummy_find_all_bboards (MAILSTREAM *stream,char *pat)
+long dummy_dead_mbx (MAILSTREAM *stream,char *mailbox)
 {
-  DIR *dirp;
-  struct direct *d;
-  struct passwd *pw;
-  char tmp[MAILTMPLEN],file[MAILTMPLEN];
-  int i = 1;
-  char *s;
-				/* local only */
-  if ((*pat == '{') || !((pw = getpwnam ("ftp")) && pw->pw_dir)) return;
-  file[0] = '*';		/* bboard designator */
-				/* directory specified in pattern? */
-  if (s = strrchr (pat,'/')) strncpy (file + 1,pat,i += (++s) - pat);
-  file[i] = '\0';		/* tie off prefix */
-  sprintf (tmp,"%s/%s",pw->pw_dir,(file[1] == '/') ? file + 2 : file + 1);
-  if (dirp = opendir (tmp)) {	/* now open that directory */
-    while (d = readdir (dirp)) {/* for each directory entry */
-      strcpy (file + i,d->d_name);
-      if (pmatch (file + 1,pat)) mm_bboard (file + 1);
-    }
-    closedir (dirp);		/* flush directory */
-  }
+  return NIL;
 }
-
-/* Dummy subscribe to mailbox
- * Accepts: mail stream
- *	    mailbox to add to subscription list
- * Returns: T on success, NIL on failure
+
+/* Dummy stub for the unreachable rename/copy/move slots (see the
+ * comment above dummydriver's initializer)
  */
 
-long dummy_subscribe (MAILSTREAM *stream,char *mailbox)
+long dummy_dead_mbx3 (MAILSTREAM *stream,char *s1,char *s2)
 {
-  return NIL;			/* always fails */
+  fatal ("Impossible dummy driver operation");
+  return NIL;
 }
 
-
-/* Dummy unsubscribe to mailbox
- * Accepts: mail stream
- *	    mailbox to delete from subscription list
- * Returns: T on success, NIL on failure
- */
-
-long dummy_unsubscribe (MAILSTREAM *stream,char *mailbox)
-{
-  return NIL;			/* always fails */
-}
-
-
-/* Dummy subscribe to bboard
- * Accepts: mail stream
- *	    bboard to add to subscription list
- * Returns: T on success, NIL on failure
- */
-
-long dummy_subscribe_bboard (MAILSTREAM *stream,char *mailbox)
-{
-  return NIL;			/* always fails */
-}
-
-
-/* Dummy unsubscribe to bboard
- * Accepts: mail stream
- *	    bboard to delete from subscription list
- * Returns: T on success, NIL on failure
- */
-
-long dummy_unsubscribe_bboard (MAILSTREAM *stream,char *mailbox)
-{
-  return NIL;			/* always fails */
-}
-
-/* Dummy create mailbox
- * Accepts: mail stream
- *	    mailbox name to create
- *	    driver type to use
- * Returns: T on success, NIL on failure
- */
-
-long dummy_create (MAILSTREAM *stream,char *mailbox)
-{
-  return NIL;			/* always fails */
-}
-
-
-/* Dummy delete mailbox
- * Accepts: mail stream
- *	    mailbox name to delete
- * Returns: T on success, NIL on failure
- */
-
-long dummy_delete (MAILSTREAM *stream,char *mailbox)
-{
-  return NIL;			/* always fails */
-}
-
-
-/* Mail rename mailbox
- * Accepts: mail stream
- *	    old mailbox name
- *	    new mailbox name
- * Returns: T on success, NIL on failure
- */
-
-long dummy_rename (MAILSTREAM *stream,char *old,char *new)
-{
-  return NIL;			/* always fails */
-}
-
 /* Dummy open
  * Accepts: stream to open
  * Returns: stream on success, NIL on failure
@@ -326,25 +234,14 @@ void dummy_close (MAILSTREAM *stream)
   /* Exit quietly */
 }
 
-/* Dummy fetch fast information
- * Accepts: MAIL stream
- *	    sequence
+/* Dummy stub for the unreachable find_bboards/find_all_bboards/
+ * fetchfast/fetchflags/search slots (see the comment above
+ * dummydriver's initializer)
  */
 
-void dummy_fetchfast (MAILSTREAM *stream,char *sequence)
+void dummy_dead_find (MAILSTREAM *stream,char *pat)
 {
-  fatal ("Impossible dummy_fetchfast");
-}
-
-
-/* Dummy fetch flags
- * Accepts: MAIL stream
- *	    sequence
- */
-
-void dummy_fetchflags (MAILSTREAM *stream,char *sequence)
-{
-  fatal ("Impossible dummy_fetchflags");
+  fatal ("Impossible dummy driver operation");
 }
 
 
@@ -362,27 +259,13 @@ ENVELOPE *dummy_fetchstructure (MAILSTREAM *stream,long msgno,BODY **body)
 }
 
 
-/* Dummy fetch message header
- * Accepts: MAIL stream
- *	    message # to fetch
- * Returns: message header in RFC822 format
+/* Dummy stub for the unreachable fetchheader/fetchtext slots (see the
+ * comment above dummydriver's initializer)
  */
 
-char *dummy_fetchheader (MAILSTREAM *stream,long msgno)
+char *dummy_dead_fetch (MAILSTREAM *stream,long msgno)
 {
-  fatal ("Impossible dummy_fetchheader");
-  return NIL;
-}
-
-/* Dummy fetch message text (body only)
- * Accepts: MAIL stream
- *	    message # to fetch
- * Returns: message text in RFC822 format
- */
-
-char *dummy_fetchtext (MAILSTREAM *stream,long msgno)
-{
-  fatal ("Impossible dummy_fetchtext");
+  fatal ("Impossible dummy driver operation");
   return NIL;
 }
 
@@ -401,40 +284,16 @@ char *dummy_fetchbody (MAILSTREAM *stream,long m,char *sec,unsigned long *len)
 }
 
 
-/* Dummy set flag
- * Accepts: MAIL stream
- *	    sequence
- *	    flag(s)
+/* Dummy stub for the unreachable setflag/clearflag slots (see the
+ * comment above dummydriver's initializer)
  */
 
-void dummy_setflag (MAILSTREAM *stream,char *sequence,char *flag)
+void dummy_dead_setflag (MAILSTREAM *stream,char *sequence,char *flag)
 {
-  fatal ("Impossible dummy_setflag");
+  fatal ("Impossible dummy driver operation");
 }
 
 
-/* Dummy clear flag
- * Accepts: MAIL stream
- *	    sequence
- *	    flag(s)
- */
-
-void dummy_clearflag (MAILSTREAM *stream,char *sequence,char *flag)
-{
-  fatal ("Impossible dummy_clearflag");
-}
-
-
-/* Dummy search for messages
- * Accepts: MAIL stream
- *	    search criteria
- */
-
-void dummy_search (MAILSTREAM *stream,char *criteria)
-{
-  fatal ("Impossible dummy_search");
-}
-
 /* Dummy ping mailbox
  * Accepts: MAIL stream
  * Returns: T if stream alive, else NIL
@@ -448,51 +307,13 @@ long dummy_ping (MAILSTREAM *stream)
 }
 
 
-/* Dummy check mailbox
- * Accepts: MAIL stream
- * No-op for readonly files, since read/writer can expunge it from under us!
+/* Dummy stub for the unreachable check/expunge slots (see the comment
+ * above dummydriver's initializer)
  */
 
-void dummy_check (MAILSTREAM *stream)
+void dummy_dead_stream (MAILSTREAM *stream)
 {
-  fatal ("Impossible dummy_check");
-}
-
-
-/* Dummy expunge mailbox
- * Accepts: MAIL stream
- */
-
-void dummy_expunge (MAILSTREAM *stream)
-{
-  fatal ("Impossible dummy_expunge");
-}
-
-/* Dummy copy message(s)
- * Accepts: MAIL stream
- *	    sequence
- *	    destination mailbox
- * Returns: T if copy successful, else NIL
- */
-
-long dummy_copy (MAILSTREAM *stream,char *sequence,char *mailbox)
-{
-  fatal ("Impossible dummy_copy");
-  return NIL;
-}
-
-
-/* Dummy move message(s)
- * Accepts: MAIL stream
- *	    sequence
- *	    destination mailbox
- * Returns: T if move successful, else NIL
- */
-
-long dummy_move (MAILSTREAM *stream,char *sequence,char *mailbox)
-{
-  fatal ("Impossible dummy_move");
-  return NIL;
+  fatal ("Impossible dummy driver operation");
 }
 
 

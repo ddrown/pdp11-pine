@@ -3516,3 +3516,95 @@ already covered by the existing composer tests).
   filter/callback-registration false positives caught before this list
   was first written to `TODO-pdp11.md`, the original gcov 0%-executed
   set had 9 false positives total out of 27 initial candidates.
+
+### Shrink `c-client/dummy.c`'s unreachable `DRIVER` slots; fix up `bezerk.c`/`mbox.c` fallout
+
+- **What it was**: prompted by "is dummy.c's fallback logic needed, don't
+  we just need mbox+bezerk?" The TODO's original "Proposed shape" --
+  delete `dummy.c`/`dummy.h` entirely and fold its load-bearing pieces
+  into `bezerk.c` -- turned out to be unsafe once traced fully:
+  `c-client/mail.c`'s own generic `mail_valid()` hardcodes the literal
+  string `"dummy"` to exclude the catch-all driver whenever its `nopen`
+  flag is set, which is how `mail_create()`/`mail_delete()`/
+  `mail_rename()` resolve their "does this mailbox already exist"
+  check. If `bezerk` became the sole catch-all driver (matching
+  nonexistent files too), every folder-create attempt would wrongly
+  report "already exists" -- a real regression. A separate driver
+  literally named "dummy" has to keep existing; the cut had to be
+  scoped down to what's actually safe.
+- **Reachability, traced precisely via every dispatch path** (not just
+  "looks like a fallback"): `dummy_open()` unconditionally fails, so no
+  `MAILSTREAM` can ever persist with `dtb == &dummydriver`, which rules
+  out `fetchfast`/`fetchflags`/`fetchstructure`/`fetchheader`/
+  `fetchtext`/`fetchbody`/`setflag`/`clearflag`/`search`/`ping`/
+  `check`/`expunge`/`copy`/`move`/`gc` (`mail_copy`/`mail_move` dispatch
+  via the *source* stream's own `dtb`, which is always bezerk in
+  practice). Separately, `mail_create()`/`mail_delete()`/
+  `mail_rename()`/`mail_subscribe()`/`mail_unsubscribe()`/
+  `mail_subscribe_bboard()`/`mail_unsubscribe_bboard()` all call
+  `mail_valid()` with `nopen` set, excluding "dummy" from ever matching
+  -- so `create`/`delete`/`rename`/`subscribe`/`unsubscribe`/
+  `subscribe_bboard`/`unsubscribe_bboard` are unreachable too (`mail_create`'s
+  local-mailbox branch always resolves through `bezerk`'s own
+  `mailstd_proto`/opened-INBOX stream, never dummy's). Third, pine's own
+  bboard/newsgroup UI is already gone (see this file's NNTP/news-strip
+  item), so nothing calls `mail_find_bboards()`/`mail_find_all_bboards()`
+  -- `find_bboards`/`find_all_bboards` are unreachable on top of that.
+  Total: 24 of `dummydriver`'s 33 slots provably unreachable. The
+  remaining 9 (`valid`/`parameters`/`find`/`find_all`/`open`/`close`/
+  `append`/`fetchstructure`... plus `dummy_file()`'s helper) are genuinely
+  load-bearing: `bezerk_find`/`bezerk_find_all` literally call
+  `dummy_find`/`dummy_find_all` (the only implementation of the
+  directory-scanning wildcard folder search), and `dummy_open`/
+  `dummy_append` produce the correct user-facing error text and the
+  `[TRYCREATE] Must create mailbox before append` hint pine's
+  `mm_notify()` (`mailbox.c:361-362`) depends on for its
+  create-on-append flow.
+- **What changed**: collapsed the 24 unreachable slots into 6 shared
+  stub functions in `dummy.c`, grouped by exact matching signature (no
+  unsafe casts) -- `dummy_dead_mbx` (6 slots, `long(MAILSTREAM*,char*)`,
+  quiet `return NIL` matching all 6 originals), `dummy_dead_mbx3` (3
+  slots, `long(MAILSTREAM*,char*,char*)`, `fatal()` -- two of the three
+  originals already used `fatal()`, the third (`rename`) was a quiet
+  `return NIL`; since all three are equally unreachable, standardized on
+  the louder/more-defensive behavior), `dummy_dead_find` (5 slots,
+  `void(MAILSTREAM*,char*)`), `dummy_dead_fetch` (2 slots,
+  `char*(MAILSTREAM*,long)`), `dummy_dead_setflag` (2 slots,
+  `void(MAILSTREAM*,char*,char*)`), `dummy_dead_stream` (2 slots,
+  `void(MAILSTREAM*)`). `fetchstructure`/`fetchbody`/`ping`/`gc` stay as
+  individual functions (unique signatures, nothing to consolidate with).
+  Updated `dummydriver`'s initializer and `dummy.h`'s prototypes to
+  match. `bezerk.c`'s own dead bboard-forwarding slots got the same
+  treatment: `bezerk_find_bboards`/`bezerk_find_all_bboards` (which
+  called the now-deleted `dummy_find_bboards`/`dummy_find_all_bboards`)
+  collapsed into one `bezerk_dead_find` no-op, and
+  `bezerk_subscribe_bboard`/`bezerk_unsubscribe_bboard` (already
+  identical `return NIL` one-liners, unreachable since
+  `mail_subscribe_bboard`/`mail_unsubscribe_bboard` build a
+  `"*"`-prefixed candidate name `bezerk_isvalid()` never matches to a
+  real file) collapsed into one `bezerk_dead_mbx`. `c-client/mbox.c` --
+  compiled into `c-client.a` but never `mail_link()`'d by pine (see the
+  separate open TODO item questioning whether it's dead weight) --
+  reuses several `bezerk_*` functions directly in its own driver table
+  and needed its 4 references updated to the new shared names to keep
+  the archive building; `c-client/phile.c` has the same pattern but
+  isn't in `makefile.lnx`'s build list at all, so it was left untouched.
+- **Verified**: `./build lnx` clean before touching anything. `./build
+  clean && ./build lnx` clean afterward, 177 warnings (unchanged). Full
+  smoketest suite 25/25 (unchanged -- no observable behavior difference
+  for any currently-tested path). Additionally drove a real pty session
+  (via `bwrap --bind <scratch-dir> /home/abob/mail`, since `myhomedir()`
+  in `c-client/os_lnx.c:195-198` resolves the real passwd-database home
+  directory via `getpwuid()` rather than honoring smoketest.py's `HOME`
+  env override -- a pre-existing test-isolation gap, tracked as a new
+  TODO item rather than fixed here) exercising the exact path this cut
+  revolves around end-to-end: Save a message to a brand-new folder name,
+  confirm the "doesn't exist... Create?" prompt (driven by
+  `dummy_open()`'s failure -> `dummy_append()`'s TRYCREATE hint ->
+  `mm_notify()` -> `want_to()`), answer yes, and confirmed the folder is
+  actually created via `context_create()`/`bezerk_create()` with the
+  message correctly appended -- the highest-risk path in this whole
+  cut, and one no existing smoketest covers.
+- **Size delta**: `bin/pine`'s `text` 339607 -> 338175 (-1432 bytes),
+  `data`/`bss` unchanged; `bin/pico` unaffected (c-client is linked into
+  `bin/pine` only).

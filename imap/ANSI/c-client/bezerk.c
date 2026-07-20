@@ -74,13 +74,13 @@ DRIVER bezerkdriver = {
   bezerk_valid,			/* mailbox is valid for us */
   bezerk_parameters,		/* manipulate parameters */
   bezerk_find,			/* find mailboxes */
-  bezerk_find_bboards,		/* find bboards */
+  bezerk_dead_find,		/* find bboards -- unreachable */
   bezerk_find_all,		/* find all mailboxes */
-  bezerk_find_all_bboards,	/* find all bboards */
+  bezerk_dead_find,		/* find all bboards -- unreachable */
   bezerk_subscribe,		/* subscribe to mailbox */
   bezerk_unsubscribe,		/* unsubscribe from mailbox */
-  bezerk_subscribe_bboard,	/* subscribe to bboard */
-  bezerk_unsubscribe_bboard,	/* unsubscribe from bboard */
+  bezerk_dead_mbx,		/* subscribe to bboard -- unreachable */
+  bezerk_dead_mbx,		/* unsubscribe from bboard -- unreachable */
   bezerk_create,		/* create mailbox */
   bezerk_delete,		/* delete mailbox */
   bezerk_rename,		/* rename mailbox */
@@ -184,17 +184,6 @@ void bezerk_find (MAILSTREAM *stream,char *pat)
 }
 
 
-/* Berkeley mail find list of bboards
- * Accepts: mail stream
- *	    pattern to search
- */
-
-void bezerk_find_bboards (MAILSTREAM *stream,char *pat)
-{
-  if (stream) dummy_find_bboards (NIL,pat);
-}
-
-
 /* Berkeley mail find list of all mailboxes
  * Accepts: mail stream
  *	    pattern to search
@@ -205,15 +194,13 @@ void bezerk_find_all (MAILSTREAM *stream,char *pat)
   if (stream) dummy_find_all (NIL,pat);
 }
 
-
-/* Berkeley mail find list of all bboards
- * Accepts: mail stream
- *	    pattern to search
+/* Bezerk stub for the unreachable find_bboards/find_all_bboards slots:
+ * pine's own bboard/newsgroup UI is gone (see TODO-pdp11-done.md), so
+ * nothing ever calls mail_find_bboards()/mail_find_all_bboards()
  */
 
-void bezerk_find_all_bboards (MAILSTREAM *stream,char *pat)
+void bezerk_dead_find (MAILSTREAM *stream,char *pat)
 {
-  if (stream) dummy_find_all_bboards (NIL,pat);
 }
 
 /* Berkeley mail subscribe to mailbox
@@ -241,30 +228,18 @@ long bezerk_unsubscribe (MAILSTREAM *stream,char *mailbox)
   return sm_unsubscribe (bezerk_file (tmp,mailbox));
 }
 
-
-/* Berkeley mail subscribe to bboard
- * Accepts: mail stream
- *	    bboard to add to subscription list
- * Returns: T on success, NIL on failure
+/* Bezerk stub for the unreachable subscribe_bboard/unsubscribe_bboard
+ * slots: never valid for Bezerk (mail_subscribe_bboard()/
+ * mail_unsubscribe_bboard() build a "*"-prefixed candidate name that
+ * bezerk_isvalid() never matches to a real file)
  */
 
-long bezerk_subscribe_bboard (MAILSTREAM *stream,char *mailbox)
+long bezerk_dead_mbx (MAILSTREAM *stream,char *mailbox)
 {
-  return NIL;			/* never valid for Bezerk */
+  return NIL;
 }
 
 
-/* Berkeley mail unsubscribe to bboard
- * Accepts: mail stream
- *	    bboard to delete from subscription list
- * Returns: T on success, NIL on failure
- */
-
-long bezerk_unsubscribe_bboard (MAILSTREAM *stream,char *mailbox)
-{
-  return NIL;			/* never valid for Bezerk */
-}
-
 /* Berkeley mail create mailbox
  * Accepts: MAIL stream
  *	    mailbox name to create

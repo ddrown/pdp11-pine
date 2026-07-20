@@ -43,59 +43,94 @@ DONE elsewhere or referenced in passing below.
         cast is still correct; possibly a leftover from an older BSD
         `wait()` signature.
 
-### Fold `c-client/dummy.c` into `bezerk.c`, drop the rest
+### Shrink `c-client/dummy.c`'s unreachable driver slots
+- DONE, see `TODO-pdp11-done.md`. The original "delete dummy.c
+  entirely, fold into bezerk.c" idea turned out unsafe (`mail.c`'s
+  `mail_valid()` hardcodes the driver name `"dummy"` to keep folder
+  creation's "already exists" check working) -- scoped down instead to
+  collapsing 24 of `dummydriver`'s 33 slots (proven unreachable by
+  tracing every dispatch path) into 6 shared stub functions, plus the
+  matching dead bboard-forwarding slots in `bezerk.c`. `mbox.c` needed
+  a small fixup to keep building (see the item below); `phile.c` has
+  the same pattern but isn't built at all.
 
-- [ ] Investigated while answering "is dummy.c's fallback logic needed,
-      don't we just need mbox+bezerk?": `mbox.c` isn't even in the
-      picture (see the separate TODO item below) -- the two drivers
-      pine actually `mail_link()`s are `bezerkdriver` and `dummydriver`
-      (`pine/pine.c:345-346`), and `bezerk.c` is *not* self-sufficient
-      without `dummy.c`:
-      - `bezerk_find`/`bezerk_find_all` literally call
-        `dummy_find`/`dummy_find_all` -- the only implementation of the
-        directory-scanning wildcard folder search lives in `dummy.c`,
-        used by pine's Folder List / Find Folder screens.
-      - `bezerk_valid()` requires the target file to already exist
-        (`stat()` must succeed). Any mailbox that doesn't exist yet
-        (new Save-folder, new Fcc target, etc.) falls through to
-        `dummy_valid()` (matches anything), whose job is to fail with
-        the *correct* message -- including the `[TRYCREATE] Must
-        create mailbox before append` hint c-client's create-on-append
-        convention depends on (`dummy_open`/`dummy_append`) -- rather
-        than crashing or misbehaving.
-      Everything else in `dummy.c` is provably unreachable rather than
-      load-bearing: `dummy_open()` unconditionally `return NIL`s, so no
-      stream can ever actually be opened with `dtb == &dummydriver`,
-      which means the ~14 message-manipulation driver-table slots
-      (`fetchfast`/`fetchflags`/`fetchstructure`/`fetchheader`/
-      `fetchtext`/`fetchbody`/`setflag`/`clearflag`/`search`/`ping`/
-      `check`/`expunge`/`copy`/`move`/`gc`) can never be invoked --
-      each is just a `fatal("Impossible dummy_X")` one-liner kept only
-      to satisfy the `DRIVER` struct's fixed layout. `subscribe`/
-      `unsubscribe`/`subscribe_bboard`/`unsubscribe_bboard`/`create`/
-      `delete` are six more one-liners (`return NIL`) sharing the
-      identical signature `long(MAILSTREAM*, char*)`.
-      **Proposed shape**: move the load-bearing pieces
-      (`dummy_find`/`dummy_find_bboards`/`dummy_find_all`/
-      `dummy_find_all_bboards`/`dummy_file`/the `dummy_open`+
-      `dummy_append` TRYCREATE-hint error paths) directly into
-      `bezerk.c` as `bezerk_`-prefixed statics (or just call them
-      inline where `bezerk_find`/etc. currently forward to `dummy_*`),
-      stop `mail_link`-ing a separate `dummydriver` entirely, and
-      delete `dummy.c`/`dummy.h` and the now-orphaned `DRIVER
-      dummydriver` struct along with the ~20 unreachable/duplicate
-      stub functions. Also check `bezerk_find_bboards`/
-      `bezerk_find_all_bboards`/`bezerk_subscribe_bboard`/
-      `bezerk_unsubscribe_bboard` -- these currently just forward to
-      the equivalent `dummy_*_bboard` calls, which are themselves
-      already known-dead now that pine's own bboard/news UI is gone
-      (see `TODO-pdp11-done.md`'s NNTP/news-strip item) -- likely
-      candidates to drop rather than migrate.
-      **Needs its own trace-before-delete pass** per CLAUDE.md's
-      verification discipline: confirm nothing else in `c-client/`
-      references `dummydriver`/`dummy_*` by name (`maildrivers` linked
-      list traversal, etc.) before deleting, not just pine's own
-      `mail_link()` call sites.
+### Make `dummy` a plain helper `mail.c`/`bezerk.c` calls, not a registered `DRIVER`
+
+- [ ] Raised after the driver-slot shrink above: dummy doesn't
+      conceptually need to be a `DRIVER` at all -- it's really a small
+      set of helper functions (`dummy_find`/`dummy_find_all`'s
+      directory-scan search, `dummy_open`/`dummy_append`'s
+      correct-error-message + `[TRYCREATE]` hint) that `bezerk.c`
+      already calls directly as plain functions in two cases
+      (`bezerk_find`/`bezerk_find_all`). If the whole thing worked that
+      way, there'd be no `DRIVER` struct to keep populated at all, and
+      the remaining 9 load-bearing functions could shrink to plain
+      helpers with no signature-matching stub games needed.
+      **The catch**: `c-client/mail.c`'s own generic `mail_create()`/
+      `mail_delete()`/`mail_rename()` distinguish "a real driver already
+      handles this mailbox" from "only the catch-all placeholder
+      matched" by checking the literal driver name `"dummy"` inside
+      `mail_valid()` (its `nopen` flag) -- that's specifically what
+      requires dummy to remain a second, distinctly-named entry in the
+      driver chain today.
+      **Refined design** (simpler than editing `mail_valid()`'s
+      exclusion in place): stop `mail_link()`-ing `dummydriver`
+      entirely, so `maildrivers` only ever contains `bezerkdriver`.
+      `bezerk_valid()` stays strict (requires the file to really
+      exist) -- unchanged. With dummy out of the chain,
+      `mail_valid()`'s loop naturally returns NIL for a nonexistent
+      local mailbox with no special-casing needed at all, so the
+      `nopen && !strcmp(factory->name,"dummy")` check can simply be
+      deleted -- `mail_create`/`mail_delete`/`mail_rename`'s "already
+      exists" checks then work correctly for free. The dummy fallback
+      behavior only needs to be added explicitly, as plain function
+      calls (not through a `DRIVER` struct), in the handful of `mail.c`
+      entry points that actually want it when nothing matched:
+      - `mail_open()`: call dummy's error-reporting helper (today's
+        `dummy_open()` logic) when `mail_valid()` returns NIL, instead
+        of just `mail_valid()`'s own generic "no such mailbox" message.
+      - `mail_append()`: same, for the `[TRYCREATE]`-hint behavior
+        (today's `dummy_append()`).
+      - `mail_find()`/`mail_find_all()`'s no-stream case: today this
+        loop iterates every registered driver and calls each one's
+        `find`/`find_all` slot directly (`d->find_all(NIL,pat)`), and
+        `dummy_find_all` is currently the *only* one of those that does
+        anything when `stream` is NIL (`bezerk_find_all`'s forwarding
+        is itself gated on `stream` being non-NIL) -- so removing dummy
+        from the chain would silently break "search all mailboxes with
+        no open stream" unless this loop also gets an explicit direct
+        call to the dummy search helpers added.
+      **Scope**: touches `c-client/mail.c` in three specific spots
+      (`mail_valid()`, `mail_open()`, `mail_append()`, plus
+      `mail_find()`/`mail_find_all()`) instead of the single name-string
+      check today -- each change is simple and explicit, but it's still
+      shared driver-chain infrastructure `mail.c` uses generically, not
+      just the two locally-linked drivers, so it needs its own careful
+      design/verification pass, not a quick follow-on.
+
+### smoketest.py's `HOME` env override doesn't isolate default-folder-path creation
+- [ ] Discovered while manually verifying the dummy.c/bezerk.c cut
+      above: `c-client/os_lnx.c:195-198`'s `myhomedir()` resolves the
+      real passwd-database home directory via `getpwuid(geteuid())`,
+      never checking `getenv("HOME")`. `test/smoketest.py`'s `Session`
+      sets `env["HOME"]` to a scratch tempdir for isolation, but any
+      code path that builds a mailbox path via `myhomedir()` (e.g.
+      `dummy_file()`/`bezerk_file()`'s default case, used whenever a
+      folder name isn't `-f`-given explicitly) ignores that override
+      and resolves against the *real* developer's home directory
+      instead. Confirmed by hand: saving a message to a new folder
+      name during manual pty testing actually created a real file
+      under the real `~/mail/`, not the scratch `$HOME/mail/` the test
+      harness assumes -- verified via `bwrap --bind <scratch-dir>
+      /home/abob/mail` to redirect it safely for repeat testing.
+      No existing smoketest currently exercises a default-relative
+      folder-creation path (all use `-f <explicit mbox path>`), so this
+      hasn't caused visible contamination yet, but any future test that
+      does (e.g. a regression test for the cut above) needs either the
+      same bwrap-bind-mount treatment `_wrap_with_sendmail_stub()`
+      already uses for sendmail, or some other harness-level fix, or it
+      will silently write into whoever's real home directory runs the
+      suite.
 
 ### Is `c-client/mbox.c` dead weight in the build?
 

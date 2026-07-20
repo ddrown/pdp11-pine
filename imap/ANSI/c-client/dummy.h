@@ -32,38 +32,24 @@
  * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-
+
 /* Function prototypes */
 
 DRIVER *dummy_valid (char *name);
 void *dummy_parameters (long function,void *value);
 void dummy_find (MAILSTREAM *stream,char *pat);
-void dummy_find_bboards (MAILSTREAM *stream,char *pat);
 void dummy_find_all (MAILSTREAM *stream,char *pat);
-void dummy_find_all_bboards (MAILSTREAM *stream,char *pat);
-long dummy_subscribe (MAILSTREAM *stream,char *mailbox);
-long dummy_unsubscribe (MAILSTREAM *stream,char *mailbox);
-long dummy_subscribe_bboard (MAILSTREAM *stream,char *mailbox);
-long dummy_unsubscribe_bboard (MAILSTREAM *stream,char *mailbox);
-long dummy_create (MAILSTREAM *stream,char *mailbox);
-long dummy_delete (MAILSTREAM *stream,char *mailbox);
-long dummy_rename (MAILSTREAM *stream,char *old,char *new);
+long dummy_dead_mbx (MAILSTREAM *stream,char *mailbox);
+long dummy_dead_mbx3 (MAILSTREAM *stream,char *s1,char *s2);
 MAILSTREAM *dummy_open (MAILSTREAM *stream);
 void dummy_close (MAILSTREAM *stream);
-void dummy_fetchfast (MAILSTREAM *stream,char *sequence);
-void dummy_fetchflags (MAILSTREAM *stream,char *sequence);
+void dummy_dead_find (MAILSTREAM *stream,char *pat);
 ENVELOPE *dummy_fetchstructure (MAILSTREAM *stream,long msgno,BODY **body);
-char *dummy_fetchheader (MAILSTREAM *stream,long msgno);
-char *dummy_fetchtext (MAILSTREAM *stream,long msgno);
+char *dummy_dead_fetch (MAILSTREAM *stream,long msgno);
 char *dummy_fetchbody (MAILSTREAM *stream,long m,char *sec,unsigned long *len);
-void dummy_setflag (MAILSTREAM *stream,char *sequence,char *flag);
-void dummy_clearflag (MAILSTREAM *stream,char *sequence,char *flag);
-void dummy_search (MAILSTREAM *stream,char *criteria);
+void dummy_dead_setflag (MAILSTREAM *stream,char *sequence,char *flag);
 long dummy_ping (MAILSTREAM *stream);
-void dummy_check (MAILSTREAM *stream);
-void dummy_expunge (MAILSTREAM *stream);
-long dummy_copy (MAILSTREAM *stream,char *sequence,char *mailbox);
-long dummy_move (MAILSTREAM *stream,char *sequence,char *mailbox);
+void dummy_dead_stream (MAILSTREAM *stream);
 long dummy_append (MAILSTREAM *stream,char *mailbox,STRING *message);
 void dummy_gc (MAILSTREAM *stream,long gcflags);
 char *dummy_file (char *dst,char *name);
