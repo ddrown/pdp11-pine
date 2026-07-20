@@ -33,6 +33,16 @@
  *
  */
 
+/*
+ * dummy is no longer a registered DRIVER (see TODO-pdp11-done.md) --
+ * these are now plain helper functions c-client/mail.c and bezerk.c
+ * call directly: dummy_find()/dummy_find_all() do the real directory-
+ * scanning wildcard folder search bezerk.c has no implementation of
+ * its own, and dummy_open_failure()/dummy_append_failure() produce
+ * the correct user-facing error text (including the "[TRYCREATE]"
+ * hint) when mail_open()/mail_append() find no driver willing to
+ * claim a mailbox name.
+ */
 
 #include <stdio.h>
 #include <ctype.h>
@@ -44,89 +54,7 @@ extern int errno;		/* just in case */
 #include <sys/file.h>
 #include "dummy.h"
 #include "misc.h"
-
-/* Dummy routines */
 
-
-/* Driver dispatch used by MAIL */
-
-/*
- * Slots commented "unreachable" below can never actually be invoked in
- * this build and are served by one of a handful of shared stub
- * functions (grouped by exact matching signature -- no unsafe casts):
- *   - dummy_open() unconditionally fails, so no stream can ever persist
- *     with dtb == &dummydriver, which means fetchfast/fetchflags/
- *     fetchheader/fetchtext/setflag/clearflag/search/check/expunge/
- *     copy/move/gc can never be dispatched to.
- *   - c-client/mail.c's mail_valid() explicitly excludes the driver
- *     named "dummy" whenever its nopen flag is set, which is how
- *     mail_create()/mail_delete()/mail_rename()/mail_subscribe()/
- *     mail_unsubscribe()/mail_subscribe_bboard()/
- *     mail_unsubscribe_bboard() all resolve their driver -- so
- *     create/delete/rename/subscribe/unsubscribe/subscribe_bboard/
- *     unsubscribe_bboard can never be dispatched to either.
- *   - pine's own bboard/newsgroup UI is gone (see TODO-pdp11-done.md),
- *     so nothing ever calls mail_find_bboards()/mail_find_all_bboards()
- *     -- find_bboards/find_all_bboards can never be dispatched to.
- */
-DRIVER dummydriver = {
-  "dummy",			/* driver name */
-  (DRIVER *) NIL,		/* next driver */
-  dummy_valid,			/* mailbox is valid for us */
-  dummy_parameters,		/* manipulate parameters */
-  dummy_find,			/* find mailboxes */
-  dummy_dead_find,		/* find bboards -- unreachable */
-  dummy_find_all,		/* find all mailboxes */
-  dummy_dead_find,		/* find all bboards -- unreachable */
-  dummy_dead_mbx,		/* subscribe to mailbox -- unreachable */
-  dummy_dead_mbx,		/* unsubscribe from mailbox -- unreachable */
-  dummy_dead_mbx,		/* subscribe to bboard -- unreachable */
-  dummy_dead_mbx,		/* unsubscribe from bboard -- unreachable */
-  dummy_dead_mbx,		/* create mailbox -- unreachable */
-  dummy_dead_mbx,		/* delete mailbox -- unreachable */
-  dummy_dead_mbx3,		/* rename mailbox -- unreachable */
-  dummy_open,			/* open mailbox */
-  dummy_close,			/* close mailbox */
-  dummy_dead_find,		/* fetch message "fast" attributes -- unreachable */
-  dummy_dead_find,		/* fetch message flags -- unreachable */
-  dummy_fetchstructure,		/* fetch message structure */
-  dummy_dead_fetch,		/* fetch message header only -- unreachable */
-  dummy_dead_fetch,		/* fetch message body only -- unreachable */
-  dummy_fetchbody,		/* fetch message body section */
-  dummy_dead_setflag,		/* set message flag -- unreachable */
-  dummy_dead_setflag,		/* clear message flag -- unreachable */
-  dummy_dead_find,		/* search for message based on criteria -- unreachable */
-  dummy_ping,			/* ping mailbox to see if still alive */
-  dummy_dead_stream,		/* check for new messages -- unreachable */
-  dummy_dead_stream,		/* expunge deleted messages -- unreachable */
-  dummy_dead_mbx3,		/* copy messages to another mailbox -- unreachable */
-  dummy_dead_mbx3,		/* move messages to another mailbox -- unreachable */
-  dummy_append,			/* append string message to mailbox */
-  dummy_gc			/* garbage collect stream */
-};
-
-/* Dummy validate mailbox
- * Accepts: mailbox name
- * Returns: our driver if name is valid, NIL otherwise
- */
-
-DRIVER *dummy_valid (char *name)
-{
-  return (name && *name) ? &dummydriver : NIL;
-}
-
-
-/* Dummy manipulate driver parameters
- * Accepts: function code
- *	    function-dependent value
- * Returns: function-dependent return value
- */
-
-void *dummy_parameters (long function,void *value)
-{
-  return NIL;
-}
-
 /* Dummy find list of subscribed mailboxes
  * Accepts: mail stream
  *	    pattern to search
@@ -178,153 +106,46 @@ void dummy_find_all (MAILSTREAM *stream,char *pat)
   if (pmatch ("INBOX",pat)) mm_mailbox ("INBOX");
 }
 
-/* Dummy stub for the unreachable subscribe/unsubscribe/create/delete
- * mailbox and bboard slots (see the comment above dummydriver's
- * initializer)
+/* Dummy open failure message
+ * Accepts: candidate mailbox name
+ *
+ * Called by mail_open() when no driver claims a mailbox name, to
+ * produce the same specific error text this used to produce as a
+ * driver's open() method (mail_open() itself only knows how to print
+ * a generic "no such mailbox").
  */
 
-long dummy_dead_mbx (MAILSTREAM *stream,char *mailbox)
-{
-  return NIL;
-}
-
-/* Dummy stub for the unreachable rename/copy/move slots (see the
- * comment above dummydriver's initializer)
- */
-
-long dummy_dead_mbx3 (MAILSTREAM *stream,char *s1,char *s2)
-{
-  fatal ("Impossible dummy driver operation");
-  return NIL;
-}
-
-/* Dummy open
- * Accepts: stream to open
- * Returns: stream on success, NIL on failure
- */
-
-MAILSTREAM *dummy_open (MAILSTREAM *stream)
+void dummy_open_failure (char *name)
 {
   int fd;
   char tmp[MAILTMPLEN];
-				/* OP_PROTOTYPE call or silence */
-  if (!stream || stream->silent) return NIL;
-  if (*stream->mailbox == '*')	/* is it a bboard? */
-    sprintf (tmp,"No such bboard: %s",stream->mailbox+1);
+  if (*name == '*')		/* is it a bboard? */
+    sprintf (tmp,"No such bboard: %s",name+1);
 				/* remote specification? */
-  else if (*stream->mailbox == '{')
-    sprintf (tmp,"Invalid remote specification: %s",stream->mailbox);
-  else if ((fd = open (dummy_file (tmp,stream->mailbox),O_RDONLY,NIL)) < 0)
-    sprintf (tmp,"%s: %s",strerror (errno),stream->mailbox);
+  else if (*name == '{')
+    sprintf (tmp,"Invalid remote specification: %s",name);
+  else if ((fd = open (dummy_file (tmp,name),O_RDONLY,NIL)) < 0)
+    sprintf (tmp,"%s: %s",strerror (errno),name);
   else {			/* must be bogus format file */
-    sprintf (tmp,"%s is not a mailbox",stream->mailbox);
+    sprintf (tmp,"%s is not a mailbox",name);
     close (fd);			/* toss out the fd */
   }
   mm_log (tmp,ERROR);
-  return NIL;			/* always fails */
 }
 
-
-/* Dummy close
- * Accepts: MAIL stream
- */
-
-void dummy_close (MAILSTREAM *stream)
-{
-  /* Exit quietly */
-}
-
-/* Dummy stub for the unreachable find_bboards/find_all_bboards/
- * fetchfast/fetchflags/search slots (see the comment above
- * dummydriver's initializer)
- */
-
-void dummy_dead_find (MAILSTREAM *stream,char *pat)
-{
-  fatal ("Impossible dummy driver operation");
-}
-
-
-/* Dummy fetch envelope
- * Accepts: MAIL stream
- *	    message # to fetch
- *	    pointer to return body
- * Returns: envelope of this message, body returned in body value
- */
-
-ENVELOPE *dummy_fetchstructure (MAILSTREAM *stream,long msgno,BODY **body)
-{
-  fatal ("Impossible dummy_fetchstructure");
-  return NIL;
-}
-
-
-/* Dummy stub for the unreachable fetchheader/fetchtext slots (see the
- * comment above dummydriver's initializer)
- */
-
-char *dummy_dead_fetch (MAILSTREAM *stream,long msgno)
-{
-  fatal ("Impossible dummy driver operation");
-  return NIL;
-}
-
-
-/* Berkeley fetch message body as a structure
- * Accepts: Mail stream
- *	    message # to fetch
- *	    section specifier
- * Returns: pointer to section of message body
- */
-
-char *dummy_fetchbody (MAILSTREAM *stream,long m,char *sec,unsigned long *len)
-{
-  fatal ("Impossible dummy_fetchbody");
-  return NIL;
-}
-
-
-/* Dummy stub for the unreachable setflag/clearflag slots (see the
- * comment above dummydriver's initializer)
- */
-
-void dummy_dead_setflag (MAILSTREAM *stream,char *sequence,char *flag)
-{
-  fatal ("Impossible dummy driver operation");
-}
-
-
-/* Dummy ping mailbox
- * Accepts: MAIL stream
- * Returns: T if stream alive, else NIL
- * No-op for readonly files, since read/writer can expunge it from under us!
- */
-
-long dummy_ping (MAILSTREAM *stream)
-{
-  fatal ("Impossible dummy_ping");
-  return NIL;
-}
-
-
-/* Dummy stub for the unreachable check/expunge slots (see the comment
- * above dummydriver's initializer)
- */
-
-void dummy_dead_stream (MAILSTREAM *stream)
-{
-  fatal ("Impossible dummy driver operation");
-}
-
-
-/* Dummy append message string
+/* Dummy append failure message
  * Accepts: mail stream
  *	    destination mailbox
- *	    stringstruct of message to append
- * Returns: T on success, NIL on failure
+ * Returns: NIL, always
+ *
+ * Called by mail_append() when no driver claims the destination
+ * mailbox, to produce the "[TRYCREATE]" hint (via mm_notify()) pine's
+ * mm_notify() (pine/mailbox.c) depends on to prompt "Folder ... doesn't
+ * exist. Create?" -- the same message this used to produce as a
+ * driver's append() method.
  */
 
-long dummy_append (MAILSTREAM *stream,char *mailbox,STRING *message)
+long dummy_append_failure (MAILSTREAM *stream,char *mailbox)
 {
   int fd = -1,e;
   char tmp[MAILTMPLEN];
@@ -343,17 +164,6 @@ long dummy_append (MAILSTREAM *stream,char *mailbox,STRING *message)
   return NIL;			/* always fails */
 }
 
-
-/* Dummy garbage collect stream
- * Accepts: mail stream
- *	    garbage collection flags
- */
-
-void dummy_gc (MAILSTREAM *stream,long gcflags)
-{
-  fatal ("Impossible dummy_gc");
-}
-
 /* Dummy mail generate file string
  * Accepts: temporary buffer to write into
  *	    mailbox name string
@@ -367,10 +177,10 @@ char *dummy_file (char *dst,char *name)
   /*
    * name is a caller-typed candidate mailbox name with no length cap
    * upstream (e.g. straight from the composer's Fcc field, and unlike
-   * bezerk_valid(), dummy_valid() accepts any nonempty name with no
-   * length check of its own); every caller of dummy_file() passes a
-   * MAILTMPLEN-sized dst, by convention across this whole file. Bounded
-   * well under MAILTMPLEN (not just under it) to leave headroom for the
+   * bezerk_valid(), nothing here checks for the mailbox actually
+   * existing); every caller of dummy_file() passes a MAILTMPLEN-sized
+   * dst, by convention across this whole file. Bounded well under
+   * MAILTMPLEN (not just under it) to leave headroom for the
    * "~"/default cases below, which prepend a home directory to (part of)
    * name into the same MAILTMPLEN dst.
    */

@@ -560,7 +560,7 @@ void mail_find (MAILSTREAM *stream,char *pat);
 void mail_find_bboards (MAILSTREAM *stream,char *pat);
 void mail_find_all (MAILSTREAM *stream,char *pat);
 void mail_find_all_bboard (MAILSTREAM *stream,char *pat);
-DRIVER *mail_valid (MAILSTREAM *stream,char *mailbox,char *purpose,long nopen);
+DRIVER *mail_valid (MAILSTREAM *stream,char *mailbox,char *purpose);
 DRIVER *mail_valid_net (char *name,DRIVER *drv,char *host,char *mailbox);
 long mail_valid_net_parse (char *name,NETMBX *mb);
 long mail_subscribe (MAILSTREAM *stream,char *mailbox);

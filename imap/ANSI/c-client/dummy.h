@@ -35,21 +35,8 @@
 
 /* Function prototypes */
 
-DRIVER *dummy_valid (char *name);
-void *dummy_parameters (long function,void *value);
 void dummy_find (MAILSTREAM *stream,char *pat);
 void dummy_find_all (MAILSTREAM *stream,char *pat);
-long dummy_dead_mbx (MAILSTREAM *stream,char *mailbox);
-long dummy_dead_mbx3 (MAILSTREAM *stream,char *s1,char *s2);
-MAILSTREAM *dummy_open (MAILSTREAM *stream);
-void dummy_close (MAILSTREAM *stream);
-void dummy_dead_find (MAILSTREAM *stream,char *pat);
-ENVELOPE *dummy_fetchstructure (MAILSTREAM *stream,long msgno,BODY **body);
-char *dummy_dead_fetch (MAILSTREAM *stream,long msgno);
-char *dummy_fetchbody (MAILSTREAM *stream,long m,char *sec,unsigned long *len);
-void dummy_dead_setflag (MAILSTREAM *stream,char *sequence,char *flag);
-long dummy_ping (MAILSTREAM *stream);
-void dummy_dead_stream (MAILSTREAM *stream);
-long dummy_append (MAILSTREAM *stream,char *mailbox,STRING *message);
-void dummy_gc (MAILSTREAM *stream,long gcflags);
+void dummy_open_failure (char *name);
+long dummy_append_failure (MAILSTREAM *stream,char *mailbox);
 char *dummy_file (char *dst,char *name);

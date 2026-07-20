@@ -3655,3 +3655,75 @@ already covered by the existing composer tests).
   scratch copy correctly received the forwarded message.
 - **Size delta**: `bin/pine`'s `text` 338175 -> 338206 (+31 bytes,
   `getenv()` check), `data`/`bss` unchanged; `bin/pico` unaffected.
+
+### `dummy` is no longer a registered `DRIVER` -- just a plain helper `mail.c`/`bezerk.c` call
+
+- **What it was**: even after shrinking `dummydriver`'s slots down to 6
+  shared stubs (the previous cut), dummy still had to exist as a
+  second, distinctly-named `DRIVER` in `maildrivers`, because
+  `c-client/mail.c`'s own generic `mail_valid()` hardcoded the literal
+  string `"dummy"` to exclude the catch-all driver from
+  `mail_create()`/`mail_delete()`/`mail_rename()`'s "does this mailbox
+  already exist" check (its `nopen` flag). Raised as a design question
+  ("dummy doesn't seem like it should be a driver, but a consumer of
+  drivers") and refined into a concrete plan: stop `mail_link()`-ing
+  `dummydriver` entirely, delete the now-pointless name-string
+  exclusion, and add explicit direct calls to dummy's helper functions
+  only where `mail.c` actually needs them.
+- **What changed**:
+  - `pine/pine.c`: dropped the `mail_link((DRIVER *)&dummydriver);`
+    call and `dummydriver` from the `extern DRIVER` declaration --
+    `maildrivers` now only ever contains `bezerkdriver`.
+  - `c-client/mail.c`: `mail_valid()` lost its `nopen` parameter
+    entirely (its only use was the now-deleted `"dummy"` name check)
+    and all 10 call sites updated to match. `mail_open()`/
+    `mail_append()` now call `dummy_open_failure(name)`/
+    `dummy_append_failure(stream,mailbox)` directly when `mail_valid()`
+    returns NIL, replicating the exact same suppression conditions the
+    old driver-dispatch path had (`mail_open`'s silent-probe/
+    `OP_SILENT` cases stayed silent before; still do). `mail_find()`/
+    `mail_find_all()`'s no-stream loop now calls
+    `dummy_find(NIL,pat)`/`dummy_find_all(NIL,pat)` explicitly after
+    iterating `maildrivers`, since `dummy_find_all` used to be the
+    *only* thing in that loop that actually did anything when `stream`
+    was NIL (`bezerk_find_all`'s forwarding to `dummy_find_all` is
+    itself gated on `stream` being non-NIL) -- removing dummy from the
+    chain without this would have silently broken "search all
+    mailboxes with no open stream".
+  - `c-client/dummy.c`/`dummy.h`: rewritten down to 5 plain functions,
+    no `DRIVER` struct at all. `dummy_find()`/`dummy_find_all()`/
+    `dummy_file()` kept verbatim (still the only implementation of the
+    wildcard directory-scan search). `dummy_open()` -> renamed
+    `dummy_open_failure(char *name)`, dropping its `MAILSTREAM*`
+    parameter (it only ever used `stream->mailbox`/`stream->silent`,
+    both now handled by the caller) and its own internal silent-check
+    (moved to `mail_open()`, since that's the only caller now).
+    `dummy_append()` -> renamed `dummy_append_failure(MAILSTREAM
+    *stream,char *mailbox)`, dropping the unused `message` parameter.
+    Deleted entirely (no longer needed once there's no `DRIVER` struct
+    to populate): `dummy_valid`, `dummy_parameters`, `dummy_close`, and
+    all 6 of the previous cut's shared "unreachable" stubs
+    (`dummy_dead_mbx`/`dummy_dead_mbx3`/`dummy_dead_find`/
+    `dummy_dead_fetch`/`dummy_dead_setflag`/`dummy_dead_stream`) plus
+    the 4 individually-kept-but-equally-unreachable ones
+    (`dummy_fetchstructure`/`dummy_fetchbody`/`dummy_ping`/`dummy_gc`)
+    -- all of these were only ever load-bearing as `DRIVER`-struct
+    filler, never as actually-called code.
+  - `c-client/mbox.c`: unaffected (it references `bezerk_*` names, not
+    `dummy_*`, and doesn't touch `dummydriver`).
+- **Verified**: `./build lnx` clean before touching anything. `./build
+  clean && ./build lnx` clean afterward, 177 warnings (unchanged). Full
+  smoketest suite 25/25 (unchanged). Manually re-verified, via a real
+  pty session (no `bwrap` needed now that `myhomedir()` respects
+  `$HOME`), all three code paths this change touches: (1) saving a
+  message to a brand-new folder name -- confirmed the "doesn't exist...
+  Create?" prompt (now driven by `dummy_open_failure()`'s TRYCREATE
+  path) and successful creation via `bezerk_create()`; (2) "Goto"-ing a
+  genuinely nonexistent folder -- confirmed `mail_open()`'s new fallback
+  produces the correct `strerror()`-based error text; (3) the Folder
+  List screen's wildcard search -- confirmed all three real folders
+  (`sent-mail`, `saved-messages`, a freshly-created one) appear,
+  exercising `mail_find_all()`'s new explicit no-stream fallback call.
+- **Size delta**: `bin/pine`'s `text` 338206 -> 337286 (-920 bytes),
+  `data` 12936 (-288 bytes; the removed `DRIVER dummydriver` struct
+  literal itself), `bss` unchanged; `bin/pico` unaffected.

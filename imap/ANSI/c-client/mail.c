@@ -40,6 +40,7 @@
 #include "osdep.h"
 #include <time.h>
 #include "misc.h"
+#include "dummy.h"
 
 
 /* c-client global data */
@@ -257,9 +258,13 @@ void mail_find (MAILSTREAM *stream,char *pat)
   DRIVER *d = maildrivers;
 				/* if have a stream, do it for that stream */
   if (stream && stream->dtb) (*stream->dtb->find) (stream,pat);
-				/* otherwise do for all DTB's */
-  else do (d->find) (NIL,pat);
-  while (d = d->next);		/* until at the end */
+  else {			/* otherwise do for all DTB's */
+    do (d->find) (NIL,pat);
+    while (d = d->next);	/* until at the end */
+				/* plus dummy's own search, since no driver
+				   is registered under that name any more */
+    dummy_find (NIL,pat);
+  }
 }
 
 
@@ -286,9 +291,13 @@ void mail_find_all (MAILSTREAM *stream,char *pat)
   DRIVER *d = maildrivers;
 				/* if have a stream, do it for that stream */
   if (stream && stream->dtb) (*stream->dtb->find_all) (stream,pat);
-				/* otherwise do for all DTB's */
-  else do (d->find_all) (NIL,pat);
-  while (d = d->next);		/* until at the end */
+  else {			/* otherwise do for all DTB's */
+    do (d->find_all) (NIL,pat);
+    while (d = d->next);	/* until at the end */
+				/* plus dummy's own search, since no driver
+				   is registered under that name any more */
+    dummy_find_all (NIL,pat);
+  }
 }
 
 
@@ -311,19 +320,17 @@ void mail_find_all_bboard (MAILSTREAM *stream,char *pat)
  * Accepts: MAIL stream
  *	    mailbox name
  *	    purpose string for error message
- *	    flag indicating this is not an open
  * Return: driver factory on success, NIL on failure
  */
 
-DRIVER *mail_valid (MAILSTREAM *stream,char *mailbox,char *purpose,long nopen)
+DRIVER *mail_valid (MAILSTREAM *stream,char *mailbox,char *purpose)
 {
   char tmp[MAILTMPLEN];
   DRIVER *factory;
   for (factory = maildrivers; factory && !(*factory->valid) (mailbox);
        factory = factory->next);
-				/* must match stream and not be dummy */
-  if (factory && ((stream && (stream->dtb != factory)) ||
-		  (nopen && !strcmp (factory->name,"dummy")))) factory = NIL;
+				/* must match stream */
+  if (factory && stream && (stream->dtb != factory)) factory = NIL;
   if (!factory && purpose) {	/* if want an error message */
     sprintf (tmp,"Can't %s %s: no such mailbox",purpose,mailbox);
     mm_log (tmp,ERROR);
@@ -439,7 +446,7 @@ long mail_valid_net_parse (char *name,NETMBX *mb)
 
 long mail_subscribe (MAILSTREAM *stream,char *mailbox)
 {
-  DRIVER *factory = mail_valid (stream,mailbox,"subscribe to mailbox",LONGT);
+  DRIVER *factory = mail_valid (stream,mailbox,"subscribe to mailbox");
   return factory ? (*factory->subscribe) (stream,mailbox) : NIL;
 }
 
@@ -452,7 +459,7 @@ long mail_subscribe (MAILSTREAM *stream,char *mailbox)
 
 long mail_unsubscribe (MAILSTREAM *stream,char *mailbox)
 {
- DRIVER *factory = mail_valid (stream,mailbox,"unsubscribe to mailbox",LONGT);
+ DRIVER *factory = mail_valid (stream,mailbox,"unsubscribe to mailbox");
   return factory ? (*factory->unsubscribe) (stream,mailbox) : NIL;
 }
 
@@ -468,7 +475,7 @@ long mail_subscribe_bboard (MAILSTREAM *stream,char *mailbox)
   char tmp[MAILTMPLEN];
   DRIVER *factory;
   sprintf (tmp,"*%s",mailbox);
-  return (factory = mail_valid (stream,tmp,"subscribe to bboard",LONGT)) ?
+  return (factory = mail_valid (stream,tmp,"subscribe to bboard")) ?
     (*factory->subscribe_bboard) (stream,mailbox) : NIL;
 }
 
@@ -484,7 +491,7 @@ long mail_unsubscribe_bboard (MAILSTREAM *stream,char *mailbox)
   char tmp[MAILTMPLEN];
   DRIVER *factory;
   sprintf (tmp,"*%s",mailbox);
-  return (factory = mail_valid (stream,tmp,"unsubscribe to bboard",LONGT)) ?
+  return (factory = mail_valid (stream,tmp,"unsubscribe to bboard")) ?
     (*factory->unsubscribe_bboard) (stream,mailbox) : NIL;
 }
 
@@ -511,7 +518,7 @@ long mail_create (MAILSTREAM *stream,char *mailbox)
     return NIL;
   }
 				/* must not already exist if local */
-  if (localp && mail_valid (stream,mailbox,NIL,LONGT)) {
+  if (localp && mail_valid (stream,mailbox,NIL)) {
     sprintf (tmp,"Can't create mailbox %s: mailbox already exists",mailbox);
     mm_log (tmp,ERROR);
     return NIL;
@@ -527,7 +534,7 @@ long mail_create (MAILSTREAM *stream,char *mailbox)
 
 long mail_delete (MAILSTREAM *stream,char *mailbox)
 {
-  DRIVER *factory = mail_valid (stream,mailbox,"delete mailbox",LONGT);
+  DRIVER *factory = mail_valid (stream,mailbox,"delete mailbox");
   return factory ? (*factory->delete) (stream,mailbox) : NIL;
 }
 
@@ -542,8 +549,8 @@ long mail_delete (MAILSTREAM *stream,char *mailbox)
 long mail_rename (MAILSTREAM *stream,char *old,char *new)
 {
   char tmp[MAILTMPLEN];
-  DRIVER *factory = mail_valid (stream,old,"rename mailbox",LONGT);
-  if ((*old != '{') && mail_valid (NIL,new,NIL,LONGT)) {
+  DRIVER *factory = mail_valid (stream,old,"rename mailbox");
+  if ((*old != '{') && mail_valid (NIL,new,NIL)) {
     sprintf (tmp,"Can't rename to mailbox %s: mailbox already exists",new);
     mm_log (tmp,ERROR);
     return NIL;
@@ -560,8 +567,7 @@ long mail_rename (MAILSTREAM *stream,char *old,char *new)
 
 MAILSTREAM *mail_open (MAILSTREAM *stream,char *name,long options)
 {
-  DRIVER *factory = mail_valid (NIL,name,(!(stream && stream->silent)) ?
-				"open mailbox" : NIL,(long) NIL);
+  DRIVER *factory = mail_valid (NIL,name,NIL);
   if (factory) {		/* must have a factory */
     if (!stream) {		/* instantiate stream if none to recycle */
       if (options & OP_PROTOTYPE) return (*factory->open) (NIL);
@@ -595,6 +601,14 @@ MAILSTREAM *mail_open (MAILSTREAM *stream,char *name,long options)
 				/* have driver open, flush if failed */
     if (!(*factory->open) (stream)) stream = mail_close (stream);
   }
+				/* no driver matched -- report why, unless
+				   this is a silent probe (matches what the
+				   driver's own open() would have suppressed:
+				   a no-stream OP_PROTOTYPE probe passes NIL
+				   straight through, and OP_SILENT sets
+				   stream->silent before any real open call) */
+  else if (!((!stream && (options & OP_PROTOTYPE)) || (options & OP_SILENT)))
+    dummy_open_failure (name);
   return stream;		/* return the stream */
 }
 
@@ -938,9 +952,10 @@ long mail_move (MAILSTREAM *stream,char *sequence,char *mailbox)
 
 long mail_append (MAILSTREAM *stream,char *mailbox,STRING *message)
 {
-  DRIVER *factory = mail_valid (stream,mailbox,"append to mailbox",(long) NIL);
+  DRIVER *factory = mail_valid (stream,mailbox,NIL);
 				/* do the driver's action */
-  return factory ? (factory->append) (stream,mailbox,message) : NIL;
+  return factory ? (factory->append) (stream,mailbox,message) :
+    dummy_append_failure (stream,mailbox);
 }
 
 /* Mail garbage collect stream

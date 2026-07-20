@@ -55,7 +55,7 @@ static char rcsid[] = "$Id: pine.c,v 4.134 1993/12/06 17:26:11 mikes Exp $";
 
 #define VERSION "3.89"
 
-extern DRIVER bezerkdriver, dummydriver;
+extern DRIVER bezerkdriver;
 
 char         version_buff[50];
 struct pine *ps_global;               /* sort of THE global variable */
@@ -341,9 +341,8 @@ main(argc, argv)
     mailcache = dos_cache;
 #endif
 
-    /*------- Set up c-client drivers -------------- */ 
+    /*------- Set up c-client drivers -------------- */
     mail_link((DRIVER *)&bezerkdriver);
-    mail_link((DRIVER *)&dummydriver);
 
     init_vars(pine_state);
 
