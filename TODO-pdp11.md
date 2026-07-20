@@ -83,45 +83,42 @@ DONE elsewhere or referenced in passing below.
       plumbing every mail operation flows through, unlike the
       previous, more narrowly-scoped dummy-driver cuts.
 
-### Simplify `read_pinerc()` to a bootstrap-only stub (drop full `.pinerc` parsing)
+### Remove `read_pinerc()` and `first_time_user` entirely
 
-- [ ] gcov flagged `read_pinerc()` (`pine/init.c:1133`) as low-coverage.
-      Called twice per run (`init.c:328` for `SYSTEM_PINERC`/
-      `ParseGlobal`, `init.c:337` for the user's own `.pinerc`/
-      `ParseLocal`), and every currently-tested invocation only
-      exercises its very first branch: `read_file(filename) == NULL`
-      -> sets `first_time_user=1` (ParseLocal only) -> `return(-1)`
-      (`init.c:1146-1151`). `test/smoketest.py`'s `Session` always
-      points `-p` at a fresh, nonexistent scratch `.pinerc` and no
-      `test/cases/*.py` ever seeds one with real content, so the whole
-      rest of the function -- line/`pinerc_lines` counting and
-      allocation, the line-by-line parse loop (comment lines, blank/
-      continuation lines, variable-name lookup, obsolete-variable
-      handling, unused-variable skip, `=`-syntax-error detection, quote
-      stripping, comma-separated list parsing with continuation-line
-      joining via `parse_list()`), and the `ParseLocal`-vs-`ParseGlobal`
-      storage into `v->user_val`/`v->global_val` -- is dead as far as
-      this project's test suite is concerned.
-      **User has explicitly accepted this as a real functionality
-      loss for the size win**: unlike the other items in this file,
-      this is not proven dead code, it's a deliberate capability cut.
-      Once landed, a hand- or Setup-written `.pinerc` (mail directory,
-      feature list, signature file, etc.) will no longer be parsed --
-      every variable silently stays at its compiled-in default on
-      every run, for both the system-wide and per-user config files.
-      **Proposed cut**: collapse `read_pinerc()` down to just the
-      existing bootstrap branch (open the file; if it doesn't exist,
-      set `first_time_user`/return `-1` same as today), deleting
-      everything past that.
-      **Needs verification before landing**:
-      - Check for other callers of `parse_list()` before deleting it
-        too (it's currently only invoked from `read_pinerc()`'s list-
-        parsing branch).
-      - Check what else reads `pinerc_lines` (the per-line struct this
-        function builds) -- it looks like it's kept around for writing
-        an updated `.pinerc` back out (e.g. from Setup/config-save
-        screens); if so, that dependent code needs its own look rather
-        than silently receiving an empty/uninitialized list.
-      - Standard trace-before-delete pass: rebuild, full smoketest
-        suite, warning count, before/after `size`.
+- [ ] Follow-on to the `read_pinerc()` stub cut above. `read_pinerc()`
+      (`pine/init.c:1114`) is now an unconditional `return(0);` with an
+      empty body -- its 3 call sites (`init.c:316`/`:318`/`:325`, the
+      `ParseGlobal`/`ParseLocal` pine.conf and `.pinerc` reads) could
+      just be deleted outright instead of calling a no-op, along with
+      the function itself, its ANSI/K&R prototypes (`init.c:82`/`:90`),
+      and the now-pointless `typedef enum {ParseLocal, ParseGlobal}
+      ParsePinerc` (`init.c:79`) -- check first whether `ParsePinerc`
+      is referenced anywhere else before deleting the typedef.
+      `first_time_user` (`struct pine`, `pine.h:648`) had no setter
+      anywhere in the tree even before this (`read_pinerc()`'s
+      bootstrap version was the only one, and it's gone now) -- grepped
+      to confirm its only remaining references are the two `if`
+      conditions that read it: `pine.c:401`
+      (`pine_state->first_time_user || pine_state->show_new_version`,
+      with a nested `if(pine_state->first_time_user)
+      new_user_or_version(first_time_message); else
+      new_user_or_version(new_version_message);` -- the `first_time_user`
+      branch is now dead, `new_version_message` always fires when this
+      block runs at all) and `pine.c:1640`
+      (`(ps_global->first_time_user || ps_global->show_new_version) &&
+      other_cmds % 3 == 0 && other_cmds < 10`, part of the periodic "O
+      command is optional" reminder -- `first_time_user` is redundant
+      with `show_new_version` here now). Proposed cut: delete the
+      `unsigned first_time_user:1` field from `struct pine`, simplify
+      both `pine.c` conditions to just `show_new_version`, and delete
+      the dead `if(pine_state->first_time_user)` branch at `pine.c:404`
+      (folding straight to the `new_version_message` call).
+      Standard trace-before-delete verification pass before landing:
+      rebuild, full smoketest suite, warning count, before/after
+      `size`. Since nothing in the test suite currently exercises the
+      first-run welcome screen either way, this is unlikely to be
+      test-observable -- consider whether a smoketest driving
+      `show_new_version` (if there's a way to set it, e.g. a version
+      marker file) is worth adding, or whether this is accepted as
+      unverified-by-suite like the `read_pinerc()` cut itself was.
 

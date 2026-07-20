@@ -3822,3 +3822,67 @@ already covered by the existing composer tests).
   `data` 12936 -> 12904 (-32 bytes; the two struct-field removals
   worth of `DRIVER` and `sm_unix.o`'s own static data), `bss`
   unchanged; `bin/pico` unaffected.
+
+### `read_pinerc()` simplified to a bootstrap-only stub -- deliberate functionality loss, user-confirmed
+
+- **What it was**: gcov flagged `pine/init.c`'s `read_pinerc()` as
+  low-coverage -- every smoketest-driven invocation only ever exercised
+  its first branch (`read_file(filename) == NULL` -> set
+  `first_time_user`/return `-1`), since `test/smoketest.py`'s `Session`
+  always points `-p` at a fresh, nonexistent scratch `.pinerc`. Unlike
+  every other item in this project's cut list, the rest of the
+  function -- the full line-by-line `.pinerc` parser (comment lines,
+  variable lookup, obsolete-variable handling, quote stripping,
+  comma-separated list parsing via `parse_list()`, storage into
+  `v->user_val`/`v->global_val`) -- is real, working code with a real
+  purpose; it just happens that nothing in this project's test suite
+  exercises it. **This is a deliberate, user-confirmed capability cut,
+  not proven-dead-code removal**: the user explicitly directed starting
+  this item after being told plainly it drops real functionality.
+- **What changed**: first collapsed `read_pinerc()` to just its
+  original bootstrap branch (open the file; if it exists, `fs_give()`
+  its contents back unread and return `0`; if it doesn't, set
+  `first_time_user`/return `-1`, identical to before) -- then
+  simplified further by hand to an unconditional `return(0);` with no
+  body at all, dropping the file-open/existence-check entirely. Since
+  `first_time_user` had no other setter anywhere in the tree (grepped
+  to confirm), it's now permanently `NIL` -- the "Welcome to Pine"
+  first-run screen (`pine.c`, gated on `first_time_user ||
+  show_new_version`) can now only trigger via `show_new_version`.
+  Deleted the now-fully-dead `static struct pinerc_line { ... }
+  *pinerc_lines` file-scope declaration and type -- confirmed via grep
+  it had no consumer anywhere outside `read_pinerc()` itself (no
+  "write .pinerc back out" feature exists anywhere in this fork to
+  have depended on it, despite the struct's shape suggesting that was
+  its original purpose upstream). Left `parse_list()` alone --
+  confirmed it has a real second caller (`pine/args.c:217`), so only
+  its `read_pinerc()` call site went away, not the function itself.
+- **Observable behavior change** (accepted, not a bug): a hand- or
+  Setup-written `.pinerc`/system-wide pinerc is no longer opened or
+  parsed at all. Every variable -- mail directory, feature list,
+  signature file, personal name, everything -- silently stays at its
+  compiled-in default on every run, for both `ParseGlobal` and
+  `ParseLocal`. Manually verified end-to-end: wrote a real `.pinerc`
+  setting `personal-name` to a distinctive value, sent a message via
+  the Fcc-only path (mirroring `test_send_body_header_overflow.py`'s
+  pattern), and confirmed the custom name never reaches the outgoing
+  `From:` header -- it stays at the compiled-in default derived from
+  the system username/hostname.
+  `test/smoketest.py`'s `Session` gained a new `pinerc=<content>`
+  parameter (mirroring the existing `postponed_mail=` pattern) to seed
+  a real `.pinerc` before pine starts, for this and any future test
+  needing one.
+- **New regression test**: `test/cases/test_pinerc_not_parsed.py` --
+  locks in the behavior change (asserts the custom `personal-name`
+  never appears in the sent message), the inverse of what a working
+  `.pinerc` parser would produce.
+- **Verified**: `./build lnx` clean before touching anything. `./build
+  clean && ./build lnx` clean after both the initial two-branch version
+  and the further hand-simplified unconditional-`return(0)` version,
+  177 warnings (unchanged) each time. Full smoketest suite 26/26 (25
+  existing + the new test), reconfirmed after the final simplification.
+- **Size delta**: `bin/pine`'s `text` 334703 -> 332455 -> 332159
+  (-2544 bytes total: -2248 from the initial bootstrap-only collapse,
+  another -296 from dropping the file-existence check entirely), `bss`
+  15000 -> 14968 (-32 bytes, the removed `pinerc_lines` static
+  pointer), `data` unchanged; `bin/pico` unaffected.
