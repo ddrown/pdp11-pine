@@ -1345,11 +1345,11 @@ strings2outgoing(env, bod, to, cc, bcc)
     rfc822_parse_adrlist(&(env->to), to, maildomain);
 
     if(env->to != NULL) {
-       dprint(9, (debugfile, "to->personal %x\n", env->to->personal));
-       dprint(9, (debugfile, "to->route_list %x\n", env->to->adl));
-       dprint(9, (debugfile, "to->mailbox %x\n", env->to->mailbox));
-       dprint(9, (debugfile, "to->host %x\n", env->to->host));
-       dprint(9, (debugfile, "to->next %x\n", env->to->next));
+       dprint(9, (debugfile, "to->personal %p\n", env->to->personal));
+       dprint(9, (debugfile, "to->route_list %p\n", env->to->adl));
+       dprint(9, (debugfile, "to->mailbox %p\n", env->to->mailbox));
+       dprint(9, (debugfile, "to->host %p\n", env->to->host));
+       dprint(9, (debugfile, "to->next %p\n", env->to->next));
        dprint(4, (debugfile, "cannonized To \"%s\"\n",
                 addr_list_string(env->to, 1)));
     }
@@ -1794,8 +1794,8 @@ pine_encode_body (env,body)
   case TYPEMULTIPART:		/* multi-part */
     if (!body->parameter) {	/* cookie not set up yet? */
       char tmp[MAILTMPLEN];	/* make cookie not in BASE64 or QUOTEPRINT*/
-      sprintf (tmp,"%ld-%ld-%ld:#%ld",gethostid (),random (),time (0),
-	       getpid ());
+      sprintf (tmp,"%ld-%ld-%ld:#%ld",gethostid (),(long) random (),time (0),
+	       (long) getpid ());
       body->parameter = mail_newbody_parameter ();
       body->parameter->attribute = cpystr ("BOUNDARY");
       body->parameter->value = cpystr (tmp);

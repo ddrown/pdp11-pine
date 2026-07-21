@@ -789,7 +789,7 @@ comatose(number)
 	if(x != 0 || done_one) {
 	    if(b != buf)
 	      *b++ = ',';
-	    sprintf(b, done_one ? "%03ld" : "%d", x);
+	    sprintf(b, done_one ? "%03ld" : "%ld", x);
 	    b += strlen(b);
 	    done_one = 1;
 	}

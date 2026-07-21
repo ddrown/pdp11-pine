@@ -626,7 +626,7 @@ do_export:
           mc = closest_not_deleted(ps_global->mail_stream,
               		     current_sorted_msgno,
               		     ps_global->max_msgno);
-          dprint(8,(debugfile, "Expunge max:%ld cur:l%d kill:%d ncur:%ld\n",
+          dprint(8,(debugfile, "Expunge max:%ld cur:%ld kill:%ld ncur:%ld\n",
                     ps_global->max_msgno, ps_global->current_sorted_msgno,
                     del_count, mc == NULL ? 0 : mc->msgno));
           StartInverse();
@@ -1528,7 +1528,7 @@ do_broach_folder(new_folder, new_context)
         ps_global->current_sort_order       = ps_global->inbox_sort_order;
         ps_global->current_reverse_sort     = ps_global->reverse_sort;
 
-	dprint(7, (debugfile, "%ld %ld %x\n", ps_global->current_sorted_msgno,
+	dprint(7, (debugfile, "%ld %ld %p\n", ps_global->current_sorted_msgno,
                    ps_global->max_msgno,
 		   ps_global->mail_stream));
 	/*
@@ -1589,7 +1589,7 @@ do_broach_folder(new_folder, new_context)
 		     (open_inbox) ? ps_global->VAR_INBOX_PATH : expanded_file,
 		     openmode);
 
-    dprint(8, (debugfile, "Opened folder %x \"%s\" (context: \"%s\")\n", m,
+    dprint(8, (debugfile, "Opened folder %p \"%s\" (context: \"%s\")\n", m,
                m != NULL ? m->mailbox : "nil", 
 	       (new_context) ? new_context->context : "nil"));
 
@@ -1609,7 +1609,7 @@ do_broach_folder(new_folder, new_context)
 		ps_global->current_sorted_msgno = sorted_msgno(ps_global,
 						  ps_global->inbox_raw_msgno);
 
-                dprint(8, (debugfile, "Reactivate inbox %ld %ld %x\n",
+                dprint(8, (debugfile, "Reactivate inbox %ld %ld %p\n",
                            ps_global->current_sorted_msgno,
                            ps_global->max_msgno,
                            ps_global->mail_stream));

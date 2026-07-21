@@ -140,7 +140,7 @@ void mm_searched(stream, msg_no_l)
     char tmp[20];
     int  msg_no = (int)msg_no_l;
 
-    sprintf(tmp,"%ld",msg_no);
+    sprintf(tmp,"%d",msg_no);
     q_status_message2(0, 2,4, "\007 %s searched %s",
 		      stream ? stream->mailbox : "<no folder>", tmp);
 }
@@ -166,7 +166,7 @@ void mm_exists(stream, number_l)
      long number_l;
 {
     int number = (int)number_l;
-    dprint(3, (debugfile, "=== mm_exists(%ld,%s) called ===\n", number,
+    dprint(3, (debugfile, "=== mm_exists(%d,%s) called ===\n", number,
 	       stream == NULL ? "(no stream)" 
 	       : stream->mailbox == NULL ? "(null)" 
 	       : stream->mailbox));

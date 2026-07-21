@@ -257,7 +257,7 @@ mail_index_screen(state)
                    (We can ignore changes in the index off the bottom of 
                     the screen -- no repainting will be required)
                  */
-                dprint(9, (debugfile, "@@@@@ new: %d,  current: %d\n",
+                dprint(9, (debugfile, "@@@@@ new: %ld,  current: %ld\n",
                            state->new_current_sorted_msgno,
                            state->current_sorted_msgno));
                 if(state->current_sorted_msgno !=
@@ -641,8 +641,8 @@ build_header_line(message_number)
                message_number));
 
     if(*(buffer = get_index_cache(message_number)) != '\0') {
-        dprint(9, (debugfile, "Returning %x<%s> (%d)\n", buffer, 
-		   buffer, strlen(buffer)));
+        dprint(9, (debugfile, "Returning %p<%s> (%d)\n", buffer,
+		   buffer, (int) strlen(buffer)));
 	return(buffer);
     }
 
@@ -721,12 +721,12 @@ build_header_line(message_number)
     if(ps_global->mail_stream->mailbox[0] != '*'){
         if(cache->rfc822_size < 100000) {
             s_tmp = comatose(cache->rfc822_size);
-            sprintf(size, " %-*.*s(%s) ", 6 - strlen(s_tmp),
-                6 - strlen(s_tmp), "       ", s_tmp);
+            sprintf(size, " %-*.*s(%s) ", 6 - (int) strlen(s_tmp),
+                6 - (int) strlen(s_tmp), "       ", s_tmp);
         } else if(cache->rfc822_size < 10000000) {
             s_tmp = comatose(cache->rfc822_size/1000);
-            sprintf(size, " %-*.*s(%sK) ", 5 - strlen(s_tmp),
-                5 - strlen(s_tmp), "       ", s_tmp);
+            sprintf(size, " %-*.*s(%sK) ", 5 - (int) strlen(s_tmp),
+                5 - (int) strlen(s_tmp), "       ", s_tmp);
         } else {
             strcpy(size, "  (****)");
         }
@@ -746,13 +746,13 @@ build_header_line(message_number)
     for(s = subject + strlen(subject); s < subject + subject_length; s++)
       *s = ' ';
     *s = '\0';
-    dprint(9, (debugfile, "strlen(subject : %d\n", strlen(subject)));
+    dprint(9, (debugfile, "strlen(subject : %d\n", (int) strlen(subject)));
 
     /*--- Put them all together ---*/
     sprintf(buffer, "%s%s%s%s", status, from, size, subject);
     /* Truncate it to proper size */
     buffer[min(ps_global->ttyo->screen_cols, i_cache_width())] = '\0';
-    dprint(9, (debugfile, "Returning %x<%s> (%d)\n", buffer, buffer, strlen(buffer)));
+    dprint(9, (debugfile, "Returning %p<%s> (%d)\n", buffer, buffer, (int) strlen(buffer)));
     return(buffer);
 }
 
