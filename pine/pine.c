@@ -120,50 +120,6 @@ void new_user_or_version();
 #endif
 static void do_setup_task();
 
-static char *first_time_message[] = {
-#ifdef DOS
-"                   Welcome to PC-Pine",
-"",
-"a Program for Internet News and Email.  Pine offers the ability to:",
-"  -Access local and remote message folders using a simple user-interface",
-"  -Send documents, graphics, etc (via the MIME standard for attachments)",
-"",
-"COMMANDS IN PINE:  The last two lines on the screen tell you what",
-"commands are available for the current situation.  Usually there",
-"are more commands than can be shown on two lines, so use the \"O\"",
-"key to see what OTHER COMMANDS are available.  The \"O\" is optional;",
-"it is not necessary for a command to be visible before using it",
-"(except when Pine is used in function-key mode; then F2 is required.)",
-"",
-"PINE CONFIGURATION:  If you haven't yet filled out your Pine configuration",
-"file, Pine will be asking you questions about your configuration as you",
-"go.  If you plan to use Pine regularly, take the time to edit the PINERC",
-"file.  Use a standard text editor outside of Pine to edit this file.",
-"",
-
-#else /* UNIX */
-
-"                      Welcome to Pine...",
-" ",
-"a Program for Internet News and Email.  Pine offers the ability to:",
-"  -Access local and remote message folders using a simple user-interface",
-"  -Send documents, graphics, etc (via the MIME standard for attachments)",
-"",
-"COMMANDS IN PINE:  The last two lines on the screen tell you what", 
-"commands are available for the current situation.  Usually there",
-"are more commands than can be shown on two lines, so use the \"O\"",
-"key to see what OTHER COMMANDS are available.  The \"O\" is optional;",
-"it is not necessary for a command to be visible before using it",
-"(except when Pine is used in function-key mode; then F2 is required.)",
-"",
-"PINE CONFIGURATION:  Pine will create a default configuration file,",
-".pinerc, in your home directory.  You may edit this file to select",
-"various options.  It will also create a \"mail\" subdirectory for your",
-"saved-message folders.  PLEASE type \"?\" from the Main Menu for help.",
-#endif
-NULL};
-
-
 static char *new_version_message[] = {
 #ifdef DOS
 "   This is a new version of PC-Pine!",
@@ -393,13 +349,10 @@ main(argc, argv)
     pine_state->in_init_seq = 0;  /* so output (and ClearScreen) will show up */
     pine_state->dont_use_init_cmds = 1;  /* don't use up initial_commands yet */
     ClearScreen();
-    if(pine_state->first_time_user || pine_state->show_new_version){
+    if(pine_state->show_new_version){
 	pine_state->mangled_header = 1;
 	show_main_screen(pine_state, 0, 0, NULL);
-        if(pine_state->first_time_user)
-	    new_user_or_version(first_time_message);
-	else
-	    new_user_or_version(new_version_message);
+	new_user_or_version(new_version_message);
         ClearScreen();
     }
     
@@ -1621,7 +1574,7 @@ warn_other_cmds()
     static int other_cmds = 0;
 
     other_cmds++;
-    if(((ps_global->first_time_user || ps_global->show_new_version) &&
+    if((ps_global->show_new_version &&
 	      other_cmds % 3 == 0 && other_cmds < 10) || other_cmds % 20 == 0)
         q_status_message(0, 0, 2,
 		    "Remember: the \"O\" command is always optional");

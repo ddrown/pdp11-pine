@@ -645,7 +645,6 @@ struct pine {
     unsigned     noticed_dead_stream:1;
     unsigned     compose_mime:1;
     unsigned     show_new_version:1;
-    unsigned     first_time_user:1;
     unsigned     do_local_lookup:1;  /* look up in passwd even if using
                                            user defined domain */
     BITMAP       feature_list;       /* a bitmap of all the features */

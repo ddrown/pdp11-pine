@@ -56,7 +56,6 @@ static char rcsid[] = "$Id: init.c,v 4.102 1993/11/23 00:04:05 mikes Exp $";
        init_vars
        init_username
        init_hostname
-       read_pinerc
        init_mail_dir
 
        open debug files
@@ -76,10 +75,7 @@ static char rcsid[] = "$Id: init.c,v 4.102 1993/11/23 00:04:05 mikes Exp $";
 
 extern char version_buff[];
 
-typedef enum {ParseLocal, ParseGlobal} ParsePinerc;
-
 #ifdef ANSI
-int  read_pinerc(char *, struct variable *, ParsePinerc);
 void set_current_val(struct variable *, int, int);
 void set_feature_list_current_val(struct variable *, int);
 /* AIX gives warning here 'cause it can't quite cope with enums */
@@ -87,7 +83,6 @@ void process_init_cmds(struct pine *, char **);
 void process_feature_list(struct pine *, char **, int , int, int);
 int  decode_sort(struct pine *, char *);
 #else /* !ANSI */
-int  read_pinerc();
 void set_current_val();
 void set_feature_list_current_val();
 void process_init_cmds();
@@ -312,17 +307,11 @@ init_vars(ps)
 	}
     }
 #else
-    if(ps_global->pine_conf)
-      read_pinerc(ps_global->pine_conf, vars, ParseGlobal);
-    else
-      read_pinerc(SYSTEM_PINERC, vars, ParseGlobal);
-
     if(!ps_global->pinerc) {
       build_path(buf, ps->home_dir, ".pinerc");
       ps_global->pinerc = cpystr(buf);
     }
 #endif
-    read_pinerc(ps_global->pinerc, vars, ParseLocal);
 
     set_current_val(vars, V_INBOX_PATH, TRUE);
 
@@ -1100,23 +1089,6 @@ init_hostname(ps)
     } else {
         return(0);
     }
-}
-
-
-/*----------------------------------------------------------------------
-   No-op stub: this build never reads or parses .pinerc contents --
-   every variable stays at its compiled-in default on every run, for
-   both the system-wide and per-user config files (a deliberate,
-   accepted functionality loss for the size win; see
-   TODO-pdp11-done.md). Args unused, kept for call-site compatibility.
-  ----*/
-int
-read_pinerc(filename, vars, which_vars)
-     char *filename;
-     ParsePinerc which_vars;
-     struct variable *vars;
-{
-    return(0);
 }
 
 

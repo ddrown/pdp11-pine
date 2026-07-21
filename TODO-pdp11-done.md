@@ -4204,3 +4204,53 @@ already covered by the existing composer tests).
   `data` 12904 -> 12648 (-256 bytes), `bss` 14968 -> 14952 (-16 bytes);
   `bin/pico` untouched (this cut is entirely in `imap/ANSI/c-client/`
   and `pine/pine.c`).
+
+### Removed `read_pinerc()` and `first_time_user` entirely
+
+- **What it was**: follow-on to the earlier `read_pinerc()`
+  bootstrap-only-stub cut. `read_pinerc()` (`pine/init.c`) had already
+  been reduced to an unconditional `return(0);` with an empty body --
+  this cut deleted the function itself, its 3 now-pointless call
+  sites, and the `first_time_user` flag that had no setter left
+  anywhere in the tree once `read_pinerc()`'s original bootstrap
+  version (the only thing that ever set it) was gone.
+- **What changed**: in `pine/init.c`, deleted `read_pinerc()`'s ANSI
+  and K&R prototypes, the now-pointless `typedef enum {ParseLocal,
+  ParseGlobal} ParsePinerc` (confirmed via grep it had no other
+  consumer), the function definition itself, and its 3 call sites --
+  the `if(ps_global->pine_conf) read_pinerc(...) else
+  read_pinerc(...)` pair had no side effect beyond the no-op call, so
+  the whole `if`/`else` was deleted outright; the third call
+  (`read_pinerc(ps_global->pinerc, vars, ParseLocal)`) was deleted but
+  the `if(!ps_global->pinerc){ build_path(...); ps_global->pinerc =
+  cpystr(buf); }` block just above it was kept -- `ps_global->pinerc`
+  is still read elsewhere (`imap.c`'s `passfile()` calls, `reply.c`'s
+  signature-path derivation), so that assignment is real, live logic,
+  not part of the dead read_pinerc plumbing. In `pine/pine.c`,
+  simplified both `first_time_user`-checking conditions to just
+  `show_new_version` and folded the now-dead
+  `if(pine_state->first_time_user) ... else ...` branch straight down
+  to its `else` (`new_user_or_version(new_version_message)`).
+  Deleted `struct pine`'s `unsigned first_time_user:1` field
+  (`pine.h`). One opportunistic extra found and cut in passing: once
+  the `if(pine_state->first_time_user)` branch was gone, its
+  `first_time_message` static string array (`pine.c`, the ~40-line
+  "Welcome to Pine..." first-run banner) had no remaining reference
+  anywhere -- confirmed via grep and deleted.
+- **Verified**: `./build clean && ./build lnx` clean before touching
+  anything (180 warnings, the accepted baseline after a separate,
+  concurrent session's Tier-1-warning-flags rollout landed on `main`
+  mid-session -- confirmed via `git log` and a `git stash`
+  before/after rebuild that this baseline was pre-existing, not
+  something this cut introduced). Clean afterward, still exactly 180
+  warnings -- diffed the full categorized warning list line-by-line
+  before/after and confirmed every difference was a pure line-number
+  shift from the deleted lines, no new or removed warning categories.
+  Full smoketest suite 26/26, including `test_pinerc_not_parsed`
+  (still passes unchanged -- deleting the call sites preserves the
+  exact same "never parses .pinerc" behavior the earlier stub cut
+  established, just with the dead plumbing removed instead of stubbed).
+- **Size delta**: `bin/pine` `text` 329551 -> 328303 (-1248 bytes),
+  `data` 12656 -> 12496 (-160 bytes), `bss` unchanged; `bin/pico`
+  confirmed byte-identical before/after (untouched by this cut --
+  entirely `pine/`).
