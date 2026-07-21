@@ -4119,3 +4119,88 @@ already covered by the existing composer tests).
   876728 -> 876704 (-24 bytes, net effect of the `wait()`/`signal()`
   simplifications outweighing the `(long)` casts added elsewhere in
   `pine/`).
+
+### Removed the `DRIVER` dispatch abstraction -- `bezerkdriver` was the only driver, now everything calls it directly
+
+- **What it was**: `imap/ANSI/c-client/mail.h` defined `DRIVER`
+  (`struct driver`), a ~29-slot function-pointer dispatch table that
+  historically let multiple pluggable mailbox-format backends
+  (imap/pop/nntp/mh/mbox/bezerk/...) register into a linked list
+  `maildrivers` and be called polymorphically through
+  `MAILSTREAM->dtb`. In this build exactly one driver was ever
+  registered -- `bezerkdriver` (`imap/ANSI/c-client/bezerk.c`), linked
+  once via `mail_link((DRIVER *)&bezerkdriver)` in `pine/pine.c`. Every
+  `stream->dtb->foo(...)`/`factory->foo(...)`/`maildrivers`-walk in
+  `imap/ANSI/c-client/mail.c` (~24 functions, ~27 raw call sites) was
+  therefore single-implementation indirection, converted to direct
+  `bezerk_foo(...)` calls.
+- **Planning discipline**: this item was explicitly flagged in
+  `TODO-pdp11.md` as needing "its own careful design/verification
+  pass, not a quick follow-on" given its size (4 files, core c-client
+  dispatch plumbing every mail operation flows through). Scoped with
+  an Explore agent (full-tree sweep for any DRIVER/dtb reference not
+  already found) and a Plan agent (worked out every exact rewrite),
+  then independently re-verified by direct reading before executing
+  -- including tracing `bezerkproto`'s real load-bearing callers
+  (`default_driver()`/`create_proto()`, the Folder List "Add" and
+  Fcc-to-new-folder paths) to make sure its positional-initializer
+  rewrite couldn't silently break real folder creation.
+- **The `dtb`-as-liveness-flag problem**: `bezerk.c` used `stream->dtb`
+  for double duty -- dispatch pointer *and* an "is this stream's local
+  data live" boolean (`bezerk_abort()` nilled it on teardown;
+  `bezerk_open()`'s recycle path and `mail_open()` set it back to
+  `&bezerkdriver`). Replaced with a real `unsigned int open : 1;`
+  bitfield on `MAILSTREAM` (`mail.h`), set/cleared at exactly those
+  same sites, and read wherever `dtb` was tested for liveness
+  (`mail_free_handle`, `mail_stream`) or used to gate a dispatch call
+  (all the mechanical conversions below).
+- **`mail_valid`** retyped from `DRIVER *` to `long` (`T`/`NIL` --
+  matches this codebase's own boolean idiom, and is all any caller
+  ever used the return value for). The old `stream->dtb != factory`
+  match check degenerates, with one driver, to exactly `!stream->open`
+  (a stream can only differ from "the" factory by not having one open
+  at all).
+- **`mail_open` rework** surfaced one real, already-existing dead-code
+  path, deleted rather than translated: the recycle branch's
+  `if (stream->dtb) (*stream->dtb->close) (stream);` was unreachable
+  even before this change -- inside `if (stream->dtb != factory)`,
+  `stream->dtb` can only be NIL (no second driver exists for it to
+  differ *to*), so the guarded call could never fire. Confirmed by
+  direct reading, not just inferred.
+- **Outright deletions** (zero remaining callers, confirmed via
+  tree-wide grep before removal): `mail_link`, `mail_valid_net`,
+  `mail_valid_net_parse` (dead beyond their one remaining caller,
+  `pine/pine.c`'s `same_stream()`, itself simplified to always
+  `return NIL` with an explanatory comment -- this build has no
+  remote/TCP-IP mailbox support, so `stream->mailbox` can never hold a
+  `"{host}mailbox"`-syntax name for it to match against; all 4 real
+  callers already treat a NIL return as the normal "open a fresh
+  stream" case), `mail_find_bboards`/`mail_find_all_bboard`/
+  `mail_subscribe_bboard`/`mail_unsubscribe_bboard` (their only
+  dispatch targets, `bezerk_dead_find`/`bezerk_dead_mbx`, were
+  themselves already-documented unreachable stubs left over from the
+  earlier bboard/newsgroup-UI removal), the `maildrivers`/
+  `inboxdriver` globals (the latter had no reader anywhere in the
+  tree, dead before this cut even started), and the `DRIVER`/
+  `struct driver` type itself.
+- **Out of scope, confirmed dead/unbuilt, left alone**:
+  `imap/ANSI/c-client/phile.c` and `contrib/carmel/carmel.c`/`pod.c`
+  each define their own `DRIVER` but aren't referenced by
+  `makefile.lnx` or `./build` at all -- same orphaned-legacy-code
+  precedent as the already-deleted `mbox.c`.
+- **Verified**: `./build clean && ./build lnx` clean throughout (0
+  warnings before and after). Full smoketest suite 26/26. `nm bin/pine
+  | grep -i "bezerkdriver\|maildrivers\|inboxdriver\|mail_link\|mail_valid_net"`
+  returns nothing -- confirmed fully gone from the binary. Manually
+  re-verified (real pty session, not just smoketests) the two paths
+  that route through `bezerkproto`: creating a new folder via the
+  Folder List "Add" screen -- confirmed the file actually landed on
+  disk (`mail/verifyme`, not just a UI success message) -- and traced
+  that Fcc-to-a-new-folder's `context_isambig()` branch uses the same
+  `fcc_cntxt->proto`/`bezerkproto`/`mail_create()` machinery, already
+  covered by the existing `test_fcc_tilde_overflow`/
+  `test_fcc_netmbx_overflow`/`test_resume_postponed_*` smoketests.
+- **Size delta**: `bin/pine` `text` 332159 -> 329415 (-2744 bytes),
+  `data` 12904 -> 12648 (-256 bytes), `bss` 14968 -> 14952 (-16 bytes);
+  `bin/pico` untouched (this cut is entirely in `imap/ANSI/c-client/`
+  and `pine/pine.c`).

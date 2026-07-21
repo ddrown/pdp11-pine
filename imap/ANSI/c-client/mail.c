@@ -41,12 +41,12 @@
 #include <time.h>
 #include "misc.h"
 #include "dummy.h"
+#include <sys/uio.h>
+#include "bezerk.h"
 
 
 /* c-client global data */
 
-DRIVER *maildrivers = NIL;	/* list of mail drivers */
-DRIVER *inboxdriver = NIL;	/* INBOX mail driver */
 char *lhostn = NIL;		/* local host name */
 mailgets_t mailgets = NIL;	/* pointer to alternate gets function */
 				/* mail cache manipulation function */
@@ -223,18 +223,6 @@ void mail_string_setpos (STRING *s,unsigned long i)
  *
  */
 
-/* Mail link driver
- * Accepts: driver to add to list
- */
-
-void mail_link (DRIVER *driver)
-{
-  DRIVER **d = &maildrivers;
-  while (*d) d = &(*d)->next;	/* find end of list of drivers */
-  *d = driver;			/* put driver at the end */
-  driver->next = NIL;		/* this driver is the end of the list */
-}
-
 
 /* Mail manipulate driver parameters
  * Accepts: mail stream
@@ -245,7 +233,7 @@ void mail_link (DRIVER *driver)
 
 void *mail_parameters (MAILSTREAM *stream,long function,void *value)
 {
-  return stream->dtb ? (stream->dtb->parameters) (function,value) : NIL;
+  return stream->open ? bezerk_parameters (function,value) : NIL;
 }
 
 /* Mail find list of subscribed mailboxes
@@ -255,32 +243,17 @@ void *mail_parameters (MAILSTREAM *stream,long function,void *value)
 
 void mail_find (MAILSTREAM *stream,char *pat)
 {
-  DRIVER *d = maildrivers;
 				/* if have a stream, do it for that stream */
-  if (stream && stream->dtb) (*stream->dtb->find) (stream,pat);
-  else {			/* otherwise do for all DTB's */
-    do (d->find) (NIL,pat);
-    while (d = d->next);	/* until at the end */
-				/* plus dummy's own search, since no driver
-				   is registered under that name any more */
+  if (stream && stream->open) bezerk_find (stream,pat);
+  else {			/* otherwise do our driver's search plus
+				   dummy's own, since no driver is registered
+				   under that name any more */
+    bezerk_find (NIL,pat);
     dummy_find_all (NIL,pat);
   }
 }
 
 
-/* Mail find list of subscribed bboards
- * Accepts: mail stream
- *	    pattern to search
- */
-
-void mail_find_bboards (MAILSTREAM *stream,char *pat)
-{
-  DRIVER *d = maildrivers;
-  if (stream && stream->dtb) (*stream->dtb->find_bboard) (stream,pat);
-  else do (d->find_bboard) (NIL,pat);
-  while (d = d->next);		/* until at the end */
-}
-
 /* Mail find list of all mailboxes
  * Accepts: mail stream
  *	    pattern to search
@@ -288,188 +261,37 @@ void mail_find_bboards (MAILSTREAM *stream,char *pat)
 
 void mail_find_all (MAILSTREAM *stream,char *pat)
 {
-  DRIVER *d = maildrivers;
 				/* if have a stream, do it for that stream */
-  if (stream && stream->dtb) (*stream->dtb->find_all) (stream,pat);
-  else {			/* otherwise do for all DTB's */
-    do (d->find_all) (NIL,pat);
-    while (d = d->next);	/* until at the end */
-				/* plus dummy's own search, since no driver
-				   is registered under that name any more */
+  if (stream && stream->open) bezerk_find_all (stream,pat);
+  else {			/* otherwise do our driver's search plus
+				   dummy's own, since no driver is registered
+				   under that name any more */
+    bezerk_find_all (NIL,pat);
     dummy_find_all (NIL,pat);
   }
 }
 
 
-/* Mail find list of all bboards
- * Accepts: mail stream
- *	    pattern to search
- */
-
-void mail_find_all_bboard (MAILSTREAM *stream,char *pat)
-{
-  DRIVER *d = maildrivers;
-				/* if have a stream, do it for that stream */
-  if (stream && stream->dtb) (*stream->dtb->find_all_bboard) (stream,pat);
-				/* otherwise do for all DTB's */
-  else do (d->find_all_bboard) (NIL,pat);
-  while (d = d->next);		/* until at the end */
-}
-
 /* Mail validate mailbox name
  * Accepts: MAIL stream
  *	    mailbox name
  *	    purpose string for error message
- * Return: driver factory on success, NIL on failure
+ * Return: T if valid mailbox (and, if a stream was given, that stream is
+ *	    currently open on our one driver), NIL on failure
  */
 
-DRIVER *mail_valid (MAILSTREAM *stream,char *mailbox,char *purpose)
+long mail_valid (MAILSTREAM *stream,char *mailbox,char *purpose)
 {
   char tmp[MAILTMPLEN];
-  DRIVER *factory;
-  for (factory = maildrivers; factory && !(*factory->valid) (mailbox);
-       factory = factory->next);
-				/* must match stream */
-  if (factory && stream && (stream->dtb != factory)) factory = NIL;
-  if (!factory && purpose) {	/* if want an error message */
+  long valid = bezerk_valid (mailbox) && (!stream || stream->open);
+  if (!valid && purpose) {	/* if want an error message */
     sprintf (tmp,"Can't %s %s: no such mailbox",purpose,mailbox);
     mm_log (tmp,ERROR);
   }
-  return factory;		/* return driver factory */
+  return valid;
 }
 
 
-/* Mail validate network mailbox name
- * Accepts: mailbox name
- *	    mailbox driver to validate against
- *	    pointer to where to return host name if non-NIL
- *	    pointer to where to return mailbox name if non-NIL
- * Returns: driver on success, NIL on failure
- */
-
-DRIVER *mail_valid_net (char *name,DRIVER *drv,char *host,char *mailbox)
-{
-  NETMBX mb;
-  if (!mail_valid_net_parse (name,&mb) || strcmp (mb.service,drv->name))
-    return NIL;
-  if (host) strcpy (host,mb.host);
-  if (mailbox) strcpy (mailbox,mb.mailbox);
-  return drv;
-}
-
-/* Mail validate network mailbox name
- * Accepts: mailbox name
- *	    NETMBX structure to return values
- * Returns: T on success, NIL on failure
- */
-
-long mail_valid_net_parse (char *name,NETMBX *mb)
-{
-  long i;
-  char c,*s,*t,*v;
-  mb->port = 0;			/* initialize structure */
-  *mb->host = *mb->mailbox = *mb->service = '\0';
-  mb->anoflag = NIL;		/* not (yet) anonymous */
-				/* check if bboard */
-  if (mb->bbdflag = (*name == '*') ? T : NIL) name++;
-				/* have host specification? */
-  if (!(*name == '{' && (t = strchr (s = name+1,'}')) && (i = t - s)))
-    return NIL;			/* not valid host specification */
-  /*
-   * host/mailbox come straight from whatever folder name the caller typed
-   * (e.g. a Goto or Fcc prompt) with no length cap upstream -- reject
-   * rather than overflow mb->host/mb->mailbox (both char[MAILTMPLEN]) if
-   * either component is too long to fit.
-   */
-  if (i >= MAILTMPLEN || strlen (t+1) >= MAILTMPLEN) return NIL;
-  strncpy (mb->host,s,i);	/* set host name */
-  mb->host[i] = '\0';		/* tie it off */
-  strcpy (mb->mailbox,t+1);	/* set mailbox name */
-				/* any switches or port specification? */
-  if (t = strpbrk (mb->host,"/:")) {
-    c = *t;			/* yes, remember delimiter */
-    *t++ = '\0';		/* tie off host name */
-    lcase (t);			/* coerce remaining stuff to lowercase */
-    do switch (c) {		/* act based upon the character */
-    case ':':			/* port specification */
-      if (mb->port || ((mb->port = strtol (t,&t,10)) <= 0)) return NIL;
-      c = t ? *t++ : '\0';	/* get delimiter, advance pointer */
-      break;
-
-    case '/':			/* switch */
-				/* find delimiter */
-      if (t = strpbrk (s = t,"/:=")) {
-	c = *t;			/* remember delimiter for later */
-	*t++ = '\0';		/* tie off switch name */
-      }
-      else c = '\0';		/* no delimiter */
-      if (c == '=') {		/* parse switches which take arguments */
-	if (t = strpbrk (v = t,"/:")) {
-	  c = *t;		/* remember delimiter for later */
-	  *t++ = '\0';		/* tie off switch name */
-	}
-	else c = '\0';		/* no delimiter */
-	if (!strcmp (s,"service")) {
-	  /* v is caller-typed, unbounded; mb->service is char[MAXSRV+1] */
-	  if (*mb->service || strlen (v) > MAXSRV) return NIL;
-	  else strcpy (mb->service,v);
-	}
-	else return NIL;	/* invalid argument switch */
-      }
-      else {			/* non-argument switch */
-	if (!strcmp (s,"anonymous")) mb->anoflag = T;
-	else if (!strcmp (s,"imap") || !strcmp (s,"imap2") ||
-		 !strcmp (s,"nntp")) {
-	  if (*mb->service) return NIL;
-	  else strcpy (mb->service,s);
-	} 
-	else return NIL;	/* invalid non-argument switch */
-      }
-      break;
-    default:			/* anything else is bogus */
-      return NIL;
-    } while (c);		/* see if anything more to parse */
-  }
-				/* default mailbox name */
-  if (!*mb->mailbox) strcpy (mb->mailbox,mb->bbdflag ? "general" : "INBOX");
-				/* default service name */
-  if (!(*mb->service && strcmp (mb->service,"imap")))
-    strcpy (mb->service,"imap2");
-  return T;
-}
-
-
-/* Mail subscribe to bboard
- * Accepts: mail stream
- *	    bboard to add to subscription list
- * Returns: T on success, NIL on failure
- */
-
-long mail_subscribe_bboard (MAILSTREAM *stream,char *mailbox)
-{
-  char tmp[MAILTMPLEN];
-  DRIVER *factory;
-  sprintf (tmp,"*%s",mailbox);
-  return (factory = mail_valid (stream,tmp,"subscribe to bboard")) ?
-    (*factory->subscribe_bboard) (stream,mailbox) : NIL;
-}
-
-
-/* Mail unsubscribe to bboard
- * Accepts: mail stream
- *	    bboard to delete from subscription list
- * Returns: T on success, NIL on failure
- */
-
-long mail_unsubscribe_bboard (MAILSTREAM *stream,char *mailbox)
-{
-  char tmp[MAILTMPLEN];
-  DRIVER *factory;
-  sprintf (tmp,"*%s",mailbox);
-  return (factory = mail_valid (stream,tmp,"unsubscribe to bboard")) ?
-    (*factory->unsubscribe_bboard) (stream,mailbox) : NIL;
-}
-
 /* Mail create mailbox
  * Accepts: mail stream
  *	    mailbox name to create
@@ -498,7 +320,7 @@ long mail_create (MAILSTREAM *stream,char *mailbox)
     mm_log (tmp,ERROR);
     return NIL;
   }
-  return stream->dtb ? (*stream->dtb->create) (stream,mailbox) : NIL;
+  return stream->open ? bezerk_create (stream,mailbox) : NIL;
 }
 
 /* Mail delete mailbox
@@ -509,8 +331,8 @@ long mail_create (MAILSTREAM *stream,char *mailbox)
 
 long mail_delete (MAILSTREAM *stream,char *mailbox)
 {
-  DRIVER *factory = mail_valid (stream,mailbox,"delete mailbox");
-  return factory ? (*factory->delete) (stream,mailbox) : NIL;
+  return mail_valid (stream,mailbox,"delete mailbox") ?
+    bezerk_delete (stream,mailbox) : NIL;
 }
 
 
@@ -524,13 +346,13 @@ long mail_delete (MAILSTREAM *stream,char *mailbox)
 long mail_rename (MAILSTREAM *stream,char *old,char *new)
 {
   char tmp[MAILTMPLEN];
-  DRIVER *factory = mail_valid (stream,old,"rename mailbox");
+  long valid = mail_valid (stream,old,"rename mailbox");
   if ((*old != '{') && mail_valid (NIL,new,NIL)) {
     sprintf (tmp,"Can't rename to mailbox %s: mailbox already exists",new);
     mm_log (tmp,ERROR);
     return NIL;
   }
-  return factory ? (*factory->rename) (stream,old,new) : NIL;
+  return valid ? bezerk_rename (stream,old,new) : NIL;
 }
 
 /* Mail open
@@ -542,23 +364,21 @@ long mail_rename (MAILSTREAM *stream,char *old,char *new)
 
 MAILSTREAM *mail_open (MAILSTREAM *stream,char *name,long options)
 {
-  DRIVER *factory = mail_valid (NIL,name,NIL);
-  if (factory) {		/* must have a factory */
+  if (mail_valid (NIL,name,NIL)) {	/* mailbox name valid for our driver? */
     if (!stream) {		/* instantiate stream if none to recycle */
-      if (options & OP_PROTOTYPE) return (*factory->open) (NIL);
+      if (options & OP_PROTOTYPE) return bezerk_open (NIL);
       stream = (MAILSTREAM *) fs_get (sizeof (MAILSTREAM));
 				/* initialize stream */
       memset ((void *) stream,0,sizeof (MAILSTREAM));
-      stream->dtb = factory;	/* set dispatch */
+      stream->open = T;		/* mark as belonging to our driver */
 				/* set mailbox name */
       stream->mailbox = cpystr (name);
 				/* initialize cache */
       (*mailcache) (stream,(long) 0,CH_INIT);
     }
-    else {			/* close driver if different from factory */
-      if (stream->dtb != factory) {
-	if (stream->dtb) (*stream->dtb->close) (stream);
-	stream->dtb = factory;	/* establish factory as our driver */
+    else {			/* recycling a stream */
+      if (!stream->open) {	/* was closed -- (re)attach our driver */
+	stream->open = T;
 	stream->local = NIL;	/* flush old driver's local data */
 	mail_free_cache (stream);
       }
@@ -574,7 +394,7 @@ MAILSTREAM *mail_open (MAILSTREAM *stream,char *name,long options)
     stream->silent = (options & OP_SILENT) ? T : NIL;
     stream->halfopen = (options & OP_HALFOPEN) ? T : NIL;
 				/* have driver open, flush if failed */
-    if (!(*factory->open) (stream)) stream = mail_close (stream);
+    if (!bezerk_open (stream)) stream = mail_close (stream);
   }
 				/* no driver matched -- report why, unless
 				   this is a silent probe (matches what the
@@ -596,7 +416,7 @@ MAILSTREAM *mail_close (MAILSTREAM *stream)
 {
   if (stream) {			/* make sure argument given */
 				/* do the driver's close action */
-    if (stream->dtb) (*stream->dtb->close) (stream);
+    if (stream->open) bezerk_close (stream);
     if (stream->mailbox) fs_give ((void **) &stream->mailbox);
     stream->sequence++;		/* invalidate sequence */
     if (stream->flagstring) fs_give ((void **) &stream->flagstring);
@@ -634,7 +454,7 @@ void mail_free_handle (MAILHANDLE **handle)
   MAILSTREAM *s;
   if (*handle) {		/* only free if exists */
 				/* resign stream, flush unreferenced zombies */
-    if ((!--(s = (*handle)->stream)->use) && !s->dtb) fs_give ((void **) &s);
+    if ((!--(s = (*handle)->stream)->use) && !s->open) fs_give ((void **) &s);
     fs_give ((void **) handle);	/* now flush the handle */
   }
 }
@@ -648,7 +468,7 @@ void mail_free_handle (MAILHANDLE **handle)
 MAILSTREAM *mail_stream (MAILHANDLE *handle)
 {
   MAILSTREAM *s = handle->stream;
-  return (s->dtb && (handle->sequence == s->sequence)) ? s : NIL;
+  return (s->open && (handle->sequence == s->sequence)) ? s : NIL;
 }
 
 /* Mail fetch long cache element
@@ -692,7 +512,7 @@ MESSAGECACHE *mail_elt (MAILSTREAM *stream,long msgno)
 void mail_fetchfast (MAILSTREAM *stream,char *sequence)
 {
   				/* do the driver's action */
-  if (stream->dtb) (*stream->dtb->fetchfast) (stream,sequence);
+  if (stream->open) bezerk_fetchfast (stream,sequence);
 }
 
 
@@ -704,7 +524,7 @@ void mail_fetchfast (MAILSTREAM *stream,char *sequence)
 void mail_fetchflags (MAILSTREAM *stream,char *sequence)
 {
   				/* do the driver's action */
-  if (stream->dtb) (*stream->dtb->fetchflags) (stream,sequence);
+  if (stream->open) bezerk_fetchflags (stream,sequence);
 }
 
 
@@ -722,7 +542,7 @@ ENVELOPE *mail_fetchstructure (MAILSTREAM *stream,long msgno,BODY **body)
   if (msgno < 1 || msgno > stream->nmsgs)
     fatal ("Bad msgno in mail_fetchstructure");
   				/* do the driver's action */
-  return stream->dtb ? (*stream->dtb->fetchstructure) (stream,msgno,body) :NIL;
+  return stream->open ? bezerk_fetchstructure (stream,msgno,body) : NIL;
 }
 
 /* Mail fetch message header
@@ -736,7 +556,7 @@ char *mail_fetchheader (MAILSTREAM *stream,long msgno)
   if (msgno < 1 || msgno > stream->nmsgs)
     fatal ("Bad msgno in mail_fetchheader");
   				/* do the driver's action */
-  return stream->dtb ? (*stream->dtb->fetchheader) (stream,msgno) : "";
+  return stream->open ? bezerk_fetchheader (stream,msgno) : "";
 }
 
 
@@ -751,7 +571,7 @@ char *mail_fetchtext (MAILSTREAM *stream,long msgno)
   if (msgno < 1 || msgno > stream->nmsgs)
     fatal ("Bad msgno in mail_fetchtext");
   				/* do the driver's action */
-  return stream->dtb ? (*stream->dtb->fetchtext) (stream,msgno) : "";
+  return stream->open ? bezerk_fetchtext (stream,msgno) : "";
 }
 
 
@@ -767,7 +587,7 @@ char *mail_fetchbody (MAILSTREAM *stream,long m,char *sec,unsigned long *len)
 {
   if (m < 1 || m > stream->nmsgs) fatal ("Bad msgno in mail_fetchbody");
   				/* do the driver's action */
-  return stream->dtb ? (*stream->dtb->fetchbody) (stream,m,sec,len) : "";
+  return stream->open ? bezerk_fetchbody (stream,m,sec,len) : "";
 }
 
 /* Mail fetch From string for menu
@@ -829,7 +649,7 @@ void mail_fetchsubject (char *s,MAILSTREAM *stream,long msgno,long length)
 void mail_setflag (MAILSTREAM *stream,char *sequence,char *flag)
 {
   				/* do the driver's action */
-  if (stream->dtb) (*stream->dtb->setflag) (stream,sequence,flag);
+  if (stream->open) bezerk_setflag (stream,sequence,flag);
 }
 
 
@@ -842,7 +662,7 @@ void mail_setflag (MAILSTREAM *stream,char *sequence,char *flag)
 void mail_clearflag (MAILSTREAM *stream,char *sequence,char *flag)
 {
   				/* do the driver's action */
-  if (stream->dtb) (*stream->dtb->clearflag) (stream,sequence,flag);
+  if (stream->open) bezerk_clearflag (stream,sequence,flag);
 }
 
 
@@ -856,7 +676,7 @@ void mail_search (MAILSTREAM *stream,char *criteria)
   long i = 1;
   while (i <= stream->nmsgs) mail_elt (stream,i++)->searched = NIL;
   				/* do the driver's action */
-  if (stream->dtb) (*stream->dtb->search) (stream,criteria);
+  if (stream->open) bezerk_search (stream,criteria);
 }
 
 
@@ -868,7 +688,7 @@ void mail_search (MAILSTREAM *stream,char *criteria)
 long mail_ping (MAILSTREAM *stream)
 {
   				/* do the driver's action */
-  return stream->dtb ? (*stream->dtb->ping) (stream) : NIL;
+  return stream->open ? bezerk_ping (stream) : NIL;
 }
 
 /* Mail check mailbox
@@ -878,7 +698,7 @@ long mail_ping (MAILSTREAM *stream)
 void mail_check (MAILSTREAM *stream)
 {
   				/* do the driver's action */
-  if (stream->dtb) (*stream->dtb->check) (stream);
+  if (stream->open) bezerk_check (stream);
 }
 
 
@@ -889,7 +709,7 @@ void mail_check (MAILSTREAM *stream)
 void mail_expunge (MAILSTREAM *stream)
 {
   				/* do the driver's action */
-  if (stream->dtb) (*stream->dtb->expunge) (stream);
+  if (stream->open) bezerk_expunge (stream);
 }
 
 /* Mail copy message(s)
@@ -901,7 +721,7 @@ void mail_expunge (MAILSTREAM *stream)
 long mail_copy (MAILSTREAM *stream,char *sequence,char *mailbox)
 {
   				/* do the driver's action */
-  return stream->dtb ? (*stream->dtb->copy) (stream,sequence,mailbox) : NIL;
+  return stream->open ? bezerk_copy (stream,sequence,mailbox) : NIL;
 }
 
 
@@ -914,7 +734,7 @@ long mail_copy (MAILSTREAM *stream,char *sequence,char *mailbox)
 long mail_move (MAILSTREAM *stream,char *sequence,char *mailbox)
 {
   				/* do the driver's action */
-  return stream->dtb ? (*stream->dtb->move) (stream,sequence,mailbox) : NIL;
+  return stream->open ? bezerk_move (stream,sequence,mailbox) : NIL;
 }
 
 
@@ -927,9 +747,9 @@ long mail_move (MAILSTREAM *stream,char *sequence,char *mailbox)
 
 long mail_append (MAILSTREAM *stream,char *mailbox,STRING *message)
 {
-  DRIVER *factory = mail_valid (stream,mailbox,NIL);
 				/* do the driver's action */
-  return factory ? (factory->append) (stream,mailbox,message) :
+  return mail_valid (stream,mailbox,NIL) ?
+    bezerk_append (stream,mailbox,message) :
     dummy_append_failure (stream,mailbox);
 }
 
@@ -943,7 +763,7 @@ void mail_gc (MAILSTREAM *stream,long gcflags)
   unsigned long i = 1;
   LONGCACHE *lelt;
   				/* do the driver's action first */
-  if (stream->dtb) (*stream->dtb->gc) (stream,gcflags);
+  if (stream->open) bezerk_gc (stream,gcflags);
   if (gcflags & GC_ENV) {	/* garbage collect envelopes? */
 				/* yes, free long cache if in use */
     if (!stream->scache) while (i <= stream->nmsgs)

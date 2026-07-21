@@ -10,15 +10,6 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-### Standing goal: eliminate compiler warnings -- DONE
-- [x] `./build clean && ./build lnx` now produces 0 warnings. Finished
-      by clearing the last 3 `-Wold-style-definition` warnings plus all
-      22 pointer/int-width cast warnings and both `wait(2)`
-      incompatible-pointer-type warnings -- see `TODO-pdp11-done.md`
-      for the per-site writeup, including one real bug found and fixed
-      (`pine/osdep/os-lnx.h`'s `HAVE_WAIT_UNION` was wrong for this
-      target's glibc).
-
 ### Turn on Tier 1 warning flags: format-string and buffer/overlap checks
 
 - [ ] Now that the build is a clean 0-warning baseline, add the
@@ -108,46 +99,6 @@ DONE elsewhere or referenced in passing below.
       trees; it's slow and can be noisy on older C, so evaluate signal
       quality on this codebase before deciding whether it's worth a
       standing CI-style target or just an occasional manual check.
-
-### Remove the `DRIVER` dispatch abstraction entirely -- `bezerkdriver` is the only driver left
-
-- [ ] Raised after the dummy-driver-shrinking effort: `bezerkdriver` is
-      now the *only* thing ever `mail_link()`-ed into `maildrivers`
-      (`pine/pine.c`) -- the whole point of `DRIVER`, supporting
-      multiple pluggable mailbox-format backends dispatched
-      polymorphically through function pointers, is unused in this
-      build. Every `factory->foo(...)`/`stream->dtb->foo(...)`
-      indirect call in `c-client/mail.c` could become a direct
-      `bezerk_foo(...)` call instead.
-      **Scope**: counted ~33 dispatch call sites in `mail.c` alone --
-      `mail_open`/`mail_close`/`mail_append`/`mail_create`/
-      `mail_delete`/`mail_rename`/`mail_find`/`mail_find_all`/
-      `mail_find_bboards`/`mail_find_all_bboard`/`mail_expunge`/
-      `mail_copy`/`mail_move`/`mail_ping`/`mail_check`/the
-      `mail_fetch*`/`mail_setflag`/`mail_clearflag`/`mail_search`/
-      `mail_gc`/`mail_subscribe_bboard`/`mail_unsubscribe_bboard`
-      family -- plus a handful of `stream->dtb` references elsewhere
-      (`bezerk.c` reattaching/clearing its own `dtb` field on
-      open/close, and two in `pine/pine.c`'s `mail_valid_net()` calls,
-      which are already dead in practice since this build has no
-      remote/TCP-IP mailbox support). Much bigger blast radius than
-      any single cut in the dummy-driver effort -- nearly every generic
-      entry point in `mail.c` is built around `MAILSTREAM->dtb`
-      indirection, not just a handful of spots.
-      **Proposed shape**: delete the `DRIVER` struct/typedef, the
-      `maildrivers` global and `mail_link()`, and `MAILSTREAM`'s `dtb`
-      field; rewrite each of `mail.c`'s dispatcher functions to call
-      the corresponding `bezerk_*` function directly (dropping the
-      `mail_valid()`-based lookup-and-match step entirely, or
-      collapsing it down to whatever's left of `bezerk_valid()`'s own
-      logic once there's no chain to walk). `bezerk_open()`/
-      `bezerk_close()`'s own `stream->dtb = &bezerkdriver` / `= NIL`
-      reattachment lines go away too, since nothing reads that field
-      once dispatch isn't indirected through it.
-      **Needs its own careful design/verification pass**, not a quick
-      follow-on -- this is core, deeply-shared c-client dispatch
-      plumbing every mail operation flows through, unlike the
-      previous, more narrowly-scoped dummy-driver cuts.
 
 ### Remove `read_pinerc()` and `first_time_user` entirely
 

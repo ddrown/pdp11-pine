@@ -294,17 +294,16 @@ STRINGDRIVER {
 /* Mail Access I/O stream */
 
 
-/* Structure for mail driver dispatch */
-
-#define DRIVER struct driver	
-
-
 /* Mail I/O stream */
-	
+
 typedef struct mail_stream {
-  DRIVER *dtb;			/* dispatch table for this driver */
   void *local;			/* pointer to driver local data */
   char *mailbox;		/* mailbox name */
+  unsigned int open : 1;	/* T if our (one and only) driver has this
+				   stream open -- replaces the old dtb-
+				   non-NIL-as-liveness-flag now that DRIVER
+				   dispatch is gone (bezerkdriver was the
+				   only driver ever linked) */
   unsigned int lock : 1;	/* stream lock flag */
   unsigned int debug : 1;	/* stream debug flag */
   unsigned int silent : 1;	/* silent stream from Tenex */
@@ -339,73 +338,6 @@ typedef struct mail_stream_handle {
   unsigned short sequence;	/* sequence of what we expect stream to be */
 } MAILHANDLE;
 
-/* Mail driver dispatch */
-
-DRIVER {
-  char *name;			/* driver name */
-  DRIVER *next;			/* next driver */
-				/* mailbox is valid for us */
-  DRIVER *(*valid) (char *mailbox);
-				/* manipulate driver parameters */
-  void *(*parameters) (long function,void *value);
-				/* find mailboxes */
-  void (*find) (MAILSTREAM *stream,char *pat);
-				/* find bboards */
-  void (*find_bboard) (MAILSTREAM *stream,char *pat);
-				/* find all mailboxes */
-  void (*find_all) (MAILSTREAM *stream,char *pat);
-				/* find all bboards */
-  void (*find_all_bboard) (MAILSTREAM *stream,char *pat);
-				/* subscribe to bboard */
-  long (*subscribe_bboard) (MAILSTREAM *stream,char *mailbox);
-				/* unsubscribe to bboard */
-  long (*unsubscribe_bboard) (MAILSTREAM *stream,char *mailbox);
-				/* create mailbox */
-  long (*create) (MAILSTREAM *stream,char *mailbox);
-				/* delete mailbox */
-  long (*delete) (MAILSTREAM *stream,char *mailbox);
-				/* rename mailbox */
-  long (*rename) (MAILSTREAM *stream,char *old,char *new);
-
-				/* open mailbox */
-  MAILSTREAM *(*open) (MAILSTREAM *stream);
-				/* close mailbox */
-  void (*close) (MAILSTREAM *stream);
-				/* fetch message "fast" attributes */
-  void (*fetchfast) (MAILSTREAM *stream,char *sequence);
-				/* fetch message flags */
-  void (*fetchflags) (MAILSTREAM *stream,char *sequence);
-				/* fetch message envelopes */
-  ENVELOPE *(*fetchstructure) (MAILSTREAM *stream,long msgno,BODY **body);
-				/* fetch message header only */
-  char *(*fetchheader) (MAILSTREAM *stream,long msgno);
-				/* fetch message body only */
-  char *(*fetchtext) (MAILSTREAM *stream,long msgno);
-				/* fetch message body section */
-  char *(*fetchbody) (MAILSTREAM *stream,long m,char *sec,unsigned long* len);
-				/* set message flag */
-  void (*setflag) (MAILSTREAM *stream,char *sequence,char *flag);
-				/* clear message flag */
-  void (*clearflag) (MAILSTREAM *stream,char *sequence,char *flag);
-				/* search for message based on criteria */
-  void (*search) (MAILSTREAM *stream,char *criteria);
-				/* ping mailbox to see if still alive */
-  long (*ping) (MAILSTREAM *stream);
-				/* check for new messages */
-  void (*check) (MAILSTREAM *stream);
-				/* expunge deleted messages */
-  void (*expunge) (MAILSTREAM *stream);
-				/* copy messages to another mailbox */
-  long (*copy) (MAILSTREAM *stream,char *sequence,char *mailbox);
-				/* move messages to another mailbox */
-  long (*move) (MAILSTREAM *stream,char *sequence,char *mailbox);
-				/* append string message to mailbox */
-  long (*append) (MAILSTREAM *stream,char *mailbox,STRING *message);
-				/* garbage collect stream */
-  void (*gc) (MAILSTREAM *stream,long gcflags);
-};
-
-
 /* Parse results from mail_valid_net_parse */
 
 #define MAXSRV 20
@@ -457,17 +389,10 @@ extern mailcache_t mailcache;
 #define mail_string_init mstrin
 #define mail_string_next mstrnx
 #define mail_string_setpos mstrsp
-#define mail_link mllink
 #define mail_parameters mlparm
 #define mail_find mlfind
-#define mail_find_bboards mlfndb
 #define mail_find_all mlfnam
-#define mail_find_all_bboard mlfalb
 #define mail_valid mlvali
-#define mail_valid_net mlvaln
-#define mail_valid_net_parse mlvlnp
-#define mail_subscribe_bboard mlsubb
-#define mail_unsubscribe_bboard mlusbb
 #define mail_create mlcret
 #define mail_delete mldele
 #define mail_rename mlrena
@@ -548,17 +473,10 @@ extern STRINGDRIVER mail_string;
 void mail_string_init (STRING *s,void *data,unsigned long size);
 char mail_string_next (STRING *s);
 void mail_string_setpos (STRING *s,unsigned long i);
-void mail_link (DRIVER *driver);
 void *mail_parameters (MAILSTREAM *stream,long function,void *value);
 void mail_find (MAILSTREAM *stream,char *pat);
-void mail_find_bboards (MAILSTREAM *stream,char *pat);
 void mail_find_all (MAILSTREAM *stream,char *pat);
-void mail_find_all_bboard (MAILSTREAM *stream,char *pat);
-DRIVER *mail_valid (MAILSTREAM *stream,char *mailbox,char *purpose);
-DRIVER *mail_valid_net (char *name,DRIVER *drv,char *host,char *mailbox);
-long mail_valid_net_parse (char *name,NETMBX *mb);
-long mail_subscribe_bboard (MAILSTREAM *stream,char *mailbox);
-long mail_unsubscribe_bboard (MAILSTREAM *stream,char *mailbox);
+long mail_valid (MAILSTREAM *stream,char *mailbox,char *purpose);
 long mail_create (MAILSTREAM *stream,char *mailbox);
 long mail_delete (MAILSTREAM *stream,char *mailbox);
 long mail_rename (MAILSTREAM *stream,char *old,char *new);

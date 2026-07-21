@@ -200,13 +200,11 @@ typedef struct bezerk_local {
 
 /* Function prototypes */
 
-DRIVER *bezerk_valid (char *name);
+long bezerk_valid (char *name);
 int bezerk_isvalid (char *name,char *tmp);
 void *bezerk_parameters (long function,void *value);
 void bezerk_find (MAILSTREAM *stream,char *pat);
-void bezerk_dead_find (MAILSTREAM *stream,char *pat);
 void bezerk_find_all (MAILSTREAM *stream,char *pat);
-long bezerk_dead_mbx (MAILSTREAM *stream,char *mailbox);
 long bezerk_create (MAILSTREAM *stream,char *mailbox);
 long bezerk_delete (MAILSTREAM *stream,char *mailbox);
 long bezerk_rename (MAILSTREAM *stream,char *old,char *new);
