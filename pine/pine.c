@@ -55,8 +55,6 @@ static char rcsid[] = "$Id: pine.c,v 4.134 1993/12/06 17:26:11 mikes Exp $";
 
 #define VERSION "3.89"
 
-extern DRIVER bezerkdriver;
-
 char         version_buff[50];
 struct pine *ps_global;               /* sort of THE global variable */
 int          timeout = NEW_MAIL_TIME; /* referenced in weemacs */
@@ -340,9 +338,6 @@ main(argc, argv)
      */
     mailcache = dos_cache;
 #endif
-
-    /*------- Set up c-client drivers -------------- */
-    mail_link((DRIVER *)&bezerkdriver);
 
     init_vars(pine_state);
 
@@ -1541,24 +1536,13 @@ same_stream(name, stream)
     char *name;
     MAILSTREAM *stream;
 {
-    char *s,*t,host1[MAILTMPLEN],host2[MAILTMPLEN];
-
-                                /* make sure stream valid */
-    if (stream && (s = stream->mailbox) &&
-                                /* must be a network stream */
-	((*s == '{') || (*s == '*' && s[1] == '{')) &&
-                                /* must be a network name */
-	((*(t = name) == '{') || (*name == '*' && (t = name)[1] == '{')) &&
-                                /* name must be valid for that stream */
-	mail_valid_net (t,stream->dtb,host1,NIL) &&
-                                /* get host name from stream */
-	mail_valid_net (stream->mailbox,stream->dtb,host2,NIL)) {
-                                /* return success if same host */
-	if (!strucmp (canonical_name(host1),host2))
-	  return stream;
-    }
-
-    return NIL;                   /* one of the tests failed */
+    /* This build has no remote/TCP-IP mailbox support (see mail.h/mail.c's
+     * removed mail_valid_net()), so stream->mailbox can never actually hold
+     * a "{host}mailbox"-syntax name -- no two streams can ever be "the same
+     * host". Always report no match; every caller already treats a NIL
+     * return as the normal "open a fresh stream" case.
+     */
+    return NIL;
 }
 
 

@@ -66,56 +66,25 @@ extern int errno;		/* just in case */
 /* Berkeley mail routines */
 
 
-/* Driver dispatch used by MAIL */
-
-DRIVER bezerkdriver = {
-  "bezerk",			/* driver name */
-  (DRIVER *) NIL,		/* next driver */
-  bezerk_valid,			/* mailbox is valid for us */
-  bezerk_parameters,		/* manipulate parameters */
-  bezerk_find,			/* find mailboxes */
-  bezerk_dead_find,		/* find bboards -- unreachable */
-  bezerk_find_all,		/* find all mailboxes */
-  bezerk_dead_find,		/* find all bboards -- unreachable */
-  bezerk_dead_mbx,		/* subscribe to bboard -- unreachable */
-  bezerk_dead_mbx,		/* unsubscribe from bboard -- unreachable */
-  bezerk_create,		/* create mailbox */
-  bezerk_delete,		/* delete mailbox */
-  bezerk_rename,		/* rename mailbox */
-  bezerk_open,			/* open mailbox */
-  bezerk_close,			/* close mailbox */
-  bezerk_fetchfast,		/* fetch message "fast" attributes */
-  bezerk_fetchflags,		/* fetch message flags */
-  bezerk_fetchstructure,	/* fetch message envelopes */
-  bezerk_fetchheader,		/* fetch message header only */
-  bezerk_fetchtext,		/* fetch message body only */
-  bezerk_fetchbody,		/* fetch message body section */
-  bezerk_setflag,		/* set message flag */
-  bezerk_clearflag,		/* clear message flag */
-  bezerk_search,		/* search for message based on criteria */
-  bezerk_ping,			/* ping mailbox to see if still alive */
-  bezerk_check,			/* check for new messages */
-  bezerk_expunge,		/* expunge deleted messages */
-  bezerk_copy,			/* copy messages to another mailbox */
-  bezerk_move,			/* move messages to another mailbox */
-  bezerk_append,		/* append string message to mailbox */
-  bezerk_gc			/* garbage collect stream */
-};
-
-				/* prototype stream */
-MAILSTREAM bezerkproto = {&bezerkdriver};
+				/* prototype stream: {local, mailbox, open} --
+				   only .open matters (T), everything else
+				   NIL/0 by omission; this positional
+				   initializer is a fragile echo of the
+				   MAILSTREAM member order in mail.h, keep
+				   them in sync if the struct is reordered */
+MAILSTREAM bezerkproto = {NIL,NIL,T};
 				/* standard driver's prototype */
 MAILSTREAM *mailstd_proto = &bezerkproto;
-
+
 /* Berkeley mail validate mailbox
  * Accepts: mailbox name
- * Returns: our driver if name is valid, NIL otherwise
+ * Returns: T if name is valid, NIL otherwise
  */
 
-DRIVER *bezerk_valid (char *name)
+long bezerk_valid (char *name)
 {
   char tmp[MAILTMPLEN];
-  return bezerk_isvalid (name,tmp) ? &bezerkdriver : NIL;
+  return bezerk_isvalid (name,tmp);
 }
 
 
@@ -190,26 +159,6 @@ void bezerk_find (MAILSTREAM *stream,char *pat)
 void bezerk_find_all (MAILSTREAM *stream,char *pat)
 {
   if (stream) dummy_find_all (NIL,pat);
-}
-
-/* Bezerk stub for the unreachable find_bboards/find_all_bboards slots:
- * pine's own bboard/newsgroup UI is gone (see TODO-pdp11-done.md), so
- * nothing ever calls mail_find_bboards()/mail_find_all_bboards()
- */
-
-void bezerk_dead_find (MAILSTREAM *stream,char *pat)
-{
-}
-
-/* Bezerk stub for the unreachable subscribe_bboard/unsubscribe_bboard
- * slots: never valid for Bezerk (mail_subscribe_bboard()/
- * mail_unsubscribe_bboard() build a "*"-prefixed candidate name that
- * bezerk_isvalid() never matches to a real file)
- */
-
-long bezerk_dead_mbx (MAILSTREAM *stream,char *mailbox)
-{
-  return NIL;
 }
 
 
@@ -312,7 +261,7 @@ MAILSTREAM *bezerk_open (MAILSTREAM *stream)
   retry = stream->silent ? 1 : KODRETRY;
   if (LOCAL) {			/* close old file if stream being recycled */
     bezerk_close (stream);	/* dump and save the changes */
-    stream->dtb = &bezerkdriver;/* reattach this driver */
+    stream->open = T;		/* reattach this driver */
     mail_free_cache (stream);	/* clean up cache */
   }
   stream->local = fs_get (sizeof (BEZERKLOCAL));
@@ -1017,7 +966,7 @@ void bezerk_abort (MAILSTREAM *stream)
     if (LOCAL->buf) fs_give ((void **) &LOCAL->buf);
 				/* nuke the local data */
     fs_give ((void **) &stream->local);
-    stream->dtb = NIL;		/* log out the DTB */
+    stream->open = NIL;		/* mark as no longer open */
   }
 }
 
