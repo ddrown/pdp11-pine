@@ -103,19 +103,11 @@ now assumes it dosn't know where the cursor is after outputing in the
 #endif
 
 
-#ifdef ANSI
 static void moveabsolute(int, int);
 static void CursorUp(int);
 static void CursorDown(int);
 static void CursorLeft(int);
 static void CursorRight(int);
-#else
-static void moveabsolute();
-static void CursorUp();
-static void CursorDown();
-static void CursorLeft();
-static void CursorRight();
-#endif
 
 
 #define FARAWAY 1000

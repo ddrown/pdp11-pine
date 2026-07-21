@@ -54,13 +54,8 @@ static char rcsid[] = "$Id: search.c,v 4.3 1993/06/15 21:14:23 erez Exp $";
 #include        "edef.h"
 #include	"efunc.h"
 
-#ifdef	ANSI
-    int eq(int, int);
-    int expandp(char *, char *, int);
-#else
-    int eq();
-    int expandp();
-#endif
+int eq(int, int);
+int expandp(char *, char *, int);
 
 
 /*

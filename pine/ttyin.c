@@ -63,11 +63,7 @@ static char rcsid[] = "$Id: ttyin.c,v 4.26 1993/11/18 01:43:50 mikes Exp $";
 
 #include "headers.h"
 
-#ifdef	ANSI
 void   line_paint(int, int *);
-#else
-void   line_paint();
-#endif
 
 #ifdef USE_POLL
 #include <poll.h>

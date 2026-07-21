@@ -4309,3 +4309,67 @@ already covered by the existing composer tests).
 - **Size delta**: none -- purely a declaration relocation, no codegen
   change; `bin/pine`/`bin/pico` confirmed byte-identical before and
   after.
+
+### Removed the dead `#ifdef ANSI`/K&R fallback branches entirely
+
+- **What it was**: `ANSI` is unconditionally defined for this build
+  (`-DANSI` in `pico/makefile.lnx`'s `CFLAGS`; `pine/osdep/os-lnx.h`'s
+  `#define ANSI`, reached via `os.h` -> `headers.h` for everything
+  under `pine/`), so every `#else`/K&R-style branch behind an
+  `#ifdef ANSI` (or the one `#define const` behind an `#ifndef ANSI`)
+  had never once compiled in this build. Removed all of it: 33 files
+  (`pico/*.c`/`*.h`, `pine/*.c`/`*.h`), 34 blocks, ~670 dead lines --
+  for each, kept the `#ifdef ANSI` branch's declarations
+  unconditionally and deleted the wrapper plus the whole dead `#else`
+  branch.
+- **What changed**: mechanical for the ~31 small/medium files (one
+  `Edit` per block, dropping the `#ifdef`/`#else`/`#endif` triplet).
+  Nested, unrelated conditionals inside a handful of blocks (e.g.
+  `pico/os_unix.h`'s `TIOCGWINSZ` guard around `winch_handler`,
+  `pine/mailindx.c`'s `DOS`-only cache-hit declarations, `pine.h`'s
+  `DEBUG`/`DOS` guards scattered through its block) were left in place
+  untouched, only the outer `ANSI` wrapper came out -- verified each
+  one individually rather than blindly deleting by line range, using a
+  small Python depth-tracking script to find the *true* matching
+  `#else`/`#endif` for the two big multi-hundred-line blocks
+  (`pine/pine.h`'s actual K&R branch ran lines 1085-1381, not the
+  nested `#ifdef DEBUG`'s `#endif` at line 1154 that a naive first
+  grep suggested).
+  Two files' `#else` branches turned out to be quietly out of sync
+  with their `#ifdef ANSI` twin (further confirming both were long-
+  abandoned dead code, not just harmlessly redundant): `pico/efunc.h`'s
+  K&R branch was missing `getccol`, all of `tcap.c`'s two entries, and
+  `unmarkbuffer` outright -- functions the ANSI branch had gained over
+  time with no one keeping the K&R mirror in sync; `pine/mailview.c`'s
+  local K&R block had *3 extra* stale declarations
+  (`scroll_scroll_text`, `search_scroll_text`, `type_desc`) not in its
+  own ANSI branch, traced and confirmed harmless to drop since all
+  three are real, still-used functions already properly prototyped via
+  the shared `pine.h` (kept). Neither discrepancy blocked anything --
+  the K&R side was being deleted wholesale regardless -- but each was
+  individually verified rather than assumed to be a clean mirror,
+  per the TODO's own caution.
+- **Side effect**: this was also the exact, previously-identified
+  source of the clangd "Conflicting types for X" false positives seen
+  repeatedly throughout this session's K&R-to-ANSI conversion work
+  (`rebindfunc`, `o_insert`, `lfree`, `lchange`, `insspace`, `kdelete`,
+  `next_line`, `prev_line`, etc.) -- clangd's editor-only analysis
+  evaluated both `#ifdef` branches even though GCC only ever compiled
+  the ANSI one. With the K&R branches gone, there's nothing left for
+  clangd to see two conflicting declarations of.
+- **Verified**: `./build clean && ./build lnx` clean throughout,
+  after the first batch of ~26 small files, again after
+  `pico/efunc.h`, and again after `pine/pine.h` (the two large/riskier
+  files done last and separately, per the TODO's own recommendation).
+  Warning count unchanged at 141 the whole way through (expected --
+  the K&R branches were never compiled, so this is a pure source/text
+  cut, not a warning cut). Full smoketest suite 26/26 after the full
+  sweep. Final `grep -rl` for `#ifdef ANSI`/`#ifndef ANSI` across
+  `pico/`, `pine/`, and `imap/` (excluding the gitignored, build-
+  generated `osdep.c`/`osdep.h` copies) returns nothing.
+- **Size delta**: none -- `bin/pine`/`bin/pico` confirmed byte-
+  identical before and after, exactly as predicted (the deleted text
+  was never compiled in the first place, so removing it can't change
+  the binary). The win here is source maintainability (670 fewer dead
+  lines to scroll past) and the clangd false-positive cleanup above,
+  not size.

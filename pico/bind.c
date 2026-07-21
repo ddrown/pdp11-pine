@@ -51,11 +51,7 @@ static char rcsid[] = "$Id: bind.c,v 4.2 1993/04/15 00:20:08 mikes Exp $";
 #include	"pico.h"
 #include	"efunc.h"
 
-#ifdef	ANSI
-    int arraylen(char **);
-#else
-    int arraylen();
-#endif
+int arraylen(char **);
 
 /* 
  * help - help function for pico (UW pared down version of uemacs).

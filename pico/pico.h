@@ -257,10 +257,6 @@ extern char *HelpKeyNames;
 /*
  * useful function definitions
  */
-#ifdef	ANSI
 int   pico(struct pico_struct *);
-#else
-int   pico();
-#endif
 
 #endif	/* PICO_H */

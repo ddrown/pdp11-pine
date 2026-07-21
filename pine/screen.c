@@ -62,15 +62,9 @@ static char rcsid[] = "$Id: screen.c,v 4.28 1993/10/02 07:29:22 hubert Exp $";
 
 #include "headers.h"
 
-#ifdef	ANSI
 char *format_titlebar(void);
 void  savebits(BITMAP, BITMAP, int);
 int   equalbits(BITMAP, BITMAP, int);
-#else
-char *format_titlebar();
-void  savebits();
-int   equalbits();
-#endif
 
 
 /*------ 

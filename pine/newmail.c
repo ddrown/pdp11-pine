@@ -60,11 +60,7 @@ static char rcsid[] = "$Id: newmail.c,v 4.22 1993/11/30 23:46:36 mikes Exp $";
 #include "headers.h"
 
 
-#ifdef ANSI
 void new_mail_mess(MAILSTREAM *, char *, long, long);
-#else
-void new_mail_mess();
-#endif
 
 
 static long mailbox_mail_since_command = 0L,

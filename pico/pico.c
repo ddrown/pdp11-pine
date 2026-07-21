@@ -90,11 +90,7 @@ static char rcsid[] = "$Id: pico.c,v 4.19 1993/12/02 16:44:31 mikes Exp $";
 #include	"ebind.h"	/* default key bindings */
 
 
-#ifdef	ANSI
-    int  func_init(void);
-#else
-    int  func_init();
-#endif
+int  func_init(void);
 
 
 /*

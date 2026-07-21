@@ -71,9 +71,6 @@ is os-xxx.h. (Don't edit osdep.h; edit os-xxx.h instead.)
 
 #include "os.h"
 
-#ifndef ANSI
-#define const  /* For mail.h  */
-#endif
 #include "../c-client/mail.h"
 #include "../c-client/osdep.h"
 #include "../c-client/rfc822.h"

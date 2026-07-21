@@ -114,7 +114,6 @@ MAILSTREAM *find_folder_stream;
 
 
 
-#ifdef ANSI
 void       redraw_folder_screen();
 void       display_folder(FSTATE_S *, CONTEXT_S *, int, CONTEXT_S *, int);
 void       paint_folder_name(int, FSTATE_S *, int, CONTEXT_S *);
@@ -135,31 +134,6 @@ void      *find_folder_names(char *, char *);
 void       free_folders_in_context(CONTEXT_S *);
 FOLDER_S  *new_folder(char *);
 void       folder_delete(int, void *);
-
-
-#else  /* ANSI */
-void       redraw_folder_screen();
-void       display_folder();
-void       paint_folder_name();
-void       folder_insert_index();
-char      *folder_list_entry();
-int        folder_total();
-int        off_folder_display();
-char      *add_new_folder();
-char      *rename_folder();
-int        delete_folder();
-int        search_folders();
-int        compare_names();
-void       create_folder_display();
-CONTEXT_S *new_context();
-void      *new_folder_list();
-void       free_folder_list();
-void      *find_folder_names();
-void       free_folders_in_context();
-FOLDER_S  *new_folder();
-void       folder_delete();
-
-#endif  /* ANSI */
 
 
 static int sort_folder_entry = 0;

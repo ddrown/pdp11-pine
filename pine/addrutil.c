@@ -60,13 +60,7 @@ static char rcsid[] = "$Id: addrutil.c,v 4.7 1993/10/18 23:34:58 mikes Exp $";
 #include "headers.h"
 
 
-#ifdef ANSI
 ADDRESS *expand_address(char *, char *, char *);
-
-#else
-
-ADDRESS *expand_address();
-#endif
 
 
 /*----------------------------------------------------------------------

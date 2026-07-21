@@ -63,7 +63,6 @@ static char rcsid[] = "$Id: send.c,v 4.75 1993/12/07 01:42:03 mikes Exp $";
 #define TCPSTREAM void
 #endif
 
-#ifdef ANSI
 void     outgoing2strings(ENVELOPE *,BODY *,char **,char **,char **,void **);
 void      strings2outgoing(ENVELOPE *,BODY **,char *,char *,char *);
 int       append_message2(char *,ENVELOPE *,BODY *,AppendTypes,char *);
@@ -88,28 +87,6 @@ void      pine_free_body_data(BODY *);
 void      pine_free_body_part(PART **);
 void      set_mime_types(BODY *);
 int       call_mailer(char *, ENVELOPE *, BODY *);
-
-#else
-
-void      outgoing2strings();
-void	  strings2outgoing();
-void      create_message_body();
-int       append_message2();
-void      parse_postponed_header();
-static char   *call_sendmail();
-static int     call_system();
-void      pine_write_body_header();
-void      pine_encode_body();
-void      pine_rfc822_header();
-size_t    pine_rfc822_header_size();
-long      pine_rfc822_output();
-long      pine_rfc822_output_body();
-void      pine_free_body();
-void      pine_free_body_data();
-void      pine_free_body_part();
-void      set_mime_types();
-int       call_mailer();
-#endif
 
 
 /*

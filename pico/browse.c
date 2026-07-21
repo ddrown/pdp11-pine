@@ -101,31 +101,17 @@ static struct bmaster {
     char   *names;				/* malloc'd name array */
 } *gmp;						/* global master ptr   */
 
-#ifdef	ANSI
-    struct bmaster *getfcells(char *);
-    int    PaintCell(int, int, int, struct fcell *, int);
-    int    PaintBrowser(struct bmaster *, int);
-    int    BrowserKeys(void);
-    int    layoutcells(struct bmaster *);
-    int    PlaceCell(struct bmaster *, struct fcell *, int *, int *);
-    int    zotfcells(struct fcell *);
-    int    zotmaster(struct bmaster **);
-    struct fcell *FindCell(struct bmaster *, char *);
-    int    sisin(char *, char *);
-    void    BrowserAnchor(char *);
-#else
-    struct bmaster *getfcells();
-    int    PaintCell();
-    int    PaintBrowser();
-    int    BrowserKeys();
-    int    layoutcells();
-    int    PlaceCell();
-    int    zotfcells();
-    int    zotmaster();
-    struct fcell *FindCell();
-    int    sisin();
-    void    BrowserAnchor();
-#endif
+struct bmaster *getfcells(char *);
+int    PaintCell(int, int, int, struct fcell *, int);
+int    PaintBrowser(struct bmaster *, int);
+int    BrowserKeys(void);
+int    layoutcells(struct bmaster *);
+int    PlaceCell(struct bmaster *, struct fcell *, int *, int *);
+int    zotfcells(struct fcell *);
+int    zotmaster(struct bmaster **);
+struct fcell *FindCell(struct bmaster *, char *);
+int    sisin(char *, char *);
+void    BrowserAnchor(char *);
 
 
 /*

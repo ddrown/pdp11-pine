@@ -63,7 +63,6 @@ static char rcsid[] = "$Id: mailcmd.c,v 4.128 1993/12/06 20:08:15 mikes Exp $";
 #include "headers.h"
 
 
-#ifdef ANSI
 MESSAGECACHE      *closest_not_deleted(MAILSTREAM *, long, long);
 int                save(char *, CONTEXT_S *, MESSAGECACHE *, long);
 void               select_sort(int);
@@ -72,18 +71,6 @@ char              *mcdate2ctime(MESSAGECACHE *);
 int                display_attachment(long, struct attachment *);
 void               save_attachment(int, long, struct attachment *);
 void		   display_text_att(long, struct attachment *);
-
-#else
-MESSAGECACHE       *closest_not_deleted();
-int                 save();
-void                select_sort();
-struct attachment *attachments();
-void                save_attachment();
-int                 display_attachment();
-char               *mcdate2ctime();
-void		   display_text_att();
-
-#endif
 
 
  

@@ -88,7 +88,6 @@ static struct key_menu index_keymenu =
 
 static OtherMenu what_keymenu = FirstMenu;
 
-#ifdef ANSI
 long  top_ent_calc(long, long);
 void  update_mess_status(MAILSTREAM *, long, long);
 char *get_sub(long);
@@ -105,14 +104,6 @@ int   i_cache_width();
 void  i_cache_hit(long);
 void  icread(void);
 void  icwrite(void);
-#endif
-#else
-long  top_ent_calc();
-void  update_mess_status();
-char *get_sub();
-char *get_index_cache();
-int   i_cache_size();
-int   i_cache_width();
 #endif
 void  sort_blip();
 

@@ -76,7 +76,6 @@ static char rcsid[] = "$Id: composer.c,v 4.10 1993/11/09 00:42:24 mikes Exp $";
 #include "efunc.h"
 
 
-#ifdef	ANSI
     int InitEntryText(char *, int);
     int HeaderOffset(int);
     int HeaderFocus(int, int);
@@ -100,31 +99,6 @@ static char rcsid[] = "$Id: composer.c,v 4.10 1993/11/09 00:42:24 mikes Exp $";
     void zotcomma(char *);
     static struct hdr_line *next_line(int *, struct hdr_line *);
     static struct hdr_line *prev_line(int *, struct hdr_line *);
-#else
-    int InitEntryText();
-    int HeaderOffset();
-    int HeaderFocus();
-    int LineEdit();
-    int FormatLines();
-    int PaintBody();
-    int ComposerHelp();
-    int NewTop();
-    void display_delimiter();
-    int InvertPrompt();
-    int partial_entries();
-    int physical_line();
-    int strend();
-    char *strqchr();
-    int KillHeaderLine();
-    int SaveHeaderLines();
-    char *break_point();
-    int hldelete();
-    int is_blank();
-    int zotentry();
-    void zotcomma();
-    static struct hdr_line *next_line();
-    static struct hdr_line *prev_line();
-#endif
 
 
 /*

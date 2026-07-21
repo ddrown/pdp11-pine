@@ -105,19 +105,11 @@ grow_tmp_20k_buf(need)
 
 
 
-#ifdef ANSI
 static int setup_mini_menu(int);
 void do_menu(int);
 void main_redrawer();
 void show_main_screen(struct pine *, int, OtherMenu, struct key_menu *);
 void new_user_or_version(char **);
-#else
-static int setup_mini_menu();
-void do_menu();
-void main_redrawer();
-void show_main_screen();
-void new_user_or_version();
-#endif
 static void do_setup_task();
 
 static char *new_version_message[] = {

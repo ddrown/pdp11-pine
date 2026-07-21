@@ -55,11 +55,7 @@ static char rcsid[] = "$Id: file.c,v 4.3 1993/08/20 02:01:43 mikes Exp $";
 #include        "efunc.h"
 
 
-#ifdef	ANSI
-    int ifile(char *);
-#else
-    int ifile();
-#endif
+int ifile(char *);
 
 
 /*

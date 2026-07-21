@@ -54,13 +54,8 @@ static char rcsid[] = "$Id: buffer.c,v 4.5 1993/08/02 20:27:19 mikes Exp $";
 #include        "edef.h"
 #include	"efunc.h"
 
-#ifdef	ANSI
 int zotbuf(struct BUFFER *);
 int sgetline(char **, int *, char *, int);
-#else
-int zotbuf();
-int sgetline();
-#endif
 
 
 int

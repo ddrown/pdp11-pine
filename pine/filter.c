@@ -79,7 +79,7 @@ static char rcsid[] = "$Id: filter.c,v 4.20 1993/10/30 00:27:42 mikes Exp $";
 #include "../pico/pico.h"
 
 
-#ifdef ANSI			/* INTERNAL PROTOTYPES */
+/* INTERNAL PROTOTYPES */
 int	gf_so_readc(unsigned char *);
 int	gf_so_writec(int);
 int	gf_sreadc(unsigned char *);
@@ -93,23 +93,6 @@ void	gf_8bit_default(FILTER_S *, int);
 void	gf_8bit_put_quote(FILTER_S *, int);
 void	gf_8bit_put(FILTER_S *, int);
 int	so_reaquire(STORE_S *);
-
-#else
-int	gf_so_readc();
-int	gf_so_writec();
-int	gf_sreadc();
-int	gf_swritec();
-int	gf_freadc();
-int	gf_fwritec();
-void	gf_terminal();
-void    gf_error();
-void	gf_qp_default();
-void	gf_8bit_default();
-void	gf_8bit_put_quote();
-void	gf_8bit_put();
-int	so_reaquire();
-
-#endif
 
 
 

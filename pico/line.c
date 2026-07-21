@@ -60,13 +60,8 @@ static char rcsid[] = "$Id: line.c,v 4.4 1993/09/29 16:46:45 mikes Exp $";
 #include        "efunc.h"
 
 
-#ifdef	ANSI
-    void insspace(int, int);
-    int ldelnewline(void);
-#else
-    int insspace();
-    int ldelnewline();
-#endif
+void insspace(int, int);
+int ldelnewline(void);
 
 
 #define NBLOCK	16                      /* Line block chunk size        */

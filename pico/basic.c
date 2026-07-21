@@ -52,11 +52,7 @@ static char rcsid[] = "$Id: basic.c,v 4.5 1993/09/29 16:45:07 mikes Exp $";
 #include        "pico.h"
 #include	"efunc.h"
 
-#ifdef	ANSI
-    int getgoal(struct LINE *);
-#else
-    int getgoal();
-#endif
+int getgoal(struct LINE *);
 
 
 /*

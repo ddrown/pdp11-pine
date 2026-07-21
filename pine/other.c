@@ -60,11 +60,7 @@ static char rcsid[] = "$Id: other.c,v 4.20 1993/11/30 23:48:35 mikes Exp $";
 
 #include "headers.h"
 
-#ifdef ANSI
 static void draw_klocked_body(char *, char *);
-#else  /* ANSI */
-static void draw_klocked_body();
-#endif /* ANSI */
 
 static void redraw_kl_body();
 static void redraw_klocked_body();

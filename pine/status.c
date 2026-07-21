@@ -61,16 +61,9 @@ static char rcsid[] = "$Id: status.c,v 4.13 1993/11/19 04:10:59 mikes Exp $";
 
 #include "headers.h"
 
-#ifdef ANSI
 int  output_message(char *);
 void radio_help(int, int, HelpType);
 void draw_radio_prompt(int, int, char *, int, HelpType);
-
-#else
-int  output_message();
-void radio_help();
-void draw_radio_prompt();
-#endif
 
 
 

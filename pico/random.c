@@ -51,11 +51,7 @@ static char rcsid[] = "$Id: random.c,v 4.3 1993/07/08 00:00:13 dlm Exp $";
 #include        "edef.h"
 #include	"efunc.h"
 
-#ifdef	ANSI
-    int getccol(int);
-#else
-    int getccol();
-#endif
+int getccol(int);
 
 int     tabsize;                        /* Tab size (0: use real tabs)  */
 

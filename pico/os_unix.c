@@ -151,20 +151,11 @@ int	errno;					/* ya, I know... */
 #endif
 
 
-#ifdef	ANSI
-    int      kbseq(int *);
-    SIGTYPE  do_hup_signal(int);
-    SIGTYPE  rtfrmshell(int);
+int      kbseq(int *);
+SIGTYPE  do_hup_signal(int);
+SIGTYPE  rtfrmshell(int);
 #ifdef	TIOCGWINSZ
-    SIGTYPE  winch_handler(int);
-#endif
-#else
-    int      kbseq();
-    SIGTYPE  do_hup_signal();
-    SIGTYPE  rtfrmshell();
-#ifdef	TIOCGWINSZ
-    SIGTYPE  winch_handler();
-#endif
+SIGTYPE  winch_handler(int);
 #endif
 
 

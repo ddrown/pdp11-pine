@@ -56,33 +56,18 @@ static char rcsid[] = "$Id: display.c,v 4.16 1993/11/19 04:01:12 mikes Exp $";
 #include        "efunc.h"
 
 
-#ifdef	ANSI
-    void vtmove(int, int);
-    void vtputc(CELL);
-    void vtpute(CELL);
-    void vteeol(void);
-    int updateline(int, CELL *, CELL *, short *);
-    void updext(void);
-    void mlputi(int, int);
-    void mlputli(long, int);
-    int showCompTitle(void);
-    int nlforw(void);
-    int dumbroot(int, int);
-    long int dumblroot(long, int);
-#else
-    int vtmove();
-    int vtputc();
-    int vtpute();
-    int vteeol();
-    int updateline();
-    int updext();
-    int mlputi();
-    int mlputli();
-    int showCompTitle();
-    int nlforw();
-    int dumbroot();
-    int dumblroot();
-#endif
+void vtmove(int, int);
+void vtputc(CELL);
+void vtpute(CELL);
+void vteeol(void);
+int updateline(int, CELL *, CELL *, short *);
+void updext(void);
+void mlputi(int, int);
+void mlputli(long, int);
+int showCompTitle(void);
+int nlforw(void);
+int dumbroot(int, int);
+long int dumblroot(long, int);
 
 
 #define WFDEBUG 0                       /* Window flag debug. */

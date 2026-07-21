@@ -63,7 +63,6 @@ static char rcsid[] = "$Id: mailview.c,v 4.71 1993/12/06 20:09:20 mikes Exp $";
 
 #define TYPICAL_BIG_MESSAGE_LINES 200 
 
-#ifdef ANSI
 void       format_envelope(ENVELOPE *, gf_io_t);
 void	   set_scroll_text(void *, int, int, int, SourceType);
 void       describe_mime(BODY *, char *, int, int);
@@ -76,24 +75,6 @@ char      *show_multipart(MESSAGECACHE *, int);
 MimeShow   mime_show(BODY *);
 char      *part_desc(char *,BODY *, int);
 char      *display_parameters(PARAMETER *);
-
-#else
-void       format_envelope();
-void	   set_scroll_text();
-void       scroll_scroll_text();
-int        search_scroll_text();
-void       describe_mime();
-char      *type_desc();
-void       format_mime_size();
-void       zero_atmts();
-void	   zero_scroll_text();
-void       push_scroll_state();
-void       pop_scroll_state();
-char      *show_multipart();
-MimeShow   mime_show();
-char      *part_desc();
-char      *display_parameters();
-#endif
 
 
 

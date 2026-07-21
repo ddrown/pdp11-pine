@@ -75,20 +75,12 @@ static char rcsid[] = "$Id: init.c,v 4.102 1993/11/23 00:04:05 mikes Exp $";
 
 extern char version_buff[];
 
-#ifdef ANSI
 void set_current_val(struct variable *, int, int);
 void set_feature_list_current_val(struct variable *, int);
 /* AIX gives warning here 'cause it can't quite cope with enums */
 void process_init_cmds(struct pine *, char **);
 void process_feature_list(struct pine *, char **, int , int, int);
 int  decode_sort(struct pine *, char *);
-#else /* !ANSI */
-void set_current_val();
-void set_feature_list_current_val();
-void process_init_cmds();
-void process_feature_list();
-int  decode_sort();
-#endif /* !ANSI */
 
 
 /*------------------------------------

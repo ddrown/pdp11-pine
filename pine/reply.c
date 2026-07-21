@@ -74,7 +74,6 @@ lots of things that could be done better that will evolve over time.
 #include <time.h>
 
 
-#ifdef ANSI
 char          *generate_reply_to(ENVELOPE *);
 ENVELOPE      *copy_envelope(ENVELOPE *);
 BODY          *copy_body(BODY *, BODY *);
@@ -83,16 +82,6 @@ void           format_text_header(ENVELOPE *, gf_io_t, char *);
 int            get_body_part_text(BODY *,long,char *,gf_io_t,char *,char *);
 char          *reply_delimiter(ENVELOPE *);
 char          *forward_delimiter(void);
-
-#else
-char          *generate_reply_to();
-ENVELOPE      *copy_envelope();
-BODY          *copy_body();
-int            fetch_contents();
-void           format_text_header();
-char          *reply_delimiter();
-char          *forward_delimiter();
-#endif
 
 
 /*----------------------------------------------------------------------
