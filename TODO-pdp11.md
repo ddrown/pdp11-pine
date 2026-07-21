@@ -64,23 +64,64 @@ DONE elsewhere or referenced in passing below.
       is inflated by the shared-header fan-out described in the Tier 1
       entry above, so re-scope by unique site once counted for real).
 
-### Audit `-Wunused-parameter`/`-Wunused-function` before enabling either
+### Remove the dead `#ifdef ANSI`/K&R fallback branches entirely
 
-- [ ] Trial-compiling with `-Wall -Wextra` also surfaces 79x
-      `-Wunused-parameter` and 38x `-Wunused-function` in `pico/*.c`
-      alone (18x/0x in `pine/*.c`). Do **not** blanket-enable these --
-      this is a callback-heavy, function-pointer-dispatch codebase
-      (see the `DRIVER`/`stream->dtb` entry below), so most of the
-      unused-parameter hits are intentionally-unused callback
-      arguments required by a shared function-pointer signature, not
-      bugs. Instead: (1) treat `-Wunused-function` hits as a dead-code
-      audit list -- each one is a candidate for outright deletion
-      (fits this project's general size-reduction goal, not just the
-      warnings goal), verify each is truly unreachable before cutting;
-      (2) leave `-Wunused-parameter` off entirely, or scope it file-by-
-      file only where dispatch isn't involved, since a wall of
-      intentional-callback noise will bury real hits from the tiers
-      above.
+- [ ] `ANSI` is unconditionally defined for this build -- `-DANSI` in
+      `pico/makefile.lnx`'s `CFLAGS`, and (for everything under
+      `pine/`, via `headers.h`'s `#include "os.h"`)
+      `pine/osdep/os-lnx.h:174: #define ANSI` (`os.h` is a build-time
+      symlink to that file). Every `#else`/K&R-style branch behind an
+      `#ifdef ANSI` (or `#define const` behind an `#ifndef ANSI`) has
+      therefore never once compiled in this build and never will --
+      pure dead weight duplicating every declaration it shadows.
+      **Scope**: 33 files (`pico/*.c`/`*.h`, `pine/*.c`/`*.h`;
+      `imap/ANSI/c-client/` is already ANSI-only, not affected), 34
+      `#ifdef ANSI`/`#ifndef ANSI` blocks, ~670 total lines living in
+      the dead branches. Two files carry most of it:
+      `pine/pine.h` (~291 lines -- the bulk of this project's
+      cross-file function prototypes, doubled) and `pico/efunc.h`
+      (~198 lines, same story for `pico/`). Everything else is a
+      handful of lines per file (mostly single-function declarations
+      like `pico/os_unix.h`'s `extern int kbseq();`/`extern char
+      *getcwd();`, or a single `int build_address();`-style line in
+      one of pine's `.c` files' local prototype blocks). One shape
+      variant: `pine/headers.h`'s block is `#ifndef ANSI` guarding
+      `#define const` (blanking the keyword out for pre-ANSI
+      compilers before including c-client's `mail.h`) rather than a
+      prototype list -- same dead-code treatment applies.
+      **Known side benefit**: `pico/efunc.h`'s K&R branch is the
+      exact, previously-identified source of the recurring clangd
+      "Conflicting types for X" false positives seen throughout this
+      session's K&R-to-ANSI conversion work (`rebindfunc`, `o_insert`,
+      `lfree`, `lchange`, `insspace`, `kdelete`, `next_line`,
+      `prev_line`, etc.) -- clangd's editor-only analysis evaluates
+      both `#ifdef` branches even though GCC only ever sees the ANSI
+      one; deleting the K&R branch removes the false positives at the
+      source instead of continuing to work around/dismiss them file by
+      file.
+      **Proposed shape**: for each block, keep the `#ifdef ANSI`
+      branch's declarations unconditionally (dropping the `#ifdef
+      ANSI`/`#else`/`#endif` wrapper itself, not just the dead half),
+      confirming line-by-line that the K&R branch is a pure mechanical
+      echo (same function names, K&R's just missing the parameter
+      types) before deleting each one -- don't assume without checking,
+      since a handful of these blocks also gate small unrelated
+      platform `#if`/`#define`s (e.g. `os_unix.h`'s `TERMCAP`/`dyn`
+      conditionals sit adjacent to, but are distinct from, the `ANSI`
+      ones) that must be left alone. `pine.h`'s and `efunc.h`'s blocks
+      are big enough to warrant their own careful pass rather than
+      folding into the same batch as the small one-liners.
+      **Verification**: standard discipline -- rebuild, full clean
+      rebuild, warning-count diff (expect no change, since the K&R
+      branches were never compiled -- this is a pure text/size cut,
+      not a warning cut), full smoketest suite, before/after `size`
+      (small win, since it's source-only text that gcc already never
+      compiled -- verify whether it moves the needle at all before
+      claiming a size delta). Good opportunistic pairing with any
+      future pass through a given file for another reason, same
+      "touch it while you're there" spirit as the K&R-to-ANSI
+      function-*definition* sweep already completed -- this is the
+      matching cleanup for function *declarations*.
 
 ### Formalize an ASan build target and try `-fanalyzer`
 
@@ -99,43 +140,4 @@ DONE elsewhere or referenced in passing below.
       trees; it's slow and can be noisy on older C, so evaluate signal
       quality on this codebase before deciding whether it's worth a
       standing CI-style target or just an occasional manual check.
-
-### Remove `read_pinerc()` and `first_time_user` entirely
-
-- [ ] Follow-on to the `read_pinerc()` stub cut above. `read_pinerc()`
-      (`pine/init.c:1114`) is now an unconditional `return(0);` with an
-      empty body -- its 3 call sites (`init.c:316`/`:318`/`:325`, the
-      `ParseGlobal`/`ParseLocal` pine.conf and `.pinerc` reads) could
-      just be deleted outright instead of calling a no-op, along with
-      the function itself, its ANSI/K&R prototypes (`init.c:82`/`:90`),
-      and the now-pointless `typedef enum {ParseLocal, ParseGlobal}
-      ParsePinerc` (`init.c:79`) -- check first whether `ParsePinerc`
-      is referenced anywhere else before deleting the typedef.
-      `first_time_user` (`struct pine`, `pine.h:648`) had no setter
-      anywhere in the tree even before this (`read_pinerc()`'s
-      bootstrap version was the only one, and it's gone now) -- grepped
-      to confirm its only remaining references are the two `if`
-      conditions that read it: `pine.c:401`
-      (`pine_state->first_time_user || pine_state->show_new_version`,
-      with a nested `if(pine_state->first_time_user)
-      new_user_or_version(first_time_message); else
-      new_user_or_version(new_version_message);` -- the `first_time_user`
-      branch is now dead, `new_version_message` always fires when this
-      block runs at all) and `pine.c:1640`
-      (`(ps_global->first_time_user || ps_global->show_new_version) &&
-      other_cmds % 3 == 0 && other_cmds < 10`, part of the periodic "O
-      command is optional" reminder -- `first_time_user` is redundant
-      with `show_new_version` here now). Proposed cut: delete the
-      `unsigned first_time_user:1` field from `struct pine`, simplify
-      both `pine.c` conditions to just `show_new_version`, and delete
-      the dead `if(pine_state->first_time_user)` branch at `pine.c:404`
-      (folding straight to the `new_version_message` call).
-      Standard trace-before-delete verification pass before landing:
-      rebuild, full smoketest suite, warning count, before/after
-      `size`. Since nothing in the test suite currently exercises the
-      first-run welcome screen either way, this is unlikely to be
-      test-observable -- consider whether a smoketest driving
-      `show_new_version` (if there's a way to set it, e.g. a version
-      marker file) is worth adding, or whether this is accepted as
-      unverified-by-suite like the `read_pinerc()` cut itself was.
 

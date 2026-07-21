@@ -14,7 +14,7 @@ CFLAGS=	 	-Dbsd -DLINUX -DPOSIX -DJOB_CONTROL -DANSI \
 		-Wformat=2 -Wstringop-overflow=4 -Wstringop-truncation \
 		-Wrestrict -Wreturn-type -Wdangling-else \
 		-Wmisleading-indentation -Wsequence-point -Wtype-limits \
-		-Waddress -Wnonnull
+		-Waddress -Wnonnull -Wunused-function
 
 
 # switches for library building
