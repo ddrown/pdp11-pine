@@ -177,6 +177,27 @@ NULL
 #include <unistd.h>
 
 /*
+ * build_child_path - join dir and fname into child[NLINE], truncating
+ *		       rather than overflowing if the combined path is
+ *		       too long (fname is an unbounded directory-entry
+ *		       name; dir is itself bounded to NLINE, but can be
+ *		       nearly that long on a deep enough tree).
+ */
+static void
+build_child_path(char *child, char *dir, char *fname)
+{
+    size_t dlen = strlen(dir);
+
+    if(dlen > NLINE - 2)
+      dlen = NLINE - 2;
+    strncpy(child, dir, dlen);
+    child[dlen] = C_FILESEP;
+    strncpy(child + dlen + 1, fname, NLINE - dlen - 2);
+    child[NLINE - 1] = '\0';
+}
+
+
+/*
  * FileBrowse - display contents of given directory dir
  *
  *         returns:
@@ -444,8 +465,7 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 		break;
 	    }
 
-	    sprintf(child, "%s%c%s", gmp->dname, C_FILESEP,
-		    gmp->current->fname);
+	    build_child_path(child, gmp->dname, gmp->current->fname);
 
 	    i = 0;
 	    while(i++ < 2){		/* verify twice!! */
@@ -615,7 +635,7 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 		    }
 
 		    strcpy(s, child); 		/* add full path! */
-		    sprintf(child, "%s%c%s", gmp->dname, C_FILESEP, s);
+		    build_child_path(child, gmp->dname, s);
 
 		    if((status = fexist(child, "w", (long *)NULL)) == FIOSUC){
 			sprintf(s,"File \"%s\" exists! OVERWRITE", child);
@@ -715,7 +735,7 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 		    }
 
 		    strcpy(s, child);
-		    sprintf(child, "%s%c%s", gmp->dname, C_FILESEP, s);
+		    build_child_path(child, gmp->dname, s);
 
 		    status = fexist(child, "w", (long *)NULL);
 		    if(status == FIOSUC || status == FIOFNF){
@@ -857,7 +877,7 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 
 		if(gmode&MDBRONLY){
 		    i = 0;
-		    sprintf(child, "%s%c%s", gmp->dname, C_FILESEP, fn);
+		    build_child_path(child, gmp->dname, fn);
 			/* stat file for executable bit */
 		    if(fexist(child, "x", NULL) == FIOSUC){
 			while(!i){

@@ -819,7 +819,7 @@ byte_string(bytes)
     char       *a, aa[5];
     char       *abbrevs = "GMK";
     long        i, ones, tenths;
-    static char string[10];
+    static char string[64];	/* room for two full-width longs */
 
     ones   = 0L;
     tenths = 0L;

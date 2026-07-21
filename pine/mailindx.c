@@ -631,7 +631,7 @@ build_header_line(message_number)
     MESSAGECACHE *cache;
     ADDRESS      *addr;
     int           status_length, size_length, subject_length, from_length;
-    char          status[20], from[MAX_SCREEN_COLS/2+1], size[12],
+    char          status[20], from[MAX_SCREEN_COLS/2+1], size[32],
                   subject[MAX_SCREEN_COLS+1], to_us;
     char         *s, *s_tmp, *buffer;
     struct date   d;

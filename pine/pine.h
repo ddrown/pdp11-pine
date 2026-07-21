@@ -195,7 +195,7 @@
 			      i = 1L;					      \
 									      \
 			    if(i < s->nmsgs){				      \
-				char         sequence[16];		      \
+				char         sequence[48];		      \
 									      \
 				sprintf(sequence,"%ld:%ld", i, s->nmsgs);     \
 				mail_fetchflags(s, sequence);		      \

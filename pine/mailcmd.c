@@ -1125,7 +1125,7 @@ export_message(q_line, sorted_msgno)
     /* ---- full_filename already contains the absolute path ---*/
     if(!can_access(full_filename, ACCESS_EXISTS)) {
         char wt, prompt[100];
-        sprintf(prompt, "File \"%s\" already exists. Append message to it",
+        sprintf(prompt, "File \"%.55s\" already exists. Append message to it",
                 filename);
         wt = want_to(prompt, 'y', 'n', NO_HELP, 0);
         if(wt == 'n') {
@@ -1349,7 +1349,13 @@ broach_folder(qline, allow_list, context)
 	    }
 	}
 
-	sprintf(prompt, "GOTO folder%s: ", expanded);
+	/*
+	 * expanded is MAXPATH+1 (it's reused below to hold a full
+	 * expanded path via expand_foldername()), but at this point it
+	 * only ever holds the short " [name]" display built above --
+	 * bound to prompt's actual MAXFOLDER+80 capacity regardless.
+	 */
+	sprintf(prompt, "GOTO folder%.130s: ", expanded);
 
         rc = optionally_enter(new_folder, qline, 0, MAXFOLDER, 1 ,0, prompt,
                               ekey, help, 0);
@@ -1758,7 +1764,7 @@ expunge_and_close(stream, folder)
 {
     long  delete_count, max_folder, seen_not_deleted_cnt, saved_msgs, i;
     char  prompt_b[MAX_SCREEN_COLS+1], short_folder_name[MAXFOLDER*2+1],
-          temp[MAXFOLDER*2+1], sequence[10];
+          temp[MAXFOLDER*2+1], sequence[24];
     CONTEXT_S *save_context;
     MESSAGECACHE *mc;
     struct variable *vars = ps_global->vars;
@@ -1833,7 +1839,7 @@ expunge_and_close(stream, folder)
                             
 		if(F_OFF(F_AUTO_EXPUNGE,ps_global)) {
                   sprintf(prompt_b,
-                       "Expunge the %ld deleted message%s from \"%s\"",
+                       "Expunge the %ld deleted message%s from \"%.115s\"",
                        delete_count,
                          delete_count == 1 ? "" : "s",
                          short_folder_name);

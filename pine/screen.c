@@ -773,6 +773,12 @@ format_titlebar()
 	    avail  = sc - (ver_len + tit_len + loc_len + 10);
 	fold_len   = strlen(as.folder_name);
 	
+	/*
+	 * fmt below is always one of the compile-time literals assigned
+	 * to it a few lines down, never external input.
+	 */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
 	if(is_context && (ct_len = strlen(as.context_name))){
 	    char *fmt;
 	    int  extra;
@@ -806,10 +812,11 @@ format_titlebar()
 	    if(fold_len + ss_len + 8 < avail) 	/* all of folder fit? */
 	      sprintf(fold_tmp, fmt, as.folder_name, ss_string);
 	    else if((fold_len/2) + ss_len + 8 < avail)
-	      sprintf(fold_tmp, fmt, 
+	      sprintf(fold_tmp, fmt,
 		      as.folder_name + fold_len - (avail - (8 + ss_len)),
 		      ss_string);
 	}
+#pragma GCC diagnostic pop
     }
     
     /* write title, location and, optionally, the folder name */

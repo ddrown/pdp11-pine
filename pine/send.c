@@ -935,7 +935,7 @@ pine_send(outgoing, body, editor_title, fcc, are_replying)
 		 * expunge has been done, just fix up the sorted number...
 		 */
 		if(are_replying > 0 && !READONLY_FOLDER){
-		    char seq[8];
+		    char seq[24];	/* room for any long */
 
 		    sprintf(seq, "%ld", are_replying);
 		    mail_setflag(ps_global->mail_stream, seq, "\\ANSWERED");

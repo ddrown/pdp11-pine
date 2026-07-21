@@ -151,7 +151,13 @@ q_status_message1(modal, min_t, max_t, s, a)
      char *s;
      void *a;
 {
+    /* every q_status_messageN() call site passes a compile-time
+     * literal for s -- this whole family is a fixed-arity printf
+     * wrapper (see the VARARGS1 comments above each). */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
     sprintf(tmp_20k_buf,s,a);
+#pragma GCC diagnostic pop
     q_status_message(modal, min_t, max_t, tmp_20k_buf);
 }
 
@@ -177,7 +183,10 @@ q_status_message2(modal, min_t, max_t, s, a1, a2)
      char *s;
      void *a1, *a2;
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
     sprintf(tmp_20k_buf,s, a1, a2);
+#pragma GCC diagnostic pop
     q_status_message(modal, min_t, max_t, tmp_20k_buf);
 }
 
@@ -203,7 +212,10 @@ q_status_message3(modal, min_t, max_t, s, a1, a2, a3)
      char *s;
      void *a1, *a2, *a3;
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
     sprintf(tmp_20k_buf,s, a1, a2, a3);
+#pragma GCC diagnostic pop
     q_status_message(modal, min_t, max_t, tmp_20k_buf);
 }
 
@@ -230,7 +242,10 @@ q_status_message4(modal, min_t, max_t, s, a1, a2, a3, a4)
      char *s;
      void *a1, *a2, *a3, *a4;
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
 	sprintf(tmp_20k_buf,s, a1, a2, a3, a4);
+#pragma GCC diagnostic pop
 	q_status_message(modal, min_t, max_t, tmp_20k_buf);
 }
 
@@ -261,7 +276,10 @@ q_status_message7(modal, min_t, max_t, s, a1, a2, a3, a4, a5, a6, a7)
      char *s;
      void *a1, *a2, *a3, *a4, *a5, *a6, *a7;
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
 	sprintf(tmp_20k_buf, s, a1, a2, a3, a4, a5, a6, a7);
+#pragma GCC diagnostic pop
 	q_status_message(modal, min_t, max_t, tmp_20k_buf);
 }
 

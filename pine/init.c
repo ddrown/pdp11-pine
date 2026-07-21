@@ -1394,7 +1394,7 @@ init_debug()
     if(debug){
 	int i;
 #else
-    char nbuf[5];
+    char nbuf[12];		/* enough for any int + sign + nul */
     char newfname[MAXPATH+1], filename[MAXPATH+1];
 
     /*---- Get rid of very old pine debug files ----*/

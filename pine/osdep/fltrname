@@ -17,7 +17,7 @@ filter_filename(file)
                           ',', ':', ';', '<', '=', '>', '?', '[', ']',
                           '\\', '^', '|', '\177', '\0'};
 #endif
-    static char error[100];
+    static char error[MAXPATH+100];
     char ill_file[MAXPATH+1], *ill_char, *ptr, e2[10];
 
     ptr = file;

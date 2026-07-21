@@ -432,7 +432,7 @@ new_mail_mess(stream, folder, number, max_num)
         if(e != NULL && e->subject == NULL)
           strcpy(subject, " with no subject");
         else
-          sprintf(subject, " %s %.199s", carray[(unsigned)random()%12], 
+          sprintf(subject, " %s %.183s", carray[(unsigned)random()%12],
 		                         e->subject);
         if(from[0] == '\0')
           subject[1] = toupper(subject[1]);

@@ -245,8 +245,14 @@ char *b, *c, *n;
 {
     char tmp[MAILTMPLEN];
 
-    if(context_digest(c, tmp, NULL, NULL) == NULL)
+    if(context_digest(c, tmp, NULL, NULL) == NULL){
+      /* tmp is context_digest()'s own "[]"->"%s" template, not
+       * external input -- always exactly one %s. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
       sprintf(b, tmp, n);		/* everythings ok,  */
+#pragma GCC diagnostic pop
+    }
     else
       strcpy(b, n);			/* don't apply bogus context */
 }
@@ -329,7 +335,7 @@ char *context;MAILSTREAM *stream;char *mailbox;
     }
     else strcpy(tmp, mailbox);	/* allow create for now */
 
-    sprintf (errbuf,"Create of mailbox outside context: %s", tmp);
+    sprintf (errbuf,"Create of mailbox outside context: %.988s", tmp);
     mm_log (errbuf,(long) NIL);
   }
   else

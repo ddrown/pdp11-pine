@@ -1296,7 +1296,7 @@ char *
 generate_message_id(ps)
      struct pine *ps;
 {
-    static char id[100], a = 'A';
+    static char id[150], a = 'A';	/* room for a large pid/year */
     long        now;
     struct tm  *now_x;
     extern char version_buff[];
