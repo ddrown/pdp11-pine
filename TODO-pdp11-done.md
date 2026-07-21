@@ -4254,3 +4254,58 @@ already covered by the existing composer tests).
   `data` 12656 -> 12496 (-160 bytes), `bss` unchanged; `bin/pico`
   confirmed byte-identical before/after (untouched by this cut --
   entirely `pine/`).
+
+### Audited `-Wunused-parameter`/`-Wunused-function` -- one real fix, `-Wunused-function` now permanently enabled
+
+- **What it was**: TODO-pdp11.md's own item cautioned not to
+  blanket-enable either flag without auditing first, since this is a
+  callback-heavy, function-pointer-dispatch codebase where most
+  unused-parameter hits are expected, not bugs. Did the audit: trial
+  runs via a real `./build clean && ./build lnx` (not per-file
+  standalone `-fsyntax-only` compiles, which inflate counts with
+  cross-translation-unit artifacts -- see below) with both flags
+  temporarily added to `WARNFLAGS`.
+- **`-Wunused-function` finding -- one real, fixable issue, not dead
+  code**: all 38 hits (19 files x 2 functions) were the exact same
+  warning -- `pico/efunc.h:117-118`/`:330-331` forward-declared
+  `next_line()`/`prev_line()` as `static` in the *shared* header, so
+  every `.c` file that includes it (all of them) sees a static
+  prototype it never defines. `static` linkage means no file other
+  than `composer.c` (where both are actually defined, at
+  `composer.c:1455`/`:1483`, and used extensively above their
+  definition point) could ever call them regardless -- putting them in
+  the shared header served no purpose. Not a dead-code case (both
+  functions are real, live, heavily used within `composer.c`) --
+  fixed by moving their forward declarations out of `efunc.h`
+  entirely and into `composer.c`'s own local ANSI/K&R prototype block
+  (which already forward-declares the rest of that file's functions
+  the same way), marked `static` there instead. Confirmed via grep
+  these were the *only* two `static` declarations anywhere in
+  `efunc.h` -- every other entry is a normal cross-file `extern`
+  prototype, meaning this was a one-off oversight, not an established
+  pattern to sweep further.
+- **`-Wunused-parameter` finding -- confirmed noise, left disabled**:
+  91 hits in the real build, sampled across `pico/basic.c`,
+  `bind.c`, `random.c`, `region.c`, `window.c`, `compose_stub.c`, etc.
+  -- overwhelmingly dominated by pico's uniform `int funcname(int f,
+  int n)` key-bound-command signature (`f`/`n`, the "flag" and
+  "numeric repeat count" arguments every editor command receives
+  whether it uses them or not) plus `compose_stub.c`'s
+  composer-as-subprocess `PICO` struct callback stubs -- both
+  confirmed genuine function-pointer-dispatch requirements, not bugs.
+  Per CLAUDE.md's standing guidance against cosmetic
+  backwards-compatibility-style changes, did not rename ~90
+  parameters purely to silence a linter with no bug-catching value
+  here. Left `-Wunused-parameter` out of both makefiles' `CFLAGS`,
+  matching the TODO item's own predicted conclusion.
+- **Verified**: `./build clean && ./build lnx` clean before and after,
+  with `-Wunused-function` now a permanent part of both
+  `pine/makefile.lnx`'s and `pico/makefile.lnx`'s flag list (0
+  warnings from it going forward -- a free standing dead-function
+  tripwire for future cuts) and `-Wunused-parameter` confirmed *not*
+  added to either. Warning count unchanged at 180 (the current
+  Tier-1-flags baseline) before and after the `composer.c`/`efunc.h`
+  fix. Full smoketest suite 26/26.
+- **Size delta**: none -- purely a declaration relocation, no codegen
+  change; `bin/pine`/`bin/pico` confirmed byte-identical before and
+  after.

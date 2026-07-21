@@ -98,6 +98,8 @@ static char rcsid[] = "$Id: composer.c,v 4.10 1993/11/09 00:42:24 mikes Exp $";
     int is_blank(int, int, int);
     void zotentry(struct hdr_line *);
     void zotcomma(char *);
+    static struct hdr_line *next_line(int *, struct hdr_line *);
+    static struct hdr_line *prev_line(int *, struct hdr_line *);
 #else
     int InitEntryText();
     int HeaderOffset();
@@ -120,6 +122,8 @@ static char rcsid[] = "$Id: composer.c,v 4.10 1993/11/09 00:42:24 mikes Exp $";
     int is_blank();
     int zotentry();
     void zotcomma();
+    static struct hdr_line *next_line();
+    static struct hdr_line *prev_line();
 #endif
 
 

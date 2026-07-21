@@ -64,24 +64,6 @@ DONE elsewhere or referenced in passing below.
       is inflated by the shared-header fan-out described in the Tier 1
       entry above, so re-scope by unique site once counted for real).
 
-### Audit `-Wunused-parameter`/`-Wunused-function` before enabling either
-
-- [ ] Trial-compiling with `-Wall -Wextra` also surfaces 79x
-      `-Wunused-parameter` and 38x `-Wunused-function` in `pico/*.c`
-      alone (18x/0x in `pine/*.c`). Do **not** blanket-enable these --
-      this is a callback-heavy, function-pointer-dispatch codebase
-      (see the `DRIVER`/`stream->dtb` entry below), so most of the
-      unused-parameter hits are intentionally-unused callback
-      arguments required by a shared function-pointer signature, not
-      bugs. Instead: (1) treat `-Wunused-function` hits as a dead-code
-      audit list -- each one is a candidate for outright deletion
-      (fits this project's general size-reduction goal, not just the
-      warnings goal), verify each is truly unreachable before cutting;
-      (2) leave `-Wunused-parameter` off entirely, or scope it file-by-
-      file only where dispatch isn't involved, since a wall of
-      intentional-callback noise will bury real hits from the tiers
-      above.
-
 ### Formalize an ASan build target and try `-fanalyzer`
 
 - [ ] CLAUDE.md's verification discipline already leans on ad hoc
