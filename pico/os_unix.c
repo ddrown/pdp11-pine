@@ -408,7 +408,7 @@ GetKey()
 	ts.tv_sec  = timeout;		/* set the timeout */
 	ts.tv_usec = 0;
 
-	rv = select(1, &readfds, 0, &readfds, &ts); /* read stdin */
+	rv = select(1, &readfds, 0, 0, &ts); /* read stdin */
 #endif
 	if(rv < 0){
 	    if(errno == EINTR)		/* interrupted? */
@@ -1282,7 +1282,7 @@ pico_new_mail()
     char   inbox[256], *p;
 
     if(p = (char *)getenv("MAIL"))
-      sprintf(inbox, p);
+      sprintf(inbox, "%.255s", p);
     else
       sprintf(inbox,"%s/%s", MAILDIR, getenv("USER"));
 

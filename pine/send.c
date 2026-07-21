@@ -1150,7 +1150,7 @@ call_mailer(fcc, envelope, body)
 	    q_status_message1(0,2,2,"\007Fcc to \"%s\" FAILED!!!", fcc);
             sprintf(error_buf,"\007Error appending %.20s in %.40s", 
 		    fcc, fcc_cntxt->context);
-            dprint(1, (debugfile, error_buf));
+            dprint(1, (debugfile, "%s", error_buf));
 	}
 
     }

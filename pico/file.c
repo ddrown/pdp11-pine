@@ -509,11 +509,12 @@ char *writetmp(int f, int n)
         lp = lforw(curbp->b_linep);             /* First line.          */
         nline = 0;                              /* Number of lines.     */
         while (lp != curbp->b_linep) {
-	    if(n || (!n && lp->l_text[0].c != '>'))
+	    if(n || (!n && lp->l_text[0].c != '>')) {
                 if ((s=ffputline(&lp->l_text[0], llength(lp))) != FIOSUC)
                         break;
-                ++nline;
-                lp = lforw(lp);
+	    }
+            ++nline;
+            lp = lforw(lp);
         }
         if (s == FIOSUC) {                      /* No write error.      */
                 s = ffclose();

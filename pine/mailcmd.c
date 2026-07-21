@@ -1349,7 +1349,7 @@ broach_folder(qline, allow_list, context)
 	    }
 	}
 
-	sprintf(prompt, "GOTO folder %s: ", expanded, *expanded ? " " : "");
+	sprintf(prompt, "GOTO folder%s: ", expanded);
 
         rc = optionally_enter(new_folder, qline, 0, MAXFOLDER, 1 ,0, prompt,
                               ekey, help, 0);

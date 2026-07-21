@@ -88,14 +88,14 @@ backchar(int f, int n)
 
     while (n--) {
 	if (curwp->w_doto == 0) {
-	    if ((lp=lback(curwp->w_dotp)) == curbp->b_linep)
+	    if ((lp=lback(curwp->w_dotp)) == curbp->b_linep) {
 	      if(Pmaster){
 		  /*
-		   * go up into editing the mail header if on 
+		   * go up into editing the mail header if on
 		   * the top line and the user hits the left arrow!!!
 		   *
-		   * if the editor returns anything except -1, the 
-		   * user requested something special, so let 
+		   * if the editor returns anything except -1, the
+		   * user requested something special, so let
 		   * pico know...
 		   */
 		  if((status = HeaderEditor(2, 1)) != -1){
@@ -106,6 +106,7 @@ backchar(int f, int n)
 	      }
 	      else
 		return (FALSE);
+	    }
 
 	    curwp->w_dotp  = lp;
 	    curwp->w_doto  = llength(lp);

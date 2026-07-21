@@ -908,7 +908,7 @@ display_folder(fd, cntxt, index, old_cntxt, old_index)
 		/*-------- paint text centered --------*/
 		if(*s){
 			PutLine0(FIRST_DLINE + row,
-				 max(0, (fd->display_cols/2)-(strlen(s)/2)),
+				 max(0, (fd->display_cols/2)-((int) strlen(s)/2)),
 				 s);
 		}
 	    }
@@ -946,7 +946,7 @@ paint_folder_name(hilite, fd, index, context)
 {
     FOLDER_S *f;
 
-    if((f = folder_entry(index, context->folders))->name == NULL)
+    if((f = folder_entry(index, context->folders)) == NULL)
       return;
 
     if(hilite)

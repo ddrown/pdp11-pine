@@ -108,7 +108,7 @@ void mm_log(string, errflg)
 	if(ps_global->try_to_create) /* hide error if creating new folder  */
 	  return;
 
-	strncpy(string += 2, "Save", 4); /* replace "APPEND" with "Save" */
+	rplstr(string, 6, "Save"); /* replace "APPEND" with "Save" */
     }
 
     /*---- replace all "mailbox" with "folder" ------*/

@@ -10,7 +10,11 @@ DASHO=		-g
 
 
 CFLAGS=	 	-Dbsd -DLINUX -DPOSIX -DJOB_CONTROL -DANSI \
-		-I/usr/include/bsd
+		-I/usr/include/bsd \
+		-Wformat=2 -Wstringop-overflow=4 -Wstringop-truncation \
+		-Wrestrict -Wreturn-type -Wdangling-else \
+		-Wmisleading-indentation -Wsequence-point -Wtype-limits \
+		-Waddress -Wnonnull
 
 
 # switches for library building

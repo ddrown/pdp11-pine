@@ -756,7 +756,7 @@ decode_text(att, msgno, pc, style, display_bound)
 
     if(match == 1) {
 	strcpy(tmp_20k_buf, "    [The following text is in the \"");
-	strcat(tmp_20k_buf, param != NULL ? param->value : NULL);
+	strcat(tmp_20k_buf, param->value);
 	strcat(tmp_20k_buf, "\" character set]");
 	strcat(tmp_20k_buf, NEWLINE);
 	strcat(tmp_20k_buf, "    [Your display is set for the \"US-ASCII\" character set]");
@@ -1190,12 +1190,13 @@ scrolltool(text, title, pages, style, source, att)
 	    if(isupper(ch))
 	       ch = tolower(ch);
 
-        if(km->which == 1)
+        if(km->which == 1) {
           if(ch >= PF1 && ch <= PF12)
             ch = PF2OPF(ch);
-        else if(km->which == 2)
+        } else if(km->which == 2) {
           if(ch >= PF1 && ch <= PF12)
             ch = PF2OOPF(ch);
+        }
 
 	ch = validatekeys(ch);
 

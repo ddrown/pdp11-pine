@@ -861,7 +861,7 @@ Writechar(ch)
     register int nt;
 
     if(ps_global->in_init_seq)
-        return;
+        return(0);
 
     if(ch >= ' ') {
         putchar(ch);

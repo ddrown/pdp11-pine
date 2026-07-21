@@ -434,7 +434,7 @@ new_mail_mess(stream, folder, number, max_num)
         else
           sprintf(subject, " %s %.199s", carray[(unsigned)random()%12], 
 		                         e->subject);
-        if(from == NULL)
+        if(from[0] == '\0')
           subject[1] = toupper(subject[1]);
 
         q_status_message3(0, 2,4, "\007%s%s%s", intro, from, subject);

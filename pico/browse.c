@@ -451,7 +451,7 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 	    while(i++ < 2){		/* verify twice!! */
 		if(i == 1){
 		    if(fexist(child, "w", (long *)NULL) != FIOSUC)
-		      sprintf(s,"File is write protected! OVERRIDE", child);
+		      sprintf(s,"File \"%s\" is write protected! OVERRIDE", child);
 		    else
 		      sprintf(s, "Delete file \"%s\"", child);
 		}

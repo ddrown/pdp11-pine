@@ -1331,8 +1331,8 @@ generate_message_id(ps)
       a = 'a';
     else if(a == 'z')
       a = 'A';
-    else    
-      a = a++;
+    else
+      a++;
 
     return(id);
 }

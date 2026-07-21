@@ -317,8 +317,8 @@ forscan(int *wrapt,		/* boolean indicating search wrapped */
 	 */
 	while (curline){
 
-	    if (curline == curbp->b_linep)
-	        *wrapt = TRUE;
+		if (curline == curbp->b_linep)
+			*wrapt = TRUE;
 
 		/* save the current position in case we need to
 		   restore it on a match			*/
