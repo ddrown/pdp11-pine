@@ -977,6 +977,7 @@ Returns: 0 if OK, and 1 if the message shouldn't be sent
 Alls queues a message indicating what happened
   ---*/
 
+int
 check_addresses(e)
     ENVELOPE *e;
 {
@@ -1246,6 +1247,7 @@ call_sendmail(envelope, body)
 
   ----*/
 static
+int
 call_system(command)
     char *command;
 {
@@ -1400,6 +1402,7 @@ writing a MIME body out is complex business so we use it here.
 We must convert the network CRLF to the local new line convention, in this
 case on UNIX it's LF.
  ----*/
+int
 unix_puts(stream_x, string)
     void   *stream_x;
     char   *string;
@@ -1446,6 +1449,7 @@ AppendSendmail:
   Includes: Bcc, header, body
   overwrites existing folder without confirmation
 ----*/
+int
 append_message2(folder, env, bod, type, fcc)
     char       *folder, *fcc;
     ENVELOPE   *env;

@@ -7,6 +7,7 @@ and responses from the passwd program to be regular so we just let the user
 type at the passwd program with some screen space, hope he doesn't scroll 
 off the top and repaint when he's done.
  ----*/        
+int
 change_passwd()
 {
     char cmd_buf[100];
@@ -26,6 +27,7 @@ change_passwd()
     sleep(3);
     Raw(1);
     init_username(ps_global);
+    return(0);
 }
 
 

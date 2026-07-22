@@ -465,6 +465,7 @@ static long first_status_change = 0;  /* time of 1st change since last chk_pt */
 static long last_status_change = 0;   /* time of last change                  */
 static long check_count_ave = 10 * 10;
 
+int
 check_point(timing)
      CheckPointTime timing;
 {
@@ -600,6 +601,7 @@ Returns:  0 if there was no change
 
 Also outputs a message that the streams have died
  ----*/
+int
 streams_died()
 {
     int rv = 0, inbox = 0;

@@ -87,6 +87,7 @@ the name may be several words. The more common "addr (name)" format would not
 require commas.
   ----*/
 
+int
 build_address(to , full_to, error)
      char *to, *full_to, **error;
 {
@@ -275,6 +276,7 @@ we may decide two addresses are the same even though they are different
 a reply not to be sent to somebody because they look like they are us.
 This should be very, very rare.
  ----*/
+int
 address_is_us(a, ps)
      ADDRESS *a;
      struct pine *ps;

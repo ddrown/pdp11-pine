@@ -308,6 +308,8 @@ edinit(char bname[])
 
     wp->w_force = 0;
     wp->w_flag  = WFMODE|WFHARD;            /* Full.                */
+
+    return(0);
 }
 
 
@@ -414,7 +416,7 @@ quickexit(int f, int n)
 	}
 	bp = bp->b_bufp;			/* on to the next buffer */
     }
-    wquit(f, n);                             /* conditionally quit   */
+    return(wquit(f, n));                     /* conditionally quit   */
 }
 
 
@@ -450,6 +452,7 @@ int
 suspend_composer(int f, int n)
 {
     pico_all_done = COMP_SUSPEND;
+    return(0);
 }
 
 
@@ -576,6 +579,8 @@ func_init()
     ttrow = ttcol = HUGE;
 
     pat[0] = rpat[0] = '\0';
+
+    return(0);
 }
 
 
@@ -610,6 +615,8 @@ zottree(struct KBSTREE *nodeptr)
 	zottree(nodeptr->down);
 	free((char *) nodeptr);
     }
+
+    return(0);
 }
 #endif
 
@@ -655,6 +662,8 @@ zotedit()
     zottree(kpadseqs);
     kpadseqs = NULL;
 #endif
+
+    return(0);
 }
 
 

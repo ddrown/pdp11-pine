@@ -4309,3 +4309,131 @@ already covered by the existing composer tests).
 - **Size delta**: none -- purely a declaration relocation, no codegen
   change; `bin/pine`/`bin/pico` confirmed byte-identical before and
   after.
+
+### Tier 1 warning flags enabled and fully cleared: 196 warnings -> 0
+
+- **What it was**: TODO-pdp11.md's "Turn on Tier 1 warning flags"
+  item -- add `-Wformat=2`, `-Wstringop-overflow=4`,
+  `-Wstringop-truncation`, `-Wrestrict`, `-Wreturn-type`,
+  `-Wdangling-else`, `-Wmisleading-indentation`, `-Wsequence-point`,
+  `-Wtype-limits`, `-Waddress`, `-Wnonnull` to both `makefile.lnx`
+  `CFLAGS`, then work the resulting warning list to 0. Landing this on
+  top of a clean 0-warning baseline surfaced 196 warnings; worked
+  through them in four batches (small high-signal warnings first,
+  then format-security/extra-args, then the big
+  format-overflow/nonliteral and format= chunks, then `-Wreturn-type`
+  last since it was the largest and least bug-dense), rebuilding and
+  running the full smoketest suite after each. Ended at a clean
+  `./build clean && ./build lnx` with 0 warnings.
+- **Real bugs found and fixed, not just warnings silenced** (the
+  majority of sites across every category turned out to be genuine
+  defects, not style noise):
+  - `pine/folder.c`: `paint_folder_name()`'s NULL check on
+    `folder_entry()`'s result was written backwards --
+    `f->name == NULL` (an array, never NULL) instead of `f == NULL`
+    -- dereferencing `f` *before* the guard could ever catch the
+    out-of-range-index case it was written to protect against. Same
+    file: a `max(0, unsigned-subtraction)` clamp in `display_folder()`
+    was dead code (unsigned underflow can never compare `< 0`),
+    silently defeating a column-clamp meant to keep centered text on
+    screen.
+  - `pine/mailview.c`: a dangling-`else` made PF-key remapping for
+    keymap `which == 2` structurally unreachable (parsed nested inside
+    the `which == 1` branch instead of parallel to it) -- an entire
+    keymap's function-key handling was dead code.
+  - `pico/os_unix.c` (source for generated `os.c`/`osdep.c`):
+    `select()` called with the same `fd_set` for both `readfds` and
+    `exceptfds` (a `-Wrestrict` aliasing violation); `pico_new_mail()`
+    used the `$MAIL` environment variable directly as an `sprintf`
+    format string (a format-string vulnerability) *and* copied it
+    unbounded into a 256-byte buffer; `ttgetc()` (the core keyboard-
+    read function, wired into `term.t_getchar`) could fall off the end
+    without returning if `read()` failed for a reason other than EOF/
+    EINTR and the resulting `SIGHUP` didn't actually terminate the
+    process, leaving the caller with an undefined "character".
+  - `pico/browse.c`: four identical `sprintf(child, "%s%c%s", dname,
+    SEP, fname)` call sites could overflow `child[NLINE]` browsing a
+    deep enough directory tree; replaced with one static
+    `build_child_path()` helper that truncates rather than overflows.
+  - `pine/newmail.c`: a `%.199s` precision bound on the mail-subject
+    line didn't account for the surrounding `" %s "` preposition-word
+    literal, actually overflowing `subject[200]` by up to 16 bytes;
+    separately, `if(from == NULL)` tested a fixed array (always
+    false) where `from[0] == '\0'` was clearly meant.
+  - `pine/log.c`: `strncpy(string += 2, "Save", 4)` replaced the wrong
+    substring of an "APPEND ..." message (produced `"APSave..."`
+    instead of `"Save..."`); switched to the file's own `rplstr()`
+    in-place-splice helper, used one block below for the same kind of
+    substitution.
+  - `pine/reply.c`: `a = a++;` was undefined behavior (two unsequenced
+    modifications of `a`); fixed to plain `a++`.
+  - Numerous `dprint()`/`sprintf()` format-vs-argument mismatches
+    across `mailcmd.c`, `mailindx.c`, `newmail.c`, `send.c`,
+    `status.c`, `strings.c`, `ttyin.c`, `mailbox.c`: pointers
+    (`MAILSTREAM *`, `char *`, `int *`) printed with `%x` (silently
+    truncated to 32 bits and technically UB via the varargs mechanism)
+    switched to `%p`; `long` fields printed with `%d` (would misread
+    the value and, on stack-passing ABIs, could misalign subsequent
+    varargs) switched to `%ld`, including one literal stray `l` before
+    a `%d` (`"cur:l%d"`) that was clearly meant to be `%ld`;
+    `send.c`'s message-ID generator cast `random()`/`getpid()` to
+    `(long)` to match its `%ld` format (`random()` has no prototype in
+    scope under `-ansi`, so the compiler otherwise assumes `int`).
+  - Several more `-Wformat-overflow=` sites where a scratch buffer was
+    sized for the "realistic" case but not the worst case a `%ld` of a
+    full-width `long` could produce (`pine/reply.c`'s message-ID
+    buffer, `pine/send.c`'s sequence buffer, `pine/strings.c`'s
+    `byte_string()`/`comatose()` buffers, `pine/mailcmd.c`'s two
+    prompt buffers) -- widened with margin or bounded with a computed
+    `%.Ns` precision matching this codebase's existing convention.
+    `pine/osdep/fltrname` (source for generated `os.c`/`osdep.c`):
+    the "illegal filename character" error message could overflow
+    `error[100]` for a long enough filename -- resized off `MAXPATH`
+    like the `ill_file` buffer it echoes back, rather than truncating
+    the filename shown to the user.
+- **The 17 `-Wformat-nonliteral` sites** all turned out to be the same
+  established, intentional pattern -- a family of fixed-arity
+  "printf-style" wrapper functions (`q_status_message1..7`,
+  `PutLine1..5`, `panic1`, `context_apply`, plus two
+  `char *fmt = "literal"` locals in `screen.c`) where every real call
+  site passes a compile-time literal, verified by grep. Suppressed
+  with scoped `#pragma GCC diagnostic ignored "-Wformat-nonliteral"`
+  around each, with a comment explaining why, rather than restructure
+  working code or convert them to true `<stdarg.h>` variadics (a
+  bigger change than this pass warranted).
+- **The 95 `-Wreturn-type` warnings** split cleanly into two kinds:
+  55 were `-Wold-style-definition`'s sibling issue, K&R function
+  *definitions* with no declared return type at all ("return type
+  defaults to `int`") -- purely mechanical, verified each still
+  actually returns plain `int` values before adding the keyword,
+  including 12 in `pine/osdep/`-family fragments (`writ_dir`,
+  `creatdir`, `rename`, `tempnam`, `hostname`, `jobcntrl` x2,
+  `chnge_pw`, `mimedisp`, `fgetpos` x2) requiring edits to the real
+  fragment source rather than generated `os.c`. The remaining 40 were
+  genuine "control reaches end of non-void function" -- functions
+  falling off the end without a `return`. Checked each one's callers
+  before picking a fallthrough value: most (all of `pico/tcap.c`'s 13
+  termcap-output wrappers, several `pico.c`/`browse.c`/`display.c`
+  helpers) are pure side-effect functions whose `int` return has never
+  been read by any caller, so a plain `return(0)` was correct and
+  safe; a few needed real values -- `pico.c`'s `quickexit()` is
+  registered via `rebindfunc(wquit, quickexit)` as a drop-in
+  replacement for `wquit()` in the keybinding dispatch table (which
+  *does* propagate command-function return values as the overall
+  command status), so it now does `return(wquit(f, n))` instead of
+  discarding wquit's result; `basic.c`/`bind.c`/`word.c`'s `gotobop()`/
+  `whelp()`/`fillpara()` are keybound `int cmd(int f, int n)` commands
+  whose return is propagated by `pico.c`'s `execute()` to the same
+  dispatch mechanism, so they now return `TRUE` (matching this
+  codebase's established command-success convention) instead of 0;
+  `screen.c`'s `equalbits()` had a `default: panic(...)` case (`panic()`
+  always calls `exit()`, confirmed by reading it) needing only a
+  trailing `return(0)` to satisfy the compiler for the theoretically-
+  unreachable fallthrough.
+- **Verified**: full `./build clean && ./build lnx` after every batch,
+  ending 0 warnings; full smoketest suite (26/26) green throughout,
+  not just at the end.
+- **Size delta**: not measured separately from the surrounding cuts in
+  this session; the fixes are almost entirely logic corrections and a
+  handful of widened stack buffers (tens of bytes each), not
+  size-reduction work in themselves.

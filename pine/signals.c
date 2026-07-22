@@ -229,6 +229,7 @@ quit_signal()
 
 Not much to do. Rely on periodic mail file check pointing.
   ----------------------------------------------------------------------*/
+int
 fast_clean_up()
 {
 #ifndef	DOS
@@ -249,8 +250,10 @@ fast_clean_up()
 
 #ifdef DEBUG
     fclose(debugfile);
-#endif    
+#endif
 #endif	/* !DOS */
+
+    return(0);
 }
 
 

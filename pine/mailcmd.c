@@ -764,6 +764,7 @@ do_sortindex:
    This does the prompting for the folder name to save to, possibly calling 
  up the folder display for selection of folder by user.                 
  ----*/
+int
 save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
      int           screen_line, *screen_mangled ;
      long          index_sorted_msgno;
@@ -1042,6 +1043,7 @@ save(folder, context, message, index_sorted_msgno)
 
  Result: 
  ----*/
+int
 export_message(q_line, sorted_msgno)
      int  q_line;
      long sorted_msgno;
@@ -1441,6 +1443,7 @@ broach_folder(qline, allow_list, context)
   it will be actually opened.
   ----*/
 
+int
 do_broach_folder(new_folder, new_context) 
      char      *new_folder;
      CONTEXT_S *new_context;

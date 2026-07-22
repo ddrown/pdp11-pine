@@ -3,6 +3,7 @@
      could be some type of fake job control.  It doesn't have to be
      real BSD-style job control.
   ----*/
+int
 have_job_control()
 {
     return 1;
@@ -12,9 +13,11 @@ have_job_control()
 /*----------------------------------------------------------------------
     If we don't have job control, this routine is never called.
   ----*/
+int
 stop_process()
 {
-    kill(0, SIGSTOP); 
+    kill(0, SIGSTOP);
+    return(0);
 }
 
 

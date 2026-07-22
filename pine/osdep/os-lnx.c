@@ -167,6 +167,7 @@ file_size(file)
                        2 if it is not a directory
                        3 it doesn't exist.
   ----*/
+int
 is_writable_dir(dir)
     char *dir;
 {
@@ -196,6 +197,7 @@ is_writable_dir(dir)
  Result: Directory is created.  Returns 0 on success, else -1 on error
 	 and errno is valid.
   ----*/
+int
 create_mail_dir(dir)
     char *dir;
 {
@@ -219,6 +221,7 @@ create_mail_dir(dir)
  Result: File is renamed.  Returns 0 on success, else -1 on error
 	 and errno is valid.
   ----*/
+int
 rename_file(tmpfname, fname)
     char *tmpfname, *fname;
 {
@@ -609,7 +612,7 @@ done:
 static char sccsid[] = "@(#)mktemp.c	5.7 (Berkeley) 6/27/88";
 #endif /* LIBC_SCCS and not lint */
 
-static
+static int
 _gettemp(as)
 	char	*as;
 {
@@ -693,7 +696,8 @@ coredump()
  Result: returns 0 if the hostname is correctly set,
          -1 if not (and errno is set).
  ----*/
-hostname(hostname,size) 
+int
+hostname(hostname,size)
     char *hostname;
     int size;
 {
@@ -787,6 +791,7 @@ canonical_name(host)
      could be some type of fake job control.  It doesn't have to be
      real BSD-style job control.
   ----*/
+int
 have_job_control()
 {
     return 1;
@@ -796,9 +801,11 @@ have_job_control()
 /*----------------------------------------------------------------------
     If we don't have job control, this routine is never called.
   ----*/
+int
 stop_process()
 {
-    kill(0, SIGSTOP); 
+    kill(0, SIGSTOP);
+    return(0);
 }
 
 
@@ -942,6 +949,7 @@ and responses from the passwd program to be regular so we just let the user
 type at the passwd program with some screen space, hope he doesn't scroll 
 off the top and repaint when he's done.
  ----*/        
+int
 change_passwd()
 {
     char cmd_buf[100];
@@ -961,6 +969,7 @@ change_passwd()
     sleep(3);
     Raw(1);
     init_username(ps_global);
+    return(0);
 }
 
 
@@ -974,6 +983,7 @@ change_passwd()
 
  Result: returns 1 if the type is displayable, 0 otherwise.
  ----*/
+int
 mime_can_display(type, subtype, params)
     int type;
     char *subtype;
@@ -1023,6 +1033,7 @@ gf_play_sound(f, c, flg)
 /*----------------------------------------------------------------------
    This is just a call to the ANSI C fgetpos function.
   ----*/
+int
 fget_pos(stream, ptr)
 FILE *stream;
 fpos_t *ptr;
@@ -1034,6 +1045,7 @@ fpos_t *ptr;
 /*----------------------------------------------------------------------
    This is just a call to the ANSI C fsetpos function.
   ----*/
+int
 fset_pos(stream, ptr)
 FILE *stream;
 fpos_t *ptr;

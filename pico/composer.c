@@ -1395,6 +1395,8 @@ ComposerHelp(int level)
     }
     sprintf(s,"Help for Composer %s Field", headents[level].name);
     (*Pmaster->helper)(headents[level].help, s, 1);
+
+    return(TRUE);
 }
 
 

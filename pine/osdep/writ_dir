@@ -8,6 +8,7 @@
                        2 if it is not a directory
                        3 it doesn't exist.
   ----*/
+int
 is_writable_dir(dir)
     char *dir;
 {

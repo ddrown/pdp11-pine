@@ -1366,6 +1366,8 @@ BrowserKeys()
     
     if(!(gmode&MDFKEY))
       HelpKeyNames = oldkeys;			/* retore HelpKeyNames */
+
+    return(0);
 }
 
 
@@ -1384,6 +1386,8 @@ layoutcells(struct bmaster *mp)
       i++;					/* like brute force! */
 
     mp->fpl = i - 1;				/* files per line */
+
+    return(0);
 }
 
 
@@ -1462,6 +1466,8 @@ zotfcells(struct fcell *hp)
 	tp->next = NULL;
 	free((char *) tp);
     }
+
+    return(0);
 }
 
 
@@ -1475,6 +1481,8 @@ zotmaster(struct bmaster **mp)
     free((char *)(*mp)->names);			/* free file names  */
     free((char *)*mp);				/* free master      */
     *mp = NULL;					/* make double sure */
+
+    return(0);
 }
 
 

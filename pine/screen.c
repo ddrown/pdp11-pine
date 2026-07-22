@@ -957,6 +957,7 @@ update_titlebar_page(new_page)
 }
 
 
+int
 update_titlebar_status(mc)
     MESSAGECACHE *mc;
 {
@@ -1052,5 +1053,6 @@ equalbits(bm1, bm2, which)
 
       default:
 	panic("Can't happen in equalbits()\n");
+	return(0);
     }
 }

@@ -165,6 +165,7 @@ removing_trailing_white_space(string)
 
  Result: integer indicating which is greater
   ---*/
+int
 strucmp(o, r)
      register char *r, *o;
 {
@@ -193,6 +194,7 @@ strucmp(o, r)
  Result: integer indicating which is greater
    
   ----*/
+int
 struncmp(o, r, n)
      register char *r, *o;
      register int   n;
@@ -345,6 +347,7 @@ week_abbrev(week_day)
 }
 
 
+int
 days_in_month(month, year)
      int month, year;
 {
@@ -637,6 +640,7 @@ convert_to_gmt(d)
 
 /*----------------------------------------------------------------------
   ----*/
+int
 compare_dates(d1, d2)
      struct date *d1, *d2;
 {

@@ -1,6 +1,7 @@
 /*----------------------------------------------------------------------
    This is just a call to the ANSI C fgetpos function.
   ----*/
+int
 fget_pos(stream, ptr)
 FILE *stream;
 fpos_t *ptr;
@@ -12,6 +13,7 @@ fpos_t *ptr;
 /*----------------------------------------------------------------------
    This is just a call to the ANSI C fsetpos function.
   ----*/
+int
 fset_pos(stream, ptr)
 FILE *stream;
 fpos_t *ptr;

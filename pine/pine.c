@@ -180,6 +180,7 @@ static struct key_menu main_keymenu =
  otherwise loop executing the various screens in Pine.
   ----*/
 
+int
 main(argc, argv)
      int   argc;
      char *argv[];
@@ -1331,6 +1332,7 @@ quit_screen(pine_state)
 
  Result: returns number of messages deleted on that stream
   ----------------------------------------------------------------------*/
+int
 count_deleted(stream)
      MAILSTREAM *stream;
 {
@@ -1360,6 +1362,7 @@ count_deleted(stream)
  Bugs: This and the function above should probably be combined into a single
 	more general function.
   ----------------------------------------------------------------------*/
+int
 count_seen_not_deleted(stream)
      MAILSTREAM *stream;
 {

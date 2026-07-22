@@ -526,4 +526,6 @@ fillpara(int f, int n)	/* deFault flag and Numeric argument */
 
 	/* and add a last newline for the end of our new paragraph */
 	lnewline();
+
+	return(TRUE);
 }
