@@ -23,6 +23,7 @@ import os
 import subprocess
 import sys
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(TEST_DIR)
@@ -116,6 +117,27 @@ def report_coverage():
           "again before taking PDP-11 size measurements.")
 
 
+def _run_one(name):
+    """Run a single test module by name. Returns (name, ok, output),
+    where output is "" on success or the formatted traceback on
+    failure -- captured as a string rather than printed directly, so
+    concurrent callers (see main()'s thread pool) can't interleave
+    partial output from different tests.
+    """
+    try:
+        module = importlib.import_module(name)
+        module.run()
+    except Exception:
+        return name, False, traceback.format_exc()
+    return name, True, ""
+
+
+def _report(name, ok, output):
+    print("%-40s%s" % (name, "ok" if ok else "FAIL"))
+    if not ok:
+        sys.stdout.write(output)
+
+
 def main():
     args = sys.argv[1:]
     coverage = "--coverage" in args
@@ -131,18 +153,24 @@ def main():
         return 1
 
     failures = []
-    for name in names:
-        sys.stdout.write("%-40s" % name)
-        sys.stdout.flush()
-        try:
-            module = importlib.import_module(name)
-            module.run()
-        except Exception:
-            print("FAIL")
-            traceback.print_exc()
-            failures.append(name)
-        else:
-            print("ok")
+    if coverage:
+        # Run serially: gcov's .gcda counter files accumulate per
+        # source file across every bin/pine invocation in a run, and
+        # concurrent processes writing them isn't worth the risk in
+        # this maintenance/debug-only mode.
+        for name in names:
+            name, ok, output = _run_one(name)
+            _report(name, ok, output)
+            if not ok:
+                failures.append(name)
+    else:
+        with ThreadPoolExecutor(max_workers=min(len(names), os.cpu_count() or 4)) as pool:
+            futures = [pool.submit(_run_one, name) for name in names]
+            for future in as_completed(futures):
+                name, ok, output = future.result()
+                _report(name, ok, output)
+                if not ok:
+                    failures.append(name)
 
     print()
     print("%d/%d passed" % (len(names) - len(failures), len(names)))

@@ -24,6 +24,14 @@ PINE_BIN = os.path.join(REPO_ROOT, "bin", "pine")
 # so a test can't override it just by adjusting PATH/env.
 REAL_SENDMAIL_PATH = "/usr/lib/sendmail"
 
+# Must match MAILFILE in imap/ANSI/c-client/os_lnx.h. A Session started
+# without an explicit mbox (mbox=None) has no -f flag, so pine opens the
+# real system INBOX: bezerk_file()'s INBOX case (imap/ANSI/c-client/
+# bezerk.c) resolves it via sprintf(dst, MAILFILE, myusername()), and
+# myusername() is getpwuid(geteuid()) -- unlike every other mail path in
+# this harness, it isn't scoped by $HOME. See _isolated_inbox_binds().
+REAL_MAILDIR = "/var/spool/mail"
+
 # Generous default: pine paces its output with delay-padding bytes, so a
 # response to a keystroke can take a couple of seconds to fully arrive.
 DEFAULT_TIMEOUT = 10
@@ -117,9 +125,15 @@ class Session:
             with open(os.path.join(self.home, "mail", "postponed-mail"), "w") as f:
                 f.write(postponed_mail)
 
-        spawn_cmd, spawn_argv = PINE_BIN, argv
+        bwrap_binds = []
         if sendmail_stub:
-            spawn_cmd, spawn_argv = self._wrap_with_sendmail_stub(argv)
+            bwrap_binds += self._sendmail_stub_binds()
+        if mbox is None:
+            bwrap_binds += self._isolated_inbox_binds()
+
+        spawn_cmd, spawn_argv = PINE_BIN, argv
+        if bwrap_binds:
+            spawn_cmd, spawn_argv = self._wrap_with_bwrap(bwrap_binds, argv)
 
         self.child = pexpect.spawn(
             spawn_cmd, spawn_argv, cwd=REPO_ROOT, env=env,
@@ -134,14 +148,13 @@ class Session:
             self.send("\r")
             self.expect("MAIN MENU")
 
-    def _wrap_with_sendmail_stub(self, argv):
-        """Run pine in a private mount namespace (bwrap) with a stub
-        script bind-mounted over the real sendmail binary, so a test can
-        drive an actual Send (through call_sendmail()'s real shell-out,
-        not just the no-recipient Fcc-only path) without risking real
-        outbound mail -- this dev box has a live Postfix wired up to
-        REAL_SENDMAIL_PATH, so a real Send here would otherwise hand it
-        an actual outbound message.
+    def _sendmail_stub_binds(self):
+        """Bind-mount args for a stub script over the real sendmail
+        binary, so a test can drive an actual Send (through
+        call_sendmail()'s real shell-out, not just the no-recipient
+        Fcc-only path) without risking real outbound mail -- this dev
+        box has a live Postfix wired up to REAL_SENDMAIL_PATH, so a real
+        Send here would otherwise hand it an actual outbound message.
 
         REAL_SENDMAIL_PATH is usually a symlink chain (e.g.
         /usr/lib/sendmail -> .../mta-sendmail -> .../sendmail.postfix ->
@@ -149,12 +162,6 @@ class Session:
         resolved regular-file target, binding onto the top-level symlink
         path itself fails ("Can't create file").
         """
-        if not shutil.which("bwrap"):
-            raise SmoketestFailure(
-                "bwrap (bubblewrap) not found -- required for "
-                "sendmail_stub=True so a test can drive a real Send "
-                "without risking real outbound mail")
-
         real_target = os.path.realpath(REAL_SENDMAIL_PATH)
 
         self.sendmail_log = os.path.join(self.home, "fake-sendmail.log")
@@ -168,11 +175,44 @@ class Session:
             )
         os.chmod(stub_path, 0o755)
 
-        bwrap_argv = [
-            "--dev-bind", "/", "/",
-            "--bind", stub_path, real_target,
-            "--", PINE_BIN,
-        ] + argv
+        return ["--bind", stub_path, real_target]
+
+    def _isolated_inbox_binds(self):
+        """Bind-mount args giving this Session a private view of the
+        real system mailbox directory and of /tmp, so opening the real
+        INBOX (see REAL_MAILDIR's comment) doesn't race other concurrent
+        Sessions -- or a real user's real mail -- for the same c-client
+        lock files. bezerk.c takes two separate locks when opening a
+        mailbox, both derived from the real, unscoped INBOX path:
+        bezerk_open() flocks a file under /tmp/.<mailbox-path-with-
+        slashes-backslashed>, and bezerk_lock() (called via
+        bezerk_parse()) takes a traditional dotlock at
+        <mailbox-path>.lock, right next to the real spool file. Emptying
+        both /tmp and REAL_MAILDIR via fresh tmpfs mounts covers both,
+        without needing to reproduce bezerk.c's lock-name escaping here.
+        A tmpfs'd /tmp also hides this Session's own scratch $HOME
+        (tempfile.mkdtemp() defaults to under /tmp), so it's rebound
+        back in explicitly.
+        """
+        return [
+            "--tmpfs", "/tmp",
+            "--bind", self.home, self.home,
+            "--tmpfs", REAL_MAILDIR,
+        ]
+
+    def _wrap_with_bwrap(self, binds, argv):
+        """Run pine in a private mount namespace (bwrap), starting from
+        a full view of the real filesystem and layering the given
+        --bind/--tmpfs args (see _sendmail_stub_binds()/
+        _isolated_inbox_binds()) on top.
+        """
+        if not shutil.which("bwrap"):
+            raise SmoketestFailure(
+                "bwrap (bubblewrap) not found -- required for "
+                "sendmail_stub=True and/or Session(mbox=None)'s "
+                "real-INBOX isolation")
+
+        bwrap_argv = ["--dev-bind", "/", "/"] + binds + ["--", PINE_BIN] + argv
         return "bwrap", bwrap_argv
 
     def expect(self, pattern, timeout=None):
