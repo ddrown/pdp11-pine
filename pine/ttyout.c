@@ -739,6 +739,7 @@ EndBold()
 -----*/
 static int __t, __b;
 
+int
 BeginScroll(top, bottom)
      int top, bottom;
 {
@@ -795,6 +796,7 @@ EndScroll()
 
  0,0 is the upper left
  -----*/
+int
 ScrollRegion(lines)
     int lines;
 {
@@ -847,6 +849,7 @@ ScrollRegion(lines)
  Result: character output
          cursor position variables updated
   ----*/
+int
 Writechar(ch)
      register unsigned int ch;
 {
@@ -1132,6 +1135,7 @@ PutLine5(x, y, line, arg1, arg2, arg3, arg4, arg5)
  Result:  String is output to screen
           Returns column number line is output on
   ----------------------------------------------------------------------*/
+int
 Centerline(line, string)
      int line;
      char *string;

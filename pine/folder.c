@@ -1647,6 +1647,7 @@ pretty_fn(folder)
   handled outside this function for now using find_folders_in_context().
 
     ----*/
+int
 folder_exists(c_string, file)
     char *c_string, *file;
 {
@@ -1745,6 +1746,7 @@ init_folders()
 
 
 #ifdef	DEBUG
+int
 dump_contexts(fp)
     FILE *fp;
 {
@@ -1760,6 +1762,8 @@ dump_contexts(fp)
 	for(i = 0; i < folder_total(c->folders); i++)
 	  fprintf(fp, "  %d) %s\n", i + 1, folder_entry(i,c->folders)->name);
     }
+
+    return(0);
 }
 #endif
 
@@ -1958,6 +1962,7 @@ free_folders_in_context(cntxt)
  *   Result: returns 0 if the folder doesn't have a unique completetion
  *                   1 if so, and replaces name with completion
  */
+int
 folder_complete(context, name)
     CONTEXT_S *context;
     char      *name;

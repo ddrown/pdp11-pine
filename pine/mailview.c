@@ -795,6 +795,7 @@ decode_text(att, msgno, pc, style, display_bound)
 		 The problem was that we were sometimes preventing people
 		 from seeing text which they could at least read partially.)
   ----*/
+int
 match_charset(text_char_set)
      char *text_char_set;
 {
@@ -1490,6 +1491,7 @@ unknown:
 
  ---*/
 
+int
 search_text(q_line, start_line)
      int            q_line, start_line;
 {

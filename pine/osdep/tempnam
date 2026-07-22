@@ -83,7 +83,7 @@ done:
 static char sccsid[] = "@(#)mktemp.c	5.7 (Berkeley) 6/27/88";
 #endif /* LIBC_SCCS and not lint */
 
-static
+static int
 _gettemp(as)
 	char	*as;
 {

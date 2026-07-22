@@ -314,6 +314,8 @@ tcapopen()
 	if (CS)
 	  putpad(tgoto(CS, term.t_nrow, 0)) ;
     }
+
+    return(0);
 }
 
 
@@ -329,6 +331,7 @@ tcapclose()
     }
 
     ttclose();
+    return(0);
 }
 
 
@@ -393,6 +396,8 @@ kpinsert(char *kstr, int kval)
     
     if(temp != NULL)
       temp->func = kval;
+
+    return(0);
 }
 
 
@@ -413,6 +418,8 @@ tcapinsert(register char ch)
 	ttputc(ch);
 	putpad(EI);
     }
+
+    return(0);
 }
 
 
@@ -429,6 +436,8 @@ tcapdelete()
 	putpad(DC);
 	putpad(ED);
     }
+
+    return(0);
 }
 
 
@@ -550,6 +559,7 @@ int
 tcapmove(int row, int col)
 {
     putpad(tgoto(CM, col, row));
+    return(0);
 }
 
 
@@ -557,6 +567,7 @@ int
 tcapeeol()
 {
     putpad(CE);
+    return(0);
 }
 
 
@@ -564,6 +575,7 @@ int
 tcapeeop()
 {
     putpad(CL);
+    return(0);
 }
 
 
@@ -579,11 +591,13 @@ tcaprev(int state)	/* FALSE = normal video, TRUE = reverse video */
     if(cstate = state){		/* remember last setting */
 	if (SO != NULL)
 	  putpad(SO);
-    } 
+    }
     else{
 	if (SE != NULL)
 	  putpad(SE);
     }
+
+    return(0);
 }
 
 
@@ -591,12 +605,14 @@ int
 tcapbeep()
 {
     ttputc(BEL);
+    return(0);
 }
 
 int
 ttputc_i(int c)
 {
     ttputc(c);
+    return(0);
 }
 
 
@@ -604,6 +620,7 @@ int
 putpad(char *str)
 {
     tputs(str, 1, ttputc_i);
+    return(0);
 }
 
 
@@ -611,6 +628,7 @@ int
 putnpad(char *str, int n)
 {
     tputs(str, n, ttputc_i);
+    return(0);
 }
 
 #else

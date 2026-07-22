@@ -697,6 +697,8 @@ out:
 
     movecursor(currow, curcol - lbound);
     (*term.t_flush)();
+
+    return(0);
 }
 
 /* updext - update the extended line which the cursor is currently
@@ -850,6 +852,8 @@ updateline(int row, CELL vline[], CELL pline[], short *flags)
 	  *cp2++ = *cp1++;
     }
     *flags &= ~VFCHG;			/* flag this line is changed */
+
+    return(0);
 }
 
 
@@ -1785,6 +1789,8 @@ showCompTitle()
 	movecursor(COMPOSER_TITLE_LINE + 1, 0);
 	peeol();
     }
+
+    return(1);
 }
 
 

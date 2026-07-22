@@ -6,6 +6,7 @@
  Result: Directory is created.  Returns 0 on success, else -1 on error
 	 and errno is valid.
   ----*/
+int
 create_mail_dir(dir)
     char *dir;
 {

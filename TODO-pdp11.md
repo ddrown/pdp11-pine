@@ -10,42 +10,6 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-### Turn on Tier 1 warning flags: format-string and buffer/overlap checks
-
-- [ ] Now that the build is a clean 0-warning baseline, add the
-      warning flags that hit closest to this project's standing
-      buffer-overflow audit, since they're static and free: `-Wformat=2`,
-      `-Wstringop-overflow=4`, `-Wstringop-truncation`, `-Wrestrict`,
-      `-Wreturn-type`, `-Wdangling-else`, `-Wmisleading-indentation`,
-      `-Wsequence-point`, `-Wtype-limits`, `-Waddress`, `-Wnonnull`.
-      Trial-compiled every `.c` file standalone with `-fsyntax-only`
-      (flags not yet added to either makefile) to size this up without
-      touching the real build:
-      - `pico/*.c`: 2x `-Wrestrict` (overlapping-argument UB, e.g.
-        `strcpy`/`memcpy`-family calls with aliasing src/dst -- exactly
-        the class of bug the manual `sprintf`/`strcat` audit is
-        looking for), 2x `-Wformat-security`, 1x `-Wformat-extra-args`,
-        1x `-Wreturn-type`, 1x `-Wdangling-else`, 2x
-        `-Wmisleading-indentation`.
-      - `pine/*.c`: 57x `-Wreturn-type`, 51x `-Wformat=`, 17x
-        `-Wformat-nonliteral`, 1x each of `-Wformat-security`,
-        `-Wformat-extra-args`, `-Wdangling-else`, `-Wsequence-point`,
-        `-Wtype-limits`, `-Wnonnull`, 2x `-Waddress`. Caveat: pine's
-        `.c` files all pull in shared headers (`headers.h` etc.) via
-        one `#include`, so a single warning-triggering declaration in
-        a shared header is counted once per translation unit that
-        includes it -- the real number of distinct fix sites is
-        smaller than the raw per-file count above; re-count post-fix
-        by unique file:line rather than raw occurrences.
-      **Proposed shape**: add the flag list above to both
-      `pico/makefile.lnx`'s and `pine/makefile.lnx`'s `CFLAGS`, then
-      work the resulting warning list to 0 following the same
-      verification discipline as the just-finished warnings sweep
-      (rebuild, confirm each fix against the actual bug it's flagging
-      rather than blanket-suppressing, full smoketest run, before/after
-      warning count). Do this tier before Tier 2/3 below since it's
-      the highest bug-density, lowest-noise set.
-
 ### Turn on Tier 2 warning flags: sign-compare, shadow, strict-prototypes
 
 - [ ] Follow-on to Tier 1 above, once that's landed and 0-warning

@@ -7,6 +7,7 @@
 
  Result: returns 1 if the type is displayable, 0 otherwise.
  ----*/
+int
 mime_can_display(type, subtype, params)
     int type;
     char *subtype;

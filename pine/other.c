@@ -75,6 +75,7 @@ static void redraw_klocked_body();
   Result: keyboard is locked until user gives password
   ---*/
 
+int
 lock_keyboard()
 {
     struct pine *ps = ps_global;

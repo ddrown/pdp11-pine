@@ -364,6 +364,8 @@ readbuf(char **buf)
 
 	bp->b_dotp = bp->b_linep;
 	bp->b_doto = 0;
+
+	return(0);
 }
 
 

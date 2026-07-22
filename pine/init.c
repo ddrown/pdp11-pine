@@ -213,10 +213,12 @@ static struct variable variables[] = {
 };
 
 
+int
 init_init_vars(ps)
      struct pine *ps;
 {
     ps->vars = variables;
+    return(0);
 }
 
     
@@ -894,6 +896,7 @@ char *linein, *lineout;
           returns 0 on success, -1 if not.
   ----*/
 
+int
 init_username(ps)
      struct pine *ps;
 {
@@ -1023,6 +1026,7 @@ the "user-domain" variable in pine.conf.  To set the domain name for an
 individual user, set the "user-domain" variable in his .pinerc.
 The .pinerc setting overrides any other setting.
  ----*/
+int
 init_hostname(ps)
      struct pine *ps;
 {
@@ -1208,6 +1212,7 @@ decode_sort(ps, sort_spec)
 
  The vars data structure is updated; the change does not persist to disk.
  ----*/
+int
 set_variable(var, value)
      int   var;
      char *value;
@@ -1242,6 +1247,7 @@ set_variable(var, value)
 
  The vars data structure is updated; the change does not persist to disk.
  ----*/
+int
 set_variable_list(var, lvalue)
     int    var;
     char **lvalue;
@@ -1296,6 +1302,7 @@ set_variable_list(var, lvalue)
   Result: returns 0 if it exists or it is created and all is well
                   1 if it is missing and can't be created.
   ----*/
+int
 init_mail_dir(dir)
      char *dir;
 {

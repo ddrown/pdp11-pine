@@ -105,6 +105,7 @@ static int            _raw_lmode,   _original_lmode;
 Some file descriptor voodoo to allow for pipes across vforks. See 
 open_mailer for details.
   ----------------------------------------------------------------------*/
+int
 init_tty_driver(ps)
      struct pine *ps;
 {
@@ -144,6 +145,7 @@ end_tty_driver(ps)
   Result: returns 0 if successful and -1 if not.
   ----*/
 
+int
 Raw(state)
 int state;
 {
@@ -907,6 +909,7 @@ This allows near full weemacs style editing in the line
    ^D delete
 ----------------------------------------------------------------------*/
 
+int
 optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
                  prompt, escape_list, help, disallow_cancel)
      char       *string, *prompt;
@@ -1128,11 +1131,11 @@ optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
 
             /* Make string so it will fit */
             kb = cpystr(kill_buffer);
-            dprint(2, (debugfile, "Undelete: %d %d\n", strlen(string), field_len));
-            if(strlen(kb) + strlen(string) > field_len) 
+            dprint(2, (debugfile, "Undelete: %d %d\n", (int) strlen(string), field_len));
+            if(strlen(kb) + strlen(string) > field_len)
                 kb[field_len - strlen(string)] = '\0';
-            dprint(2, (debugfile, "Undelete: %d %d\n", field_len - strlen(string),
-                       strlen(kb)));
+            dprint(2, (debugfile, "Undelete: %d %d\n", (int) (field_len - strlen(string)),
+                       (int) strlen(kb)));
             if(string[field_pos] == '\0') {
                 /*--- adding to the end of the string ----*/
                 for(k = kb; *k; k++)
@@ -1422,6 +1425,7 @@ line_paint(offset, passwd)
  Result:  A valid command is returned, or a well know bad command is returned.
  
  ---*/
+int
 validatekeys(ch)
      int  ch;
 {

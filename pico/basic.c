@@ -319,6 +319,8 @@ gotobop(int f, int n)	/* default Flag & Numeric argument */
     }
 
     curwp->w_flag |= WFMOVE;	/* force screen update */
+
+    return(TRUE);
 }
 
 

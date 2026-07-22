@@ -954,6 +954,7 @@ Returns: 0 if OK, and 1 if the message shouldn't be sent
 Alls queues a message indicating what happened
   ---*/
 
+int
 check_addresses(e)
     ENVELOPE *e;
 {
@@ -1223,6 +1224,7 @@ call_sendmail(envelope, body)
 
   ----*/
 static
+int
 call_system(command)
     char *command;
 {
@@ -1322,11 +1324,11 @@ strings2outgoing(env, bod, to, cc, bcc)
     rfc822_parse_adrlist(&(env->to), to, maildomain);
 
     if(env->to != NULL) {
-       dprint(9, (debugfile, "to->personal %x\n", env->to->personal));
-       dprint(9, (debugfile, "to->route_list %x\n", env->to->adl));
-       dprint(9, (debugfile, "to->mailbox %x\n", env->to->mailbox));
-       dprint(9, (debugfile, "to->host %x\n", env->to->host));
-       dprint(9, (debugfile, "to->next %x\n", env->to->next));
+       dprint(9, (debugfile, "to->personal %p\n", env->to->personal));
+       dprint(9, (debugfile, "to->route_list %p\n", env->to->adl));
+       dprint(9, (debugfile, "to->mailbox %p\n", env->to->mailbox));
+       dprint(9, (debugfile, "to->host %p\n", env->to->host));
+       dprint(9, (debugfile, "to->next %p\n", env->to->next));
        dprint(4, (debugfile, "cannonized To \"%s\"\n",
                 addr_list_string(env->to, 1)));
     }
@@ -1377,6 +1379,7 @@ writing a MIME body out is complex business so we use it here.
 We must convert the network CRLF to the local new line convention, in this
 case on UNIX it's LF.
  ----*/
+int
 unix_puts(stream_x, string)
     void   *stream_x;
     char   *string;
@@ -1423,6 +1426,7 @@ AppendSendmail:
   Includes: Bcc, header, body
   overwrites existing folder without confirmation
 ----*/
+int
 append_message2(folder, env, bod, type, fcc)
     char       *folder, *fcc;
     ENVELOPE   *env;
@@ -1771,8 +1775,8 @@ pine_encode_body (env,body)
   case TYPEMULTIPART:		/* multi-part */
     if (!body->parameter) {	/* cookie not set up yet? */
       char tmp[MAILTMPLEN];	/* make cookie not in BASE64 or QUOTEPRINT*/
-      sprintf (tmp,"%ld-%ld-%ld:#%ld",gethostid (),random (),time (0),
-	       getpid ());
+      sprintf (tmp,"%ld-%ld-%ld:#%ld",gethostid (),(long) random (),time (0),
+	       (long) getpid ());
       body->parameter = mail_newbody_parameter ();
       body->parameter->attribute = cpystr ("BOUNDARY");
       body->parameter->value = cpystr (tmp);

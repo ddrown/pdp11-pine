@@ -108,7 +108,7 @@ new_mail(cursor_moved, force, time_for_check_point)
     long          *old_sort;
 #endif
 
-    dprint(9, (debugfile, "new mail called (%x %d %d)\n",
+    dprint(9, (debugfile, "new mail called (%p %d %d)\n",
                cursor_moved, force, time_for_check_point));
     pine_state = ps_global;  /*  this gets called out of the composer which
                               *  doesn't know about pine_state
@@ -184,7 +184,7 @@ new_mail(cursor_moved, force, time_for_check_point)
       -------------------------------------------------------------*/
     if(pine_state->mail_box_changed) {
         dprint(7, (debugfile,
-        "New mail, %s,  new_mail_count:%d  expunge count:%d,  max_msgno:%d\n",
+        "New mail, %s,  new_mail_count:%ld  expunge count:%ld,  max_msgno:%ld\n",
                    pine_state->mail_stream == pine_state->inbox_stream ?
                       "inbox" : "other",
                    pine_state->new_mail_count,
@@ -461,6 +461,7 @@ static long first_status_change = 0;  /* time of 1st change since last chk_pt */
 static long last_status_change = 0;   /* time of last change                  */
 static long check_count_ave = 10 * 10;
 
+int
 check_point(timing)
      CheckPointTime timing;
 {
@@ -484,7 +485,7 @@ check_point(timing)
     tm   = CHECK_POINT_TIME * (timing==GoodTime ? 1 : timing==BadTime ? 2 : 3);
 
     dprint(9, (debugfile, "freq: %d  count: %d\n", freq, check_count));
-    dprint(9, (debugfile, "tm: %d  elapsed: %d\n", tm,
+    dprint(9, (debugfile, "tm: %d  elapsed: %ld\n", tm,
                time(0) - first_status_change));
 
     if(!last_status_change)
@@ -494,14 +495,14 @@ check_point(timing)
     adj_cca = (tmp > check_count_ave) ?
 	  min((check_count_ave + tmp)/2, 2*check_count_ave) : check_count_ave;
 
-    dprint(9, (debugfile, "freq %d tm %d changes %d since_1st_change %d\n",
+    dprint(9, (debugfile, "freq %d tm %d changes %d since_1st_change %ld\n",
 	       freq, tm, check_count, time(0)-first_status_change));
-    dprint(9, (debugfile, "since_status_chg %d chk_cnt_ave %d (tenths)\n",
+    dprint(9, (debugfile, "since_status_chg %ld chk_cnt_ave %ld (tenths)\n",
 	       time(0)-last_status_change, check_count_ave));
-    dprint(9, (debugfile, "adj_chk_cnt_ave %d (tenths)\n", adj_cca));
-    dprint(9, (debugfile, "Check:if changes(%d)xadj_cca(%d) >= freq(%d)x200\n",
+    dprint(9, (debugfile, "adj_chk_cnt_ave %ld (tenths)\n", adj_cca));
+    dprint(9, (debugfile, "Check:if changes(%d)xadj_cca(%ld) >= freq(%d)x200\n",
 	       check_count, adj_cca, freq));
-    dprint(9, (debugfile, "      is %d >= %d ?\n",
+    dprint(9, (debugfile, "      is %ld >= %d ?\n",
 	       check_count*adj_cca, 200*freq));
 
     /* the 200 comes from 20 seconds for an average status change time
@@ -511,7 +512,7 @@ check_point(timing)
 #ifdef	DEBUG
 	now = time(0);
 	dprint(7, (debugfile,
-                     "Doing checkpoint: %s  Since 1st status change: %d\n",
+                     "Doing checkpoint: %s  Since 1st status change: %ld\n",
                      ctime(&now), now - first_status_change));
 #endif
         StartInverse();
@@ -596,6 +597,7 @@ Returns:  0 if there was no change
 
 Also outputs a message that the streams have died
  ----*/
+int
 streams_died()
 {
     int rv = 0, inbox = 0;

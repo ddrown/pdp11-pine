@@ -966,6 +966,7 @@ the original message.
 If one or more part (but not all), a status message will be queued.
  ----*/
 
+int
 fetch_contents(stream, msgno, body, part_offset, start_part)
      MAILSTREAM *stream;
      long        msgno;

@@ -7,7 +7,8 @@
  Result: returns 0 if the hostname is correctly set,
          -1 if not (and errno is set).
  ----*/
-hostname(hostname,size) 
+int
+hostname(hostname,size)
     char *hostname;
     int size;
 {

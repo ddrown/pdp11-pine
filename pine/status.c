@@ -363,7 +363,7 @@ display_message(command)
                        currently_displayed.max_display_time : 
                          currently_displayed.min_display_time)
                     ) - now;
-            dprint(9, (debugfile, "diff: %d, displayed_time: %d, now: %d\n", diff, displayed_time, now));
+            dprint(9, (debugfile, "diff: %ld, displayed_time: %ld, now: %ld\n", diff, displayed_time, now));
             if(diff > 0)
               return;
 	    if(queue_length > 0){
@@ -396,7 +396,7 @@ display_message(command)
 	        message_is_displayed = 1;
     	        output_message(currently_displayed.text);
 	        displayed_time       = time(0);
-                dprint(9, (debugfile, "displayed_time: %d\n", displayed_time));
+                dprint(9, (debugfile, "displayed_time: %ld\n", displayed_time));
             } while(queue_length > 0 &&
                     currently_displayed.min_display_time == 0);
 	} else {
@@ -611,7 +611,7 @@ radio_buttons(prompt, line, column, buttons, labels, deefault, on_ctrl_C,
                 Writechar('\007');
                 break;
             }
-            dprint(9, (debugfile, "label %d %s\n", p - buttons,
+            dprint(9, (debugfile, "label %d %s\n", (int) (p - buttons),
                        labels[p-buttons]));
             Write_to_screen(labels[p - buttons]);
             goto out_of_loop;

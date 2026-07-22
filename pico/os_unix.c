@@ -344,6 +344,8 @@ ttgetc()
 	  return(NODATA);
 	else
 	  kill(getpid(), SIGHUP);
+
+	return(NODATA);
     }
     else
       return((int)c);
@@ -540,6 +542,8 @@ bktoshell(int f, int n)		/* suspend MicroEMACS and wait to wake up */
     signal(SIGTSTP, SIG_DFL);			/* prepare to stop */
     kill(0, SIGTSTP);
 #endif
+
+    return 0;
 }
 
 

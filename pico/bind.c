@@ -152,6 +152,8 @@ int whelp(int f, int n)
       pico_help(helptext, NULL, 0);
 
         sgarbf = TRUE;
+
+    return(TRUE);
 }
 
 

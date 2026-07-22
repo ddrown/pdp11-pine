@@ -315,6 +315,7 @@ so_puts(so, s)
  * Possition the storage object's pointer to the given offset
  * from the start of the object's data.
  */
+int
 so_seek(so, pos, orig)
 STORE_S *so;
 long     pos;
@@ -374,6 +375,7 @@ STORE_S *so;
  *             references to them.
  *                     
  */
+int
 so_reaquire(so)
 STORE_S *so;
 {
@@ -615,6 +617,7 @@ gf_filter_init()
 /*
  * link the given filter into the filter chain
  */
+int
 gf_link_filter(f)
     filter_t f;
 {
@@ -635,6 +638,8 @@ gf_link_filter(f)
 
 	tail->next = new;
     }
+
+    return(0);
 }
 
 
