@@ -4501,3 +4501,41 @@ already covered by the existing composer tests).
   this session; the fixes are almost entirely logic corrections and a
   handful of widened stack buffers (tens of bytes each), not
   size-reduction work in themselves.
+
+### Dropped `pico/ansi.c` -- permanently dead, never-enabled alternate terminal driver
+- [x] Deleted `pico/ansi.c` outright (`git rm`) and dropped `ansi.o`/
+      `ansi.c` from `pico/makefile.lnx`'s `OFILES`/`CFILES`. As
+      described when this was found: the file's entire body (`#if
+      ANSI_DRIVER` ... `#endif`, the alternate ANSI/VT100 terminal
+      driver competing with `pico/tcap.c`'s termcap-based one) never
+      compiled here since `ANSI_DRIVER` is never defined in this tree,
+      and the one function outside that guard, `ansiopen()`, was an
+      orphaned, always-unreferenced external-linkage function (its
+      only reference was itself inside the dead block). Confirmed via
+      grep across `pico/efunc.h`/`estruct.h`/`edef.h` and every other
+      `pico/*.c` that nothing outside `ansi.c` itself referenced
+      `ansiopen` or any `ansi*` symbol -- a clean, no-dependency
+      deletion. Other platform makefiles (`pico/makefile.bsd`,
+      `.sol`, `.sco`, etc.) still list `ansi.o`/`ansi.c`, but those
+      aren't part of this project's active build (only `makefile.lnx`
+      is used for the `lnx` dev target; there's no PDP-11
+      cross-compiler makefile yet) and were left alone, matching the
+      original TODO's scope.
+  - **Correction to the original estimate**: the write-up expected a
+    "small but real" binary-size win (~176 bytes text+data, per a
+    standalone `nm` compile of `ansi.c` alone). The actual before/after
+    `size bin/pico` was identical (text 110299, data 6364, both
+    before and after). Root cause: `libpico.a` is a static archive, and
+    the linker only pulls in archive members needed to resolve an
+    undefined symbol when linking `pico` (`main.c` + `libpico.a`).
+    Since nothing ever called `ansiopen()`, `ansi.o` was already being
+    excluded from the final link even while `ansi.c` still existed and
+    was being compiled into the archive -- confirmed by `nm bin/pico |
+    grep -i ansi` finding nothing both before and after, and by `ar t
+    libpico.a` no longer listing `ansi.o` post-deletion. So this cut is
+    source-hygiene/dead-code removal, not a measurable size win; noted
+    here so future size-accounting doesn't expect a delta that isn't
+    there.
+  - **Verified**: `./build clean && ./build lnx`, 0 warnings; full
+    smoketest suite, 26/26 passing; confirmed no `ansi` symbols in
+    `bin/pico` and no `ansi.o` member in `libpico.a` post-deletion.

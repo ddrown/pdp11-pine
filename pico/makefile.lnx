@@ -24,12 +24,12 @@ RANLIB=		ranlib
 
 LIBS=		-ltermcap -lc
 
-OFILES=		ansi.o basic.o bind.o browse.o buffer.o \
+OFILES=		basic.o bind.o browse.o buffer.o \
 		composer.o compose_stub.o display.o file.o fileio.o line.o \
 		osdep.o pico.o random.o region.o search.o tcap.o \
 		window.o word.o
 
-CFILES=		ansi.c basic.c bind.c browse.c buffer.c \
+CFILES=		basic.c bind.c browse.c buffer.c \
 		composer.c compose_stub.c display.c file.c fileio.c line.c \
 		osdep.c pico.c random.c region.c search.c tcap.c \
 		window.c word.c
