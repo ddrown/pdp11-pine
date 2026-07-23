@@ -298,7 +298,7 @@
 #define V_PERSONAL_PRINT_COMMAND   22  /* disabled, printing not supported */
 #define V_STANDARD_PRINTER         23  /* disabled, printing not supported */
 #define V_LAST_TIME_PRUNE_QUESTION 24  /* disabled, sent-mail pruning not supported */
-#define V_LAST_VERS_USED           25
+#define V_LAST_VERS_USED           25  /* disabled, new-version welcome screen removed */
 #define V_BUGS_NICKNAME            26
 #define V_BUGS_FULLNAME            27
 #define V_BUGS_ADDRESS             28
@@ -325,7 +325,6 @@
 #define VAR_SAVED_MSG_NAME_RULE      vars[V_SAVED_MSG_NAME_RULE].current_val.p
 #define VAR_SORT_KEY                 vars[V_SORT_KEY].current_val.p
 #define VAR_USE_ONLY_DOMAIN_NAME     vars[V_USE_ONLY_DOMAIN_NAME].current_val.p
-#define VAR_LAST_VERS_USED           vars[V_LAST_VERS_USED].current_val.p
 #define VAR_BUGS_NICKNAME            vars[V_BUGS_NICKNAME].current_val.p
 #define VAR_BUGS_FULLNAME            vars[V_BUGS_FULLNAME].current_val.p
 #define VAR_BUGS_ADDRESS             vars[V_BUGS_ADDRESS].current_val.p
@@ -644,7 +643,6 @@ struct pine {
     unsigned     noticed_dead_inbox:1;
     unsigned     noticed_dead_stream:1;
     unsigned     compose_mime:1;
-    unsigned     show_new_version:1;
     unsigned     do_local_lookup:1;  /* look up in passwd even if using
                                            user defined domain */
     BITMAP       feature_list;       /* a bitmap of all the features */

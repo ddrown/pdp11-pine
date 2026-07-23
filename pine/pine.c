@@ -109,26 +109,7 @@ static int setup_mini_menu(int);
 void do_menu(int);
 void main_redrawer();
 void show_main_screen(struct pine *, int, OtherMenu, struct key_menu *);
-void new_user_or_version(char **);
 static void do_setup_task();
-
-static char *new_version_message[] = {
-#ifdef DOS
-"   This is a new version of PC-Pine!",
-#else /* UNIX */
-"   This is a new version of Pine!",
-#endif
-"",
-"   Your Pine configuration file shows that you have not used ",
-"   Pine 3.89 before.  There are a small number of visible changes",
-"   since Pine 3.88, but this is primarily a \"bug fix\" release.",
-"",
-"   Details of changes in this, and previous, versions of Pine can",
-"   be found in the Release Notes (\"R\" command off Main Menu).",
-"",
-"   This message will appear only once.",
-"",
-NULL};
 
 static struct key main_keys[] =
        {{"?","Help",0},        {"O","OTHER CMDS",0},  {NULL,NULL,0},    
@@ -342,13 +323,7 @@ main(argc, argv)
     pine_state->in_init_seq = 0;  /* so output (and ClearScreen) will show up */
     pine_state->dont_use_init_cmds = 1;  /* don't use up initial_commands yet */
     ClearScreen();
-    if(pine_state->show_new_version){
-	pine_state->mangled_header = 1;
-	show_main_screen(pine_state, 0, 0, NULL);
-	new_user_or_version(new_version_message);
-        ClearScreen();
-    }
-    
+
     /* put back in case we need to suppress output */
     pine_state->in_init_seq = pine_state->save_in_init_seq;
             
@@ -1219,35 +1194,8 @@ do_setup_task(command)
 
 
 
-/*
- * Display a new user or new version message.
- */
-void
-new_user_or_version(message)
-    char *message[];
-{
-    int  dline;
-
-    for(dline = 3; dline < ps_global->ttyo->screen_rows - 4; dline++) {
-        if(message[dline-3] == NULL)
-            break;
-        PutLine0(dline, 4, message[dline-3]);
-    }
-
-    PutLine0(ps_global->ttyo->screen_rows - 4, 13,
-		 "PINE is a trademark of the University of Washington.");
-    StartInverse();
-    PutLine0(ps_global->ttyo->screen_rows - 3, 0,
-		 "Type any character to continue : ");
-    EndInverse();
-
-    /* ignore the character typed, 120 second timeout */
-    (void)read_char(120);
-}
-
-
 /*----------------------------------------------------------------------
-          Quit pine if the user wants to 
+          Quit pine if the user wants to
 
     Args: The usual pine structure
 
@@ -1574,8 +1522,7 @@ warn_other_cmds()
     static int other_cmds = 0;
 
     other_cmds++;
-    if((ps_global->show_new_version &&
-	      other_cmds % 3 == 0 && other_cmds < 10) || other_cmds % 20 == 0)
+    if(other_cmds % 20 == 0)
         q_status_message(0, 0, 2,
 		    "Remember: the \"O\" command is always optional");
 }

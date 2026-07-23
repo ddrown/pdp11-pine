@@ -186,8 +186,8 @@ static struct variable variables[] = {
   "Printing is disabled, this build has no printer support"},
 {"last-time-prune-questioned" ,1, 1, 0, 1, 0, 0,
   "Sent-mail pruning is disabled, this build has no automatic expiration"},
-{"last-version-used",          0, 1, 0, 1, 0, 0,
-  "Version of Pine used last session (set automatically)"},
+{"last-version-used",          1, 1, 0, 1, 0, 0,
+  "Last-version-used is disabled, the new-version welcome screen has been removed"},
 {"bugs-nickname",              0, 1, 0, 0, 1, 0,
   "Nickname of bugs entry to be automatically placed in all address books"},
 {"bugs-fullname",              0, 1, 0, 0, 1, 0,
@@ -337,15 +337,6 @@ init_vars(ps)
 
     set_current_val(vars, V_SIGNATURE_FILE, TRUE);
 
-    set_current_val(vars, V_LAST_VERS_USED, TRUE);
-    if(VAR_LAST_VERS_USED && strcmp(VAR_LAST_VERS_USED, version_buff) == 0)
-      ps->show_new_version = 0;
-    else
-      ps->show_new_version = 1;
-    /* want to write new version to pinerc */
-    if(ps->show_new_version)
-      set_variable(V_LAST_VERS_USED, version_buff);
-    
     /* Obsolete, backwards compatibility */
     set_current_val(vars, V_ELM_STYLE_SAVE, TRUE);
     /* Also obsolete */

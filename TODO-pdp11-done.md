@@ -4539,3 +4539,76 @@ already covered by the existing composer tests).
   - **Verified**: `./build clean && ./build lnx`, 0 warnings; full
     smoketest suite, 26/26 passing; confirmed no `ansi` symbols in
     `bin/pico` and no `ansi.o` member in `libpico.a` post-deletion.
+
+### Removed the "This is a new version of Pine!" first-launch screen -- permanently broken by the earlier `read_pinerc()` cut, user-reported
+- **What it was**: user reported seeing "This is a new version of Pine!"
+  (`new_user_or_version()`/`new_version_message[]` in `pine/pine.c`)
+  every single time they started pine, not just once. Root cause:
+  this screen's "show once" logic (`pine/init.c`'s old `init_vars()`)
+  compared the pinerc's `last-version-used` value against the
+  compiled-in version string, and if they didn't match, set
+  `ps->show_new_version = 1` and called `set_variable(V_LAST_VERS_USED,
+  version_buff)` to "remember" it for next time. Two independent things
+  make that permanently broken in this fork: `set_variable()`'s own
+  header comment says it plainly -- "pinerc is never rewritten" -- it
+  only updates the in-memory value, so the write-back back to disk
+  never happened even before this session's changes; and separately,
+  `read_pinerc()` was already cut down to an unconditional `return(0)`
+  stub (see the "bootstrap-only stub" entry above), so the pinerc is
+  never even read back in on the next run either. Net effect:
+  `VAR_LAST_VERS_USED` is always `NULL` on every startup, so
+  `show_new_version` was unconditionally `1` on every run -- this
+  screen could never have worked as a once-only notice in this fork,
+  with or without the `read_pinerc()` cut.
+- **What changed**: removed the whole subsystem rather than patch the
+  broken persistence, since there's no persistence mechanism left in
+  this fork to make "show once" meaningful again:
+  - `pine/pine.c`: deleted `new_user_or_version()`, the
+    `new_version_message[]` array, its prototype, and the
+    `if(pine_state->show_new_version){ ... }` call site in the startup
+    sequence (the `ClearScreen()` calls immediately before/after it
+    stay, unrelated to this screen). Simplified `warn_other_cmds()`'s
+    condition (used for an unrelated "the O command is optional" hint)
+    from `(ps_global->show_new_version && other_cmds % 3 == 0 &&
+    other_cmds < 10) || other_cmds % 20 == 0` down to plain
+    `other_cmds % 20 == 0` -- the more-frequent-hints-for-a-new-version
+    behavior no longer has a "new version" concept to key off.
+  - `pine/pine.h`: dropped the `show_new_version:1` bitfield from
+    `struct pine`, and the now-fully-unreferenced `VAR_LAST_VERS_USED`
+    macro. Left the `V_LAST_VERS_USED` index itself and its
+    `variables[]` table entry in `pine/init.c` in place (renumbering
+    `V_*` constants for one dead slot isn't worth the blast radius,
+    and this fork already keeps several other disabled slots the same
+    way -- `V_PRINTER`, `V_SMTP_SERVER`, etc. -- for the same reason);
+    flipped its `is_obsolete` flag to 1 and reworded its description
+    to "Last-version-used is disabled, the new-version welcome screen
+    has been removed", matching the existing disabled-slot convention
+    (confirmed via grep that `is_obsolete`/`is_used` aren't actually
+    read by any code -- these fields, and the whole `variables[]`
+    description text, are inert now that this fork has no Setup/Config
+    screen left that displays them; kept purely for readability/
+    consistency with neighboring entries).
+  - `pine/init.c`: deleted the `set_current_val(vars, V_LAST_VERS_USED,
+    TRUE)` / compare-and-set `show_new_version` / `set_variable(...)`
+    block from `init_vars()` entirely.
+  - `test/smoketest.py`: `Session.__init__`'s `dismiss_splash` handling
+    used to `expect("MAIN MENU")` (matching the splash screen's
+    underlying chrome), blindly `send("\r")` to dismiss it, then
+    `expect("MAIN MENU")` again for the real menu. With the splash
+    gone, that blind `\r` now lands as a real keystroke on the actual
+    Main Menu -- caught by `test_pinerc_not_parsed.py` failing (it
+    landed on the Folder List screen instead). Simplified to a single
+    `expect("MAIN MENU")` with no keystroke; `dismiss_splash` kept as a
+    no-op-if-true parameter so existing call sites don't need to
+    change.
+- **Verified**: `./build clean && ./build lnx`, 0 warnings (`bin/pine`
+  text shrank 328383 -> 327351, data 12496 -> 12400, from the removed
+  message array/function; `bin/pico` unaffected). Manually drove a
+  fresh `Session(mbox=None, dismiss_splash=False)` and confirmed the
+  very first screen is the real Main Menu with no interstitial splash
+  or "Type any character to continue" prompt. Full smoketest suite,
+  26/26 passing, run twice for stability (the `dismiss_splash` fix
+  above was needed for `test_pinerc_not_parsed` specifically, since
+  it's the one test that both relies on default `dismiss_splash=True`
+  and does its own subsequent `To:`-field interaction that a
+  misdirected keystroke could desync).

@@ -142,10 +142,13 @@ class Session:
         )
 
         if dismiss_splash:
-            # First launch shows a "Welcome to Pine" splash on top of the
-            # Main Menu chrome; any keystroke dismisses it.
-            self.expect("MAIN MENU")
-            self.send("\r")
+            # No first-launch splash to dismiss any more (see
+            # TODO-pdp11-done.md's "new-version welcome screen" removal --
+            # it never actually worked as a once-only notice in this fork
+            # since .pinerc is never rewritten to persist last-version-used,
+            # so it fired on literally every run). Kept as a no-op wait so
+            # existing callers (and the dismiss_splash=False escape hatch)
+            # don't need to change.
             self.expect("MAIN MENU")
 
     def _sendmail_stub_binds(self):
