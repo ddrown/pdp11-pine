@@ -1214,8 +1214,7 @@ quit_screen(pine_state)
 
     dprint(1, (debugfile, "\n\n    ---- QUIT SCREEN ----\n"));    
 
-    if(F_OFF(F_QUIT_WO_CONFIRM,pine_state) &&
-       (ret=want_to("Really quit pine", 'y', 'x', h_oe_export, 0)) != 'y') {
+    if((ret=want_to("Really quit pine", 'y', 'x', h_oe_export, 0)) != 'y') {
 	if(ret == 'x')
 	  Writechar('\007');
         pine_state->next_screen = pine_state->prev_screen;

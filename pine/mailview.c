@@ -1061,14 +1061,10 @@ scrolltool(text, title, pages, style, source, att)
       km = &text_att_view_keymenu;
     }else if(style == MessageText) {
       km = &view_keymenu;
-      if(F_OFF(F_ENABLE_PIPE,ps_global))
-        clrbitn(VIEW_PIPE_KEY, bitmap);
-      if(F_OFF(F_ENABLE_BOUNCE,ps_global))
-	clrbitn(BOUNCE_KEY, bitmap);
-      if(F_OFF(F_ENABLE_FLAG,ps_global))
-	clrbitn(FLAG_KEY, bitmap);
-      if(F_OFF(F_ENABLE_FULL_HDR,ps_global))
-	clrbitn(VIEW_FULL_HEADERS_KEY, bitmap);
+      clrbitn(VIEW_PIPE_KEY, bitmap);
+      clrbitn(BOUNCE_KEY, bitmap);
+      clrbitn(FLAG_KEY, bitmap);
+      clrbitn(VIEW_FULL_HEADERS_KEY, bitmap);
     }else if(style == ComposerHelpText) {
       km = &composer_help_keymenu;
     }else {

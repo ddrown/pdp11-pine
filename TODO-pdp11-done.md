@@ -4719,3 +4719,81 @@ already covered by the existing composer tests).
   even before this cut).
 - **Size delta**: `bin/pine` text 327351 -> 323943 (-3408 bytes), data
   12400 -> 11184 (-1216 bytes); `bin/pico` unaffected.
+
+### Collapse dead `feature-list` (`F_*`) checks, phase 1 -- 28 call sites across 5 files
+
+Same root cause as the `variables[]` cut above: `.pinerc` is never read
+or written, so `process_feature_list()` (`pine/init.c`) -- the only code
+that ever populates a feature bit from the `feature-list` variable -- is
+a permanent no-op (its `list` argument, `VAR_FEATURE_LIST`, is always a
+non-NULL pointer to a single `NULL` entry, so its `for` loop body never
+runs). Grepped every `F_TURN_ON`/`F_TURN_OFF`/`F_SET` call site in the
+tree: of pine's 19 feature bits, only `F_USE_FK`, `F_CAN_SUSPEND`, and
+`F_EXPANDED_FOLDERS` have a second, real write path (`-k`/`-z`/`-l`
+command-line flags in `pine/args.c`, the "pinef" argv0 check, and
+`F_USE_FK`'s composer-subprocess toggle in `pine.c`/`send.c`/`ttyin.c`)
+-- those three stay live and untouched. The other 16 can only ever be
+set through the dead `process_feature_list()` path, so every
+`F_ON()`/`F_OFF()` check on them is a provably-fixed-outcome dead
+branch, using the same "trace the always-true/false condition by hand"
+technique as the Tier 2 cut above.
+
+Collapsed all 28 non-`F_USE_FK`/`F_CAN_SUSPEND`/`F_EXPANDED_FOLDERS`
+call sites to their fixed outcome:
+- `pine/mailindx.c` (`do_index_border()`) and `pine/mailview.c`
+  (view-screen keymenu setup): 6 + 4 `if(F_OFF(F_ENABLE_PIPE/FULL_HDR/
+  BOUNCE/FLAG/ZOOM/APPLY,...)) clrbitn(KEY, bitmap);` sites always
+  fired -- replaced each with a bare unconditional `clrbitn(...)`.
+- `pine/mailcmd.c` (13 sites, `process_cmd()`'s file -- mailcmd.o's
+  largest symbol): delete-message handler's `F_DEL_SKIPS_DEL` 3-way
+  branch collapsed to its permanent `F_OFF` outcome; the `'0'`-`'9'`
+  digit-jump-to-message shortcut (gated by `F_ENABLE_JUMP`, always
+  `goto bogus`) had its 10 `case` labels deleted outright -- they now
+  fall through to `default: bogus` with identical behavior (the
+  `'j'`/`'w'`/`OOPF7` Jump/WhereIs commands are untouched, still fully
+  live); the `'h'` toggle-full-headers command (gated by
+  `F_ENABLE_FULL_HDR`, always `goto bogus` before its body ran) had its
+  entire `case` block deleted, same reasoning; both `F_AUTO_EXPUNGE`
+  sites (`process_cmd()`'s expunge handler and `expunge_and_close()`)
+  and the `F_AUTO_READ_MSGS` site collapsed from "prompt only if
+  `F_OFF`, else auto-act" to always prompting via `want_to()`; the two
+  `F_ENABLE_TAB_COMPLETE` extra-key-setup blocks in the save-folder
+  prompt (`if(F_ON(...)) { ekey[rc].ch = ...; rc++; }`) were dead code
+  and deleted outright.
+- `pine/pine.c` (`quit_screen()`): `F_OFF(F_QUIT_WO_CONFIRM) &&` guard
+  was always true -- dropped it, "Really quit pine" confirmation now
+  unconditional (same as actual prior behavior).
+- `pine/reply.c` (3 spots): `F_SIG_AT_BOTTOM`'s `F_OFF` guard on the
+  "insert signature before included text" block in the reply composer
+  was always true -- dropped it; two `if(F_ON(F_INCLUDE_HEADER,...))
+  format_text_header(...);` lines in the reply composer were dead and
+  deleted; `forward()`'s `F_MIME_FORWARD` block was the biggest single
+  find -- `ret` is declared `int ret=0;` and never assigned before the
+  `if(F_ON(F_MIME_FORWARD,...) && (ret=want_to(...))=='y')` line, and
+  since `F_ON` is always false, `&&`-short-circuiting means
+  `want_to()` is *never called*, so `ret` stays `0` forever, making the
+  following `else if(ret == 'x')` branch dead too (`0 == 'x'` is always
+  false). Execution always fell through to the final `else` (the plain
+  non-MIME forward path). Deleted the entire dead
+  `if(...){...} else if(ret=='x'){...}` (73 lines) and un-wrapped the
+  final `else` block to run unconditionally; `ret` and the `BODY *b`
+  local (only used inside the deleted MIME branch) became unused and
+  were removed too.
+- **What's deliberately left for phase 2**: `process_feature_list()`
+  itself, `feat_list[]`, the `"feature-list"` variable/`V_FEATURE_LIST`
+  entry, and the 16 now-fully-unreachable `F_*` `#define`s -- once
+  every reader of the 16 dead bits is gone, nothing reads
+  `process_feature_list()`'s output for them either, but that's a
+  separate, independently-verifiable cut (different call sites, no
+  overlap with this one).
+- **Verified**: `./build clean && ./build lnx`, 0 warnings. Full
+  smoketest suite, 26/26, run twice for stability. Manually drove a
+  session and confirmed: quit still prompts "Really quit pine"
+  (Y/n/^C) and a `n` answer correctly cancels; expunge still prompts
+  "Expunge N message(s)..." and a `y` answer still expunges; forward
+  still opens the plain (non-MIME) forward composer with no
+  MIME-attachment prompt (matching pre-cut behavior, since that prompt
+  was already unreachable).
+- **Size delta**: `bin/pine` text 323943 -> 321543 (-2400 bytes), data
+  unchanged at 11184 (expected -- this phase only touches code, not
+  the `variables[]`/`struct variable` data). `bin/pico` unaffected.

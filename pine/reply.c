@@ -281,16 +281,14 @@ reply(pine_state, msgno, env, body)
     /*---- Include the origina text if requested ----*/
     if(include_text){
 	/* write preliminarly envelope info into message text */
-	if(F_OFF(F_SIG_AT_BOTTOM,ps_global)){
-	    if(sig[0]){
-		so_puts((STORE_S *)msgtext, sig);
-		fs_give((void **)&sig);
-	    }
-	    else
-	      so_puts((STORE_S *)msgtext, NEWLINE);
-
-	    so_puts((STORE_S *)msgtext, NEWLINE);
+	if(sig[0]){
+	    so_puts((STORE_S *)msgtext, sig);
+	    fs_give((void **)&sig);
 	}
+	else
+	  so_puts((STORE_S *)msgtext, NEWLINE);
+
+	so_puts((STORE_S *)msgtext, NEWLINE);
 
         if(orig_body == NULL || orig_body->type == TYPETEXT) {
 
@@ -299,10 +297,8 @@ reply(pine_state, msgno, env, body)
             body->type            = TYPETEXT;
 	    body->contents.binary = msgtext;
 	    so_puts((STORE_S *)msgtext, reply_delimiter(env));
-	    if(F_ON(F_INCLUDE_HEADER,ps_global))
-	      format_text_header(env, pc, prefix);
 
-	    get_body_part_text(orig_body, msgno, "1", pc, 
+	    get_body_part_text(orig_body, msgno, "1", pc,
 				prefix, ". Text not included");
         } else if(orig_body->type == TYPEMULTIPART) {
 
@@ -316,8 +312,6 @@ reply(pine_state, msgno, env, body)
 		body->contents.part->body.contents.binary = msgtext;
 /* BUG: ? matter that we're not setting body.size.bytes */
 		so_puts((STORE_S *)msgtext, reply_delimiter(env));
-	        if(F_ON(F_INCLUDE_HEADER,ps_global))
-		  format_text_header(env, pc, prefix);
 
 		get_body_part_text(&orig_body->contents.part->body,
 				   msgno, "1", pc, prefix,
@@ -546,14 +540,13 @@ forward(pine_state, msgno, env, body)
      BODY          *body;
 {
     ENVELOPE      *outgoing;
-    BODY          *orig_body, *text_body, *b;
+    BODY          *orig_body, *text_body;
     char          *tmp_text, *tp;
     PART          *part;
     MAILSTREAM    *stream;
     void          *msgtext;
     gf_io_t        pc;
     char          *sig;
-    int            ret=0;
 #ifdef	DOS
     char *reserve;
 #endif
@@ -612,80 +605,6 @@ forward(pine_state, msgno, env, body)
     }
 #endif
 
-    if(F_ON(F_MIME_FORWARD,ps_global) &&
-       (ret=want_to("Forward message as a MIME attachment",'n','x',NO_HELP,0))
-								     == 'y') {
-        /*----- Forward the message as a MIME type "MESSAGE" ----*/
-
-        body = mail_newbody();
-        body->type = TYPEMULTIPART;
-
-        /*---- The TEXT part/body ----*/
-        body->contents.part                       = mail_newbody_part();
-        body->contents.part->body.type            = TYPETEXT;
-        body->contents.part->body.contents.binary = msgtext;
-
-        /*---- The Forwarded Message body ----*/
-        body->contents.part->next = mail_newbody_part();
-        b = &(body->contents.part->next->body);
-        b->type        = TYPEMESSAGE;
-        b->id          = cpystr(generate_message_id(ps_global));
-        b->description = fs_get(
-                 (env->subject != NULL ? strlen(env->subject) : (size_t)0) 
-		 + (size_t)30);
-        sprintf(b->description, "Forwarded message \'%s\'",
-                env->subject == NULL ? "" : env->subject); 
-        b->contents.msg.env  = NULL;
-        b->contents.msg.body = NULL;
-#ifdef	DOS
-	/*
-	 * put the message together in a storage object
-	 */
-        if((b->contents.binary = (void *) so_get(FileStar, NULL,
-						 EDIT_ACCESS)) == NULL)
-	    goto bomb;
-
-	mailgets    = dos_gets;	/* write fetched text to disk */
-	append_file = (FILE *)so_text((STORE_S *)b->contents.binary);
-
-	/* write the header */
-	if(mail_fetchheader(stream, msgno) == NULL)
-	  goto bomb;
-
-	/* HACK!  See mailview.c:format_message for details... */
-	stream->text = NULL;
-	/* write the body */
-	if(mail_fetchtext(stream, msgno) == NULL)
-	  goto bomb;
-
-	b->size.bytes = ftell(append_file);
-	/* next time body may stay in core */
-	mailgets      = NULL;
-	append_file   = NULL;
-	mail_gc(stream, GC_TEXTS);
-#else
-        if((b->contents.binary = (void *) so_get(CharStar, NULL,
-						 EDIT_ACCESS)) == NULL)
-	    goto bomb;
-
-        if(!(tmp_text = mail_fetchheader(stream, msgno)) || *tmp_text == '\0')
-          goto bomb;
-	else
-	  so_puts((STORE_S *)b->contents.binary, tmp_text);
-
-	b->size.bytes = strlen(tmp_text);
-	so_puts((STORE_S *)b->contents.binary, "\015\012");
-        if(!(tmp_text = mail_fetchtext(stream, msgno)) || *tmp_text == '\0')
-          goto bomb;
-	else
-	  so_puts((STORE_S *)b->contents.binary, tmp_text);
-
-	b->size.bytes += strlen(tmp_text);
-#endif
-    } else if(ret == 'x') {
-        q_status_message(1, 2, 4,"\007Message cancelled");
-	goto clean_early;
-    } else {
         if(orig_body == NULL || orig_body->type == TYPETEXT) {
             /*---- Message has a single text part -----*/
             body                  = mail_newbody();
@@ -775,7 +694,6 @@ forward(pine_state, msgno, env, body)
 	    else
 	      goto bomb;
         }
-    }
 
 #ifdef	DOS
     free((void *)reserve);

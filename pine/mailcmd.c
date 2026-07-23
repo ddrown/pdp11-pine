@@ -297,21 +297,9 @@ process_cmd(command, in_index, orig_command, force_mailchk)
 	      strcat(prompt, "already ");
 	  }
 
-	  is_unread = 1;
-	  if(F_ON(F_DEL_SKIPS_DEL,ps_global))
-	    new_sorted_mess_num = next_sorted_un(ps_global->mail_stream,
-						 current_sorted_msgno + 1,
-						 &is_unread, 1);
-
-	  if(F_OFF(F_DEL_SKIPS_DEL,ps_global) 
-	     && current_sorted_msgno < ps_global->max_msgno){
+	  if(current_sorted_msgno < ps_global->max_msgno){
 	      current_sorted_msgno++;
 	      ps_global->current_sorted_msgno = current_sorted_msgno;
-	  }
-	  else if(F_ON(F_DEL_SKIPS_DEL,ps_global) && is_unread){
-	      /* more interesting mail, goto next msg */
-	      ps_global->current_sorted_msgno = new_sorted_mess_num;
-	      current_sorted_msgno            = new_sorted_mess_num;
 	  }
 
 	  if(prompt[0])
@@ -484,19 +472,6 @@ do_index:
 
 
           /*---------- Search (where is command) AND Jump To ----------*/
-       case '0':
-       case '1':
-       case '2':
-       case '3':
-       case '4':
-       case '5':
-       case '6':
-       case '7':
-       case '8':
-       case '9':
-          if(F_OFF(F_ENABLE_JUMP,ps_global))
-	      goto bogus;
-
        case OPF8:
        case 'w':		/* Note, whereis only effective in Index */
        case OOPF7:
@@ -595,11 +570,10 @@ do_export:
 	     break;
 	  }
 
-	  if(F_OFF(F_AUTO_EXPUNGE,ps_global)) {
-            sprintf(prompt, "Expunge %ld message%s from %s", del_count,
+          sprintf(prompt, "Expunge %ld message%s from %s", del_count,
                   plural(del_count), pretty_fn(ps_global->cur_folder));
-            ps_global->mangled_footer = 1;
-	    {int ret;
+          ps_global->mangled_footer = 1;
+	  {int ret;
               ret = want_to(prompt, 'y', 'x', NO_HELP, 0);
 	      if(ret == 'n') {
 	        break;
@@ -608,7 +582,6 @@ do_export:
 	        Writechar('\007');
 	        break;
 	      }
-	    }
 	  }
           mc = closest_not_deleted(ps_global->mail_stream,
               		     current_sorted_msgno,
@@ -652,11 +625,7 @@ do_export:
                          plural(ps_global->expunge_count),
 			 pretty_fn(ps_global->cur_folder));
               ps_global->expunge_count = 0;
-          }else if(F_ON(F_AUTO_EXPUNGE,ps_global)) {
-              q_status_message1(0, 0, 3,
-                        "No messages to expunge from folder \"%s\"",
-			 pretty_fn(ps_global->cur_folder));
-	  }
+          }
           break;
 
 
@@ -706,18 +675,6 @@ do_sortindex:
 		q_status_message(0, 1, 3, "\007No message in folder");
 	  }
 
-          break;
-
-
-          /*------- Toggle Full Headers -----------*/
-	case OOPF9: 
-        case 'h':
-          if(F_OFF(F_ENABLE_FULL_HDR,ps_global))
-            goto bogus;
-          ps_global->full_header = !ps_global->full_header;
-          q_status_message1(0, 0, 2, "Display of full headers is now o%s",
-                           ps_global->full_header ? "n" : "ff");
-          a_changed = 1;
           break;
 
 
@@ -826,13 +783,6 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
     ekey[rc].rval    =  2;
     ekey[rc].name    = "^T";
     ekey[rc++].label = "To Fldrs";
-
-    if(F_ON(F_ENABLE_TAB_COMPLETE,ps_global)){
-	ekey[rc].ch      = (F_ON(F_USE_FK,ps_global)) ? PF4 + rc : TAB;
-	ekey[rc].rval    =  12;
-	ekey[rc].name    = "TAB";
-	ekey[rc++].label = "Complete";
-    }
 
     ekey[rc].ch = -1;
 
@@ -1309,13 +1259,6 @@ broach_folder(qline, allow_list, context)
     ekey[rc].name    = (allow_list) ? "^T" : "";
     ekey[rc++].label = (allow_list) ? "ToFldrs" : "";
 
-    if(F_ON(F_ENABLE_TAB_COMPLETE,ps_global)){
-	ekey[rc].ch      = (F_ON(F_USE_FK,ps_global)) ? PF4 + rc : TAB;
-	ekey[rc].rval    =  12;
-	ekey[rc].name    = "TAB";
-	ekey[rc++].label = "Complete";
-    }
-
     ekey[rc].ch = -1;
 
     while(1) {
@@ -1774,15 +1717,13 @@ expunge_and_close(stream, folder)
 		    stream == ps_global->inbox_stream &&
                     (seen_not_deleted_cnt = count_seen_not_deleted(stream))) {
 
-	      if(F_OFF(F_AUTO_READ_MSGS,ps_global)) {
-                sprintf(prompt_b,
+              sprintf(prompt_b,
                        "Save the %ld read message%s in \"%s\"",
                          seen_not_deleted_cnt,
                          plural(seen_not_deleted_cnt),
                          VAR_READ_MESSAGE_FOLDER);
-		ret = want_to(prompt_b, 'y', 0, NO_HELP, 0);
-	      }
-	      if(F_ON(F_AUTO_READ_MSGS,ps_global) || ret == 'y') {
+	      ret = want_to(prompt_b, 'y', 0, NO_HELP, 0);
+	      if(ret == 'y') {
 	        save_context = ps_global->context_list;
 
 		FETCH_ALL_FLAGS(stream);
@@ -1827,15 +1768,13 @@ expunge_and_close(stream, folder)
                    strcpy(short_folder_name, temp);
                 }
                             
-		if(F_OFF(F_AUTO_EXPUNGE,ps_global)) {
                   sprintf(prompt_b,
                        "Expunge the %ld deleted message%s from \"%.115s\"",
                        delete_count,
                          delete_count == 1 ? "" : "s",
                          short_folder_name);
 		  ret = want_to(prompt_b, 'y', 0, NO_HELP, 0);
-		}
-                if(F_ON(F_AUTO_EXPUNGE,ps_global) || ret == 'y'){
+                if(ret == 'y'){
                     q_status_message4(0, 2, 3,
                        "Closing \"%s\". Keeping %s message%s and deleting %s",
                                       pretty_fn(folder),

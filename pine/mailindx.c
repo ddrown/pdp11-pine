@@ -142,20 +142,12 @@ do_index_border(do_header, do_footer, do_clear, which_keys)
 	setbitmap(bitmap);
 	{
           km = &index_keymenu;
-#ifndef DOS
-          if(F_OFF(F_ENABLE_PIPE,ps_global))
-#endif
-            clrbitn(VIEW_PIPE_KEY, bitmap);  /* always clear for DOS */
-          if(F_OFF(F_ENABLE_FULL_HDR,ps_global))
-            clrbitn(VIEW_FULL_HEADERS_KEY, bitmap);
-          if(F_OFF(F_ENABLE_BOUNCE,ps_global))
-            clrbitn(BOUNCE_KEY, bitmap);
-          if(F_OFF(F_ENABLE_FLAG,ps_global))
-            clrbitn(FLAG_KEY, bitmap);
-          if(F_OFF(F_ENABLE_ZOOM,ps_global))
-            clrbitn(ZOOM_KEY, bitmap);
-          if(F_OFF(F_ENABLE_APPLY,ps_global))
-	    clrbitn(APPLY_KEY, bitmap);
+          clrbitn(VIEW_PIPE_KEY, bitmap);
+          clrbitn(VIEW_FULL_HEADERS_KEY, bitmap);
+          clrbitn(BOUNCE_KEY, bitmap);
+          clrbitn(FLAG_KEY, bitmap);
+          clrbitn(ZOOM_KEY, bitmap);
+          clrbitn(APPLY_KEY, bitmap);
           clrbitn(UNEXCLUDE_KEY, bitmap);
 	  index_keys[EXCLUDE_KEY].label = "eXpunge";
 	}
