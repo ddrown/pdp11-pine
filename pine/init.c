@@ -907,41 +907,6 @@ decode_sort(ps, sort_spec)
 
 
 /*----------------------------------------------------------------------
-      Set a user variable in memory (pinerc is never rewritten)
-
-  Args:  var -- The index of the variable to set from pine.h (V_....)
-         value -- The string to set the value to
-
- Result: 0 is always returned
-
- The vars data structure is updated; the change does not persist to disk.
- ----*/
-int
-set_variable(var, value)
-     int   var;
-     char *value;
-{
-    struct variable *v;
-
-    v = &ps_global->vars[var];
-
-    if(!v->is_user) 
-      panic1("Trying to set non-user variable %s", v->name);
-
-    if(v->user_val.p != NULL)
-      fs_give((void **) &v->user_val.p);
-
-    if(v->current_val.p != NULL)
-      fs_give((void **) &v->current_val.p);
-
-    v->user_val.p    = value == NULL ? NULL : cpystr(value);
-    v->current_val.p = value == NULL ? NULL : cpystr(value);
-
-    return(0);
-}
-
-
-/*----------------------------------------------------------------------
       Set a user variable list in memory (pinerc is never rewritten)
 
   Args:  var -- The index of the variable to set from pine.h (V_....)

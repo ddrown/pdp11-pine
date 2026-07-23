@@ -100,11 +100,6 @@ int   compare_size(const QSType *, const QSType *);
 char *get_index_cache(long);
 int   i_cache_size(long);
 int   i_cache_width();
-#ifdef	DOS
-void  i_cache_hit(long);
-void  icread(void);
-void  icwrite(void);
-#endif
 void  sort_blip();
 
 
@@ -177,9 +172,6 @@ mail_index_screen(state)
     int   ch, orig_ch, lines_per_page, which_keys, force;
     long  old_top_ent, old_current_sorted_msgno, old_max_msgno,
           changed_sorted_msgno, tmp;
-#ifdef	DOS
-    extern void (*while_waiting)();
-#endif
 
 
     dprint(1, (debugfile, "\n\n ---- MAIL INDEX ----\n"));
@@ -362,32 +354,7 @@ mail_index_screen(state)
         /* Let read_command do the fflush(stdout) */
 
         /*---------- Read command and validate it ----------------*/
-#ifdef	DOS
-#ifdef	MOUSE
-	{extern int register_mfunc();
-	 extern unsigned long mouse_in_index();
-
-	 ps_global->top_of_screen_sorted_msgno = old_top_ent;
-	 register_mfunc(mouse_in_index, 2, 0, state->ttyo->screen_rows-4,
-			state->ttyo->screen_cols);
-	}
-#endif
-	/*
-	 * AND pre-build header lines.  This works just fine under
-	 * DOS since we wait for characters in a loop. Something will
-         * will have to change under UNIX if we want to do the same.
-	 */
-	while_waiting = build_header_cache;
-#endif
 	ch = read_command();
-#ifdef	DOS
-	while_waiting = NULL;
-#ifdef	MOUSE
-	{extern void clear_mfunc();
-	clear_mfunc();
-	}
-#endif
-#endif
 
         orig_ch = ch;
 
@@ -1050,9 +1017,7 @@ sort_current_folder()
     }else{
 	for(mess_no = 1; mess_no <= ps_global->max_msgno; mess_no++)
             sort[mess_no] = mess_no;
-#ifndef	DOS
-        if(ps_global->max_msgno > 500) 
-#endif
+        if(ps_global->max_msgno > 500)
             q_status_message1(0, 2, 4, "Sorting folder by %s", sort_name(so));
                               
         compare_count = 0;
@@ -1093,7 +1058,6 @@ sort_name(so)
  */
 static struct index_cache {
    void	    *cache;			/* pointer to cache */
-   char	    *name;			/* pointer to cache name */
    long      num;			/* number of last index in cache */
    unsigned  size;			/* size of each index line       */
 } icache = { NULL, 0L, 0 };
@@ -1101,26 +1065,7 @@ static struct index_cache {
 /*
  * cache size growth increment
  */
-
-#ifdef	DOS
-/*
- * the idea is to have the cache increment be a multiple of the block
- * size (4K), for efficient swapping of blocks.  we can pretty much
- * assume 81 character lines.
- *
- * REMEMBER: number of lines in the incore cache has to be a mutliple 
- *           of the cache growth increment!
- */
-#define	IC_SIZE		(50L)			/* cache growth increment  */
-#define	ICC_SIZE	(50L)			/* enties in incore cache  */
-#define FUDGE           (46L)			/* extra chars to make 4096*/
-
-static char	*incore_cache = NULL;		/* pointer to incore cache */
-static long      cache_block_s = 0L;		/* save recomputing time   */
-static long      cache_base = 0L;		/* index of line 0 in block*/
-#else
 #define	IC_SIZE		100
-#endif
 
 /*
  * important values for cache building
@@ -1162,49 +1107,6 @@ i_cache_size(indx)
 	while(indx >= icache.num)
 	  icache.num += IC_SIZE;
 
-#ifdef	DOS
-	tmpline = fs_get((size_t)tmplen);
-	memset(tmpline, 0, (size_t)tmplen);
-	if(icache.cache == NULL){
-	    if(!icache.name)
-	      icache.name = (char *)temp_nam(NULL, "pi");
-
-	    if((icache.cache = (void *)fopen(icache.name,"w+b")) == NULL){
-		sprintf(tmp_20k_buf, "Can't open index cache: %s",icache.name);
-		fatal(tmp_20k_buf);
-	    }
-
-	    for(j = 0; j < icache.num; j++){
-	        if(fwrite(tmpline,(size_t)tmplen,
-			  (size_t)1,(FILE *)icache.cache) != 1)
-		  fatal("Can't write index cache in resize");
-
-		if(j%ICC_SIZE == 0){
-		  if(fwrite(tmpline,(size_t)FUDGE,
-				(size_t)1,(FILE *)icache.cache) != 1)
-		    fatal("Can't write FUDGE factor in resize");
-	        }
-	    }
-	}
-	else{
-	    /* init new entries */
-	    fseek((FILE *)icache.cache, 0L, 2);		/* seek to end */
-
-	    for(;j < icache.num; j++){
-	        if(fwrite(tmpline,(size_t)tmplen,
-			(size_t)1,(FILE *)icache.cache) != 1)
-		  fatal("Can't write index cache in resize");
-
-		if(j%ICC_SIZE == 0){
-		  if(fwrite(tmpline,(size_t)FUDGE,
-				(size_t)1,(FILE *)icache.cache) != 1)
-		    fatal("Can't write FUDGE factor in resize");
-	        }
-	    }
-	}
-
-	fs_give((void **)&tmpline);
-#else
 	if(icache.cache == NULL){
 	    icache.cache = (void *)fs_get((icache.num+1)*tmplen);
 	    memset(icache.cache, 0, (icache.num+1)*tmplen);
@@ -1214,77 +1116,10 @@ i_cache_size(indx)
 	    tmpline = (char *)icache.cache + ((j+1) * tmplen);
 	    memset(tmpline, 0, (icache.num - j) * tmplen);
 	}
-#endif
     }
 
     return(1);
 }
-
-#ifdef	DOS
-/*
- * read a block into the incore cache
- */
-void
-icread()
-{
-    size_t n;
-
-    if(fseek((FILE *)icache.cache, (cache_base/ICC_SIZE) * cache_block_s, 0))
-      fatal("ran off end of index cache file in icread");
-
-    n = fread((void *)incore_cache, (size_t)cache_block_s, 
-		(size_t)1, (FILE *)icache.cache);
-
-    if(n != 1L)
-      fatal("Can't read index cache block in from disk");
-}
-
-
-/*
- * write the incore cache out to disk
- */
-void
-icwrite()
-{
-    size_t n;
-
-    if(fseek((FILE *)icache.cache, (cache_base/ICC_SIZE) * cache_block_s, 0))
-      fatal("ran off end of index cache file in icwrite");
-
-    n = fwrite((void *)incore_cache, (size_t)cache_block_s,
-		(size_t)1, (FILE *)icache.cache);
-
-    if(n != 1L)
-      fatal("Can't write index cache block in from disk");
-}
-
-
-/*
- * make sure the neccessary block of index lines is in core
- */
-void
-i_cache_hit(indx)
-    long         indx;
-{
-    dprint(9, (debugfile, "i_cache_hit: %d\n", indx));
-    /* no incore cache, create it */
-    if(!incore_cache){
-	cache_block_s = (((long)icache.size * ICC_SIZE) + FUDGE)*sizeof(char);
-	incore_cache  = (char *)fs_get((size_t)cache_block_s);
-	cache_base = (indx/ICC_SIZE) * ICC_SIZE;
-	icread();
-	return;
-    }
-
-    if(indx >= cache_base && indx < (cache_base + ICC_SIZE))
-	return;
-
-    icwrite();
-
-    cache_base = (indx/ICC_SIZE) * ICC_SIZE;
-    icread();
-}
-#endif
 
 
 /*
@@ -1299,12 +1134,7 @@ get_index_cache(msgno)
 	return(NULL);
     }
 
-#ifdef	DOS
-    i_cache_hit(msgno);			/* get entry into core */
-    return(incore_cache + ((msgno%ICC_SIZE) * (long)max(icache.size,FUDGE)));
-#else
     return((char *)(icache.cache) + (msgno * (long)icache.size * sizeof(char)));
-#endif
 }
 
 
@@ -1361,43 +1191,9 @@ clear_index_cache_ent(indx)
 void
 clear_index_cache()
 {
-#ifdef	DOS
-    cache_base = 0L;
-    if(incore_cache)
-      fs_give((void **)&incore_cache);
-
-    if(icache.cache){
-	fclose((FILE *)icache.cache);
-	icache.cache = NULL;
-    }
-
-    if(icache.name){
-	unlink(icache.name);
-	fs_give((void **)&icache.name);
-    }
-#else
     if(icache.cache)
       fs_give((void **)&(icache.cache));
-#endif
     icache.num  = 0L;
     icache.size = 0;
     bc_this_stream = NULL;
 }
-
-
-#ifdef	DOS
-/*
- * flush the incore_cache, but not the whole enchilada
- */
-void
-flush_index_cache()
-{
-    if(incore_cache){
-	if(ps_global->max_msgno)	/* write this block out to disk */
-	  icwrite();
-
-	fs_give((void **)&incore_cache);
-	cache_base = 0L;
-    }
-}
-#endif

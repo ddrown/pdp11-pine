@@ -4851,3 +4851,88 @@ used to feed them, all in `pine/init.c` unless noted:
   11184 -> 10768 (-416 bytes, from the removed `variables[]` entry).
   `bin/pico` unaffected. Combined phase 1 + phase 2 total against the
   pre-cut baseline: text -6424 bytes, data -416 bytes.
+
+### `pine/mailindx.c` and `pine/pine.c` dead-code sweep -- never-defined-macro cleanup, outside the earlier four-file survey
+
+Neither file was part of the earlier `send.c`/`mailcmd.c`/`folder.c`/
+`mailview.c` "UI files: dead/vestigial code" survey, so they still had
+the same class of `#ifdef DOS` (and friends) dead weight that survey
+already cleaned up elsewhere. Confirmed `DOS`, `MOUSE`, `DYN`,
+`HAVE_SMALLOC`, `NXT` are never defined anywhere in the tree (grepped
+every platform header and `makefile.lnx`), and that `USE_QUOTAS`/
+`NO_KEYBOARD_LOCK` are always commented out in every `pine/osdep/os-*.h`
+variant including the one this build actually uses (`os-lnx.h`) --
+same "uniform-across-every-platform-variant" proof technique already
+used for the `DF_*` migration defaults in the `variables[]` cut.
+
+**`pine/mailindx.c`**: removed two dead mouse-support blocks
+(`register_mfunc`/`mouse_in_index`/`clear_mfunc`) and a dead
+`while_waiting = build_header_cache` pre-fetch hook from
+`mail_index_screen()`'s command loop; unwrapped an always-true
+`#ifndef DOS` guard around the "still sorting" status message (kept
+the real `if(max_msgno > 500)` check it wrapped). The big find: the
+entire **disk-paged index-line cache** was DOS-only --
+`icread()`/`icwrite()`/`i_cache_hit()` (three whole functions), the
+DOS half of `i_cache_size()`, and the `incore_cache`/`cache_block_s`/
+`cache_base`/`ICC_SIZE`/`FUDGE` bookkeeping plus the `icache.name`
+struct field they were the only users of -- same species of dead code
+as the `FileStar` disk-paged scroll-buffer engine already cut from
+`mailview.c`. Also deleted **`flush_index_cache()`** outright: its
+entire body was `#ifdef DOS` (so it already compiled to a no-op) and
+grep confirmed zero callers anywhere in the tree, plus its prototype
+in `pine.h`.
+
+**`pine/pine.c`**: `main()` lost a dead DYNIX stdio-buffering
+workaround, dead `malloc_debug()` calls (`HAVE_SMALLOC`/`NXT`), a dead
+`mailcache = dos_cache` hook, a dead disk-quota check
+(`USE_QUOTAS`), and two dead terminal-init error-message suppressions
+(`#ifdef DOS /* always succeeds */ #else <real error path> #endif` --
+unwrapped to keep the real path unconditional). The biggest find:
+`main()`'s entire "prompt for an inbox path if none is set" block (65
+lines) was wrapped in `#ifdef DOS` -- meaning the
+`set_variable(V_INBOX_PATH, int_mail)` call inside it, which an
+earlier session's `variables[]`-removal scoping investigation had
+flagged as "genuine interactive runtime mutation, can't just delete
+`variables[]`", **never actually executes in this build**. That
+earlier finding was looking at dead code. With this block gone,
+`set_variable()` has zero callers left anywhere in the tree (confirmed
+via grep) and was deleted outright too, along with its prototype in
+`pine.h`. `main_menu_screen()` lost the same dead mouse/`while_waiting`
+pre-fetch hook as `mailindx.c`, a whole dead `case 'h':` MS-DOS
+heap-debugger command (`_heapwalk`/`_HEAPINFO`, self-labeled "while
+we're testing DOS" / "END: for testing" in its own comments -- clearly
+throwaway test code, not a shipped feature), a dead low-memory check
+before opening an IMAP folder, and a dead `change_passwd()`-suppression
+branch (unwrapped to keep the real `change_passwd()` call
+unconditional). Two `NO_KEYBOARD_LOCK` sites: one `#ifndef` wrapper
+that was always-true (unwrapped, kept the live keyboard-lock command)
+and one `#ifdef` that was always-false (deleted). `default_driver()`
+lost a dead `extern MAILSTREAM dawzproto` (the live branch already
+declares `bezerkproto`, used via `DF_DRIVER_PROTO`).
+
+Noticed but left alone, same as the `folder.c` sweep's `h_folder_fcc`
+precedent: `pine.hlp`'s `h_sticky_inbox` help topic is now unreachable
+too (it was only ever shown from the deleted inbox-path-prompt block),
+but cutting it means editing the tracked `.hlp` source and
+regenerating `helptext.c`/`.h` -- a separate generated-file workflow,
+out of scope here.
+
+Verified: `./build clean && ./build lnx`, 0 warnings both files. Full
+smoketest suite, 26/26, run twice for stability. Manually drove a
+session exercising every behavior-relevant (not just dead-branch) site
+touched: sorting the index by subject (exercises
+`build_header_cache()`/`get_index_cache()`, the surviving half of the
+disk-cache code); the Main Menu's `'k'` keyboard-lock command still
+prompts and cancels correctly; the Main Menu's `'g'` goto-folder
+command (the now-unwrapped `broach_folder()` call site) still prompts
+correctly. No new regression test added -- dead-code removal with no
+intended behavior change, not a bug fix.
+
+Size delta was smaller than the line count suggests, for the same
+reason the `mailview.c` sweep's was: most of what was removed was
+`#ifdef`-gated code that the preprocessor already stripped before the
+compiler ever saw it, so its presence or absence in the source doesn't
+move the compiled binary -- the real win is `set_variable()` and
+`flush_index_cache()`, which *were* compiling in with zero callers.
+`bin/pine` text 317519 -> 317247 (-272 bytes), data unchanged at
+10768. `bin/pico` unaffected.

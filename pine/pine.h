@@ -783,7 +783,6 @@ void init_vars(struct pine *);
 char *expand_variables(char *, char *);
 int  init_username(struct pine *);  
 int  init_hostname(struct pine *);
-int  set_variable(int, char *);
 int  set_variable_list(int, char **);
 int  init_mail_dir(char *);
 char **parse_list(char *, int, char **);
@@ -807,9 +806,6 @@ void  mail_index_screen(struct pine *);
 void  clear_index_cache(void);
 void  clear_index_cache_ent(long);
 int   build_index_cache(long);
-#ifdef	DOS
-void  flush_index_cache(void);
-#endif
 char *build_header_line(long);
 void  build_header_cache(void);
 void  redraw_index_body(void);
