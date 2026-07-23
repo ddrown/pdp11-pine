@@ -28,39 +28,6 @@ DONE elsewhere or referenced in passing below.
       is inflated by the shared-header fan-out described in the Tier 1
       entry above, so re-scope by unique site once counted for real).
 
-### Collapse dead `feature-list` (`F_*`) checks -- pinerc can never enable them
-
-- [ ] Same root cause as the `variables[]` cut in `TODO-pdp11-done.md`:
-      `.pinerc` is never read or written, so the `feature-list` variable's
-      `global_val`/`user_val` are always empty and `process_feature_list()`
-      (`pine/init.c`) is a permanent no-op. Confirmed via grep across all of
-      `pine/*.c` for every `F_TURN_ON`/`F_TURN_OFF`/`F_SET` call site: of
-      pine's 19 feature bits, only `F_USE_FK`, `F_CAN_SUSPEND`, and
-      `F_EXPANDED_FOLDERS` have a second, real write path (`-k`/`-z`/`-l`
-      command-line flags in `pine/args.c`, plus the "pinef" argv0 check and
-      the composer's use-fkeys toggle in `pine.c`/`send.c`/`ttyin.c`) --
-      those three stay live. The other 16 (`F_ENABLE_PIPE`,
-      `F_ENABLE_FULL_HDR`, `F_ENABLE_BOUNCE`, `F_ENABLE_FLAG`,
-      `F_ENABLE_ZOOM`, `F_ENABLE_APPLY`, `F_DEL_SKIPS_DEL`,
-      `F_ENABLE_JUMP`, `F_AUTO_EXPUNGE`, `F_ENABLE_TAB_COMPLETE`,
-      `F_AUTO_READ_MSGS`, `F_QUIT_WO_CONFIRM`, `F_SIG_AT_BOTTOM`,
-      `F_INCLUDE_HEADER`, `F_MIME_FORWARD`, `F_OLD_GROWTH`) can only ever
-      be set through the dead `process_feature_list()` path -- they are
-      permanently OFF for the life of every run, forever. That makes ~28
-      `F_ON()`/`F_OFF()` call sites across `pine/mailcmd.c` (13),
-      `pine/mailindx.c` (6), `pine/mailview.c` (4), `pine/reply.c` (4), and
-      `pine/pine.c` (1) provably-fixed-outcome dead branches -- e.g.
-      `mailcmd.c:715`'s `if(F_OFF(F_ENABLE_FULL_HDR,...)) goto bogus;` means
-      the `'h'` full-header-toggle command is unreachable today, and the
-      `'0'`-`'9'` digit-jump-to-message shortcut (`mailcmd.c:487-498`) is
-      likewise always disabled. `process_feature_list()` itself, its
-      `feat_list[]` table, and the `feature-list` variable/`V_FEATURE_LIST`
-      entry (currently kept as "live" in the `variables[]` cut) can also be
-      removed outright once every reader of those 16 bits is collapsed --
-      its only remaining live-write task (`F_USE_FK`/`F_CAN_SUSPEND`/
-      `F_EXPANDED_FOLDERS`) is already fully covered by `args.c`'s
-      command-line path.
-
 ### Formalize an ASan build target and try `-fanalyzer`
 
 - [ ] CLAUDE.md's verification discipline already leans on ad hoc

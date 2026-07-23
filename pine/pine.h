@@ -282,11 +282,10 @@
 #define V_MAIL_DIRECTORY           6
 #define V_READ_MESSAGE_FOLDER      7
 #define V_SIGNATURE_FILE           8
-#define V_FEATURE_LIST             9
-#define V_INIT_CMD_LIST            10
-#define V_SAVED_MSG_NAME_RULE      11
-#define V_SORT_KEY                 12
-#define V_USE_ONLY_DOMAIN_NAME     13
+#define V_INIT_CMD_LIST            9
+#define V_SAVED_MSG_NAME_RULE      10
+#define V_SORT_KEY                 11
+#define V_USE_ONLY_DOMAIN_NAME     12
 
 
 #define VAR_PERSONAL_NAME            vars[V_PERSONAL_NAME].current_val.p
@@ -298,7 +297,6 @@
 #define VAR_MAIL_DIRECTORY           vars[V_MAIL_DIRECTORY].current_val.p
 #define VAR_READ_MESSAGE_FOLDER      vars[V_READ_MESSAGE_FOLDER].current_val.p
 #define VAR_SIGNATURE_FILE           vars[V_SIGNATURE_FILE].current_val.p
-#define VAR_FEATURE_LIST             vars[V_FEATURE_LIST].current_val.l
 #define VAR_INIT_CMD_LIST            vars[V_INIT_CMD_LIST].current_val.l
 #define VAR_SAVED_MSG_NAME_RULE      vars[V_SAVED_MSG_NAME_RULE].current_val.p
 #define VAR_SORT_KEY                 vars[V_SORT_KEY].current_val.p
@@ -315,25 +313,9 @@
 					 : F_TURN_OFF((feature),(ps)))
 
 /* list of feature numbers (which bit goes with which feature) */
-#define F_OLD_GROWTH                0
-#define F_ENABLE_FULL_HDR           1
-#define F_ENABLE_PIPE               2
-#define F_ENABLE_TAB_COMPLETE       3
-#define F_QUIT_WO_CONFIRM           4
-#define F_ENABLE_JUMP               5
-#define F_ENABLE_BOUNCE             7
-#define F_ENABLE_APPLY              8
-#define F_ENABLE_FLAG               9
-#define F_ENABLE_ZOOM              10
-#define F_MIME_FORWARD             11
-#define F_CAN_SUSPEND              12
-#define F_EXPANDED_FOLDERS         13
-#define F_USE_FK                   14
-#define F_INCLUDE_HEADER           15
-#define F_SIG_AT_BOTTOM            16
-#define F_DEL_SKIPS_DEL            17
-#define F_AUTO_EXPUNGE             18
-#define F_AUTO_READ_MSGS           19
+#define F_CAN_SUSPEND               0
+#define F_EXPANDED_FOLDERS          1
+#define F_USE_FK                    2
 
 
 

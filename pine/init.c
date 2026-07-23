@@ -76,10 +76,8 @@ static char rcsid[] = "$Id: init.c,v 4.102 1993/11/23 00:04:05 mikes Exp $";
 extern char version_buff[];
 
 void set_current_val(struct variable *, int, int);
-void set_feature_list_current_val(struct variable *, int);
 /* AIX gives warning here 'cause it can't quite cope with enums */
 void process_init_cmds(struct pine *, char **);
-void process_feature_list(struct pine *, char **);
 int  decode_sort(struct pine *, char *);
 
 
@@ -101,11 +99,6 @@ a bit more readable...
 #define	READ_MSG_TEXT "read-message-folder specifies where already-read messages will be stored.\n# If set, you will be asked when you quit Pine if you want read messages\n# to be moved to this folder and deleted from your INBOX."
 
 #define	SIG_FILE_TEXT "signature-file specifies the name or path of a file containing text that\n# will automatically be inserted in outgoing mail."
-
-#define	FEATURE_LIST_TEXT	"feature-list= comma-separated list of features from the following set:\n# Note: the value \"old-growth\" is shorthand for the indicated features...\n# enable-full-header-cmd        (included in old-growth set)\n# enable-unix-pipe-cmd          (included in old-growth set)\n# enable-bounce-cmd             (included in old-growth set)\n# enable-suspend                (included in old-growth set)\n# \
-enable-tab-completion         (included in old-growth set)\n# enable-jump-shortcut          (included in old-growth set)\n# quit-without-confirm          (included in old-growth set)\n# enable-apply-cmd              (included in old-growth set)\n# enable-flag-cmd               (included in old-growth set)\n# enable-zoom-cmd               (included in old-growth set)\n# expanded-view-of-folders\n# use-function-keys\n# include-header-in-reply\n# signature-at-bottom\n# delete-skips-deleted\n# expunge-without-confirm\n# auto-move-read-msgs\n# e.g.\n# feature-list= old-growth, signature-at-bottom\n# \
-The feature-list that is in effect when you are running Pine is the\n# combination of the feature-list set by the system manager in the pine.conf\n# file plus the feature-list set by you here.  (PC-Pine doesn't have a\n# pine.conf so this doesn't apply in that case.)  The feature-list is additive\n# and the order is significant.  First the system-wide pine.conf values are\n# read, then yours.  Any of the features listed above may also have the\n# \
-characters \"no-\" prepended to it, to cancel its effect.  So, for example,\n# you could set \"feature-list= old-growth, no-quit-without-confirm\" if you\n# wanted to have all of the old-growth features except for that one.  Or,\n# if the system manager has set \"old-growth\" in the pine.conf file, you\n# can cancel that with \"no-old-growth\".  The default condition for all\n# of the features is no-, that is, off."
 
 #define	SAVE_MSG_TEXT	"saved-msg-name-rule= determines default folder name for Saves...\n# Choose one: default-folder, by-sender, by-from, by-recipient,\n# last-folder-used.  Normal default is \"default-folder\", which on Unix\n# means \"saved-messages\" and in PC-Pine means \"SAVEMAIL\""
 
@@ -154,8 +147,6 @@ static struct variable variables[] = {
   READ_MSG_TEXT},
 {"signature-file",             0, 1, 0, 1, 1, 0,
   SIG_FILE_TEXT},
-{"feature-list",               0, 1, 0, 1, 1, 1,
-  FEATURE_LIST_TEXT},
 {"initial-keystroke-list",     0, 1, 0, 1, 1, 1,
  "Pine executes these keys upon startup (e.g. to view msg 13: i,j,1,3,CR,v)"},
 {"saved-msg-name-rule",        0, 1, 0, 1, 1, 0,
@@ -308,10 +299,6 @@ init_vars(ps)
     else if(!strucmp(VAR_SAVED_MSG_NAME_RULE, "default-folder"))
         ps->save_by_sender = 0;
 
-    set_feature_list_current_val(vars, V_FEATURE_LIST);
-    process_feature_list(ps, VAR_FEATURE_LIST);
-
-    /* this should come after process_feature_list because of use_fkeys */
     if (!ps->start_in_index)
         set_current_val(vars, V_INIT_CMD_LIST, FALSE);
     if (VAR_INIT_CMD_LIST)
@@ -331,81 +318,6 @@ init_vars(ps)
 		                   : STRING(vars->current_val.p)));
     }
 #endif
-}
-
-
-struct features {
-    char *name;        /* the name that goes in the config file */
-    int   var_number;  /* the internal bit number */
-};
-static struct features feat_list[] = {
-    {"old-growth", F_OLD_GROWTH},
-    {"enable-full-header-cmd", F_ENABLE_FULL_HDR},
-    {"enable-unix-pipe-cmd", F_ENABLE_PIPE},
-    {"enable-tab-completion", F_ENABLE_TAB_COMPLETE},
-    {"quit-without-confirm", F_QUIT_WO_CONFIRM},
-    {"enable-jump-shortcut", F_ENABLE_JUMP},
-    {"enable-bounce-cmd", F_ENABLE_BOUNCE},
-    {"enable-apply-cmd", F_ENABLE_APPLY},
-    {"enable-flag-cmd", F_ENABLE_FLAG},
-    {"enable-zoom-cmd", F_ENABLE_ZOOM},
-    {"enable-forward-as-mime", F_MIME_FORWARD},
-    {"enable-suspend", F_CAN_SUSPEND},
-    {"expanded-view-of-folders", F_EXPANDED_FOLDERS},
-    {"use-function-keys", F_USE_FK},
-    {"include-header-in-reply", F_INCLUDE_HEADER},
-    {"signature-at-bottom", F_SIG_AT_BOTTOM},
-    {"delete-skips-deleted", F_DEL_SKIPS_DEL},
-    {"expunge-without-confirm", F_AUTO_EXPUNGE},
-    {"auto-move-read-msgs", F_AUTO_READ_MSGS},
-    {NULL, 0}
-};
-
-void
-process_feature_list(ps, list)
-    struct pine *ps;
-    char **list;
-{
-    register char *q;
-    char **p;
-    int   yorn;
-    struct features *feat;
-
-    /* now run through the list (both global and user lists are in list) */
-    if(list) {
-      for(p = list; (q = *p) != NULL; p++) {
-	if(struncmp(q, "no-", 3) == 0) {
-	  yorn = 0;
-	  q += 3;
-	}else {
-	  yorn = 1;
-	}
-
-	for(feat=feat_list; feat->name; feat++) {
-	  if(strucmp(q, feat->name) == 0) {
-	    if(feat->var_number == F_OLD_GROWTH) {
-	      F_SET(F_ENABLE_FULL_HDR, ps, yorn);
-	      F_SET(F_ENABLE_PIPE, ps, yorn);
-	      F_SET(F_ENABLE_TAB_COMPLETE, ps, yorn);
-	      F_SET(F_QUIT_WO_CONFIRM, ps, yorn);
-	      F_SET(F_ENABLE_JUMP, ps, yorn);
-	      F_SET(F_ENABLE_BOUNCE, ps, yorn);
-	      F_SET(F_ENABLE_APPLY, ps, yorn);
-	      F_SET(F_ENABLE_FLAG, ps, yorn);
-	      F_SET(F_ENABLE_ZOOM, ps, yorn);
-	      F_SET(F_CAN_SUSPEND, ps, yorn);
-	    }else {
-	      F_SET(feat->var_number, ps, yorn);
-	    }
-	    break;
-	  }
-	}
-	/* if it wasn't in that list */
-	if(feat->name == NULL) {
-          dprint(1, (debugfile, "Unrecognized feature in feature-list (%s%s)", (yorn ? "" : "no-"), q));
-	}
-      }
-    }
 }
 
 
@@ -583,44 +495,6 @@ set_current_val(vars, v_no, expand)
     }
 }
 
-
-/*
- * Feature-list has to be handled separately from the other variables
- * because it is additive.  The other variables choose one of command line,
- * or pine.conf, or pinerc.  Feature list adds them (except there is not
- * a command-line option).  This could easily be converted to a general
- * purpose routine if we add more additive variables.
- */
-void    
-set_feature_list_current_val(vars, v_no)
-  struct variable *vars;
-  int              v_no;
-{
-    char **list;
-    int    i, j,
-	   elems = 0;
-
-    /* count the lists so I can allocate */
-    if(list=vars[v_no].global_val.l)
-      for(i = 0; list[i]; i++)
-        elems++;
-    if(list=vars[v_no].user_val.l)
-      for(i = 0; list[i]; i++)
-        elems++;
-
-    vars[v_no].current_val.l = (char **)fs_get((elems+1) * sizeof(char *));
-
-    j = 0;
-    if(list=vars[v_no].global_val.l)
-      for(i = 0; list[i]; i++)
-        vars[v_no].current_val.l[j++] = cpystr(list[i]);
-    if(list=vars[v_no].user_val.l)
-      for(i = 0; list[i]; i++)
-        vars[v_no].current_val.l[j++] = cpystr(list[i]);
-
-    vars[v_no].current_val.l[j] = NULL;
-}
-                                                     
 
 
 /*----------------------------------------------------------------------

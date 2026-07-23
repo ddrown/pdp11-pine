@@ -4797,3 +4797,57 @@ call sites to their fixed outcome:
 - **Size delta**: `bin/pine` text 323943 -> 321543 (-2400 bytes), data
   unchanged at 11184 (expected -- this phase only touches code, not
   the `variables[]`/`struct variable` data). `bin/pico` unaffected.
+
+### Collapse dead `feature-list` (`F_*`) checks, phase 2 -- remove the dead machinery
+
+Follow-on to phase 1 above: with every reader of the 16 dead `F_*` bits
+collapsed to its fixed outcome, nothing reads `process_feature_list()`'s
+output for them either, so removed the whole now-fully-dead chain that
+used to feed them, all in `pine/init.c` unless noted:
+- The `"feature-list"` entry from the `variables[]` table (was
+  `V_FEATURE_LIST` = 9 of 14), and its `FEATURE_LIST_TEXT` description
+  string -- its only reference.
+- The `set_feature_list_current_val(vars, V_FEATURE_LIST)` and
+  `process_feature_list(ps, VAR_FEATURE_LIST)` call sites in
+  `init_vars()`, plus the now-stale "this should come after
+  process_feature_list because of use_fkeys" comment above them (moot
+  once feature-list processing no longer exists -- `F_USE_FK` is set
+  by `args.c` before `init_vars()` even runs).
+- `process_feature_list()` itself, `feat_list[]`, and `struct
+  features` -- confirmed via grep this was `process_feature_list()`'s
+  only caller anywhere in the tree.
+- `set_feature_list_current_val()` itself -- confirmed its only caller
+  was the `init_vars()` call site just removed.
+- Both functions' forward prototypes near the top of `pine/init.c`.
+- In `pine/pine.h`: the `V_FEATURE_LIST`/`VAR_FEATURE_LIST` `#define`s,
+  with the remaining 13 `V_*` constants renumbered sequentially (same
+  safe mechanical renumbering as the `variables[]` cut above --
+  confirmed via grep that nothing hardcodes a literal `V_*` index); and
+  the 16 now-fully-unreachable `F_*` `#define`s (`F_OLD_GROWTH`,
+  `F_ENABLE_FULL_HDR`, `F_ENABLE_PIPE`, `F_ENABLE_TAB_COMPLETE`,
+  `F_QUIT_WO_CONFIRM`, `F_ENABLE_JUMP`, `F_ENABLE_BOUNCE`,
+  `F_ENABLE_APPLY`, `F_ENABLE_FLAG`, `F_ENABLE_ZOOM`, `F_MIME_FORWARD`,
+  `F_INCLUDE_HEADER`, `F_SIG_AT_BOTTOM`, `F_DEL_SKIPS_DEL`,
+  `F_AUTO_EXPUNGE`, `F_AUTO_READ_MSGS`), keeping only `F_CAN_SUSPEND`,
+  `F_EXPANDED_FOLDERS`, `F_USE_FK` -- renumbered 0/1/2. Safe for the
+  same reason as the `V_*` renumbering: `F_ON`/`F_OFF`/`F_TURN_ON`/
+  `F_TURN_OFF`/`F_SET` are the only way any code touches a feature
+  bit, and every call site in the tree goes through the symbolic
+  `F_*` name, never a literal bit number (confirmed via grep).
+- **Verified**: grepped all 16 removed `F_*` names, `V_FEATURE_LIST`,
+  `VAR_FEATURE_LIST`, and `FEATURE_LIST_TEXT` across the whole tree
+  after the edit -- zero references remain anywhere. `./build clean &&
+  ./build lnx`, 0 warnings. Full smoketest suite, 26/26, run twice for
+  stability. Manually confirmed: a `.pinerc` seeded with
+  `feature-list=quit-without-confirm` still has no effect (quit still
+  prompts "Really quit pine", matching the pre-existing "pinerc is
+  never parsed" behavior -- this cut removes dead code, it doesn't
+  change what was already unreachable); the 3 surviving command-line
+  feature flags (`-k`/`-z`/`-l`) are inherently safe under the
+  renumbering since reader and writer both resolve through the same
+  `F_*` symbol at compile time, with no literal bit values anywhere in
+  the tree to go stale.
+- **Size delta**: `bin/pine` text 321543 -> 317519 (-4024 bytes), data
+  11184 -> 10768 (-416 bytes, from the removed `variables[]` entry).
+  `bin/pico` unaffected. Combined phase 1 + phase 2 total against the
+  pre-cut baseline: text -6424 bytes, data -416 bytes.
