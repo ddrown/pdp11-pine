@@ -4612,3 +4612,110 @@ already covered by the existing composer tests).
   it's the one test that both relies on default `dismiss_splash=True`
   and does its own subsequent `To:`-field interaction that a
   misdirected keystroke could desync).
+
+### Cut 22 of `pine/init.c`'s 36 `variables[]` pinerc entries -- dead now that `.pinerc` is never actually read or written
+- **What it was**: `pine/init.c`'s `variables[]` table (`V_*`-indexed)
+  models every `.pinerc`/`pine.conf` variable pine could ever have. But
+  `read_pinerc()` is an unconditional `return(0)` stub (the
+  "bootstrap-only stub" entry above) -- no `.pinerc` is ever actually
+  read -- and `set_variable()`'s own header comment says plainly
+  "pinerc is never rewritten," so nothing persists a value across runs
+  either. Net effect: no entry in this table can ever hold anything but
+  its compiled-in default, for the life of a run or across runs. Two
+  tiers of entries fell out of grepping every `V_*`/`VAR_*` name
+  against the whole tree (excluding the table/`#define` lines
+  themselves):
+  - **Tier 1 (17 entries, zero non-table references anywhere)**: the
+    12 already-`is_obsolete`-flagged "disabled, X removed" slots from
+    past cuts (`smtp-server`, `incoming-folders`, `news-collections`,
+    `address-book`, `character-set`, `editor`, `image-viewer`,
+    `printer`, `personal-print-command`, `standard-printer`,
+    `last-time-prune-questioned`, `last-version-used`), 2 that were
+    never wired into anything at all (`compose-mime`,
+    `show-all-characters`), and 3 more caught in a second pass after
+    the user spotted them (`bugs-nickname`/`bugs-fullname`/
+    `bugs-address`): these had a `set_current_val()` call each (so an
+    earlier grep for "any reference at all" undercounted them as
+    live), but no `VAR_BUGS_*` macro was ever actually read anywhere,
+    and no `DF_BUGS_*` default existed to populate them either --
+    `set_current_val()` just copied an always-`NULL` `global_val`/
+    `user_val` into an always-`NULL` `current_val`, a complete no-op.
+    They're leftovers of the deleted address-book feature ("Nickname
+    of bugs entry to be automatically placed in all address books").
+    All 17 of these slots were previously kept (not deleted) purely so
+    their `V_*` index numbers wouldn't shift and break re-parsing of
+    an old `.pinerc` -- but since nothing is parsed by name anymore,
+    that compatibility concern is itself moot, which is what unblocked
+    full deletion instead of just marking them disabled.
+  - **Tier 2 (5 entries, `elm-style-save`/`header-in-reply`/
+    `feature-level`/`old-style-reply`/`save-by-sender`)**: these exist
+    purely to let `read_pinerc()` translate pre-3.89 pinerc variable
+    names into their modern `feature-list`/`saved-msg-name-rule`
+    equivalents on the fly. Since they can only ever hold their
+    compiled-in `DF_*` default (`pine/os.h`: all four "no"-defaulted
+    ones are literally `"no"`, `DF_FEATURE_LEVEL` is `"sapling"`,
+    identical across every platform variant in the tree), traced the
+    resulting arithmetic by hand: `obs_header_in_reply`/
+    `obs_old_style_reply`/`obs_save_by_sender` always resolve `0` and
+    `obs_feature_level` always resolves `Sapling`, unconditionally, on
+    every run. That made two further pieces of live-looking code
+    provably dead: `process_feature_list()`'s three backward-compat
+    parameters were always called `(0, 0, 0)`, so its `if(hir)`/
+    `if(osr)`/`if(old_growth)` blocks and its entire ~35-line
+    "build a new feature-list to fold the obsolete setting in" tail
+    never executed; and `init_vars()`'s `obs_save_by_sender`-driven
+    override of `saved-msg-name-rule` never fired either.
+- **What changed**: deleted all 22 `variables[]` entries and their
+  `V_*`/`VAR_*` `#define`s from `pine/pine.h`, renumbering the
+  remaining 14 `V_*` constants sequentially from 0 (confirmed via grep
+  that nothing in the tree hardcodes a literal index; the 3
+  `V_BUGS_*` entries happened to already be last in the list, so their
+  removal needed no renumbering of its own). Deleted the now-unused
+  `FeatureLevel`/`Sapling`/`Seedling`/`Seasoned` enum. Deleted the
+  Tier 2 migration block from `init_vars()`, its 3
+  `set_current_val(vars, V_BUGS_*, TRUE)` calls, and simplified the
+  `saved-msg-name-rule` "default-folder" branch (the dead
+  `obs_save_by_sender` override that followed it is gone). Simplified
+  `process_feature_list()`'s signature from `(ps, list, old_growth,
+  hir, osr)` down to `(ps, list)`, deleting the three backward-compat
+  parameters, their top-of-function `F_TURN_ON` blocks, and the
+  "build a new feature-list" tail -- it now just walks the real
+  `feature-list` value and sets bits, nothing else. The remaining 14
+  variables (`personal-name`, `user-id`, `user-domain`, `inbox-path`,
+  `folder-collections`, `default-fcc`, `mail-directory`,
+  `read-message-folder`, `signature-file`, `feature-list`,
+  `initial-keystroke-list`, `saved-msg-name-rule`, `sort-key`,
+  `use-only-domain-name`) are untouched -- all confirmed real,
+  live-read `VAR_*` values used throughout `pine/*.c` (re-checked
+  after the `bugs-*` correction: each of these 14 has at least one
+  `VAR_*` macro reference outside `init_vars()`'s bootstrap, unlike
+  `bugs-*`). `sort-key` and `initial-keystroke-list` are also the only
+  two ever touched by `pine/args.c`'s command-line-flag handling
+  (`command_line_val`), an independent input path from `.pinerc` --
+  unaffected by this cut. Left the never-read `struct variable`
+  bitfields (`is_obsolete`/`is_used`/`been_written`/`is_global`) and
+  the deeper 4-way `user_val`/`global_val`/`command_line_val`/
+  `current_val` value model alone -- a bigger redesign of how
+  variables work at all, separate from "which variables can be
+  deleted."
+- **Correction mid-cut**: the first pass classified `bugs-nickname`/
+  `bugs-fullname`/`bugs-address` as live because they had a
+  `set_current_val()` call each -- but the user pointed out these
+  three were also removable, which prompted checking further and
+  finding that call is the *only* thing that ever touches them:
+  `VAR_BUGS_*` is never read anywhere, and no `DF_BUGS_*` default
+  exists to give `set_current_val()` anything to actually propagate.
+  Folded into this same entry rather than a separate write-up since
+  it's a direct continuation of the same not-yet-committed cut.
+- **Verified**: grepped all 22 removed `V_*`/`VAR_*` names (plus
+  `FeatureLevel`/`Sapling`/`Seedling`/`Seasoned`) across the whole tree
+  before and after each pass -- zero references either way beyond the
+  lines being deleted. `./build clean && ./build lnx`, 0 warnings after
+  both passes. Full smoketest suite, 26/26, run twice for stability
+  after each pass. Manually confirmed default feature bits are
+  unchanged: drove a fresh session and quitting still prompts "Really
+  quit pine?" (i.e. `F_QUIT_WO_CONFIRM` still defaults off, matching
+  pre-cut behavior since `old_growth` was already unconditionally `0`
+  even before this cut).
+- **Size delta**: `bin/pine` text 327351 -> 323943 (-3408 bytes), data
+  12400 -> 11184 (-1216 bytes); `bin/pico` unaffected.

@@ -79,7 +79,7 @@ void set_current_val(struct variable *, int, int);
 void set_feature_list_current_val(struct variable *, int);
 /* AIX gives warning here 'cause it can't quite cope with enums */
 void process_init_cmds(struct pine *, char **);
-void process_feature_list(struct pine *, char **, int , int, int);
+void process_feature_list(struct pine *, char **);
 int  decode_sort(struct pine *, char *);
 
 
@@ -142,16 +142,10 @@ static struct variable variables[] = {
   "Your login/e-mail user name"},
 {"user-domain",                0, 1, 0, 1, 1, 0,
   USER_DOMAIN_TEXT},
-{"smtp-server",                1, 1, 0, 1, 1, 1,
-  "Smtp-server is disabled, outgoing mail is always sent via local sendmail"},
-{"inbox-path",                 0, 1, 0, 1, 1, 0, 
+{"inbox-path",                 0, 1, 0, 1, 1, 0,
   INBOX_TEXT},
-{"incoming-folders",           1, 1, 0, 1, 1, 1,
-  "Incoming-folders is disabled, multi-collection support has been removed"},
 {"folder-collections",         0, 1, 0, 1, 1, 1,
   FOLDER_TEXT},
-{"news-collections",           1, 1, 0, 1, 1, 1,
-  "News-collections is disabled, news reading support has been removed"},
 {"default-fcc",                0, 1, 0, 1, 1, 0,
   DEFAULT_FCC_TEXT},
 {"mail-directory",             0, 1, 0, 1, 1, 0,
@@ -160,8 +154,6 @@ static struct variable variables[] = {
   READ_MSG_TEXT},
 {"signature-file",             0, 1, 0, 1, 1, 0,
   SIG_FILE_TEXT},
-{"address-book",               1, 1, 0, 1, 1, 0,
-  "Address-book is disabled, address book support has been removed"},
 {"feature-list",               0, 1, 0, 1, 1, 1,
   FEATURE_LIST_TEXT},
 {"initial-keystroke-list",     0, 1, 0, 1, 1, 1,
@@ -170,44 +162,8 @@ static struct variable variables[] = {
   SAVE_MSG_TEXT},
 {"sort-key",                   0, 1, 0, 1, 1, 0,
   SORT_TEXT},
-{"character-set",              1, 1, 0, 1, 1, 0,
-  "Character-set is disabled, this build only supports US-ASCII"},
-{"editor",                     1, 1, 0, 1, 1, 0,
-  "Alternate editor is disabled, this build only supports the built-in composer"},
-{"image-viewer",               1, 1, 0, 1, 1, 0,
-  "Image-viewer is disabled, this build has no attachment display support"},
 {"use-only-domain-name",       0, 1, 0, 1, 1, 0,
   ONLY_DOMAIN_TEXT},
-{"printer",                    1, 1, 0, 1, 1, 0,
-  "Printing is disabled, this build has no printer support"},
-{"personal-print-command",     1, 1, 0, 1, 0, 0,
-  "Printing is disabled, this build has no printer support"},
-{"standard-printer",           1, 1, 0, 0, 1, 0,
-  "Printing is disabled, this build has no printer support"},
-{"last-time-prune-questioned" ,1, 1, 0, 1, 0, 0,
-  "Sent-mail pruning is disabled, this build has no automatic expiration"},
-{"last-version-used",          1, 1, 0, 1, 0, 0,
-  "Last-version-used is disabled, the new-version welcome screen has been removed"},
-{"bugs-nickname",              0, 1, 0, 0, 1, 0,
-  "Nickname of bugs entry to be automatically placed in all address books"},
-{"bugs-fullname",              0, 1, 0, 0, 1, 0,
-  "Full name of bugs entry to be automatically placed in all address books"},
-{"bugs-address",               0, 1, 0, 0, 1, 0,
-  "Email address of bugs entry to be automatically placed in all address books"},
-{"elm-style-save",             1, 1, 0, 1, 1, 0,
-  "Elm-style-save is obsolete, use saved-msg-name-rule"},
-{"header-in-reply",            1, 1, 0, 1, 1, 0,
-  "Header-in-reply is obsolete, use include-header-in-reply in feature-list"},
-{"feature-level",              1, 1, 0, 1, 1, 0,
-  "Feature-level is obsolete, use feature-list"},
-{"old-style-reply",            1, 1, 0, 1, 1, 0,
-  "Old-style-reply is obsolete, use signature-at-bottom in feature-list"},
-{"compose-mime",               1, 1, 0, 0, 1, 0,
-  "Compose-mime is obsolete"},
-{"show-all-characters",        1, 1, 0, 1, 1, 0,
-  "Show-all-characters is obsolete"},
-{"save-by-sender",             1, 1, 0, 1, 1, 0,
-  "Save-by-sender is obsolete, use saved-msg-name-rule"},
 {NULL,                         0, 0, 0, 0, 0, 0,
    NULL}
 };
@@ -240,21 +196,12 @@ init_vars(ps)
 {
     char	 buf[MAXPATH +1];
     register struct variable *vars = ps->vars;
-    int		 obs_header_in_reply,     /* the obs_ variables are to       */
-		 obs_old_style_reply,     /* support backwards compatibility */
-		 obs_save_by_sender;
-    FeatureLevel obs_feature_level;
 
     /*--- The defaults here are defined in os-xxx.h so they can vary
           per machine ---*/
-    vars[V_ELM_STYLE_SAVE].global_val.p   = cpystr(DF_ELM_STYLE_SAVE);
-    vars[V_SAVE_BY_SENDER].global_val.p   = cpystr(DF_SAVE_BY_SENDER);
-    vars[V_HEADER_IN_REPLY].global_val.p  = cpystr(DF_HEADER_IN_REPLY);
     vars[V_INBOX_PATH].global_val.p       = cpystr("inbox");
     vars[V_DEFAULT_FCC].global_val.p      = cpystr(DF_DEFAULT_FCC);
     vars[V_USE_ONLY_DOMAIN_NAME].global_val.p = cpystr(DF_USE_ONLY_DOMAIN_NAME);
-    vars[V_FEATURE_LEVEL].global_val.p    = cpystr(DF_FEATURE_LEVEL);
-    vars[V_OLD_STYLE_REPLY].global_val.p  = cpystr(DF_OLD_STYLE_REPLY);
     vars[V_SORT_KEY].global_val.p         = cpystr(DF_SORT_KEY);
     vars[V_SAVED_MSG_NAME_RULE].global_val.p = cpystr(DF_SAVED_MSG_NAME_RULE);
 #ifdef FIRST_FOLDER_TRY
@@ -312,38 +259,10 @@ init_vars(ps)
     set_current_val(vars, V_USER_DOMAIN, TRUE);
     set_current_val(vars,V_USE_ONLY_DOMAIN_NAME, TRUE);
 
-    /* obsolete, backwards compatibility */
-    set_current_val(vars,V_HEADER_IN_REPLY, TRUE);
-    obs_header_in_reply=!strucmp(VAR_HEADER_IN_REPLY, "yes");
-
-    set_current_val(vars,V_BUGS_NICKNAME, TRUE);
-    set_current_val(vars,V_BUGS_FULLNAME, TRUE);
-    set_current_val(vars,V_BUGS_ADDRESS, TRUE);
     set_current_val(vars,V_DEFAULT_FCC, TRUE);
     set_current_val(vars,V_READ_MESSAGE_FOLDER, TRUE);
 
-    /* obsolete, backwards compatibility */
-    set_current_val(vars, V_FEATURE_LEVEL, TRUE);
-    if(strucmp(VAR_FEATURE_LEVEL, "seedling") == 0)
-      obs_feature_level = Seedling;
-    else if(strucmp(VAR_FEATURE_LEVEL, "old-growth") == 0)
-      obs_feature_level = Seasoned;
-    else
-      obs_feature_level = Sapling;
-
-    /* obsolete, backwards compatibility */
-    set_current_val(vars, V_OLD_STYLE_REPLY, TRUE);
-    obs_old_style_reply = !strucmp(VAR_OLD_STYLE_REPLY, "yes");
-
     set_current_val(vars, V_SIGNATURE_FILE, TRUE);
-
-    /* Obsolete, backwards compatibility */
-    set_current_val(vars, V_ELM_STYLE_SAVE, TRUE);
-    /* Also obsolete */
-    set_current_val(vars, V_SAVE_BY_SENDER, TRUE);
-    if(!strucmp(VAR_ELM_STYLE_SAVE, "yes"))
-      set_variable(V_SAVE_BY_SENDER, "yes");
-    obs_save_by_sender = !strucmp(VAR_SAVE_BY_SENDER, "yes");
 
     /*
      * mail-directory variable is obsolete, put its value in
@@ -386,22 +305,11 @@ init_vars(ps)
         ps->save_by_recipient = 1;
     else if(!strucmp(VAR_SAVED_MSG_NAME_RULE, "last-folder-used"))
         ps->save_by_last_saved = 1;
-    else if(!strucmp(VAR_SAVED_MSG_NAME_RULE, "default-folder")) {
+    else if(!strucmp(VAR_SAVED_MSG_NAME_RULE, "default-folder"))
         ps->save_by_sender = 0;
-	/* if user overrode explicitly, don't change back */
-        if(!strucmp(vars[V_SAVED_MSG_NAME_RULE].user_val.p, "default-folder"))
-	    obs_save_by_sender = 0;  /* don't overwrite */
-    }
-    /* backwards compatibility */
-    if(obs_save_by_sender) {
-        ps->save_by_from = 1;
-	set_variable(V_SAVED_MSG_NAME_RULE, "by-from");
-    }
 
     set_feature_list_current_val(vars, V_FEATURE_LIST);
-    process_feature_list(ps, VAR_FEATURE_LIST,
-           (obs_feature_level == Seasoned) ? 1 : 0,
-	   obs_header_in_reply, obs_old_style_reply);
+    process_feature_list(ps, VAR_FEATURE_LIST);
 
     /* this should come after process_feature_list because of use_fkeys */
     if (!ps->start_in_index)
@@ -453,45 +361,15 @@ static struct features feat_list[] = {
     {NULL, 0}
 };
 
-/*
- * All the arguments past "list" are the backwards compatibility hacks.
- */
 void
-process_feature_list(ps, list, old_growth, hir, osr)
+process_feature_list(ps, list)
     struct pine *ps;
     char **list;
-    int old_growth, hir, osr;
 {
-    register struct variable *vars = ps->vars;
     register char *q;
     char **p;
-    char *lvalue[LARGEST_BITMAP];
-    int   i, yorn;
+    int   yorn;
     struct features *feat;
-
-
-    /* backwards compatibility */
-    if(hir)
-	F_TURN_ON(F_INCLUDE_HEADER, ps);
-
-    /* ditto */
-    if(osr)
-	F_TURN_ON(F_SIG_AT_BOTTOM, ps);
-
-    /* ditto */
-    if(old_growth) {
-	F_TURN_ON(F_ENABLE_FULL_HDR, ps);
-	F_TURN_ON(F_ENABLE_PIPE, ps);
-	F_TURN_ON(F_ENABLE_TAB_COMPLETE, ps);
-	F_TURN_ON(F_QUIT_WO_CONFIRM, ps);
-	F_TURN_ON(F_ENABLE_JUMP, ps);
-	F_TURN_ON(F_ENABLE_BOUNCE, ps);
-	F_TURN_ON(F_ENABLE_APPLY, ps);
-	F_TURN_ON(F_ENABLE_FLAG, ps);
-	F_TURN_ON(F_ENABLE_ZOOM, ps);
-	F_TURN_ON(F_CAN_SUSPEND, ps);
-    }
-
 
     /* now run through the list (both global and user lists are in list) */
     if(list) {
@@ -528,45 +406,6 @@ process_feature_list(ps, list, old_growth, hir, osr)
 	}
       }
     }
-
-    /* Will we have to build a new list? */
-    if(!(old_growth || hir || osr))
-	return;
-
-    /*
-     * Build a new list for feature-list.  The only reason we ever need to
-     * do this is if one of the obsolete options is being converted
-     * into a feature-list item, and it isn't already included in the user's
-     * feature-list.
-     */
-    i = 0;
-    for(p = vars[V_FEATURE_LIST].user_val.l; p && (q = *p); p++) {
-      /* already have it or cancelled it, don't need to add later */
-      if(hir && (strucmp(q, "include-header-in-reply") == 0 ||
-                             strucmp(q, "no-include-header-in-reply") == 0)) {
-	hir = 0;
-      }else if(osr && (strucmp(q, "signature-at-bottom") == 0 ||
-                             strucmp(q, "no-signature-at-bottom") == 0)) {
-	osr = 0;
-      }else if(old_growth && (strucmp(q, "old-growth") == 0 ||
-                             strucmp(q, "no-old-growth") == 0)) {
-	old_growth = 0;
-      }
-      lvalue[i++] = cpystr(q);
-    }
-
-    /* check to see if we still need to build a new list */
-    if(!(old_growth || hir || osr))
-	return;
-
-    if(hir)
-      lvalue[i++] = "include-header-in-reply";
-    if(osr)
-      lvalue[i++] = "signature-at-bottom";
-    if(old_growth)
-      lvalue[i++] = "old-growth";
-    lvalue[i] = NULL;
-    set_variable_list(V_FEATURE_LIST, lvalue);
 }
 
 
