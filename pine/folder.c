@@ -114,7 +114,7 @@ MAILSTREAM *find_folder_stream;
 
 
 
-void       redraw_folder_screen();
+void       redraw_folder_screen(void);
 void       display_folder(FSTATE_S *, CONTEXT_S *, int, CONTEXT_S *, int);
 void       paint_folder_name(int, FSTATE_S *, int, CONTEXT_S *);
 char      *folder_list_entry(FSTATE_S *, int, int *, CONTEXT_S **);
@@ -128,12 +128,15 @@ int        search_folders(FSTATE_S *, int);
 int        compare_names(QSType *, QSType *);
 void       create_folder_display(FSTATE_S *, int);
 CONTEXT_S *new_context(char *);
-void      *new_folder_list();
+void      *new_folder_list(void);
 void       free_folder_list(void **);
 void      *find_folder_names(char *, char *);
 void       free_folders_in_context(CONTEXT_S *);
 FOLDER_S  *new_folder(char *);
 void       folder_delete(int, void *);
+#ifdef	DEBUG
+static int dump_contexts(FILE *);
+#endif
 
 
 static int sort_folder_entry = 0;
@@ -821,7 +824,7 @@ Uses the static fs data structure so it can be called almost from
 any context. It will recalculate the screen size if need be.
   ----*/
 void
-redraw_folder_screen()
+redraw_folder_screen(void)
 {
     create_folder_display(&fs, ps_global->ttyo->screen_cols);
     display_folder(&fs, fs.context, fs.folder_index, NULL, -1);
@@ -1694,7 +1697,7 @@ folder_exists(c_string, file)
 
   ----*/
 void
-init_folders()
+init_folders(void)
 {
     CONTEXT_S  *tc;
     FOLDER_S   *f;
@@ -1746,9 +1749,8 @@ init_folders()
 
 
 #ifdef	DEBUG
-int
-dump_contexts(fp)
-    FILE *fp;
+static int
+dump_contexts(FILE *fp)
 {
     FOLDER_S *f;
     int i = 0;
@@ -2052,7 +2054,7 @@ typedef struct folder_list {
  *
  */
 void *
-new_folder_list()
+new_folder_list(void)
 {
     FLIST *flist = (FLIST *) fs_get(sizeof(FLIST));
     flist->folders = (FOLDER_S **) fs_get(FCHUNK * sizeof(FOLDER_S *));

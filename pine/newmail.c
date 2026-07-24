@@ -498,7 +498,7 @@ check_point(timing)
   mailbox state changes.
   ----------------------------------------------------------------------*/
 void
-check_point_change()
+check_point_change(void)
 {
     if(!last_status_change)
         last_status_change = time(0) - 10;  /* first change 10 seconds */
@@ -553,7 +553,7 @@ Returns:  0 if there was no change
 Also outputs a message that the streams have died
  ----*/
 int
-streams_died()
+streams_died(void)
 {
     int rv = 0, inbox = 0;
 

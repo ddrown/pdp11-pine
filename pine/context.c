@@ -68,9 +68,8 @@ char *string;
  *	    fully-qualified name
  */
 
-void context_fqn_to_an (f, context_string, fqn)
-find_return f;
-char *context_string,*fqn;
+void
+context_fqn_to_an(find_return f, char *context_string, char *fqn)
 {
   char tmp[MAILTMPLEN];
   char *ret = fqn;
@@ -240,8 +239,7 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
  *          No context applied if error
  */
 void
-context_apply(b, c, n)
-char *b, *c, *n;
+context_apply(char *b, char *c, char *n)
 {
     char tmp[MAILTMPLEN];
 
@@ -263,8 +261,8 @@ char *b, *c, *n;
  * Returns: T if ambiguous, NIL if fully-qualified
  */
 
-short context_isambig (s)
-char *s;
+short
+context_isambig(char *s)
 {
 				/* first character after possible bboard * */
   char c = (*s == '*') ? s[1] : s[0];
@@ -286,8 +284,8 @@ char *s;
  *	    pattern to search
  */
 
-void context_find_all (context, stream, pat)
-char *context;MAILSTREAM *stream;char *pat;
+void
+context_find_all(char *context, MAILSTREAM *stream, char *pat)
 {
   char tmp[MAILTMPLEN];
 				/* must be within context */
@@ -318,8 +316,8 @@ char *context;MAILSTREAM *stream;char *pat;
  * Returns: T on success, NIL on failure
  */
 
-long context_create (context, stream, mailbox)
-char *context;MAILSTREAM *stream;char *mailbox;
+long
+context_create(char *context, MAILSTREAM *stream, char *mailbox)
 {
   char tmp[MAILTMPLEN];		/* must be within context */
 
@@ -362,8 +360,8 @@ char *context;MAILSTREAM *stream;char *mailbox;
  * Returns: stream to use on success, NIL on failure
  */
 
-MAILSTREAM *context_open (context, old, name, opt)
-char *context;MAILSTREAM *old;char *name;long opt;
+MAILSTREAM *
+context_open(char *context, MAILSTREAM *old, char *name, long opt)
 {
   char *s,tmp[MAILTMPLEN];	/* build FQN from ambiguous name */
   char host[MAILTMPLEN];
@@ -388,8 +386,8 @@ char *context;MAILSTREAM *old;char *name;long opt;
  * Returns: T on success, NIL on failure
  */
 
-long context_rename (context, stream, old, new)
-char *context;MAILSTREAM *stream;char *old, *new;
+long
+context_rename(char *context, MAILSTREAM *stream, char *old, char *new)
 {
   char *s,*t,tmp[MAILTMPLEN],tmp2[MAILTMPLEN];
 	/* build FQN from ambiguous name */
@@ -418,8 +416,8 @@ char *context;MAILSTREAM *stream;char *old, *new;
  * Returns: T on success, NIL on failure
  */
 
-long context_delete (context, stream, name)
-char *context;MAILSTREAM *stream;char *name;
+long
+context_delete(char *context, MAILSTREAM *stream, char *name)
 {
   char *s,tmp[MAILTMPLEN];	/* build FQN from ambiguous name */
   if (context_isambig (name)) context_apply (s = tmp,context,name);
@@ -441,8 +439,8 @@ char *context;MAILSTREAM *stream;char *name;
  * Returns: T on success, NIL on failure
  */
 
-long context_append (context, stream, name, msg)
-char *context;MAILSTREAM *stream;char *name;STRING *msg;
+long
+context_append(char *context, MAILSTREAM *stream, char *name, STRING *msg)
 {
   char *s,tmp[MAILTMPLEN];	/* build FQN from ambiguous name */
   if (context_isambig (name)) context_apply (s = tmp,context,name);
@@ -466,10 +464,8 @@ char *context;MAILSTREAM *stream;char *name;STRING *msg;
  * Returns: stream if useful, else NIL
  */
 MAILSTREAM *
-context_same_stream(context, name, stream)
-char *context;MAILSTREAM *stream; char *name;
+context_same_stream(char *context, char *name, MAILSTREAM *stream)
 {
-  extern MAILSTREAM *same_stream();
   char *s,tmp[MAILTMPLEN];	/* build FQN from ambiguous name */
   if (context_isambig (name)) context_apply (s = tmp,context,name);
   else if(name[0] != '{' && context[0] == '{' && (s = strindex(context, '}'))){

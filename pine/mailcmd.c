@@ -803,7 +803,7 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
 	    return(0);
 	}
 	else if(rc == 2) {
-	    void (*redraw)() = ps_global->redrawer;
+	    void (*redraw)(void) = ps_global->redrawer;
 
 	    push_titlebar_state();
 	    rc = folder_lister(ps_global,SaveMessage,cntxt,&cntxt,new_folder);
@@ -1301,7 +1301,7 @@ broach_folder(qline, allow_list, context)
 	    return(NULL);
 	}
 	else if(rc == 2){
-	    void (*redraw)() = ps_global->redrawer;
+	    void (*redraw)(void) = ps_global->redrawer;
 
 	    push_titlebar_state();
 	    rc = folder_lister(ps_global, OpenFolder, tc, &tc, new_folder);

@@ -6,13 +6,12 @@
  Result: Canonical form, or input argument (worst case)
  ----*/
 char *
-canonical_name(host)
-    char *host;
+canonical_name(char *host)
 {
     struct hostent *hent;
     char hostname[MAILTMPLEN];
     char tmp[MAILTMPLEN];
-    extern char *lcase();
+    extern char *lcase(char *);
                                 /* domain literal is easy */
     if (host[0] == '[' && host[(strlen (host))-1] == ']')
       return host;

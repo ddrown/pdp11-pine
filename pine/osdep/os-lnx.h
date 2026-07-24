@@ -178,13 +178,9 @@
 
 /*-------- Standard ANSI functions usually defined in stdlib.h ---------*/
 #include <stdlib.h>  /* declarations of many common functions */
-/*---- Declare getenv() if not already declared ------------------------*/
-char *getenv();      /* often declared in stdlib.h */
-FILE *tmpfile();
+/* getenv(), tmpfile(), fgetpos(), fsetpos() are already declared by
+ * <stdlib.h>/<stdio.h> on this target -- no local re-declaration needed. */
 extern int errno;
-/* Provide these two functions in os.c */
-
-int fgetpos(); int fsetpos();
 
 
 /*------- Standard string functions ------------------------------------*/

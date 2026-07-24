@@ -618,8 +618,7 @@ gf_filter_init()
  * link the given filter into the filter chain
  */
 int
-gf_link_filter(f)
-    filter_t f;
+gf_link_filter(filter_t f)
 {
     char      c;
     FILTER_S *new, *tail = gf_master;

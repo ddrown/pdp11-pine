@@ -99,8 +99,8 @@ int   compare_message_dates(const QSType *, const QSType *);
 int   compare_size(const QSType *, const QSType *);
 char *get_index_cache(long);
 int   i_cache_size(long);
-int   i_cache_width();
-void  sort_blip();
+int   i_cache_width(void);
+void  sort_blip(void);
 
 
 /*-----------

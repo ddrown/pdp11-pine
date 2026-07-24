@@ -67,8 +67,8 @@ static char rcsid[] = "$Id: signals.c,v 4.14 1993/10/29 01:35:42 mikes Exp $";
 
 
               /* SigType is defined in os.h and is either int or void */
-static SigType auger_in_signal(), winch_signal(), quit_signal(), 
-               usr2_signal();
+static SigType auger_in_signal(int), winch_signal(int), quit_signal(int),
+               usr2_signal(int);
 
 
 
@@ -174,7 +174,7 @@ end_signals()
 Call panic which cleans up tty modes and then core dumps
   ----------------------------------------------------------------------*/
 static SigType
-auger_in_signal()
+auger_in_signal(int signo)
 {
     dprint(5, (debugfile, "auger_in_signal()\n"));
     panic("Received abort signal");
@@ -191,7 +191,7 @@ processing here.
   ----------------------------------------------------------------------*/
 
 static SigType
-quit_signal()
+quit_signal(int signo)
 {
     dprint(1, (debugfile, "\n\n  *** Received QUIT signal ***  \n\n"));
     if(want_to("\007Pine emergency exit. REALLY ABORT PINE RIGHT NOW", 'n',
@@ -251,7 +251,7 @@ fast_clean_up()
 Not much to do. Rely on periodic mail file check pointing.
   ----------------------------------------------------------------------*/
 SigType
-hup_signal()
+hup_signal(int signo)
 {
     dprint(1, (debugfile, "\n\n** Received SIGHUP **\n\n\n\n"));
     fast_clean_up();
@@ -266,7 +266,7 @@ hup_signal()
 Not much to do. Rely on periodic mail file check pointing.
   ----------------------------------------------------------------------*/
 SigType
-term_signal()
+term_signal(int signo)
 {
     dprint(1, (debugfile, "\n\n** Received SIGTERM **\n\n\n\n"));
     fast_clean_up();
@@ -281,7 +281,7 @@ term_signal()
 Not much to do. Rely on periodic mail file check pointing.
   ----------------------------------------------------------------------*/
 static SigType
-usr2_signal()
+usr2_signal(int signo)
 {
     char c;
     dprint(1, (debugfile, "\n\n** Received SIGUSR2 **\n\n\n\n"));
@@ -320,7 +320,7 @@ extern jmp_buf  winch_state;
 extern int      ready_for_winch, winch_occured;
 
 SigType
-static winch_signal()
+static winch_signal(int signo)
 {
     dprint(9,(debugfile, "SIGWINCH ready_for_winch: %d winch_occured:%d\n",
                ready_for_winch, winch_occured));
@@ -383,7 +383,7 @@ do_suspend(pine)
 }
 
 
-SigType (*hold_hup)(), (*hold_int)(), (*hold_term)(), (*hold_usr2)();
+SigType (*hold_hup)(int), (*hold_int)(int), (*hold_term)(int), (*hold_usr2)(int);
 
 /*----------------------------------------------------------------------
      Ignore signals when imap is running through critical code

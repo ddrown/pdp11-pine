@@ -64,8 +64,8 @@
 extern void       *find_folder_list;
 extern MAILSTREAM *find_folder_stream;
    
-void context_mailbox(name)
-    char *name;
+void
+context_mailbox(char *name)
 {
     FOLDER_S          *new_f;
 
@@ -88,8 +88,8 @@ void context_mailbox(name)
  the global context (aka collection). 
  ----*/
 
-void context_bboard(name)
-char *name;
+void
+context_bboard(char *name)
 {
     FOLDER_S          *new_f = new_folder(name);
 

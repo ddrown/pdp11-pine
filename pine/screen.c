@@ -457,7 +457,7 @@ status_string(message_cache)
 /*--------
 ------*/
 void
-push_titlebar_state()
+push_titlebar_state(void)
 {
     titlebar_stack  = as;
     as.folder_name  = NULL;	/* erase knowledge of malloc'd data */
@@ -469,7 +469,7 @@ push_titlebar_state()
 /*--------
 ------*/
 void
-pop_titlebar_state()
+pop_titlebar_state(void)
 {
     fs_give((void **)&(as.folder_name)); /* free malloc'd values */
     fs_give((void **)&(as.context_name));

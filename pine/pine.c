@@ -107,9 +107,9 @@ grow_tmp_20k_buf(need)
 
 static int setup_mini_menu(int);
 void do_menu(int);
-void main_redrawer();
+void main_redrawer(void);
 void show_main_screen(struct pine *, int, OtherMenu, struct key_menu *);
-static void do_setup_task();
+static void do_setup_task(int);
 
 static struct key main_keys[] =
        {{"?","Help",0},        {"O","OTHER CMDS",0},  {NULL,NULL,0},    
@@ -154,9 +154,7 @@ static struct key_menu main_keymenu =
   ----*/
 
 int
-main(argc, argv)
-     int   argc;
-     char *argv[];
+main(int argc, char *argv[])
 {
     char         *folder_to_open;
     int           rv;
@@ -737,7 +735,7 @@ main_menu_screen(pine_state)
   Result: main menu is re-displayed
   ----*/
 void
-main_redrawer()
+main_redrawer(void)
 {
     struct key_menu *km = &main_keymenu;
     ps_global->mangled_screen = 1;
@@ -913,8 +911,7 @@ Args: command -- command char to perform
 
   ----*/
 static void
-do_setup_task(command)
-    int command;
+do_setup_task(int command)
 {
     switch(command) {
 /*
@@ -1272,7 +1269,7 @@ create_proto(stream, context, folder)
  Result: message may be printed to status line
   ----*/
 void
-warn_other_cmds()
+warn_other_cmds(void)
 {
     static int other_cmds = 0;
 

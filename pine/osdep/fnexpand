@@ -1,5 +1,3 @@
-struct passwd *getpwnam();
-
 /*----------------------------------------------------------------------
        Expand the ~ in a file ala the csh (as home directory)
 

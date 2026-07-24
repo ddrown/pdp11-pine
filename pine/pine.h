@@ -518,9 +518,9 @@ up with this convention very well.
   
 struct pine {
     /*-- see the loop at the end of main() for how these are used --*/
-    void       (*next_screen)();   /* NULL means stay in current screen */
-    void       (*prev_screen)();
-    void       (*redrawer)();
+    void       (*next_screen)(struct pine *);   /* NULL means stay in current screen */
+    void       (*prev_screen)(struct pine *);
+    void       (*redrawer)(void);
 
     char        *return_string;
     char        *error_message;
@@ -679,9 +679,22 @@ typedef enum {InLine, QStatus} DetachErrStyle;
 
 /*
  * typedefs of generalized filters used by gf_pipe
+ *
+ * gf_io_t is deliberately left with no fixed parameter list: it's used
+ * as *two* distinct signatures by convention -- "get" functions take
+ * (unsigned char *) and are called as (*gc)(&c), "put" functions take
+ * (int) and are called as (*pc)(c) -- never mixed, but not expressible
+ * as a single ANSI prototype without splitting the typedef in two and
+ * updating every declaration site referencing it.
  */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstrict-prototypes"
 typedef int (*gf_io_t)();	/* type of get and put char function     */
-typedef void (*filter_t)();	/* type of filters for piping            */
+#pragma GCC diagnostic pop
+struct filter_s;	/* forward decl so filter_t's parameter list binds to
+			 * the same tag as the typedef below, instead of an
+			 * unrelated type scoped to this prototype alone */
+typedef void (*filter_t)(struct filter_s *, int, int);	/* type of filters for piping */
 typedef struct filter_s {	/* type to hold data for filter function */
     filter_t f;			/* next function in the pipe             */
     struct filter_s *next;	/* next filter to call                   */
@@ -735,6 +748,7 @@ int      so_seek(STORE_S *, long, int);
 int	 so_release(STORE_S *);
 void	*so_text(STORE_S *);
 void     gf_filter_init(void);
+int	 gf_link_filter(filter_t);
 char	*gf_pipe(gf_io_t, gf_io_t);
 void	 gf_set_so_readc(gf_io_t *, STORE_S *);
 void	 gf_set_so_writec(gf_io_t *, STORE_S *);
@@ -766,7 +780,7 @@ char       *pretty_fn(char *);
 int         folder_exists(char *, char *);
 int         folder_create(char *, CONTEXT_S *);
 int         folder_complete(CONTEXT_S *, char *);
-void        init_folders();
+void        init_folders(void);
 void       *find_folders(char *, char *);
 void        find_folders_in_context(CONTEXT_S *, char *);
 FOLDER_S   *folder_entry(int, void *);
@@ -779,6 +793,7 @@ char       *folder_is_nick(char *, void *);
 void helper(char *text[], char *title, int);
 
 /*-- init.c --*/
+int  init_init_vars(struct pine *);
 void init_vars(struct pine *);
 char *expand_variables(char *, char *);
 int  init_username(struct pine *);  
@@ -811,7 +826,7 @@ void  build_header_cache(void);
 void  redraw_index_body(void);
 void  do_index_border(int, int, int, int *);
 char *sort_name(SortOrder);
-void  sort_current_folder();
+void  sort_current_folder(void);
 
 
 /*--- mailview.c ---*/
@@ -836,7 +851,8 @@ int  decode_text(struct attachment *, long, gf_io_t, DetachErrStyle, int);
 /*--newmail.c --*/
 long new_mail(int *, int, int);
 int  check_point(CheckPointTime);
-void check_point_change();
+void check_point_change(void);
+int  streams_died(void);
 void reset_check_point(void);
 void zero_new_mail_count(void);
 
@@ -892,7 +908,7 @@ MAILSTREAM *create_proto(MAILSTREAM *, CONTEXT_S *, char *);
 MsgNo       first_sorted_unread(MAILSTREAM *);
 MsgNo       next_sorted_un(MAILSTREAM *, long, int *, int);
 MsgNo       sorted_msgno(struct pine *, MsgNo);
-void warn_other_cmds();
+void warn_other_cmds(void);
 
 /*-- reply.c --*/
 void     reply(struct pine *, long, ENVELOPE *, BODY *);
@@ -900,7 +916,7 @@ void     forward(struct pine *, long, ENVELOPE *, BODY *);
 char    *generate_message_id(struct pine *);
 void     pretty_addr_string(char *, ADDRESS *, char *, gf_io_t);
 ADDRESS *first_addr(ADDRESS *);
-char    *get_signature();
+char    *get_signature(void);
 PARAMETER *copy_parameters(PARAMETER *);
 
 /*-- screen.c --*/
@@ -911,8 +927,8 @@ void blank_keymenu(int, int);
 void redraw_keymenu(void);
 char *status_string(MESSAGECACHE *);
 char *set_titlebar(char *, int, TitleBarType, long, int, int);
-void push_titlebar_state();
-void pop_titlebar_state();
+void push_titlebar_state(void);
+void pop_titlebar_state(void);
 void redraw_titlebar(void);
 void update_titlebar_message(int);
 void update_titlebar_percent(int);
@@ -929,8 +945,8 @@ void  pine_free_body(BODY **);
 void init_signals(void); 
 void do_suspend(struct pine *);
 void end_signals(void);
-SigType hup_signal();
-SigType term_signal();
+SigType hup_signal(int);
+SigType term_signal(int);
 
 /*-- status.c --*/
 void display_message(int);
@@ -973,7 +989,7 @@ char *int2string(int);
 
 /*-- ttyin.c--*/
 int read_char(int);
-int read_command();
+int read_command(void);
 int optionally_enter(char *,int,int,int,int,int,char *,ESCKEY_S *,HelpType,int);
 int init_tty_driver(struct pine *);
 void end_tty_driver(struct pine *);
@@ -1015,7 +1031,7 @@ void clear_cursor_pos(void);
 /*----- our own various library things, some from imap, other from ../lib --*/
 char *cpystr(char *);
 
-#define SCREEN_FUN_NULL ((void (*) (void *))NULL)
+#define SCREEN_FUN_NULL ((void (*) (struct pine *))NULL)
 
 
 #endif /* _PINE_INCLUDED */

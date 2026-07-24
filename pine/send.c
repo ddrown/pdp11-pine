@@ -374,9 +374,7 @@ parse_postponed_header(text, fcc, fcc_size)
  * is only a few lines each way).
  */
 static void
-write_field(fp, tag, buf)
-    FILE *fp;
-    char *tag, *buf;
+write_field(FILE *fp, char *tag, char *buf)
 {
     long len = buf ? strlen(buf) : 0L;
 
@@ -388,9 +386,7 @@ write_field(fp, tag, buf)
 
 
 static char *
-read_field(fp, tag)
-    FILE *fp;
-    char *tag;
+read_field(FILE *fp, char *tag)
 {
     char got_tag[32];
     char linebuf[56];
@@ -423,8 +419,7 @@ read_field(fp, tag)
  * branch outgoing2strings()/create_message_body() already use.
  */
 static STORE_S *
-compose_body_store(bod)
-    BODY *bod;
+compose_body_store(BODY *bod)
 {
     return (STORE_S *)((bod->type == TYPETEXT) ? bod->contents.binary
 			: bod->contents.part->body.contents.binary);
@@ -436,9 +431,7 @@ compose_body_store(bod)
  * plain file, for handing to the composer subprocess.
  */
 static int
-dump_body_text(bod, path)
-    BODY *bod;
-    char *path;
+dump_body_text(BODY *bod, char *path)
 {
     STORE_S      *so = compose_body_store(bod);
     FILE         *fp;
@@ -461,9 +454,7 @@ dump_body_text(bod, path)
  * one built from the composer subprocess's edited body file.
  */
 static int
-reload_body_text(bod, path)
-    BODY *bod;
-    char *path;
+reload_body_text(BODY *bod, char *path)
 {
     FILE    *fp;
     STORE_S *newso, *oldso;
@@ -502,7 +493,7 @@ reload_body_text(bod, path)
  * (relying on $PATH) if pine's own argv[0] had no directory part.
  */
 static char *
-pico_child_path()
+pico_child_path(void)
 {
     static char path[MAXPATH + 1];
     char       *slash;
@@ -531,17 +522,16 @@ pico_child_path()
  * COMP_CANCEL/COMP_SUSPEND/COMP_GOTHUP/0-meaning-send.
  */
 static int
-run_composer_subprocess(anchor, to, cc, bcc, sub, fcc, bodyfile, flags,
-			 new_to, new_cc, new_bcc, new_sub, new_fcc)
-    char     *anchor, *to, *cc, *bcc, *sub, *fcc, *bodyfile;
-    unsigned  flags;
-    char    **new_to, **new_cc, **new_bcc, **new_sub, **new_fcc;
+run_composer_subprocess(char *anchor, char *to, char *cc, char *bcc,
+			 char *sub, char *fcc, char *bodyfile, unsigned flags,
+			 char **new_to, char **new_cc, char **new_bcc,
+			 char **new_sub, char **new_fcc)
 {
     extern char version_buff[];
     char     handoff_path[MAXPATH + 1], result_path[MAXPATH + 1];
     FILE    *fp;
     int      pid, r, status, editor_result;
-    SigType (*isig)(), (*qsig)(), (*hsig)();
+    SigType (*isig)(int), (*qsig)(int), (*hsig)(int);
 
     strcpy(handoff_path, temp_nam(NULL, "pinecmph"));
     strcpy(result_path, temp_nam(NULL, "pinecmpr"));
@@ -882,7 +872,7 @@ pine_send(outgoing, body, editor_title, fcc, are_replying)
                                      fccbuf);
             dprint(1, (debugfile, "Save composition on HUP %s\n",
                        result < 0 ? "FAILED" : "succeeded"));
-            hup_signal(); /* Do what we normally do on SIGHUP */
+            hup_signal(SIGHUP); /* Do what we normally do on SIGHUP */
 
         } else {
             /*------ Must be sending mail ! -----*/
@@ -955,8 +945,7 @@ Alls queues a message indicating what happened
   ---*/
 
 int
-check_addresses(e)
-    ENVELOPE *e;
+check_addresses(ENVELOPE *e)
 {
     ADDRESS *a;
 
@@ -1228,7 +1217,7 @@ int
 call_system(command)
     char *command;
 {
-    SigType (*hsig)(), (*isig)(), (*qsig)();
+    SigType (*hsig)(int), (*isig)(int), (*qsig)(int);
     int status, pid, r;
 
     dprint(9, (debugfile, "Command: \"%s\"\n", command));
@@ -1380,9 +1369,7 @@ We must convert the network CRLF to the local new line convention, in this
 case on UNIX it's LF.
  ----*/
 int
-unix_puts(stream_x, string)
-    void   *stream_x;
-    char   *string;
+unix_puts(void *stream_x, char *string)
 {
     FILE *stream = (FILE *)stream_x;
     char *p;
@@ -1672,8 +1659,7 @@ set_mime_types(body)
  *                  exactly how much escaping will happen.
  */
 static size_t
-addr_list_size(adr)
-    ADDRESS *adr;
+addr_list_size(ADDRESS *adr)
 {
     size_t n = 0;
 
@@ -1841,7 +1827,7 @@ static char       l_out_buf[L_OUT_BUF_LEN + 2];
  * l_flust_net - empties gf_io terminal function's buffer
  */
 void
-l_flush_net()
+l_flush_net(void)
 {
     if(c_in_buf){
 	if(l_f)
@@ -1861,8 +1847,7 @@ l_flush_net()
  *
  */
 int
-l_putc(c)
-    int c;
+l_putc(int c)
 {
     l_out_buf[c_in_buf++] = (char) c;
     l_out_buf[c_in_buf]   = '\0';
@@ -1889,8 +1874,7 @@ l_putc(c)
  *                  the caller, pine_rfc822_output_body()).
  */
 static size_t
-pine_body_header_size(body)
-    BODY *body;
+pine_body_header_size(BODY *body)
 {
     size_t n = 128;    /* Content-Type/-Transfer-Encoding labels, CRLFs, slop */
     PARAMETER *param;

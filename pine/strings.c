@@ -348,8 +348,7 @@ week_abbrev(week_day)
 
 
 int
-days_in_month(month, year)
-     int month, year;
+days_in_month(int month, int year)
 {
     static int d_i_m[] = {0,31,28,31,30,31,30,31,31,30,31,30,31};
     if(month == 2) 
@@ -608,7 +607,7 @@ convert_to_gmt(d)
         /* Back one month */
         if(d->month > 2) {
             d->month--;
-            d->day = days_in_month(d->month);
+            d->day = days_in_month(d->month, d->year);
             return;
         }
         /* Back one year */
@@ -618,7 +617,7 @@ convert_to_gmt(d)
     } else {
         /* Forward one day */
         d->hour -= 24;
-        if(d->day != days_in_month(d->month)) {
+        if(d->day != days_in_month(d->month, d->year)) {
             d->day++;
             return;
         }
@@ -641,8 +640,7 @@ convert_to_gmt(d)
 /*----------------------------------------------------------------------
   ----*/
 int
-compare_dates(d1, d2)
-     struct date *d1, *d2;
+compare_dates(struct date *d1, struct date *d2)
 {
     if(d1->year > d2->year)
       return(1);
