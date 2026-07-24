@@ -89,11 +89,7 @@
 #define TILDE_ESCAPE	'~'		/* escape character~    */
 #define ESCAPE		'\033'		/* the escape		*/
 
-#ifdef	DOS
-#define	NEWLINE		"\r\n"		/* local EOL convention...  */
-#else
 #define	NEWLINE		"\n"		/* necessary for gf_* funcs */
-#endif
 
 #ifndef TRUE
 #define TRUE		1
@@ -613,9 +609,7 @@ struct pine {
                 *userdomain,     /* The per user domain from .pinerc or */
                 *maildomain,     /* Domain name for most uses */
                 *pine_exe,	 /* argv[0], used to find sibling pico */
-#ifndef	DOS
                 *pine_conf,	 /* Location of global pine.conf */
-#endif
                 *pinerc;	 /* Location of user's pinerc */
 
     SortOrder    sort_order, current_sort_order,
@@ -874,10 +868,6 @@ char *local_name_lookup(char *);
 int   change_passwd(void);
 int   mime_can_display(int, char *, PARAMETER *);
 void  gf_play_sound(FILTER_S *, int, int);
-#ifdef	DOS
-void *dos_cache(MAILSTREAM *, long, long);
-char *dos_gets(readfn_t, void *, unsigned long);
-#endif
 
 /*--- other.c ---*/
 int  lock_keyboard(void);
