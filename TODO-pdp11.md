@@ -28,48 +28,25 @@ DONE elsewhere or referenced in passing below.
       is inflated by the shared-header fan-out described in the Tier 1
       entry above, so re-scope by unique site once counted for real).
 
-### Drop `pico/ansi.c` -- permanently dead, never-enabled alternate terminal driver
+### Dead-code sweep, bucket 2: `signals.c`, `newmail.c`, `imap.c`, `ttyin.c`, `other.c`
 
-- [ ] Found while double-checking scope after the `#ifdef ANSI`/K&R
-      cleanup above (unrelated despite the similar name --
-      `pico/ansi.c` guards its body on `ANSI_DRIVER`, not `ANSI`).
-      This file is an alternate ANSI/VT100-terminal-escape-sequence
-      driver, a build-time alternative to the termcap-based driver in
-      `pico/tcap.c` (which is what this build actually uses). Its own
-      header comment says as much: "The routines in this file provide
-      support for ANSI style terminals over a serial line... It
-      compiles into nothing if not an ANSI device." `ANSI_DRIVER` is
-      never defined anywhere in this tree (grepped `pico/`, no
-      `-DANSI_DRIVER` in `pico/makefile.lnx`), so the file's entire
-      body (`#if ANSI_DRIVER` at line 55 through `#endif` at line 146
-      -- the `TERM term = {...}` dispatch struct, `ansimove`/`ansieeol`/
-      `ansieeop`/`ansibeep`/etc.) has never once compiled here.
-      **Not quite inert, though**: `ansiopen()` (lines 148-165) sits
-      *outside* that `#if ANSI_DRIVER` guard, so it compiles for real
-      every build -- but its only reference anywhere (a `TERM` struct
-      entry at line 82) is itself inside the dead block, so it's an
-      orphaned, always-unreferenced function. It isn't caught by the
-      now-standing `-Wunused-function` check (see
-      `TODO-pdp11-done.md`'s `-Wunused-parameter`/`-Wunused-function`
-      audit) because `ansiopen` has external linkage (no `static`) --
-      that warning only fires on `static` functions, since an
-      externally-linked one could in principle be called from another
-      translation unit. Confirmed via `nm` on a standalone compile
-      that `ansiopen`'s body and the file's unused `rcsid[]` string
-      are the only two symbols this file actually contributes: 126
-      bytes text + 50 bytes data.
-      **Proposed shape**: delete `pico/ansi.c` outright and drop
-      `ansi.o`/`ansi.c` from `pico/makefile.lnx`'s `OFILES`/`CFILES`.
-      Grepped `pico/efunc.h`/`estruct.h`/`edef.h` and every other
-      `pico/*.c` -- nothing outside `ansi.c` itself references
-      `ansiopen` or any of the `ansi*` symbols, so this is a clean,
-      no-dependency deletion, not a stub-and-decide-later situation
-      like the `read_pinerc()` cut was.
-      **Verification**: standard discipline -- rebuild, full clean
-      rebuild, warning count (expect unchanged), full smoketest suite,
-      before/after `size` (small but real win this time, unlike the
-      `#ifdef ANSI` cleanup -- `ansiopen`/`rcsid` were actually being
-      compiled in, ~176 bytes per the standalone `nm` check above).
+- [ ] Second bucket, ~24 sites total: `signals.c` (12 -- **caveat**:
+      mixed in with real, legitimate platform conditionals on
+      `SIGEMT`/`SIGTSTP`/`RESIZING`/`ULT`, which vary by real target
+      OS and are NOT the same as the project's own never-defined build
+      knobs -- only touch the `DOS` sites here, leave the signal-macro
+      ones alone), `newmail.c` (6), `imap.c` (3), `ttyin.c` (2 --
+      `TODO-pdp11-done.md`'s "broader MS-DOS dead-code sweep" entry
+      already cut this file's two giant Unix/DOS halves; these are
+      leftover scattered mouse/DOS-keyboard scraps past that, noted
+      but skipped there), `other.c` (1).
+
+### Dead-code sweep, bucket 3: `init.c`, `filter.c`, `status.c`, `os.c`
+
+- [ ] Third bucket, ~24 sites total: `init.c` (11), `filter.c` (10 --
+      also has a `FIRST_FOLDER_TRY` guard, needs the same
+      never-defined confirmation as `LWP`/`PCTCP`/`PCNFS` above before
+      cutting), `status.c` (2), `os.c` (1).
 
 ### Formalize an ASan build target and try `-fanalyzer`
 

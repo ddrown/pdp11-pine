@@ -76,10 +76,8 @@ static char rcsid[] = "$Id: init.c,v 4.102 1993/11/23 00:04:05 mikes Exp $";
 extern char version_buff[];
 
 void set_current_val(struct variable *, int, int);
-void set_feature_list_current_val(struct variable *, int);
 /* AIX gives warning here 'cause it can't quite cope with enums */
 void process_init_cmds(struct pine *, char **);
-void process_feature_list(struct pine *, char **, int , int, int);
 int  decode_sort(struct pine *, char *);
 
 
@@ -101,11 +99,6 @@ a bit more readable...
 #define	READ_MSG_TEXT "read-message-folder specifies where already-read messages will be stored.\n# If set, you will be asked when you quit Pine if you want read messages\n# to be moved to this folder and deleted from your INBOX."
 
 #define	SIG_FILE_TEXT "signature-file specifies the name or path of a file containing text that\n# will automatically be inserted in outgoing mail."
-
-#define	FEATURE_LIST_TEXT	"feature-list= comma-separated list of features from the following set:\n# Note: the value \"old-growth\" is shorthand for the indicated features...\n# enable-full-header-cmd        (included in old-growth set)\n# enable-unix-pipe-cmd          (included in old-growth set)\n# enable-bounce-cmd             (included in old-growth set)\n# enable-suspend                (included in old-growth set)\n# \
-enable-tab-completion         (included in old-growth set)\n# enable-jump-shortcut          (included in old-growth set)\n# quit-without-confirm          (included in old-growth set)\n# enable-apply-cmd              (included in old-growth set)\n# enable-flag-cmd               (included in old-growth set)\n# enable-zoom-cmd               (included in old-growth set)\n# expanded-view-of-folders\n# use-function-keys\n# include-header-in-reply\n# signature-at-bottom\n# delete-skips-deleted\n# expunge-without-confirm\n# auto-move-read-msgs\n# e.g.\n# feature-list= old-growth, signature-at-bottom\n# \
-The feature-list that is in effect when you are running Pine is the\n# combination of the feature-list set by the system manager in the pine.conf\n# file plus the feature-list set by you here.  (PC-Pine doesn't have a\n# pine.conf so this doesn't apply in that case.)  The feature-list is additive\n# and the order is significant.  First the system-wide pine.conf values are\n# read, then yours.  Any of the features listed above may also have the\n# \
-characters \"no-\" prepended to it, to cancel its effect.  So, for example,\n# you could set \"feature-list= old-growth, no-quit-without-confirm\" if you\n# wanted to have all of the old-growth features except for that one.  Or,\n# if the system manager has set \"old-growth\" in the pine.conf file, you\n# can cancel that with \"no-old-growth\".  The default condition for all\n# of the features is no-, that is, off."
 
 #define	SAVE_MSG_TEXT	"saved-msg-name-rule= determines default folder name for Saves...\n# Choose one: default-folder, by-sender, by-from, by-recipient,\n# last-folder-used.  Normal default is \"default-folder\", which on Unix\n# means \"saved-messages\" and in PC-Pine means \"SAVEMAIL\""
 
@@ -142,16 +135,10 @@ static struct variable variables[] = {
   "Your login/e-mail user name"},
 {"user-domain",                0, 1, 0, 1, 1, 0,
   USER_DOMAIN_TEXT},
-{"smtp-server",                1, 1, 0, 1, 1, 1,
-  "Smtp-server is disabled, outgoing mail is always sent via local sendmail"},
-{"inbox-path",                 0, 1, 0, 1, 1, 0, 
+{"inbox-path",                 0, 1, 0, 1, 1, 0,
   INBOX_TEXT},
-{"incoming-folders",           1, 1, 0, 1, 1, 1,
-  "Incoming-folders is disabled, multi-collection support has been removed"},
 {"folder-collections",         0, 1, 0, 1, 1, 1,
   FOLDER_TEXT},
-{"news-collections",           1, 1, 0, 1, 1, 1,
-  "News-collections is disabled, news reading support has been removed"},
 {"default-fcc",                0, 1, 0, 1, 1, 0,
   DEFAULT_FCC_TEXT},
 {"mail-directory",             0, 1, 0, 1, 1, 0,
@@ -160,54 +147,14 @@ static struct variable variables[] = {
   READ_MSG_TEXT},
 {"signature-file",             0, 1, 0, 1, 1, 0,
   SIG_FILE_TEXT},
-{"address-book",               1, 1, 0, 1, 1, 0,
-  "Address-book is disabled, address book support has been removed"},
-{"feature-list",               0, 1, 0, 1, 1, 1,
-  FEATURE_LIST_TEXT},
 {"initial-keystroke-list",     0, 1, 0, 1, 1, 1,
  "Pine executes these keys upon startup (e.g. to view msg 13: i,j,1,3,CR,v)"},
 {"saved-msg-name-rule",        0, 1, 0, 1, 1, 0,
   SAVE_MSG_TEXT},
 {"sort-key",                   0, 1, 0, 1, 1, 0,
   SORT_TEXT},
-{"character-set",              1, 1, 0, 1, 1, 0,
-  "Character-set is disabled, this build only supports US-ASCII"},
-{"editor",                     1, 1, 0, 1, 1, 0,
-  "Alternate editor is disabled, this build only supports the built-in composer"},
-{"image-viewer",               1, 1, 0, 1, 1, 0,
-  "Image-viewer is disabled, this build has no attachment display support"},
 {"use-only-domain-name",       0, 1, 0, 1, 1, 0,
   ONLY_DOMAIN_TEXT},
-{"printer",                    1, 1, 0, 1, 1, 0,
-  "Printing is disabled, this build has no printer support"},
-{"personal-print-command",     1, 1, 0, 1, 0, 0,
-  "Printing is disabled, this build has no printer support"},
-{"standard-printer",           1, 1, 0, 0, 1, 0,
-  "Printing is disabled, this build has no printer support"},
-{"last-time-prune-questioned" ,1, 1, 0, 1, 0, 0,
-  "Sent-mail pruning is disabled, this build has no automatic expiration"},
-{"last-version-used",          0, 1, 0, 1, 0, 0,
-  "Version of Pine used last session (set automatically)"},
-{"bugs-nickname",              0, 1, 0, 0, 1, 0,
-  "Nickname of bugs entry to be automatically placed in all address books"},
-{"bugs-fullname",              0, 1, 0, 0, 1, 0,
-  "Full name of bugs entry to be automatically placed in all address books"},
-{"bugs-address",               0, 1, 0, 0, 1, 0,
-  "Email address of bugs entry to be automatically placed in all address books"},
-{"elm-style-save",             1, 1, 0, 1, 1, 0,
-  "Elm-style-save is obsolete, use saved-msg-name-rule"},
-{"header-in-reply",            1, 1, 0, 1, 1, 0,
-  "Header-in-reply is obsolete, use include-header-in-reply in feature-list"},
-{"feature-level",              1, 1, 0, 1, 1, 0,
-  "Feature-level is obsolete, use feature-list"},
-{"old-style-reply",            1, 1, 0, 1, 1, 0,
-  "Old-style-reply is obsolete, use signature-at-bottom in feature-list"},
-{"compose-mime",               1, 1, 0, 0, 1, 0,
-  "Compose-mime is obsolete"},
-{"show-all-characters",        1, 1, 0, 1, 1, 0,
-  "Show-all-characters is obsolete"},
-{"save-by-sender",             1, 1, 0, 1, 1, 0,
-  "Save-by-sender is obsolete, use saved-msg-name-rule"},
 {NULL,                         0, 0, 0, 0, 0, 0,
    NULL}
 };
@@ -239,21 +186,12 @@ init_vars(ps)
 {
     char	 buf[MAXPATH +1];
     register struct variable *vars = ps->vars;
-    int		 obs_header_in_reply,     /* the obs_ variables are to       */
-		 obs_old_style_reply,     /* support backwards compatibility */
-		 obs_save_by_sender;
-    FeatureLevel obs_feature_level;
 
     /*--- The defaults here are defined in os-xxx.h so they can vary
           per machine ---*/
-    vars[V_ELM_STYLE_SAVE].global_val.p   = cpystr(DF_ELM_STYLE_SAVE);
-    vars[V_SAVE_BY_SENDER].global_val.p   = cpystr(DF_SAVE_BY_SENDER);
-    vars[V_HEADER_IN_REPLY].global_val.p  = cpystr(DF_HEADER_IN_REPLY);
     vars[V_INBOX_PATH].global_val.p       = cpystr("inbox");
     vars[V_DEFAULT_FCC].global_val.p      = cpystr(DF_DEFAULT_FCC);
     vars[V_USE_ONLY_DOMAIN_NAME].global_val.p = cpystr(DF_USE_ONLY_DOMAIN_NAME);
-    vars[V_FEATURE_LEVEL].global_val.p    = cpystr(DF_FEATURE_LEVEL);
-    vars[V_OLD_STYLE_REPLY].global_val.p  = cpystr(DF_OLD_STYLE_REPLY);
     vars[V_SORT_KEY].global_val.p         = cpystr(DF_SORT_KEY);
     vars[V_SAVED_MSG_NAME_RULE].global_val.p = cpystr(DF_SAVED_MSG_NAME_RULE);
 #ifdef FIRST_FOLDER_TRY
@@ -311,47 +249,10 @@ init_vars(ps)
     set_current_val(vars, V_USER_DOMAIN, TRUE);
     set_current_val(vars,V_USE_ONLY_DOMAIN_NAME, TRUE);
 
-    /* obsolete, backwards compatibility */
-    set_current_val(vars,V_HEADER_IN_REPLY, TRUE);
-    obs_header_in_reply=!strucmp(VAR_HEADER_IN_REPLY, "yes");
-
-    set_current_val(vars,V_BUGS_NICKNAME, TRUE);
-    set_current_val(vars,V_BUGS_FULLNAME, TRUE);
-    set_current_val(vars,V_BUGS_ADDRESS, TRUE);
     set_current_val(vars,V_DEFAULT_FCC, TRUE);
     set_current_val(vars,V_READ_MESSAGE_FOLDER, TRUE);
 
-    /* obsolete, backwards compatibility */
-    set_current_val(vars, V_FEATURE_LEVEL, TRUE);
-    if(strucmp(VAR_FEATURE_LEVEL, "seedling") == 0)
-      obs_feature_level = Seedling;
-    else if(strucmp(VAR_FEATURE_LEVEL, "old-growth") == 0)
-      obs_feature_level = Seasoned;
-    else
-      obs_feature_level = Sapling;
-
-    /* obsolete, backwards compatibility */
-    set_current_val(vars, V_OLD_STYLE_REPLY, TRUE);
-    obs_old_style_reply = !strucmp(VAR_OLD_STYLE_REPLY, "yes");
-
     set_current_val(vars, V_SIGNATURE_FILE, TRUE);
-
-    set_current_val(vars, V_LAST_VERS_USED, TRUE);
-    if(VAR_LAST_VERS_USED && strcmp(VAR_LAST_VERS_USED, version_buff) == 0)
-      ps->show_new_version = 0;
-    else
-      ps->show_new_version = 1;
-    /* want to write new version to pinerc */
-    if(ps->show_new_version)
-      set_variable(V_LAST_VERS_USED, version_buff);
-    
-    /* Obsolete, backwards compatibility */
-    set_current_val(vars, V_ELM_STYLE_SAVE, TRUE);
-    /* Also obsolete */
-    set_current_val(vars, V_SAVE_BY_SENDER, TRUE);
-    if(!strucmp(VAR_ELM_STYLE_SAVE, "yes"))
-      set_variable(V_SAVE_BY_SENDER, "yes");
-    obs_save_by_sender = !strucmp(VAR_SAVE_BY_SENDER, "yes");
 
     /*
      * mail-directory variable is obsolete, put its value in
@@ -394,24 +295,9 @@ init_vars(ps)
         ps->save_by_recipient = 1;
     else if(!strucmp(VAR_SAVED_MSG_NAME_RULE, "last-folder-used"))
         ps->save_by_last_saved = 1;
-    else if(!strucmp(VAR_SAVED_MSG_NAME_RULE, "default-folder")) {
+    else if(!strucmp(VAR_SAVED_MSG_NAME_RULE, "default-folder"))
         ps->save_by_sender = 0;
-	/* if user overrode explicitly, don't change back */
-        if(!strucmp(vars[V_SAVED_MSG_NAME_RULE].user_val.p, "default-folder"))
-	    obs_save_by_sender = 0;  /* don't overwrite */
-    }
-    /* backwards compatibility */
-    if(obs_save_by_sender) {
-        ps->save_by_from = 1;
-	set_variable(V_SAVED_MSG_NAME_RULE, "by-from");
-    }
 
-    set_feature_list_current_val(vars, V_FEATURE_LIST);
-    process_feature_list(ps, VAR_FEATURE_LIST,
-           (obs_feature_level == Seasoned) ? 1 : 0,
-	   obs_header_in_reply, obs_old_style_reply);
-
-    /* this should come after process_feature_list because of use_fkeys */
     if (!ps->start_in_index)
         set_current_val(vars, V_INIT_CMD_LIST, FALSE);
     if (VAR_INIT_CMD_LIST)
@@ -431,150 +317,6 @@ init_vars(ps)
 		                   : STRING(vars->current_val.p)));
     }
 #endif
-}
-
-
-struct features {
-    char *name;        /* the name that goes in the config file */
-    int   var_number;  /* the internal bit number */
-};
-static struct features feat_list[] = {
-    {"old-growth", F_OLD_GROWTH},
-    {"enable-full-header-cmd", F_ENABLE_FULL_HDR},
-    {"enable-unix-pipe-cmd", F_ENABLE_PIPE},
-    {"enable-tab-completion", F_ENABLE_TAB_COMPLETE},
-    {"quit-without-confirm", F_QUIT_WO_CONFIRM},
-    {"enable-jump-shortcut", F_ENABLE_JUMP},
-    {"enable-bounce-cmd", F_ENABLE_BOUNCE},
-    {"enable-apply-cmd", F_ENABLE_APPLY},
-    {"enable-flag-cmd", F_ENABLE_FLAG},
-    {"enable-zoom-cmd", F_ENABLE_ZOOM},
-    {"enable-forward-as-mime", F_MIME_FORWARD},
-    {"enable-suspend", F_CAN_SUSPEND},
-    {"expanded-view-of-folders", F_EXPANDED_FOLDERS},
-    {"use-function-keys", F_USE_FK},
-    {"include-header-in-reply", F_INCLUDE_HEADER},
-    {"signature-at-bottom", F_SIG_AT_BOTTOM},
-    {"delete-skips-deleted", F_DEL_SKIPS_DEL},
-    {"expunge-without-confirm", F_AUTO_EXPUNGE},
-    {"auto-move-read-msgs", F_AUTO_READ_MSGS},
-    {NULL, 0}
-};
-
-/*
- * All the arguments past "list" are the backwards compatibility hacks.
- */
-void
-process_feature_list(ps, list, old_growth, hir, osr)
-    struct pine *ps;
-    char **list;
-    int old_growth, hir, osr;
-{
-    register struct variable *vars = ps->vars;
-    register char *q;
-    char **p;
-    char *lvalue[LARGEST_BITMAP];
-    int   i, yorn;
-    struct features *feat;
-
-
-    /* backwards compatibility */
-    if(hir)
-	F_TURN_ON(F_INCLUDE_HEADER, ps);
-
-    /* ditto */
-    if(osr)
-	F_TURN_ON(F_SIG_AT_BOTTOM, ps);
-
-    /* ditto */
-    if(old_growth) {
-	F_TURN_ON(F_ENABLE_FULL_HDR, ps);
-	F_TURN_ON(F_ENABLE_PIPE, ps);
-	F_TURN_ON(F_ENABLE_TAB_COMPLETE, ps);
-	F_TURN_ON(F_QUIT_WO_CONFIRM, ps);
-	F_TURN_ON(F_ENABLE_JUMP, ps);
-	F_TURN_ON(F_ENABLE_BOUNCE, ps);
-	F_TURN_ON(F_ENABLE_APPLY, ps);
-	F_TURN_ON(F_ENABLE_FLAG, ps);
-	F_TURN_ON(F_ENABLE_ZOOM, ps);
-	F_TURN_ON(F_CAN_SUSPEND, ps);
-    }
-
-
-    /* now run through the list (both global and user lists are in list) */
-    if(list) {
-      for(p = list; (q = *p) != NULL; p++) {
-	if(struncmp(q, "no-", 3) == 0) {
-	  yorn = 0;
-	  q += 3;
-	}else {
-	  yorn = 1;
-	}
-
-	for(feat=feat_list; feat->name; feat++) {
-	  if(strucmp(q, feat->name) == 0) {
-	    if(feat->var_number == F_OLD_GROWTH) {
-	      F_SET(F_ENABLE_FULL_HDR, ps, yorn);
-	      F_SET(F_ENABLE_PIPE, ps, yorn);
-	      F_SET(F_ENABLE_TAB_COMPLETE, ps, yorn);
-	      F_SET(F_QUIT_WO_CONFIRM, ps, yorn);
-	      F_SET(F_ENABLE_JUMP, ps, yorn);
-	      F_SET(F_ENABLE_BOUNCE, ps, yorn);
-	      F_SET(F_ENABLE_APPLY, ps, yorn);
-	      F_SET(F_ENABLE_FLAG, ps, yorn);
-	      F_SET(F_ENABLE_ZOOM, ps, yorn);
-	      F_SET(F_CAN_SUSPEND, ps, yorn);
-	    }else {
-	      F_SET(feat->var_number, ps, yorn);
-	    }
-	    break;
-	  }
-	}
-	/* if it wasn't in that list */
-	if(feat->name == NULL) {
-          dprint(1, (debugfile, "Unrecognized feature in feature-list (%s%s)", (yorn ? "" : "no-"), q));
-	}
-      }
-    }
-
-    /* Will we have to build a new list? */
-    if(!(old_growth || hir || osr))
-	return;
-
-    /*
-     * Build a new list for feature-list.  The only reason we ever need to
-     * do this is if one of the obsolete options is being converted
-     * into a feature-list item, and it isn't already included in the user's
-     * feature-list.
-     */
-    i = 0;
-    for(p = vars[V_FEATURE_LIST].user_val.l; p && (q = *p); p++) {
-      /* already have it or cancelled it, don't need to add later */
-      if(hir && (strucmp(q, "include-header-in-reply") == 0 ||
-                             strucmp(q, "no-include-header-in-reply") == 0)) {
-	hir = 0;
-      }else if(osr && (strucmp(q, "signature-at-bottom") == 0 ||
-                             strucmp(q, "no-signature-at-bottom") == 0)) {
-	osr = 0;
-      }else if(old_growth && (strucmp(q, "old-growth") == 0 ||
-                             strucmp(q, "no-old-growth") == 0)) {
-	old_growth = 0;
-      }
-      lvalue[i++] = cpystr(q);
-    }
-
-    /* check to see if we still need to build a new list */
-    if(!(old_growth || hir || osr))
-	return;
-
-    if(hir)
-      lvalue[i++] = "include-header-in-reply";
-    if(osr)
-      lvalue[i++] = "signature-at-bottom";
-    if(old_growth)
-      lvalue[i++] = "old-growth";
-    lvalue[i] = NULL;
-    set_variable_list(V_FEATURE_LIST, lvalue);
 }
 
 
@@ -752,44 +494,6 @@ set_current_val(vars, v_no, expand)
     }
 }
 
-
-/*
- * Feature-list has to be handled separately from the other variables
- * because it is additive.  The other variables choose one of command line,
- * or pine.conf, or pinerc.  Feature list adds them (except there is not
- * a command-line option).  This could easily be converted to a general
- * purpose routine if we add more additive variables.
- */
-void    
-set_feature_list_current_val(vars, v_no)
-  struct variable *vars;
-  int              v_no;
-{
-    char **list;
-    int    i, j,
-	   elems = 0;
-
-    /* count the lists so I can allocate */
-    if(list=vars[v_no].global_val.l)
-      for(i = 0; list[i]; i++)
-        elems++;
-    if(list=vars[v_no].user_val.l)
-      for(i = 0; list[i]; i++)
-        elems++;
-
-    vars[v_no].current_val.l = (char **)fs_get((elems+1) * sizeof(char *));
-
-    j = 0;
-    if(list=vars[v_no].global_val.l)
-      for(i = 0; list[i]; i++)
-        vars[v_no].current_val.l[j++] = cpystr(list[i]);
-    if(list=vars[v_no].user_val.l)
-      for(i = 0; list[i]; i++)
-        vars[v_no].current_val.l[j++] = cpystr(list[i]);
-
-    vars[v_no].current_val.l[j] = NULL;
-}
-                                                     
 
 
 /*----------------------------------------------------------------------
@@ -1199,41 +903,6 @@ decode_sort(ps, sort_spec)
     return(0);
 }
 
-
-
-/*----------------------------------------------------------------------
-      Set a user variable in memory (pinerc is never rewritten)
-
-  Args:  var -- The index of the variable to set from pine.h (V_....)
-         value -- The string to set the value to
-
- Result: 0 is always returned
-
- The vars data structure is updated; the change does not persist to disk.
- ----*/
-int
-set_variable(var, value)
-     int   var;
-     char *value;
-{
-    struct variable *v;
-
-    v = &ps_global->vars[var];
-
-    if(!v->is_user) 
-      panic1("Trying to set non-user variable %s", v->name);
-
-    if(v->user_val.p != NULL)
-      fs_give((void **) &v->user_val.p);
-
-    if(v->current_val.p != NULL)
-      fs_give((void **) &v->current_val.p);
-
-    v->user_val.p    = value == NULL ? NULL : cpystr(value);
-    v->current_val.p = value == NULL ? NULL : cpystr(value);
-
-    return(0);
-}
 
 
 /*----------------------------------------------------------------------

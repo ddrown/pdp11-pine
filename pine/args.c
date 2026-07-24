@@ -138,9 +138,7 @@ Loop: while(--ac > 0 && **++av == '-') {
 /* END OF WHILETESTINGFOLDERS */
 		 /* these take arguments */
 		 case 'f': case 'p': case 'I':  /* string args */
-#ifndef DOS
 		 case 'P':  /* also a string */
-#endif
 		 case 'd': case 'n':  /* integer args */
 		   if(*++*av) {
 		      str = *av;
@@ -163,12 +161,10 @@ Loop: while(--ac > 0 && **++av == '-') {
 		       if(str != NULL)
 			  pine_state->pinerc = cpystr(str);
 		       break;
-#ifndef DOS
 		     case 'P':
 		       if(str != NULL)
 			  pine_state->pine_conf = cpystr(str);
 		       break;
-#endif
 #ifdef	DEBUG
 		     case 'd':
 		       if(!isdigit(str[0])){
@@ -273,9 +269,7 @@ args_help(void)
         printf("\t -n <number>\tEntry in index to begin on\n");
 	printf("\t -o \t\tReadOnly - Open first folder read-only\n");
         printf("\t -p <pinerc>\tSpecify alternate .pinerc file\n");
-#ifndef DOS
         printf("\t -P <pine.conf>\tSpecify alternate pine.conf file\n");
-#endif
 /* WHILE TESTING FOLDERS */
 printf("\t -l\t\tList - Expand List of folder collections by default\n");
 	printf("\n");

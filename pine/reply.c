@@ -119,9 +119,6 @@ reply(pine_state, msgno, env, body)
     char       *prefix;
     int 	include_text;
     int         ret;
-#ifdef	DOS
-    char *reserve;
-#endif
 
     dprint(4, (debugfile,"\n - reply -\n"));
 
@@ -249,18 +246,6 @@ reply(pine_state, msgno, env, body)
 
     outgoing->message_id  = cpystr(generate_message_id(pine_state));
 
-#ifdef	DOS
-#if	defined(LWP) || defined(PCTCP) || defined(PCNFS)
-#define	IN_RESERVE	8192
-#else
-#define	IN_RESERVE	16384
-#endif
-    if((reserve=(char *)malloc(IN_RESERVE)) == NULL){
-        q_status_message(1, 2, 4,"\007Insufficient memory for message text");
-	goto done_early;
-    }
-#endif
-
    /*==================== Now fix up the message body ====================*/
 
     sig       = get_signature();
@@ -281,16 +266,14 @@ reply(pine_state, msgno, env, body)
     /*---- Include the origina text if requested ----*/
     if(include_text){
 	/* write preliminarly envelope info into message text */
-	if(F_OFF(F_SIG_AT_BOTTOM,ps_global)){
-	    if(sig[0]){
-		so_puts((STORE_S *)msgtext, sig);
-		fs_give((void **)&sig);
-	    }
-	    else
-	      so_puts((STORE_S *)msgtext, NEWLINE);
-
-	    so_puts((STORE_S *)msgtext, NEWLINE);
+	if(sig[0]){
+	    so_puts((STORE_S *)msgtext, sig);
+	    fs_give((void **)&sig);
 	}
+	else
+	  so_puts((STORE_S *)msgtext, NEWLINE);
+
+	so_puts((STORE_S *)msgtext, NEWLINE);
 
         if(orig_body == NULL || orig_body->type == TYPETEXT) {
 
@@ -299,10 +282,8 @@ reply(pine_state, msgno, env, body)
             body->type            = TYPETEXT;
 	    body->contents.binary = msgtext;
 	    so_puts((STORE_S *)msgtext, reply_delimiter(env));
-	    if(F_ON(F_INCLUDE_HEADER,ps_global))
-	      format_text_header(env, pc, prefix);
 
-	    get_body_part_text(orig_body, msgno, "1", pc, 
+	    get_body_part_text(orig_body, msgno, "1", pc,
 				prefix, ". Text not included");
         } else if(orig_body->type == TYPEMULTIPART) {
 
@@ -316,8 +297,6 @@ reply(pine_state, msgno, env, body)
 		body->contents.part->body.contents.binary = msgtext;
 /* BUG: ? matter that we're not setting body.size.bytes */
 		so_puts((STORE_S *)msgtext, reply_delimiter(env));
-	        if(F_ON(F_INCLUDE_HEADER,ps_global))
-		  format_text_header(env, pc, prefix);
 
 		get_body_part_text(&orig_body->contents.part->body,
 				   msgno, "1", pc, prefix,
@@ -356,22 +335,6 @@ reply(pine_state, msgno, env, body)
 	    /*
 	     * the idea here is to fetch part into storage object
 	     */
-#ifdef	DOS
-	    if(part->body.contents.binary = (void *) so_get(FileStar, NULL,
-							    EDIT_ACCESS)){
-		mailgets    = dos_gets;	/* fetched text to disk */
-		append_file = (FILE *)so_text(
-				       (STORE_S *)part->body.contents.binary);
-
-		if(mail_fetchbody(pine_state->mail_stream, msgno, "1",
-					&part->body.size.bytes) == NULL)
-		  goto done;
-
-		mailgets    = NULL;
-		append_file = NULL;
-		mail_gc(pine_state->mail_stream, GC_TEXTS);
-	    }
-#else
 	    if(part->body.contents.binary = (void *) so_get(CharStar, NULL,
 							    EDIT_ACCESS)){
 		if((tp=mail_fetchbody(pine_state->mail_stream, msgno, "1",
@@ -379,7 +342,6 @@ reply(pine_state, msgno, env, body)
 		  goto done;
 		so_puts((STORE_S *)part->body.contents.binary, tp);
 	    }
-#endif
 	    else
 	      goto done;
         }
@@ -395,9 +357,6 @@ reply(pine_state, msgno, env, body)
 	fs_give((void **)&sig);
     }
 
-#ifdef	DOS
-    free((void *)reserve);
-#endif
     pine_send(outgoing,      /* partially formatted outgoing message */
               &body,
               "COMPOSE MESSAGE REPLY",
@@ -546,17 +505,13 @@ forward(pine_state, msgno, env, body)
      BODY          *body;
 {
     ENVELOPE      *outgoing;
-    BODY          *orig_body, *text_body, *b;
+    BODY          *orig_body, *text_body;
     char          *tmp_text, *tp;
     PART          *part;
     MAILSTREAM    *stream;
     void          *msgtext;
     gf_io_t        pc;
     char          *sig;
-    int            ret=0;
-#ifdef	DOS
-    char *reserve;
-#endif
 
     dprint(4, (debugfile, "\n - forward -\n"));
 
@@ -599,93 +554,6 @@ forward(pine_state, msgno, env, body)
     fs_give((void **)&sig);
     gf_set_so_writec(&pc, (STORE_S *)msgtext);
 
-#ifdef	DOS
-#if	defined(LWP) || defined(PCTCP) || defined(PCNFS)
-#define	IN_RESERVE	8192
-#else
-#define	IN_RESERVE	16384
-#endif
-    if((reserve=(char *)malloc(IN_RESERVE)) == NULL){
-	so_give(&(STORE_S *)msgtext);
-        q_status_message(1, 2, 4,"\007Insufficient memory for message text");
-	goto clean_early;
-    }
-#endif
-
-    if(F_ON(F_MIME_FORWARD,ps_global) &&
-       (ret=want_to("Forward message as a MIME attachment",'n','x',NO_HELP,0))
-								     == 'y') {
-        /*----- Forward the message as a MIME type "MESSAGE" ----*/
-
-        body = mail_newbody();
-        body->type = TYPEMULTIPART;
-
-        /*---- The TEXT part/body ----*/
-        body->contents.part                       = mail_newbody_part();
-        body->contents.part->body.type            = TYPETEXT;
-        body->contents.part->body.contents.binary = msgtext;
-
-        /*---- The Forwarded Message body ----*/
-        body->contents.part->next = mail_newbody_part();
-        b = &(body->contents.part->next->body);
-        b->type        = TYPEMESSAGE;
-        b->id          = cpystr(generate_message_id(ps_global));
-        b->description = fs_get(
-                 (env->subject != NULL ? strlen(env->subject) : (size_t)0) 
-		 + (size_t)30);
-        sprintf(b->description, "Forwarded message \'%s\'",
-                env->subject == NULL ? "" : env->subject); 
-        b->contents.msg.env  = NULL;
-        b->contents.msg.body = NULL;
-#ifdef	DOS
-	/*
-	 * put the message together in a storage object
-	 */
-        if((b->contents.binary = (void *) so_get(FileStar, NULL,
-						 EDIT_ACCESS)) == NULL)
-	    goto bomb;
-
-	mailgets    = dos_gets;	/* write fetched text to disk */
-	append_file = (FILE *)so_text((STORE_S *)b->contents.binary);
-
-	/* write the header */
-	if(mail_fetchheader(stream, msgno) == NULL)
-	  goto bomb;
-
-	/* HACK!  See mailview.c:format_message for details... */
-	stream->text = NULL;
-	/* write the body */
-	if(mail_fetchtext(stream, msgno) == NULL)
-	  goto bomb;
-
-	b->size.bytes = ftell(append_file);
-	/* next time body may stay in core */
-	mailgets      = NULL;
-	append_file   = NULL;
-	mail_gc(stream, GC_TEXTS);
-#else
-        if((b->contents.binary = (void *) so_get(CharStar, NULL,
-						 EDIT_ACCESS)) == NULL)
-	    goto bomb;
-
-        if(!(tmp_text = mail_fetchheader(stream, msgno)) || *tmp_text == '\0')
-          goto bomb;
-	else
-	  so_puts((STORE_S *)b->contents.binary, tmp_text);
-
-	b->size.bytes = strlen(tmp_text);
-	so_puts((STORE_S *)b->contents.binary, "\015\012");
-        if(!(tmp_text = mail_fetchtext(stream, msgno)) || *tmp_text == '\0')
-          goto bomb;
-	else
-	  so_puts((STORE_S *)b->contents.binary, tmp_text);
-
-	b->size.bytes += strlen(tmp_text);
-#endif
-    } else if(ret == 'x') {
-        q_status_message(1, 2, 4,"\007Message cancelled");
-	goto clean_early;
-    } else {
         if(orig_body == NULL || orig_body->type == TYPETEXT) {
             /*---- Message has a single text part -----*/
             body                  = mail_newbody();
@@ -747,23 +615,6 @@ forward(pine_state, msgno, env, body)
 	    /*
 	     * the idea here is to fetch part into storage object
 	     */
-#ifdef	DOS
-	    if(part->body.contents.binary = (void *) so_get(FileStar, NULL,
-							    EDIT_ACCESS)){
-		mailgets    = dos_gets;	/* fetched text to disk */
-		append_file = (FILE *)so_text(
-				       (STORE_S *)part->body.contents.binary);
-
-		if(mail_fetchbody(stream, msgno, "1",
-					&part->body.size.bytes) == NULL)
-		  goto bomb;
-
-		/* next time body may stay in core */
-		mailgets    = NULL;
-		append_file = NULL;
-		mail_gc(stream, GC_TEXTS);
-	    }
-#else
 	    if(part->body.contents.binary = (void *) so_get(CharStar, NULL,
 							    EDIT_ACCESS)){
 		if((tp=mail_fetchbody(stream, msgno, "1",
@@ -771,15 +622,10 @@ forward(pine_state, msgno, env, body)
 		  goto bomb;
 		so_puts((STORE_S *)part->body.contents.binary, tp);
 	    }
-#endif
 	    else
 	      goto bomb;
         }
-    }
 
-#ifdef	DOS
-    free((void *)reserve);
-#endif
     pine_send(outgoing,      /* partially formatted outgoing message */
 		&body,
 		"FORWARD MESSAGE",
@@ -793,11 +639,6 @@ forward(pine_state, msgno, env, body)
     return;
 
   bomb:
-#ifdef	DOS
-    mailgets    = NULL;
-    append_file = NULL;
-    mail_gc(pine_state->mail_stream, GC_TEXTS);
-#endif
     q_status_message(1, 4, 5,
            "\007Error fetching message contents. Can't forwarded message");
     goto clean;
@@ -846,22 +687,11 @@ get_body_part_text(body, msg_no, part_no, pc, prefix, hmm)
      */
     if(body == NULL){
 	char         *text, *decode_error;
-	MESSAGECACHE *mc;
 	gf_io_t       gc;
 	SourceType    src = CharStar;
 	int           rv = 0;
 
 	(void)mail_fetchstructure(ps_global->mail_stream, msg_no, NULL);
-	mc = mail_elt(ps_global->mail_stream,  msg_no);
-
-#ifdef	DOS
-	if(mc->rfc822_size > MAX_MSG_INCORE){
-	    src = FileStar;
-	    mailgets = dos_gets;	/* write fetched text to disk */
-	}
-	else
-	  mailgets = NULL;		/* message stays in core */
-#endif
 
 	if(text = mail_fetchtext(ps_global->mail_stream, msg_no)){
 	    gf_set_readc(&gc,text,(src == FileStar) ? 0L : (unsigned long)strlen(text),src);
@@ -889,16 +719,6 @@ get_body_part_text(body, msg_no, part_no, pc, prefix, hmm)
 	    rv++;
 	}
 
-#ifdef	DOS
-	/* clean up dos_gets returned file pointer!! */
-	if(src == FileStar && append_file){
-	    fclose(append_file);
-	    append_file = NULL;
-	    mail_gc(ps_global->mail_stream, GC_TEXTS);
-	}
-
-	mailgets = NULL;		/* message stays in core */
-#endif
 	return(rv == 0);
     }
 
@@ -1012,7 +832,6 @@ fetch_contents(stream, msgno, body, part_offset, start_part)
 		/*
 		 * the idea here is to fetch everything into storage objects
 		 */
-#ifndef	DOS
 		part->body.contents.binary = (void *) so_get(CharStar, NULL,
 							     EDIT_ACCESS);
 		if(part->body.contents.binary == NULL
@@ -1024,29 +843,6 @@ fetch_contents(stream, msgno, body, part_offset, start_part)
 		    so_puts((STORE_S *)part->body.contents.binary, tp);
 		    got_one = 1;
 		}
-#else
-		part->body.contents.binary = (void *) so_get(TmpFileStar, NULL,
-							     EDIT_ACCESS);
-		if(part->body.contents.binary){
-		    mailgets    = dos_gets;	/* fetched text to disk */
-		    append_file = (FILE *)so_text(
-				       (STORE_S *)part->body.contents.binary);
-
-		    if(mail_fetchbody(stream, msgno, part_string,
-				      &part->body.size.bytes) == NULL){
-			*ep++ = part_count;
-		    }
-		    else {
-			so_release((STORE_S *)part->body.contents.binary);
-			got_one = 1;
-		    }
-
-		    /* next time body may stay in core */
-		    mailgets    = NULL;
-		    append_file = NULL;
-		    mail_gc(stream, GC_TEXTS);
-		}
-#endif
             } else {
                 got_one = 1;
             }
@@ -1055,10 +851,9 @@ fetch_contents(stream, msgno, body, part_offset, start_part)
 	     * the idea here is to fetch everything into storage objects
 	     * so, grab one, then fetch the body part
 	     */
-#ifndef	DOS
             part->body.contents.binary = (void *) so_get(CharStar, NULL,
 							 EDIT_ACCESS);
-            if(part->body.contents.binary == NULL 
+            if(part->body.contents.binary == NULL
                 || (tp=mail_fetchbody(stream, msgno, part_string,
                                   &part->body.size.bytes)) == NULL){
 		*ep++ = part_count;
@@ -1067,28 +862,6 @@ fetch_contents(stream, msgno, body, part_offset, start_part)
 		so_puts((STORE_S *)part->body.contents.binary, tp);
 		got_one = 1;
 	    }
-#else
-            part->body.contents.binary = (void *) so_get(TmpFileStar, NULL,
-							 EDIT_ACCESS);
-            if(part->body.contents.binary){
-		mailgets    = dos_gets;	/* write fetched text to disk */
-		append_file = (FILE *)so_text((STORE_S *)part->body.contents.binary);
-
-                if(mail_fetchbody(stream, msgno, part_string,
-                                  &part->body.size.bytes) == NULL){
-		    *ep++ = part_count;
-		}
-		else {
-		    so_release((STORE_S *)part->body.contents.binary);
-		    got_one = 1;
-		}
-
-		/* next time body may stay in core */
-		mailgets    = NULL;
-		append_file = NULL;
-		mail_gc(stream, GC_TEXTS);
-	    }
-#endif
         }
     }
 
@@ -1290,30 +1063,11 @@ generate_message_id(ps)
     long        now;
     struct tm  *now_x;
     extern char version_buff[];
-#ifdef  DOS
-#ifdef  LWP
-    #define	STACK	'n'		/* Novell Implementation   */
-#else
-#ifdef  PCTCP
-    #define	STACK	'f'		/* FTP Inc. Implementation */
-#else
-#ifdef  PCNFS
-    #define	STACK	's'		/* Sun Implementation      */
-#else
-    #define	STACK	'p'		/* Generic Packet-Driver   */
-#endif
-#endif
-#endif
-#endif
 
     now   = time(0);
     now_x = localtime(&now);
 
-#ifdef	DOS
-    sprintf(id,"<PCPine_%c.%.20s.%02d%02d%02d%02d%02d.%c%d@%.50s>", STACK,
-#else
     sprintf(id,"<Pine.%.20s.%02d%02d%02d%02d%02d.%c%d@%.50s>",
-#endif
             version_buff,now_x->tm_year, now_x->tm_mon + 1, now_x->tm_mday,
             now_x->tm_hour, now_x->tm_sec, a, getpid(), ps->hostname);
 
@@ -1470,20 +1224,6 @@ get_signature(void)
     /*----- Get the signature if there is one to get -----*/
     if(ps_global->VAR_SIGNATURE_FILE != NULL &&
        ps_global->VAR_SIGNATURE_FILE[0] != '\0') {
-#ifdef	DOS
-	if(ps_global->VAR_SIGNATURE_FILE[0] == '\\' 
-	   || (isalpha(ps_global->VAR_SIGNATURE_FILE[0])
-	       && ps_global->VAR_SIGNATURE_FILE[1] == ':')){
-	    strcpy(sig_path, ps_global->VAR_SIGNATURE_FILE);
-	}
-	else{
-	    int l = last_cmpnt(ps_global->pinerc) - ps_global->pinerc;
-
-	    strncpy(sig_path, ps_global->pinerc, l);
-	    sig_path[l] = '\0';
-	    strcat(sig_path, ps_global->VAR_SIGNATURE_FILE);
-	}
-#else
 	if(ps_global->VAR_SIGNATURE_FILE[0] == '/'){
 	    strcpy(sig_path, ps_global->VAR_SIGNATURE_FILE);
 	}
@@ -1494,7 +1234,6 @@ get_signature(void)
 	else
 	  build_path(sig_path,ps_global->home_dir,
 		     ps_global->VAR_SIGNATURE_FILE);
-#endif
 
 	if(can_access(sig_path, ACCESS_EXISTS) == 0){
 	    if(tmp_sig = read_file(sig_path)){

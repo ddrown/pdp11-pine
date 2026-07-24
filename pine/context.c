@@ -268,10 +268,6 @@ context_isambig(char *s)
   char c = (*s == '*') ? s[1] : s[0];
   if(c == '\0' && *s == '*')	/* special case! */
     return(1);
-#ifdef	DOS
-  else if (isalpha(*s) && *(s+1) == ':')
-    return(0);
-#endif
   else
     /*
      * return ambiguous if alphanumeric OR something that starts

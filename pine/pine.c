@@ -109,26 +109,7 @@ static int setup_mini_menu(int);
 void do_menu(int);
 void main_redrawer(void);
 void show_main_screen(struct pine *, int, OtherMenu, struct key_menu *);
-void new_user_or_version(char **);
 static void do_setup_task(int);
-
-static char *new_version_message[] = {
-#ifdef DOS
-"   This is a new version of PC-Pine!",
-#else /* UNIX */
-"   This is a new version of Pine!",
-#endif
-"",
-"   Your Pine configuration file shows that you have not used ",
-"   Pine 3.89 before.  There are a small number of visible changes",
-"   since Pine 3.88, but this is primarily a \"bug fix\" release.",
-"",
-"   Details of changes in this, and previous, versions of Pine can",
-"   be found in the Release Notes (\"R\" command off Main Menu).",
-"",
-"   This message will appear only once.",
-"",
-NULL};
 
 static struct key main_keys[] =
        {{"?","Help",0},        {"O","OTHER CMDS",0},  {NULL,NULL,0},    
@@ -179,9 +160,6 @@ main(int argc, char *argv[])
     int           rv;
     struct pine  *pine_state;
     char          int_mail[MAXPATH+1];
-#ifdef DYN
-    char stdiobuf[64];
-#endif
 
     /*----------------------------------------------------------------------
           Set up buffering and some data structures
@@ -223,43 +201,12 @@ main(int argc, char *argv[])
     ps_global->max_msgno     = 0;
     init_init_vars(ps_global);
 
-#ifndef	DOS
     srandom(getpid());  /* for new mail notification which uses random */
-#endif
-
-#ifdef DYN
-    /*-------------------------------------------------------------------
-      There's a bug in DYNIX that causes the terminal driver to lose
-      characters when large I/O writes are done on slow lines. Like
-      a 1Kb write(2) on a 1200 baud line. Usually CR is output which
-      causes a flush before the buffer is too full, some the pine composer
-      doesn't output newlines a lot. Either stdio should be fixed to
-      continue with more writes when the write request is partial, or
-      fix the tty driver to always complete the write.
-     */
-    setbuffer(stdout, stdiobuf, 64);
-#endif	
 
     /*----------------------------------------------------------------------
            Parse arguemnts and initialize debugging
       ----------------------------------------------------------------------*/
     folder_to_open = pine_args(pine_state, argc, argv, &argv);
-
-#ifdef DEBUG
-    /* Since this is specific debugging we don't mind if the
-       ifdef is the type of system. See conf/templets.h
-     */
-#ifdef HAVE_SMALLOC 
-    if(debug > 8)
-      malloc_debug(2);
-#endif 
-#ifdef NXT
-    if(debug > 8)
-      malloc_debug(32); 
-#endif 
-
-#endif  /* DEBUG */
-
 
     strcpy(version_buff, VERSION);
 
@@ -276,14 +223,6 @@ main(int argc, char *argv[])
 
 #ifdef DEBUG
     init_debug();
-#endif
-
-#ifdef	DOS
-    /*
-     * install c-client callback to manage cache data outside
-     * free memory
-     */
-    mailcache = dos_cache;
 #endif
 
     init_vars(pine_state);
@@ -303,21 +242,14 @@ main(int argc, char *argv[])
 
     /*--- input side ---*/
     if(init_tty_driver(pine_state)){
-#ifdef	DOS
-    /* always succeeds under DOS! */
-#else
         fprintf(stderr, "Can't access terminal or input is not a terminal. Redirection of\n");
         fprintf(stderr, "standard input is not allowed. For example \"pine < file\" doesn't work.\n\007");
         exit(-1);
-#endif
     }
-        
+
 
     /*--- output side ---*/
     rv = config_screen(&(pine_state->ttyo));
-#ifdef	DOS
-    /* always succeeds under DOS! */
-#else
     if(rv) {
         switch(rv) {
           case -1: printf("Terminal type (envronment variable TERM) not set.\n");
@@ -335,18 +267,11 @@ main(int argc, char *argv[])
         end_tty_driver(pine_state);
         exit(-1);
     }
-#endif
     init_screen();
     pine_state->in_init_seq = 0;  /* so output (and ClearScreen) will show up */
     pine_state->dont_use_init_cmds = 1;  /* don't use up initial_commands yet */
     ClearScreen();
-    if(pine_state->show_new_version){
-	pine_state->mangled_header = 1;
-	show_main_screen(pine_state, 0, 0, NULL);
-	new_user_or_version(new_version_message);
-        ClearScreen();
-    }
-    
+
     /* put back in case we need to suppress output */
     pine_state->in_init_seq = pine_state->save_in_init_seq;
             
@@ -421,71 +346,6 @@ main(int argc, char *argv[])
                 exit(-1);
             }
         } else {
-#ifdef	DOS
-            /*
-	     * need to ask for the inbox name if no default under DOS
-	     * since there is no "inbox"
-	     */
-
-	    if(!pine_state->VAR_INBOX_PATH || !pine_state->VAR_INBOX_PATH[0]
-	       || strucmp(pine_state->VAR_INBOX_PATH, "inbox") == 0){
-		HelpType help = NO_HELP;
-		static   ESCKEY_S ekey[] = {{"^T", "To Fldrs", ctrl(T), 2},
-					  {NULL,NULL,-1,0}};
-
-		pine_state->mangled_footer = 1;
-		int_mail[0] = '\0';
-    		while(1) {
-        	    rv = optionally_enter(int_mail, -3, 0, MAXPATH, 1, 0,
-				      "No inbox!  Folder to open as inbox : ",
-				      ekey, help, 0);
-        	    if(rv == 3){
-			help = (help == NO_HELP) ? h_sticky_inbox : NO_HELP;
-			continue;
-		    }
-
-        	    if(rv != 4)
-			break;
-    		}
-
-    		if(rv == 1){
-		    q_status_message(0, 0,2 ,"\007Folder open cancelled");
-		    rv = 0;		/* reset rv */
-		} 
-		else if(rv == 2){
-        	    if(!folder_lister(pine_state, OpenFolder, NULL,
-			       &(pine_state->context_current), int_mail))
-		      *int_mail = '\0';	/* user cancelled! */
-
-                    show_main_screen(pine_state, 0, FirstMenu, km);
-		}
-
-		if(*int_mail){
-		    removing_trailing_white_space(int_mail);
-		    removing_leading_white_space(int_mail);
-		    if((!pine_state->VAR_INBOX_PATH 
-			|| strucmp(pine_state->VAR_INBOX_PATH, "inbox") == 0)
-		     && want_to("Preserve folder as \"inbox-path\" in PINERC", 
-				'y', 'n', NO_HELP, 0) == 'y'){
-			set_variable(V_INBOX_PATH, int_mail);
-		    }
-		    else{
-			if(pine_state->VAR_INBOX_PATH)
-			  fs_give((void **)&pine_state->VAR_INBOX_PATH);
-
-			pine_state->VAR_INBOX_PATH = cpystr(int_mail);
-		    }
-
-		    do_broach_folder(pine_state->inbox_name, 
-				     pine_state->context_list);
-    		}
-		else
-		  q_status_message(0, 0,2 ,"\007No folder opened");
-
-	    }
-	    else
-
-#endif
             do_broach_folder(pine_state->inbox_name, pine_state->context_list);
         }
 
@@ -496,19 +356,6 @@ main(int argc, char *argv[])
         if(can_access(int_mail, ACCESS_EXISTS) == 0) {
             q_status_message(1, 4, 5, "\007Use compose command to continue composing last message. It was interrupted.");
         }
-
-#if defined(USE_QUOTAS)
-	{
-	    long q;
-	    int  over;
-	    q = disk_quota(pine_state->home_dir, &over);
-	    if(q > 0 && over) {
-		q_status_message2(1, 4,5,
-			"\007WARNING! Over your disk quota by %s bytes (%s)",
-			comatose(q),byte_string(q));
-	    }
-	}
-#endif
 
 	pine_state->in_init_seq = pine_state->save_in_init_seq;
 	pine_state->dont_use_init_cmds = 0;
@@ -644,9 +491,6 @@ main_menu_screen(pine_state)
     CONTEXT_S       *tc;
     struct key_menu *km;
     OtherMenu       what;
-#ifdef	DOS
-    extern void (*while_waiting)();
-#endif
 
     ps_global                 = pine_state;
     question_line             = -3;
@@ -684,18 +528,7 @@ main_menu_screen(pine_state)
 
         /*------ Read the command from the keyboard ----*/      
         MoveCursor(min(0, pine_state->ttyo->screen_rows - 3), 0);
-#ifdef	DOS
-	/*
-	 * AND pre-build header lines.  This works just fine under
-	 * DOS since we wait for characters in a loop. Something will
-         * will have to change under UNIX if we want to do the same.
-	 */
-	while_waiting = build_header_cache;
-#endif
         ch = read_command();
-#ifdef	DOS
-	while_waiting = NULL;
-#endif
         orig_ch = ch;
 
         if(ch <= 0xff && isupper(ch))
@@ -723,84 +556,6 @@ main_menu_screen(pine_state)
 	/*------ Execute the command ------*/
 	switch (ch)
 	{
-#ifdef	DOS
-/* while we're testing DOS */
- case 'h': 
-     {
-#include <malloc.h>
-       int    heapresult;
-       int    totalused = 0;
-       int    totalfree = 0;
-       long   totalusedbytes = 0L;
-       long   totalfreebytes = 0L;
-       long   largestinuse = 0L;
-       long   largestfree = 0L, freeaccum = 0L;
-       _HEAPINFO hinfo;
-       extern long coreleft();
-       extern void dumpmetacache();
-
-       hinfo._pentry = NULL;
-       while((heapresult = _heapwalk(&hinfo)) == _HEAPOK){
-        if(hinfo._useflag == _USEDENTRY){
-          totalused++;
-          totalusedbytes += (long)hinfo._size; 
-          if(largestinuse < (long)hinfo._size)
-             largestinuse = (long)hinfo._size;
-        }
-        else{
-          totalfree++;
-          totalfreebytes += (long)hinfo._size;
-        }
-
-        if(hinfo._useflag == _USEDENTRY){
-	    if(freeaccum > largestfree)		/* remember largest run */
-	      largestfree = freeaccum;
-
-	    freeaccum = 0L;
-	}
-	else
-	  freeaccum += (long)hinfo._size;
-      }
-
-      sprintf(tmp_20k_buf,
-	      "use: %d (%ld, %ld lrg), free: %d (%ld, %ld lrg), DOS: %ld", 
-		totalused, totalusedbytes, largestinuse,
-		totalfree, totalfreebytes, largestfree, coreleft());
-      q_status_message(0, 5, 7, tmp_20k_buf);
-
-      switch(heapresult/* = _heapchk()*/){
-       case _HEAPBADPTR:
-        q_status_message(0,1,2 ,"\007ERROR - Bad start of heap");
-        break;
-       case _HEAPBADBEGIN:
-        q_status_message(0,1,2 ,"\007ERROR - Bad start of heap");
-        break;
-       case _HEAPBADNODE:
-        q_status_message(0,1,2 ,"\007ERROR - Bad node in heap");
-        break;
-       case _HEAPEMPTY:
-        q_status_message(0,1,2 ,"Heap OK - empty");
-        break;
-       case _HEAPEND:
-        q_status_message(0,1,2 ,"Heap checks out!");
-        break;
-       case _HEAPOK:
-        q_status_message(0,1,2 ,"Heap checks out!");
-        break;
-       default:
-        q_status_message1(0,1,2 ,"\007BS from heapchk: %d", (void *)heapresult);
-        break;
-      }
-
-/*       dumpmetacache(ps_global->mail_stream);*/
-/* DEBUG: heapcheck() */
-/*       q_status_message1(0, 1, 3,
-                         " * * There's %ld bytes of core left for Pine * * ", 
-                         (void *)coreleft());*/
-     }
-     break;
-#endif	/* END: for testing */
-
 	  /*---------- help ------*/
 	  case PF1:
 	  case OPF1:
@@ -862,7 +617,6 @@ main_menu_screen(pine_state)
 	    pine_state->mangled_screen = 1;
 	    break;
 
-#ifndef NO_KEYBOARD_LOCK
           /*---------- Keyboard lock ----------*/
 	  case PF10:
 	  case 'k':
@@ -870,7 +624,6 @@ main_menu_screen(pine_state)
 	    ClearScreen();
 	    pine_state->mangled_screen = 1;
 	    break;
-#endif /* !NO_KEYBOARD_LOCK */
 
           /*---------- Quit pine ----------*/
 	  case OPF3: 
@@ -900,13 +653,6 @@ main_menu_screen(pine_state)
 	  case 'g':
 	    tc = ps_global->context_current;
             new_folder = broach_folder(question_line, 1, &tc);
-#ifdef	DOS
-	    if(new_folder && *new_folder == '{' && coreleft() < 20000){
-	      q_status_message(0,0,2,
-			       "\007Not enough memory to open IMAP folder");
-	      new_folder = NULL;
-	    }
-#endif
             if(new_folder != NULL) {
               dprint(9, (debugfile, "do_broach_folder (%s, %s)\n",
                          new_folder, tc->context));
@@ -1057,10 +803,6 @@ show_main_screen(pine_state, quick_draw, what, km)
 
       setbitmap(bitmap);
 
-#ifdef NO_KEYBOARD_LOCK
-      clrbitn(KBLOCK_KEY, bitmap);
-#endif
-
       /* put brackets around the default action */
       label[0] = '[';  label[1] = '\0';
       strcat(label,
@@ -1199,16 +941,9 @@ do_setup_task(int command)
 
         /*----- NEW PASSWORD -----*/
       case 'n':
-#ifdef	DOS
-        q_status_message(1, 3, 5,
-	    "Password change not available in the DOS version of Pine.");
-	display_message('x');
-        sleep(3);
-#else
 	change_passwd();
 	ClearScreen();
 	ps_global->mangled_screen = 1;
-#endif	/* DOS */
         break;
 
     }
@@ -1216,35 +951,8 @@ do_setup_task(int command)
 
 
 
-/*
- * Display a new user or new version message.
- */
-void
-new_user_or_version(message)
-    char *message[];
-{
-    int  dline;
-
-    for(dline = 3; dline < ps_global->ttyo->screen_rows - 4; dline++) {
-        if(message[dline-3] == NULL)
-            break;
-        PutLine0(dline, 4, message[dline-3]);
-    }
-
-    PutLine0(ps_global->ttyo->screen_rows - 4, 13,
-		 "PINE is a trademark of the University of Washington.");
-    StartInverse();
-    PutLine0(ps_global->ttyo->screen_rows - 3, 0,
-		 "Type any character to continue : ");
-    EndInverse();
-
-    /* ignore the character typed, 120 second timeout */
-    (void)read_char(120);
-}
-
-
 /*----------------------------------------------------------------------
-          Quit pine if the user wants to 
+          Quit pine if the user wants to
 
     Args: The usual pine structure
 
@@ -1263,8 +971,7 @@ quit_screen(pine_state)
 
     dprint(1, (debugfile, "\n\n    ---- QUIT SCREEN ----\n"));    
 
-    if(F_OFF(F_QUIT_WO_CONFIRM,pine_state) &&
-       (ret=want_to("Really quit pine", 'y', 'x', h_oe_export, 0)) != 'y') {
+    if((ret=want_to("Really quit pine", 'y', 'x', h_oe_export, 0)) != 'y') {
 	if(ret == 'x')
 	  Writechar('\007');
         pine_state->next_screen = pine_state->prev_screen;
@@ -1520,11 +1227,7 @@ MAILSTREAM *
 default_driver(name)
     char *name;
 {
-#ifdef	DOS
-    extern MAILSTREAM dawzproto;	/*  HACK!  */
-#else
     extern MAILSTREAM bezerkproto;	/*  HACK!  */
-#endif
     /*
      * if the folder name is local, assign default proto
      * BE SURE TO DO THIS if it is local, as {mail,context}_create
@@ -1571,8 +1274,7 @@ warn_other_cmds(void)
     static int other_cmds = 0;
 
     other_cmds++;
-    if((ps_global->show_new_version &&
-	      other_cmds % 3 == 0 && other_cmds < 10) || other_cmds % 20 == 0)
+    if(other_cmds % 20 == 0)
         q_status_message(0, 0, 2,
 		    "Remember: the \"O\" command is always optional");
 }

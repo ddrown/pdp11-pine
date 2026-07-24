@@ -4501,3 +4501,503 @@ already covered by the existing composer tests).
   this session; the fixes are almost entirely logic corrections and a
   handful of widened stack buffers (tens of bytes each), not
   size-reduction work in themselves.
+
+### Dropped `pico/ansi.c` -- permanently dead, never-enabled alternate terminal driver
+- [x] Deleted `pico/ansi.c` outright (`git rm`) and dropped `ansi.o`/
+      `ansi.c` from `pico/makefile.lnx`'s `OFILES`/`CFILES`. As
+      described when this was found: the file's entire body (`#if
+      ANSI_DRIVER` ... `#endif`, the alternate ANSI/VT100 terminal
+      driver competing with `pico/tcap.c`'s termcap-based one) never
+      compiled here since `ANSI_DRIVER` is never defined in this tree,
+      and the one function outside that guard, `ansiopen()`, was an
+      orphaned, always-unreferenced external-linkage function (its
+      only reference was itself inside the dead block). Confirmed via
+      grep across `pico/efunc.h`/`estruct.h`/`edef.h` and every other
+      `pico/*.c` that nothing outside `ansi.c` itself referenced
+      `ansiopen` or any `ansi*` symbol -- a clean, no-dependency
+      deletion. Other platform makefiles (`pico/makefile.bsd`,
+      `.sol`, `.sco`, etc.) still list `ansi.o`/`ansi.c`, but those
+      aren't part of this project's active build (only `makefile.lnx`
+      is used for the `lnx` dev target; there's no PDP-11
+      cross-compiler makefile yet) and were left alone, matching the
+      original TODO's scope.
+  - **Correction to the original estimate**: the write-up expected a
+    "small but real" binary-size win (~176 bytes text+data, per a
+    standalone `nm` compile of `ansi.c` alone). The actual before/after
+    `size bin/pico` was identical (text 110299, data 6364, both
+    before and after). Root cause: `libpico.a` is a static archive, and
+    the linker only pulls in archive members needed to resolve an
+    undefined symbol when linking `pico` (`main.c` + `libpico.a`).
+    Since nothing ever called `ansiopen()`, `ansi.o` was already being
+    excluded from the final link even while `ansi.c` still existed and
+    was being compiled into the archive -- confirmed by `nm bin/pico |
+    grep -i ansi` finding nothing both before and after, and by `ar t
+    libpico.a` no longer listing `ansi.o` post-deletion. So this cut is
+    source-hygiene/dead-code removal, not a measurable size win; noted
+    here so future size-accounting doesn't expect a delta that isn't
+    there.
+  - **Verified**: `./build clean && ./build lnx`, 0 warnings; full
+    smoketest suite, 26/26 passing; confirmed no `ansi` symbols in
+    `bin/pico` and no `ansi.o` member in `libpico.a` post-deletion.
+
+### Removed the "This is a new version of Pine!" first-launch screen -- permanently broken by the earlier `read_pinerc()` cut, user-reported
+- **What it was**: user reported seeing "This is a new version of Pine!"
+  (`new_user_or_version()`/`new_version_message[]` in `pine/pine.c`)
+  every single time they started pine, not just once. Root cause:
+  this screen's "show once" logic (`pine/init.c`'s old `init_vars()`)
+  compared the pinerc's `last-version-used` value against the
+  compiled-in version string, and if they didn't match, set
+  `ps->show_new_version = 1` and called `set_variable(V_LAST_VERS_USED,
+  version_buff)` to "remember" it for next time. Two independent things
+  make that permanently broken in this fork: `set_variable()`'s own
+  header comment says it plainly -- "pinerc is never rewritten" -- it
+  only updates the in-memory value, so the write-back back to disk
+  never happened even before this session's changes; and separately,
+  `read_pinerc()` was already cut down to an unconditional `return(0)`
+  stub (see the "bootstrap-only stub" entry above), so the pinerc is
+  never even read back in on the next run either. Net effect:
+  `VAR_LAST_VERS_USED` is always `NULL` on every startup, so
+  `show_new_version` was unconditionally `1` on every run -- this
+  screen could never have worked as a once-only notice in this fork,
+  with or without the `read_pinerc()` cut.
+- **What changed**: removed the whole subsystem rather than patch the
+  broken persistence, since there's no persistence mechanism left in
+  this fork to make "show once" meaningful again:
+  - `pine/pine.c`: deleted `new_user_or_version()`, the
+    `new_version_message[]` array, its prototype, and the
+    `if(pine_state->show_new_version){ ... }` call site in the startup
+    sequence (the `ClearScreen()` calls immediately before/after it
+    stay, unrelated to this screen). Simplified `warn_other_cmds()`'s
+    condition (used for an unrelated "the O command is optional" hint)
+    from `(ps_global->show_new_version && other_cmds % 3 == 0 &&
+    other_cmds < 10) || other_cmds % 20 == 0` down to plain
+    `other_cmds % 20 == 0` -- the more-frequent-hints-for-a-new-version
+    behavior no longer has a "new version" concept to key off.
+  - `pine/pine.h`: dropped the `show_new_version:1` bitfield from
+    `struct pine`, and the now-fully-unreferenced `VAR_LAST_VERS_USED`
+    macro. Left the `V_LAST_VERS_USED` index itself and its
+    `variables[]` table entry in `pine/init.c` in place (renumbering
+    `V_*` constants for one dead slot isn't worth the blast radius,
+    and this fork already keeps several other disabled slots the same
+    way -- `V_PRINTER`, `V_SMTP_SERVER`, etc. -- for the same reason);
+    flipped its `is_obsolete` flag to 1 and reworded its description
+    to "Last-version-used is disabled, the new-version welcome screen
+    has been removed", matching the existing disabled-slot convention
+    (confirmed via grep that `is_obsolete`/`is_used` aren't actually
+    read by any code -- these fields, and the whole `variables[]`
+    description text, are inert now that this fork has no Setup/Config
+    screen left that displays them; kept purely for readability/
+    consistency with neighboring entries).
+  - `pine/init.c`: deleted the `set_current_val(vars, V_LAST_VERS_USED,
+    TRUE)` / compare-and-set `show_new_version` / `set_variable(...)`
+    block from `init_vars()` entirely.
+  - `test/smoketest.py`: `Session.__init__`'s `dismiss_splash` handling
+    used to `expect("MAIN MENU")` (matching the splash screen's
+    underlying chrome), blindly `send("\r")` to dismiss it, then
+    `expect("MAIN MENU")` again for the real menu. With the splash
+    gone, that blind `\r` now lands as a real keystroke on the actual
+    Main Menu -- caught by `test_pinerc_not_parsed.py` failing (it
+    landed on the Folder List screen instead). Simplified to a single
+    `expect("MAIN MENU")` with no keystroke; `dismiss_splash` kept as a
+    no-op-if-true parameter so existing call sites don't need to
+    change.
+- **Verified**: `./build clean && ./build lnx`, 0 warnings (`bin/pine`
+  text shrank 328383 -> 327351, data 12496 -> 12400, from the removed
+  message array/function; `bin/pico` unaffected). Manually drove a
+  fresh `Session(mbox=None, dismiss_splash=False)` and confirmed the
+  very first screen is the real Main Menu with no interstitial splash
+  or "Type any character to continue" prompt. Full smoketest suite,
+  26/26 passing, run twice for stability (the `dismiss_splash` fix
+  above was needed for `test_pinerc_not_parsed` specifically, since
+  it's the one test that both relies on default `dismiss_splash=True`
+  and does its own subsequent `To:`-field interaction that a
+  misdirected keystroke could desync).
+
+### Cut 22 of `pine/init.c`'s 36 `variables[]` pinerc entries -- dead now that `.pinerc` is never actually read or written
+- **What it was**: `pine/init.c`'s `variables[]` table (`V_*`-indexed)
+  models every `.pinerc`/`pine.conf` variable pine could ever have. But
+  `read_pinerc()` is an unconditional `return(0)` stub (the
+  "bootstrap-only stub" entry above) -- no `.pinerc` is ever actually
+  read -- and `set_variable()`'s own header comment says plainly
+  "pinerc is never rewritten," so nothing persists a value across runs
+  either. Net effect: no entry in this table can ever hold anything but
+  its compiled-in default, for the life of a run or across runs. Two
+  tiers of entries fell out of grepping every `V_*`/`VAR_*` name
+  against the whole tree (excluding the table/`#define` lines
+  themselves):
+  - **Tier 1 (17 entries, zero non-table references anywhere)**: the
+    12 already-`is_obsolete`-flagged "disabled, X removed" slots from
+    past cuts (`smtp-server`, `incoming-folders`, `news-collections`,
+    `address-book`, `character-set`, `editor`, `image-viewer`,
+    `printer`, `personal-print-command`, `standard-printer`,
+    `last-time-prune-questioned`, `last-version-used`), 2 that were
+    never wired into anything at all (`compose-mime`,
+    `show-all-characters`), and 3 more caught in a second pass after
+    the user spotted them (`bugs-nickname`/`bugs-fullname`/
+    `bugs-address`): these had a `set_current_val()` call each (so an
+    earlier grep for "any reference at all" undercounted them as
+    live), but no `VAR_BUGS_*` macro was ever actually read anywhere,
+    and no `DF_BUGS_*` default existed to populate them either --
+    `set_current_val()` just copied an always-`NULL` `global_val`/
+    `user_val` into an always-`NULL` `current_val`, a complete no-op.
+    They're leftovers of the deleted address-book feature ("Nickname
+    of bugs entry to be automatically placed in all address books").
+    All 17 of these slots were previously kept (not deleted) purely so
+    their `V_*` index numbers wouldn't shift and break re-parsing of
+    an old `.pinerc` -- but since nothing is parsed by name anymore,
+    that compatibility concern is itself moot, which is what unblocked
+    full deletion instead of just marking them disabled.
+  - **Tier 2 (5 entries, `elm-style-save`/`header-in-reply`/
+    `feature-level`/`old-style-reply`/`save-by-sender`)**: these exist
+    purely to let `read_pinerc()` translate pre-3.89 pinerc variable
+    names into their modern `feature-list`/`saved-msg-name-rule`
+    equivalents on the fly. Since they can only ever hold their
+    compiled-in `DF_*` default (`pine/os.h`: all four "no"-defaulted
+    ones are literally `"no"`, `DF_FEATURE_LEVEL` is `"sapling"`,
+    identical across every platform variant in the tree), traced the
+    resulting arithmetic by hand: `obs_header_in_reply`/
+    `obs_old_style_reply`/`obs_save_by_sender` always resolve `0` and
+    `obs_feature_level` always resolves `Sapling`, unconditionally, on
+    every run. That made two further pieces of live-looking code
+    provably dead: `process_feature_list()`'s three backward-compat
+    parameters were always called `(0, 0, 0)`, so its `if(hir)`/
+    `if(osr)`/`if(old_growth)` blocks and its entire ~35-line
+    "build a new feature-list to fold the obsolete setting in" tail
+    never executed; and `init_vars()`'s `obs_save_by_sender`-driven
+    override of `saved-msg-name-rule` never fired either.
+- **What changed**: deleted all 22 `variables[]` entries and their
+  `V_*`/`VAR_*` `#define`s from `pine/pine.h`, renumbering the
+  remaining 14 `V_*` constants sequentially from 0 (confirmed via grep
+  that nothing in the tree hardcodes a literal index; the 3
+  `V_BUGS_*` entries happened to already be last in the list, so their
+  removal needed no renumbering of its own). Deleted the now-unused
+  `FeatureLevel`/`Sapling`/`Seedling`/`Seasoned` enum. Deleted the
+  Tier 2 migration block from `init_vars()`, its 3
+  `set_current_val(vars, V_BUGS_*, TRUE)` calls, and simplified the
+  `saved-msg-name-rule` "default-folder" branch (the dead
+  `obs_save_by_sender` override that followed it is gone). Simplified
+  `process_feature_list()`'s signature from `(ps, list, old_growth,
+  hir, osr)` down to `(ps, list)`, deleting the three backward-compat
+  parameters, their top-of-function `F_TURN_ON` blocks, and the
+  "build a new feature-list" tail -- it now just walks the real
+  `feature-list` value and sets bits, nothing else. The remaining 14
+  variables (`personal-name`, `user-id`, `user-domain`, `inbox-path`,
+  `folder-collections`, `default-fcc`, `mail-directory`,
+  `read-message-folder`, `signature-file`, `feature-list`,
+  `initial-keystroke-list`, `saved-msg-name-rule`, `sort-key`,
+  `use-only-domain-name`) are untouched -- all confirmed real,
+  live-read `VAR_*` values used throughout `pine/*.c` (re-checked
+  after the `bugs-*` correction: each of these 14 has at least one
+  `VAR_*` macro reference outside `init_vars()`'s bootstrap, unlike
+  `bugs-*`). `sort-key` and `initial-keystroke-list` are also the only
+  two ever touched by `pine/args.c`'s command-line-flag handling
+  (`command_line_val`), an independent input path from `.pinerc` --
+  unaffected by this cut. Left the never-read `struct variable`
+  bitfields (`is_obsolete`/`is_used`/`been_written`/`is_global`) and
+  the deeper 4-way `user_val`/`global_val`/`command_line_val`/
+  `current_val` value model alone -- a bigger redesign of how
+  variables work at all, separate from "which variables can be
+  deleted."
+- **Correction mid-cut**: the first pass classified `bugs-nickname`/
+  `bugs-fullname`/`bugs-address` as live because they had a
+  `set_current_val()` call each -- but the user pointed out these
+  three were also removable, which prompted checking further and
+  finding that call is the *only* thing that ever touches them:
+  `VAR_BUGS_*` is never read anywhere, and no `DF_BUGS_*` default
+  exists to give `set_current_val()` anything to actually propagate.
+  Folded into this same entry rather than a separate write-up since
+  it's a direct continuation of the same not-yet-committed cut.
+- **Verified**: grepped all 22 removed `V_*`/`VAR_*` names (plus
+  `FeatureLevel`/`Sapling`/`Seedling`/`Seasoned`) across the whole tree
+  before and after each pass -- zero references either way beyond the
+  lines being deleted. `./build clean && ./build lnx`, 0 warnings after
+  both passes. Full smoketest suite, 26/26, run twice for stability
+  after each pass. Manually confirmed default feature bits are
+  unchanged: drove a fresh session and quitting still prompts "Really
+  quit pine?" (i.e. `F_QUIT_WO_CONFIRM` still defaults off, matching
+  pre-cut behavior since `old_growth` was already unconditionally `0`
+  even before this cut).
+- **Size delta**: `bin/pine` text 327351 -> 323943 (-3408 bytes), data
+  12400 -> 11184 (-1216 bytes); `bin/pico` unaffected.
+
+### Collapse dead `feature-list` (`F_*`) checks, phase 1 -- 28 call sites across 5 files
+
+Same root cause as the `variables[]` cut above: `.pinerc` is never read
+or written, so `process_feature_list()` (`pine/init.c`) -- the only code
+that ever populates a feature bit from the `feature-list` variable -- is
+a permanent no-op (its `list` argument, `VAR_FEATURE_LIST`, is always a
+non-NULL pointer to a single `NULL` entry, so its `for` loop body never
+runs). Grepped every `F_TURN_ON`/`F_TURN_OFF`/`F_SET` call site in the
+tree: of pine's 19 feature bits, only `F_USE_FK`, `F_CAN_SUSPEND`, and
+`F_EXPANDED_FOLDERS` have a second, real write path (`-k`/`-z`/`-l`
+command-line flags in `pine/args.c`, the "pinef" argv0 check, and
+`F_USE_FK`'s composer-subprocess toggle in `pine.c`/`send.c`/`ttyin.c`)
+-- those three stay live and untouched. The other 16 can only ever be
+set through the dead `process_feature_list()` path, so every
+`F_ON()`/`F_OFF()` check on them is a provably-fixed-outcome dead
+branch, using the same "trace the always-true/false condition by hand"
+technique as the Tier 2 cut above.
+
+Collapsed all 28 non-`F_USE_FK`/`F_CAN_SUSPEND`/`F_EXPANDED_FOLDERS`
+call sites to their fixed outcome:
+- `pine/mailindx.c` (`do_index_border()`) and `pine/mailview.c`
+  (view-screen keymenu setup): 6 + 4 `if(F_OFF(F_ENABLE_PIPE/FULL_HDR/
+  BOUNCE/FLAG/ZOOM/APPLY,...)) clrbitn(KEY, bitmap);` sites always
+  fired -- replaced each with a bare unconditional `clrbitn(...)`.
+- `pine/mailcmd.c` (13 sites, `process_cmd()`'s file -- mailcmd.o's
+  largest symbol): delete-message handler's `F_DEL_SKIPS_DEL` 3-way
+  branch collapsed to its permanent `F_OFF` outcome; the `'0'`-`'9'`
+  digit-jump-to-message shortcut (gated by `F_ENABLE_JUMP`, always
+  `goto bogus`) had its 10 `case` labels deleted outright -- they now
+  fall through to `default: bogus` with identical behavior (the
+  `'j'`/`'w'`/`OOPF7` Jump/WhereIs commands are untouched, still fully
+  live); the `'h'` toggle-full-headers command (gated by
+  `F_ENABLE_FULL_HDR`, always `goto bogus` before its body ran) had its
+  entire `case` block deleted, same reasoning; both `F_AUTO_EXPUNGE`
+  sites (`process_cmd()`'s expunge handler and `expunge_and_close()`)
+  and the `F_AUTO_READ_MSGS` site collapsed from "prompt only if
+  `F_OFF`, else auto-act" to always prompting via `want_to()`; the two
+  `F_ENABLE_TAB_COMPLETE` extra-key-setup blocks in the save-folder
+  prompt (`if(F_ON(...)) { ekey[rc].ch = ...; rc++; }`) were dead code
+  and deleted outright.
+- `pine/pine.c` (`quit_screen()`): `F_OFF(F_QUIT_WO_CONFIRM) &&` guard
+  was always true -- dropped it, "Really quit pine" confirmation now
+  unconditional (same as actual prior behavior).
+- `pine/reply.c` (3 spots): `F_SIG_AT_BOTTOM`'s `F_OFF` guard on the
+  "insert signature before included text" block in the reply composer
+  was always true -- dropped it; two `if(F_ON(F_INCLUDE_HEADER,...))
+  format_text_header(...);` lines in the reply composer were dead and
+  deleted; `forward()`'s `F_MIME_FORWARD` block was the biggest single
+  find -- `ret` is declared `int ret=0;` and never assigned before the
+  `if(F_ON(F_MIME_FORWARD,...) && (ret=want_to(...))=='y')` line, and
+  since `F_ON` is always false, `&&`-short-circuiting means
+  `want_to()` is *never called*, so `ret` stays `0` forever, making the
+  following `else if(ret == 'x')` branch dead too (`0 == 'x'` is always
+  false). Execution always fell through to the final `else` (the plain
+  non-MIME forward path). Deleted the entire dead
+  `if(...){...} else if(ret=='x'){...}` (73 lines) and un-wrapped the
+  final `else` block to run unconditionally; `ret` and the `BODY *b`
+  local (only used inside the deleted MIME branch) became unused and
+  were removed too.
+- **What's deliberately left for phase 2**: `process_feature_list()`
+  itself, `feat_list[]`, the `"feature-list"` variable/`V_FEATURE_LIST`
+  entry, and the 16 now-fully-unreachable `F_*` `#define`s -- once
+  every reader of the 16 dead bits is gone, nothing reads
+  `process_feature_list()`'s output for them either, but that's a
+  separate, independently-verifiable cut (different call sites, no
+  overlap with this one).
+- **Verified**: `./build clean && ./build lnx`, 0 warnings. Full
+  smoketest suite, 26/26, run twice for stability. Manually drove a
+  session and confirmed: quit still prompts "Really quit pine"
+  (Y/n/^C) and a `n` answer correctly cancels; expunge still prompts
+  "Expunge N message(s)..." and a `y` answer still expunges; forward
+  still opens the plain (non-MIME) forward composer with no
+  MIME-attachment prompt (matching pre-cut behavior, since that prompt
+  was already unreachable).
+- **Size delta**: `bin/pine` text 323943 -> 321543 (-2400 bytes), data
+  unchanged at 11184 (expected -- this phase only touches code, not
+  the `variables[]`/`struct variable` data). `bin/pico` unaffected.
+
+### Collapse dead `feature-list` (`F_*`) checks, phase 2 -- remove the dead machinery
+
+Follow-on to phase 1 above: with every reader of the 16 dead `F_*` bits
+collapsed to its fixed outcome, nothing reads `process_feature_list()`'s
+output for them either, so removed the whole now-fully-dead chain that
+used to feed them, all in `pine/init.c` unless noted:
+- The `"feature-list"` entry from the `variables[]` table (was
+  `V_FEATURE_LIST` = 9 of 14), and its `FEATURE_LIST_TEXT` description
+  string -- its only reference.
+- The `set_feature_list_current_val(vars, V_FEATURE_LIST)` and
+  `process_feature_list(ps, VAR_FEATURE_LIST)` call sites in
+  `init_vars()`, plus the now-stale "this should come after
+  process_feature_list because of use_fkeys" comment above them (moot
+  once feature-list processing no longer exists -- `F_USE_FK` is set
+  by `args.c` before `init_vars()` even runs).
+- `process_feature_list()` itself, `feat_list[]`, and `struct
+  features` -- confirmed via grep this was `process_feature_list()`'s
+  only caller anywhere in the tree.
+- `set_feature_list_current_val()` itself -- confirmed its only caller
+  was the `init_vars()` call site just removed.
+- Both functions' forward prototypes near the top of `pine/init.c`.
+- In `pine/pine.h`: the `V_FEATURE_LIST`/`VAR_FEATURE_LIST` `#define`s,
+  with the remaining 13 `V_*` constants renumbered sequentially (same
+  safe mechanical renumbering as the `variables[]` cut above --
+  confirmed via grep that nothing hardcodes a literal `V_*` index); and
+  the 16 now-fully-unreachable `F_*` `#define`s (`F_OLD_GROWTH`,
+  `F_ENABLE_FULL_HDR`, `F_ENABLE_PIPE`, `F_ENABLE_TAB_COMPLETE`,
+  `F_QUIT_WO_CONFIRM`, `F_ENABLE_JUMP`, `F_ENABLE_BOUNCE`,
+  `F_ENABLE_APPLY`, `F_ENABLE_FLAG`, `F_ENABLE_ZOOM`, `F_MIME_FORWARD`,
+  `F_INCLUDE_HEADER`, `F_SIG_AT_BOTTOM`, `F_DEL_SKIPS_DEL`,
+  `F_AUTO_EXPUNGE`, `F_AUTO_READ_MSGS`), keeping only `F_CAN_SUSPEND`,
+  `F_EXPANDED_FOLDERS`, `F_USE_FK` -- renumbered 0/1/2. Safe for the
+  same reason as the `V_*` renumbering: `F_ON`/`F_OFF`/`F_TURN_ON`/
+  `F_TURN_OFF`/`F_SET` are the only way any code touches a feature
+  bit, and every call site in the tree goes through the symbolic
+  `F_*` name, never a literal bit number (confirmed via grep).
+- **Verified**: grepped all 16 removed `F_*` names, `V_FEATURE_LIST`,
+  `VAR_FEATURE_LIST`, and `FEATURE_LIST_TEXT` across the whole tree
+  after the edit -- zero references remain anywhere. `./build clean &&
+  ./build lnx`, 0 warnings. Full smoketest suite, 26/26, run twice for
+  stability. Manually confirmed: a `.pinerc` seeded with
+  `feature-list=quit-without-confirm` still has no effect (quit still
+  prompts "Really quit pine", matching the pre-existing "pinerc is
+  never parsed" behavior -- this cut removes dead code, it doesn't
+  change what was already unreachable); the 3 surviving command-line
+  feature flags (`-k`/`-z`/`-l`) are inherently safe under the
+  renumbering since reader and writer both resolve through the same
+  `F_*` symbol at compile time, with no literal bit values anywhere in
+  the tree to go stale.
+- **Size delta**: `bin/pine` text 321543 -> 317519 (-4024 bytes), data
+  11184 -> 10768 (-416 bytes, from the removed `variables[]` entry).
+  `bin/pico` unaffected. Combined phase 1 + phase 2 total against the
+  pre-cut baseline: text -6424 bytes, data -416 bytes.
+
+### `pine/mailindx.c` and `pine/pine.c` dead-code sweep -- never-defined-macro cleanup, outside the earlier four-file survey
+
+Neither file was part of the earlier `send.c`/`mailcmd.c`/`folder.c`/
+`mailview.c` "UI files: dead/vestigial code" survey, so they still had
+the same class of `#ifdef DOS` (and friends) dead weight that survey
+already cleaned up elsewhere. Confirmed `DOS`, `MOUSE`, `DYN`,
+`HAVE_SMALLOC`, `NXT` are never defined anywhere in the tree (grepped
+every platform header and `makefile.lnx`), and that `USE_QUOTAS`/
+`NO_KEYBOARD_LOCK` are always commented out in every `pine/osdep/os-*.h`
+variant including the one this build actually uses (`os-lnx.h`) --
+same "uniform-across-every-platform-variant" proof technique already
+used for the `DF_*` migration defaults in the `variables[]` cut.
+
+**`pine/mailindx.c`**: removed two dead mouse-support blocks
+(`register_mfunc`/`mouse_in_index`/`clear_mfunc`) and a dead
+`while_waiting = build_header_cache` pre-fetch hook from
+`mail_index_screen()`'s command loop; unwrapped an always-true
+`#ifndef DOS` guard around the "still sorting" status message (kept
+the real `if(max_msgno > 500)` check it wrapped). The big find: the
+entire **disk-paged index-line cache** was DOS-only --
+`icread()`/`icwrite()`/`i_cache_hit()` (three whole functions), the
+DOS half of `i_cache_size()`, and the `incore_cache`/`cache_block_s`/
+`cache_base`/`ICC_SIZE`/`FUDGE` bookkeeping plus the `icache.name`
+struct field they were the only users of -- same species of dead code
+as the `FileStar` disk-paged scroll-buffer engine already cut from
+`mailview.c`. Also deleted **`flush_index_cache()`** outright: its
+entire body was `#ifdef DOS` (so it already compiled to a no-op) and
+grep confirmed zero callers anywhere in the tree, plus its prototype
+in `pine.h`.
+
+**`pine/pine.c`**: `main()` lost a dead DYNIX stdio-buffering
+workaround, dead `malloc_debug()` calls (`HAVE_SMALLOC`/`NXT`), a dead
+`mailcache = dos_cache` hook, a dead disk-quota check
+(`USE_QUOTAS`), and two dead terminal-init error-message suppressions
+(`#ifdef DOS /* always succeeds */ #else <real error path> #endif` --
+unwrapped to keep the real path unconditional). The biggest find:
+`main()`'s entire "prompt for an inbox path if none is set" block (65
+lines) was wrapped in `#ifdef DOS` -- meaning the
+`set_variable(V_INBOX_PATH, int_mail)` call inside it, which an
+earlier session's `variables[]`-removal scoping investigation had
+flagged as "genuine interactive runtime mutation, can't just delete
+`variables[]`", **never actually executes in this build**. That
+earlier finding was looking at dead code. With this block gone,
+`set_variable()` has zero callers left anywhere in the tree (confirmed
+via grep) and was deleted outright too, along with its prototype in
+`pine.h`. `main_menu_screen()` lost the same dead mouse/`while_waiting`
+pre-fetch hook as `mailindx.c`, a whole dead `case 'h':` MS-DOS
+heap-debugger command (`_heapwalk`/`_HEAPINFO`, self-labeled "while
+we're testing DOS" / "END: for testing" in its own comments -- clearly
+throwaway test code, not a shipped feature), a dead low-memory check
+before opening an IMAP folder, and a dead `change_passwd()`-suppression
+branch (unwrapped to keep the real `change_passwd()` call
+unconditional). Two `NO_KEYBOARD_LOCK` sites: one `#ifndef` wrapper
+that was always-true (unwrapped, kept the live keyboard-lock command)
+and one `#ifdef` that was always-false (deleted). `default_driver()`
+lost a dead `extern MAILSTREAM dawzproto` (the live branch already
+declares `bezerkproto`, used via `DF_DRIVER_PROTO`).
+
+Noticed but left alone, same as the `folder.c` sweep's `h_folder_fcc`
+precedent: `pine.hlp`'s `h_sticky_inbox` help topic is now unreachable
+too (it was only ever shown from the deleted inbox-path-prompt block),
+but cutting it means editing the tracked `.hlp` source and
+regenerating `helptext.c`/`.h` -- a separate generated-file workflow,
+out of scope here.
+
+Verified: `./build clean && ./build lnx`, 0 warnings both files. Full
+smoketest suite, 26/26, run twice for stability. Manually drove a
+session exercising every behavior-relevant (not just dead-branch) site
+touched: sorting the index by subject (exercises
+`build_header_cache()`/`get_index_cache()`, the surviving half of the
+disk-cache code); the Main Menu's `'k'` keyboard-lock command still
+prompts and cancels correctly; the Main Menu's `'g'` goto-folder
+command (the now-unwrapped `broach_folder()` call site) still prompts
+correctly. No new regression test added -- dead-code removal with no
+intended behavior change, not a bug fix.
+
+Size delta was smaller than the line count suggests, for the same
+reason the `mailview.c` sweep's was: most of what was removed was
+`#ifdef`-gated code that the preprocessor already stripped before the
+compiler ever saw it, so its presence or absence in the source doesn't
+move the compiled binary -- the real win is `set_variable()` and
+`flush_index_cache()`, which *were* compiling in with zero callers.
+`bin/pine` text 317519 -> 317247 (-272 bytes), data unchanged at
+10768. `bin/pico` unaffected.
+
+### Dead-code sweep, bucket 1 of 3: `reply.c`, `screen.c`, `args.c`, `strings.c`, `context.c`
+
+First of three roughly-equal-sized buckets covering the rest of the
+tree's `#ifdef DOS`/never-defined-macro dead weight, split out because
+the leftover surface (~73 sites across 14 files) was too big for one
+pass. User confirmed `PCTCP`/`PCNFS` (dead network-stack variants
+guarding `reply.c`'s message-ID-generation code) don't apply to any
+target platform this project cares about, same as `LWP` -- all three
+confirmed never defined anywhere in the tree (not even commented out),
+same standard as `DOS`/`MOUSE`/etc.
+
+- **`reply.c`** (biggest file in this bucket, 16+ sites): removed a
+  dead DOS `IN_RESERVE`/`malloc()` pre-allocation block from both
+  `reply()` and `forward()` (paired with its `free()` at each
+  function's exit) -- once removed, the `char *reserve;` locals became
+  unused and were deleted too. Removed three near-identical dead
+  "fetch part into storage object" `FileStar`-vs-`CharStar` branch
+  pairs (`forward()` x2, `fetch_contents()` x2 more) -- each kept its
+  `CharStar`/live half. `get_body_part_text()`'s DOS
+  `mailgets`/`append_file`/`dos_gets` disk-paged-fetch setup and
+  cleanup were dead; removing them left the local `MESSAGECACHE *mc`
+  variable's only assignment (`mail_elt()`) with no reader, so that
+  got removed too -- an actual (not just preprocessor-stripped) dead
+  function call, the one real size win in this file.
+  `generate_message_id()`'s `STACK` character macro (fed by the now-
+  confirmed-dead `LWP`/`PCTCP`/`PCNFS`) was entirely inside `#ifdef
+  DOS` and only used by the DOS half of an `#ifdef`/`#else` `sprintf()`
+  format-string choice -- deleted the macro and the DOS format string,
+  kept the real one. `get_signature()`'s DOS-vs-Unix signature-path
+  logic (backslash/drive-letter paths vs. `/`/`~`-relative paths)
+  collapsed to the Unix half.
+- **`screen.c`** (4 sites, all `#if defined(DOS) && defined(MOUSE)`):
+  dead mouse-registration calls in the key-menu-footer painter
+  (`register_key()`/an unused `extern void register_key()` decl and
+  `int j` counter) -- `sed` was used instead of the Edit tool for these
+  specific deletions after the tool's literal-string matching kept
+  missing on this function's mixed tab/space indentation.
+- **`args.c`** (3 sites): the `-P <pine.conf>` command-line flag's
+  `case` label, its handler, and its `-h` usage-text line were each
+  wrapped in an always-true `#ifndef DOS` -- unwrapped all three (the
+  flag was already fully functional, just needlessly conditional).
+- **`context.c`** (1 site): `context_isambig()`'s DOS drive-letter
+  (`C:`) ambiguity check was dead; removed, leaving the real dot/
+  alphanumeric ambiguity check as the sole `else` branch.
+- **`strings.c`** (1 site): `comatose()`'s entire DOS half (a 16-byte-
+  buffer, non-locale-aware number-with-commas formatter, "no numbers >
+  1 trillion!") was dead; kept the real 100-byte-buffer version with
+  proper 3-digit grouping.
+- **Verified**: `./build clean && ./build lnx`, 0 warnings across all
+  five files. Full smoketest suite, 26/26, run twice for stability.
+  Manually drove a session exercising every behavior-relevant site
+  touched: Reply with original text included (confirms
+  `get_signature()`'s path logic and the quoted-text/signature
+  insertion still work); Forward (confirms `forward()`'s storage-object
+  fetch path); `bin/pine -h`'s usage text still lists `-P <pine.conf>`.
+  No new regression test added -- dead-code removal with no intended
+  behavior change, not a bug fix.
+- **Size delta**: `bin/pine` text 317247 -> 317183 (-64 bytes, all from
+  `reply.c`'s `mail_elt()`/`mc` removal -- the only site in this bucket
+  that was compiling in live code, not just preprocessor-stripped
+  branches), data unchanged at 10768. `bin/pico` unaffected.
+- **Remaining**: bucket 2 (`signals.c`/`newmail.c`/`imap.c`/`ttyin.c`/
+  `other.c`) and bucket 3 (`init.c`/`filter.c`/`status.c`/`os.c`) still
+  open in `TODO-pdp11.md`.

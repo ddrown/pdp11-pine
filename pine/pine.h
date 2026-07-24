@@ -276,39 +276,16 @@
 #define V_PERSONAL_NAME            0
 #define V_USER_ID                  1
 #define V_USER_DOMAIN              2
-#define V_SMTP_SERVER              3  /* disabled, always sends via local sendmail */
-#define V_INBOX_PATH               4
-#define V_INCOMING_FOLDERS         5  /* disabled, multi-collection support removed */
-#define V_FOLDER_SPEC              6
-#define V_NEWS_SPEC                7  /* disabled, news reading removed */
-#define V_DEFAULT_FCC              8
-#define V_MAIL_DIRECTORY           9
-#define V_READ_MESSAGE_FOLDER      10
-#define V_SIGNATURE_FILE           11
-#define V_ADDRESSBOOK              12  /* disabled, address book removed */
-#define V_FEATURE_LIST             13
-#define V_INIT_CMD_LIST            14
-#define V_SAVED_MSG_NAME_RULE      15
-#define V_SORT_KEY                 16
-#define V_CHAR_SET                 17  /* disabled, this build is US-ASCII only */
-#define V_EDITOR                   18  /* disabled, alternate editor not supported */
-#define V_IMAGE_VIEWER             19  /* disabled, no attachment display support */
-#define V_USE_ONLY_DOMAIN_NAME     20
-#define V_PRINTER                  21  /* disabled, printing not supported */
-#define V_PERSONAL_PRINT_COMMAND   22  /* disabled, printing not supported */
-#define V_STANDARD_PRINTER         23  /* disabled, printing not supported */
-#define V_LAST_TIME_PRUNE_QUESTION 24  /* disabled, sent-mail pruning not supported */
-#define V_LAST_VERS_USED           25
-#define V_BUGS_NICKNAME            26
-#define V_BUGS_FULLNAME            27
-#define V_BUGS_ADDRESS             28
-#define V_ELM_STYLE_SAVE           29  /* obsolete */
-#define V_HEADER_IN_REPLY          30  /* obsolete */
-#define V_FEATURE_LEVEL            31  /* obsolete */
-#define V_OLD_STYLE_REPLY          32  /* obsolete */
-#define V_COMPOSE_MIME             33  /* obsolete */
-#define V_SHOW_ALL_CHARACTERS      34  /* obsolete */
-#define V_SAVE_BY_SENDER           35  /* obsolete */
+#define V_INBOX_PATH               3
+#define V_FOLDER_SPEC              4
+#define V_DEFAULT_FCC              5
+#define V_MAIL_DIRECTORY           6
+#define V_READ_MESSAGE_FOLDER      7
+#define V_SIGNATURE_FILE           8
+#define V_INIT_CMD_LIST            9
+#define V_SAVED_MSG_NAME_RULE      10
+#define V_SORT_KEY                 11
+#define V_USE_ONLY_DOMAIN_NAME     12
 
 
 #define VAR_PERSONAL_NAME            vars[V_PERSONAL_NAME].current_val.p
@@ -320,29 +297,10 @@
 #define VAR_MAIL_DIRECTORY           vars[V_MAIL_DIRECTORY].current_val.p
 #define VAR_READ_MESSAGE_FOLDER      vars[V_READ_MESSAGE_FOLDER].current_val.p
 #define VAR_SIGNATURE_FILE           vars[V_SIGNATURE_FILE].current_val.p
-#define VAR_FEATURE_LIST             vars[V_FEATURE_LIST].current_val.l
 #define VAR_INIT_CMD_LIST            vars[V_INIT_CMD_LIST].current_val.l
 #define VAR_SAVED_MSG_NAME_RULE      vars[V_SAVED_MSG_NAME_RULE].current_val.p
 #define VAR_SORT_KEY                 vars[V_SORT_KEY].current_val.p
 #define VAR_USE_ONLY_DOMAIN_NAME     vars[V_USE_ONLY_DOMAIN_NAME].current_val.p
-#define VAR_LAST_VERS_USED           vars[V_LAST_VERS_USED].current_val.p
-#define VAR_BUGS_NICKNAME            vars[V_BUGS_NICKNAME].current_val.p
-#define VAR_BUGS_FULLNAME            vars[V_BUGS_FULLNAME].current_val.p
-#define VAR_BUGS_ADDRESS             vars[V_BUGS_ADDRESS].current_val.p
-  /* Elm style save is obsolete in Pine 3.81 (see saved msg name rule) */   
-#define VAR_ELM_STYLE_SAVE           vars[V_ELM_STYLE_SAVE].current_val.p
-  /* Header in reply is obsolete in Pine 3.83 (see feature list) */   
-#define VAR_HEADER_IN_REPLY          vars[V_HEADER_IN_REPLY].current_val.p
-  /* Feature level is obsolete in Pine 3.83 (see feature list) */   
-#define VAR_FEATURE_LEVEL            vars[V_FEATURE_LEVEL].current_val.p
-  /* Old style reply is obsolete in Pine 3.83 (see feature list) */   
-#define VAR_OLD_STYLE_REPLY          vars[V_OLD_STYLE_REPLY].current_val.p
-  /* Compose MIME is obsolete in Pine 3.81 */
-#define VAR_COMPOSE_MIME             vars[V_COMPOSE_MIME].current_val.p
-  /* Show all characters is obsolete in Pine 3.83 */   
-#define VAR_SHOW_ALL_CHARACTERS      vars[V_SHOW_ALL_CHARACTERS].current_val.p
-  /* Save by sender is obsolete in Pine 3.83 (see saved msg name rule) */   
-#define VAR_SAVE_BY_SENDER           vars[V_SAVE_BY_SENDER].current_val.p
 
 /* Feature list support (can have up to LARGEST_BITMAP features) */
 /* Is feature "feature" turned on? */
@@ -355,25 +313,9 @@
 					 : F_TURN_OFF((feature),(ps)))
 
 /* list of feature numbers (which bit goes with which feature) */
-#define F_OLD_GROWTH                0
-#define F_ENABLE_FULL_HDR           1
-#define F_ENABLE_PIPE               2
-#define F_ENABLE_TAB_COMPLETE       3
-#define F_QUIT_WO_CONFIRM           4
-#define F_ENABLE_JUMP               5
-#define F_ENABLE_BOUNCE             7
-#define F_ENABLE_APPLY              8
-#define F_ENABLE_FLAG               9
-#define F_ENABLE_ZOOM              10
-#define F_MIME_FORWARD             11
-#define F_CAN_SUSPEND              12
-#define F_EXPANDED_FOLDERS         13
-#define F_USE_FK                   14
-#define F_INCLUDE_HEADER           15
-#define F_SIG_AT_BOTTOM            16
-#define F_DEL_SKIPS_DEL            17
-#define F_AUTO_EXPUNGE             18
-#define F_AUTO_READ_MSGS           19
+#define F_CAN_SUSPEND               0
+#define F_EXPANDED_FOLDERS          1
+#define F_USE_FK                    2
 
 
 
@@ -560,7 +502,6 @@ struct key_menu {
 
 typedef enum {SortDate, SortArrival, SortFrom, SortSubject,
                 SortTo, SortCc, SortSize, EndofList}   SortOrder;
-typedef enum {Sapling, Seedling, Seasoned} FeatureLevel;
 /*----------------------------------------------------------------------
    This structure sort of takes the place of global variables or perhaps
 is the global variable.  (It can be accessed globally as ps_global.  One
@@ -644,7 +585,6 @@ struct pine {
     unsigned     noticed_dead_inbox:1;
     unsigned     noticed_dead_stream:1;
     unsigned     compose_mime:1;
-    unsigned     show_new_version:1;
     unsigned     do_local_lookup:1;  /* look up in passwd even if using
                                            user defined domain */
     BITMAP       feature_list;       /* a bitmap of all the features */
@@ -858,7 +798,6 @@ void init_vars(struct pine *);
 char *expand_variables(char *, char *);
 int  init_username(struct pine *);  
 int  init_hostname(struct pine *);
-int  set_variable(int, char *);
 int  set_variable_list(int, char **);
 int  init_mail_dir(char *);
 char **parse_list(char *, int, char **);
@@ -882,9 +821,6 @@ void  mail_index_screen(struct pine *);
 void  clear_index_cache(void);
 void  clear_index_cache_ent(long);
 int   build_index_cache(long);
-#ifdef	DOS
-void  flush_index_cache(void);
-#endif
 char *build_header_line(long);
 void  build_header_cache(void);
 void  redraw_index_body(void);
