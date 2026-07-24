@@ -28,19 +28,6 @@ DONE elsewhere or referenced in passing below.
       is inflated by the shared-header fan-out described in the Tier 1
       entry above, so re-scope by unique site once counted for real).
 
-### Dead-code sweep, bucket 2: `signals.c`, `newmail.c`, `imap.c`, `ttyin.c`, `other.c`
-
-- [ ] Second bucket, ~24 sites total: `signals.c` (12 -- **caveat**:
-      mixed in with real, legitimate platform conditionals on
-      `SIGEMT`/`SIGTSTP`/`RESIZING`/`ULT`, which vary by real target
-      OS and are NOT the same as the project's own never-defined build
-      knobs -- only touch the `DOS` sites here, leave the signal-macro
-      ones alone), `newmail.c` (6), `imap.c` (3), `ttyin.c` (2 --
-      `TODO-pdp11-done.md`'s "broader MS-DOS dead-code sweep" entry
-      already cut this file's two giant Unix/DOS halves; these are
-      leftover scattered mouse/DOS-keyboard scraps past that, noted
-      but skipped there), `other.c` (1).
-
 ### Dead-code sweep, bucket 3: `init.c`, `filter.c`, `status.c`, `os.c`
 
 - [ ] Third bucket, ~24 sites total: `init.c` (11), `filter.c` (10 --

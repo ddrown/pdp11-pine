@@ -274,139 +274,6 @@ void mm_expunged(stream, number_l)
  */
 char mm_login_user[80] = {'\0'}, mm_login_passwd[80] = {'\0'};
 
-#ifdef	DOS
-#define	PASSFILE	"pine.pwd"
-
-
-#define	FIRSTCH	0x20
-#define	LASTCH	0x7e
-#define	TABSZ	(LASTCH - FIRSTCH + 1)
-
-int encrypt_key;
-
-unsigned int
-xsum(s)
-    char *s;
-{
-    unsigned int sum = 0;
-
-    while(s && *s)
-      sum ^= (unsigned char) *s++;
-
-    return(sum % TABSZ);
-}
-
-
-/*
- * encrypt() - encrypt the given character
- */
-char
-encrypt(c)
-    int	c;
-{
-    register int  eti;
-    extern int encrypt_key;
-
-    eti = encrypt_key;
-    if((c >= FIRSTCH) && (c <= LASTCH)){
-        eti += (c - FIRSTCH);
-	eti -= (eti >= 2*TABSZ) ? 2*TABSZ : (eti >= TABSZ) ? TABSZ : 0;
-        return((encrypt_key = eti) + FIRSTCH);
-    }
-    else
-      return(c);
-}
-
-
-/*
- * decrypt() - decrypt the given character
- */
-char
-decrypt(c)
-char	c;
-{
-    register int  dti;
-    register int  xch;
-    extern int encrypt_key;
-
-    if((c >= FIRSTCH) && (c <= LASTCH)){
-        xch  = c - (dti = encrypt_key);
-	xch += (xch < FIRSTCH-TABSZ) ? 2*TABSZ : (xch < FIRSTCH) ? TABSZ : 0;
-        dti  = (xch - FIRSTCH) + dti;
-	dti -= (dti >= 2*TABSZ) ? 2*TABSZ : (dti >= TABSZ) ? TABSZ : 0;
-        encrypt_key = dti;
-        return(xch);
-    }
-    else
-      return(c);
-}
-
-
-/*
- * passfile - return the password contained in the special passord
- *            cache.  The file is assumed to be in the same directory
- *            as the pinerc with the name defined above.
- */
-char *
-passfile(pinerc, passwd)
-    char *pinerc, *passwd;
-{
-    static char path[MAXPATH];
-    char *p = NULL;
-    int   i;
-    FILE *fp;
-
-    if(!pinerc || pinerc[0] == '\0')
-      return(NULL);
-
-    if((p = strrchr(pinerc, '\\')) == NULL)
-      p = strchr(pinerc, ':');
-
-    if(p){
-	strncpy(path, pinerc, i = (p - pinerc) + 1);
-	path[i] = '\0';
-    }
-
-    strcat(path, PASSFILE);
-
-    /* if there's a password to write, but no file to write to... */
-    if(passwd && passwd[0] && can_access(path, ACCESS_EXISTS) != 0)
-      return(NULL);			/* don't write anything */
-
-    if((fp = fopen(path, passwd ? "wb" : "rb")) == NULL)
-      return(NULL);
-
-    if(passwd){
-	if(want_to("Preserve password on DISK for next login", 'y', 'x',
-		   NO_HELP, 0) != 'y')
-	  return(NULL);
-
-	/*** do any necessary ENcryption here ***/
-	encrypt_key = xsum(mm_login_user);
-	for(i = 0; passwd[i]; i++)
-	  path[i] = encrypt(passwd[i]);
-
-	path [i] = '\0';
-	if(fwrite(path, sizeof(char) * strlen(path), 1, fp) != 1)
-	  passwd = NULL;
-    }
-    else if((i = fread(path, sizeof(char), (size_t)MAXPATH, fp)) > 0){
-	path[i] = 0;
-	passwd  = path;
-
-	/*** do any necessary DEcryption here ***/
-	encrypt_key = xsum(mm_login_user);
-	for(i = 0; path[i]; i++)
-	  path[i] = decrypt(path[i]);
-    }
-    else
-      passwd = NULL;
-
-    fclose(fp);
-    return(passwd);
-}
-#endif
-
 /*----------------------------------------------------------------------
       Get login and password from user for IMAP login
   
@@ -424,7 +291,7 @@ void mm_login(host, user, passwd, trial)
      long  trial;
 {
     static char junk[] = {'?', '\0'};
-    char      prompt[80], *p;
+    char      prompt[80];
     HelpType  help ;
     int  rc, q_line;
 
@@ -457,15 +324,6 @@ void mm_login(host, user, passwd, trial)
 	strcpy(passwd, mm_login_passwd);
 	return;
     }
-
-#ifdef	DOS
-    /* check to see if there's a password left over from last session */
-    if(trial==0L && *mm_login_user && (p = passfile(ps_global->pinerc, NULL))){
-	strcpy(user, mm_login_user);
-	strcpy(passwd, p);
-	return;
-    }
-#endif
 
     ps_global->mangled_footer = 1;
     help = NO_HELP;
@@ -509,9 +367,6 @@ void mm_login(host, user, passwd, trial)
 
     strcpy(user, mm_login_user);
     strcpy(passwd, mm_login_passwd);
-#ifdef	DOS
-    passfile(ps_global->pinerc, passwd);
-#endif
 }
     
 

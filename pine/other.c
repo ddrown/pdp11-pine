@@ -66,7 +66,6 @@ static void redraw_kl_body();
 static void redraw_klocked_body();
 
 
-#ifndef NO_KEYBOARD_LOCK
 /*----------------------------------------------------------------------
           Execute the lock keyboard command
 
@@ -189,4 +188,3 @@ redraw_klocked_body()
     PutLine0(8, 3, "To unlock, enter password used to lock the keyboard.");
     fflush(stdout);
 }
-#endif /* !NO_KEYBOARD_LOCK */
