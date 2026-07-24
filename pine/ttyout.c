@@ -128,7 +128,7 @@ static char  _terminal[1024];         /* Storage for terminal entry */
 static char  _capabilities[1024];     /* String for cursor motion */
 static char *ptr = _capabilities;     /* for buffering         */
 
-char  *tgetstr();     		       /* Get termcap capability */
+char  *tgetstr(const char *, char **);     		       /* Get termcap capability */
 
 #endif
 
@@ -136,7 +136,7 @@ static int   _line  = FARAWAY;
 static int   _col   = FARAWAY;
 static enum  {NoScroll,UseScrollRegion,InsertDelete} _scrollmode;
 
-char  *tgoto();				/* and the goto stuff    */
+char  *tgoto(const char *, int, int);				/* and the goto stuff    */
 
 
 
@@ -209,8 +209,8 @@ config_screen(tt)
     _lines	       = tigetnum("lines");
     _columns	       = tigetnum("cols");
 #else
-    int  tgetent(),      /* get termcap entry */
-         err;
+    int  tgetent(char *, const char *);      /* get termcap entry */
+    int  err;
 
     *tt = NULL;
     if (getenv("TERM") == NULL) return(-1);
@@ -443,10 +443,10 @@ ClearScreen()
   ----*/
 
 static void
-moveabsolute(col, row)
+moveabsolute(int col, int row)
 {
 
-	char *stuff, *tgoto();
+	char *stuff;
 
 	stuff = tgoto(_moveto, col, row);
 	tputs(stuff, 1, outchar);
@@ -1136,9 +1136,7 @@ PutLine5(x, y, line, arg1, arg2, arg3, arg4, arg5)
           Returns column number line is output on
   ----------------------------------------------------------------------*/
 int
-Centerline(line, string)
-     int line;
-     char *string;
+Centerline(int line, char *string)
 {
 	/** Output 'string' on the given line, centered. **/
 

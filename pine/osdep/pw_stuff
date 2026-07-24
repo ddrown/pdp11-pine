@@ -14,8 +14,7 @@ static struct passwd *unix_pwd = NULL;
  Result: returns pointer to buffer with name
   ----*/
 static char *
-gcos_name(gcos_field, logname)
-    char *logname, *gcos_field;
+gcos_name(char *gcos_field, char *logname)
 {
     static char fullname[MAX_FULLNAME+1];
     register char *fncp, *gcoscp, *lncp, *end;
@@ -91,8 +90,7 @@ get_system_passwd()
  Result: returns NULL or pointer to static string rfc822 address.
   ----*/
 char *
-local_name_lookup(name)
-    char *name;
+local_name_lookup(char *name)
 {
     struct passwd *pw;
     static char    buf[100];

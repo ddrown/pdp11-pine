@@ -214,8 +214,7 @@ static struct variable variables[] = {
 
 
 int
-init_init_vars(ps)
-     struct pine *ps;
+init_init_vars(struct pine *ps)
 {
     ps->vars = variables;
     return(0);

@@ -1463,7 +1463,7 @@ pretty_addr_string(field_name, addr, line_prefix, pc)
 
   ----*/
 char *
-get_signature()
+get_signature(void)
 {
     char *sig = NULL, *tmp_sig, sig_path[MAXPATH+1];
 

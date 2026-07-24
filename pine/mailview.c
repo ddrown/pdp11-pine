@@ -69,8 +69,8 @@ void       describe_mime(BODY *, char *, int, int);
 void       format_mime_size(char *, BODY *);
 void       zero_atmts(struct attachment *);
 void	   zero_scroll_text(void);
-void       push_scroll_state();
-void       pop_scroll_state();
+void       push_scroll_state(void);
+void       pop_scroll_state(void);
 char      *show_multipart(MESSAGECACHE *, int);
 MimeShow   mime_show(BODY *);
 char      *part_desc(char *,BODY *, int);
@@ -796,8 +796,7 @@ decode_text(att, msgno, pc, style, display_bound)
 		 from seeing text which they could at least read partially.)
   ----*/
 int
-match_charset(text_char_set)
-     char *text_char_set;
+match_charset(char *text_char_set)
 {
     if(!text_char_set || strucmp(text_char_set, "us-ascii") == 0)
       return(0);
@@ -1547,7 +1546,7 @@ static struct scroll_text {
 
 
 void
-push_scroll_state()
+push_scroll_state(void)
 {
     scroll_stack    = st;		/* save old state */
     st.text         = NULL;		/* prepare st struct for new data */
@@ -1560,7 +1559,7 @@ push_scroll_state()
 
 
 void
-pop_scroll_state()
+pop_scroll_state(void)
 {
     zero_scroll_text();			/* clean up each line */
     end_scroll_text();			/* clean up array of pointers */

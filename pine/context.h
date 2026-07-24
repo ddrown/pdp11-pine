@@ -40,20 +40,20 @@
 #define _CONTEXT_INCLUDED
 
 extern char *current_context;
-typedef void (*find_return) ();
-void context_mailbox();
-void context_bboard();
-void context_fqn_to_an ();
+typedef void (*find_return) (char *);
+void context_mailbox(char *);
+void context_bboard(char *);
+void context_fqn_to_an(find_return, char *, char *);
 
-short context_isambig ();
-char *context_digest ();
-void context_apply ();
-void context_find_all ();
-long context_create ();
-MAILSTREAM *context_open ();
-long context_rename ();
-long context_delete ();
-long context_append ();
-MAILSTREAM *context_same_stream();
+short context_isambig(char *);
+char *context_digest(char *, char *, char *, char *);
+void context_apply(char *, char *, char *);
+void context_find_all(char *, MAILSTREAM *, char *);
+long context_create(char *, MAILSTREAM *, char *);
+MAILSTREAM *context_open(char *, MAILSTREAM *, char *, long);
+long context_rename(char *, MAILSTREAM *, char *, char *);
+long context_delete(char *, MAILSTREAM *, char *);
+long context_append(char *, MAILSTREAM *, char *, STRING *);
+MAILSTREAM *context_same_stream(char *, char *, MAILSTREAM *);
 
 #endif /* _CONTEXT_INCLUDED */

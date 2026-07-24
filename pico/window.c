@@ -49,6 +49,7 @@ static char rcsid[] = "$Id: window.c,v 4.2 1993/04/15 00:34:26 mikes Exp $";
 #include        "pico.h"
 #include	"edef.h"
 #include	"osdep.h"
+#include	"efunc.h"
 
 
 /*

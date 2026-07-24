@@ -336,8 +336,6 @@ expand_foldername(filename)
 
 
 
-struct passwd *getpwnam();
-
 /*----------------------------------------------------------------------
        Expand the ~ in a file ala the csh (as home directory)
 
@@ -548,12 +546,11 @@ static char sccsid[] = "@(#)tmpnam.c	4.5 (Berkeley) 6/27/88";
 	 by the caller.  Returns the string on success and NULL on failure.
   ----*/
 char *
-temp_nam(dir, prefix)
-    char *dir, *prefix;
+temp_nam(char *dir, char *prefix)
 {
     struct stat buf;
     char *f, *name;
-    char *our_mktemp();
+    char *our_mktemp(char *);
 
     if (!(name = malloc((unsigned int)MAXPATHLEN)))
         return((char *)NULL);
@@ -613,8 +610,7 @@ static char sccsid[] = "@(#)mktemp.c	5.7 (Berkeley) 6/27/88";
 #endif /* LIBC_SCCS and not lint */
 
 static int
-_gettemp(as)
-	char	*as;
+_gettemp(char *as)
 {
 	extern int	errno;
 	register char	*start, *trv;
@@ -668,8 +664,7 @@ _gettemp(as)
 }
 
 char *
-our_mktemp(as)
-	char	*as;
+our_mktemp(char *as)
 {
 	return(_gettemp(as) ? as : (char *)NULL);
 }
@@ -697,9 +692,7 @@ coredump()
          -1 if not (and errno is set).
  ----*/
 int
-hostname(hostname,size)
-    char *hostname;
-    int size;
+hostname(char *hostname, int size)
 {
     return(gethostname(hostname, size));
 }
@@ -767,13 +760,12 @@ getdomainnames(hostname, hsize, domainname, dsize)
  Result: Canonical form, or input argument (worst case)
  ----*/
 char *
-canonical_name(host)
-    char *host;
+canonical_name(char *host)
 {
     struct hostent *hent;
     char hostname[MAILTMPLEN];
     char tmp[MAILTMPLEN];
-    extern char *lcase();
+    extern char *lcase(char *);
                                 /* domain literal is easy */
     if (host[0] == '[' && host[(strlen (host))-1] == ']')
       return host;
@@ -846,8 +838,7 @@ static struct passwd *unix_pwd = NULL;
  Result: returns pointer to buffer with name
   ----*/
 static char *
-gcos_name(gcos_field, logname)
-    char *logname, *gcos_field;
+gcos_name(char *gcos_field, char *logname)
 {
     static char fullname[MAX_FULLNAME+1];
     register char *fncp, *gcoscp, *lncp, *end;
@@ -923,8 +914,7 @@ get_system_passwd()
  Result: returns NULL or pointer to static string rfc822 address.
   ----*/
 char *
-local_name_lookup(name)
-    char *name;
+local_name_lookup(char *name)
 {
     struct passwd *pw;
     static char    buf[100];
@@ -1034,9 +1024,7 @@ gf_play_sound(f, c, flg)
    This is just a call to the ANSI C fgetpos function.
   ----*/
 int
-fget_pos(stream, ptr)
-FILE *stream;
-fpos_t *ptr;
+fget_pos(FILE *stream, fpos_t *ptr)
 {
     return(fgetpos(stream, ptr));
 }
@@ -1046,9 +1034,7 @@ fpos_t *ptr;
    This is just a call to the ANSI C fsetpos function.
   ----*/
 int
-fset_pos(stream, ptr)
-FILE *stream;
-fpos_t *ptr;
+fset_pos(FILE *stream, fpos_t *ptr)
 {
     return(fsetpos(stream, ptr));
 }

@@ -58,7 +58,7 @@ static char rcsid[] = "$Id: args.c,v 4.24 1993/10/02 07:29:22 hubert Exp $";
 
 #include "headers.h"
 
-void args_help();
+void args_help(void);
 
 
 /*
@@ -252,7 +252,7 @@ Loop: while(--ac > 0 && **++av == '-') {
  Result: prints help messages
   ----------------------------------------------------------------------*/
 void
-args_help()
+args_help(void)
 {
 	/**  print out possible starting arguments... **/
 

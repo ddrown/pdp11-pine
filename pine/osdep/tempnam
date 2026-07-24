@@ -19,12 +19,11 @@ static char sccsid[] = "@(#)tmpnam.c	4.5 (Berkeley) 6/27/88";
 	 by the caller.  Returns the string on success and NULL on failure.
   ----*/
 char *
-temp_nam(dir, prefix)
-    char *dir, *prefix;
+temp_nam(char *dir, char *prefix)
 {
     struct stat buf;
     char *f, *name;
-    char *our_mktemp();
+    char *our_mktemp(char *);
 
     if (!(name = malloc((unsigned int)MAXPATHLEN)))
         return((char *)NULL);
@@ -84,8 +83,7 @@ static char sccsid[] = "@(#)mktemp.c	5.7 (Berkeley) 6/27/88";
 #endif /* LIBC_SCCS and not lint */
 
 static int
-_gettemp(as)
-	char	*as;
+_gettemp(char *as)
 {
 	extern int	errno;
 	register char	*start, *trv;
@@ -139,8 +137,7 @@ _gettemp(as)
 }
 
 char *
-our_mktemp(as)
-	char	*as;
+our_mktemp(char *as)
 {
 	return(_gettemp(as) ? as : (char *)NULL);
 }

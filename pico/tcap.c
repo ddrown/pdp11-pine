@@ -406,7 +406,7 @@ kpinsert(char *kstr, int kval)
  * tcapinsert - insert a character at the current character position.
  *              IC takes precedence.
  */
-int
+static int
 tcapinsert(register char ch)
 {
     if(IC != NULL){
@@ -426,8 +426,8 @@ tcapinsert(register char ch)
 /*
  * tcapdelete - delete a character at the current character position.
  */
-int
-tcapdelete()
+static int
+tcapdelete(void)
 {
     if(DM == NULL && ED == NULL)
       putpad(DC);
@@ -608,7 +608,7 @@ tcapbeep()
     return(0);
 }
 
-int
+static int
 ttputc_i(int c)
 {
     ttputc(c);
@@ -624,7 +624,7 @@ putpad(char *str)
 }
 
 
-int
+static int
 putnpad(char *str, int n)
 {
     tputs(str, n, ttputc_i);

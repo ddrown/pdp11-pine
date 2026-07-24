@@ -62,8 +62,8 @@ static char rcsid[] = "$Id: other.c,v 4.20 1993/11/30 23:48:35 mikes Exp $";
 
 static void draw_klocked_body(char *, char *);
 
-static void redraw_kl_body();
-static void redraw_klocked_body();
+static void redraw_kl_body(void);
+static void redraw_klocked_body(void);
 
 
 #ifndef NO_KEYBOARD_LOCK
@@ -144,7 +144,7 @@ lock_keyboard()
 }
 
 static void
-redraw_kl_body()
+redraw_kl_body(void)
 {
     ClearScreen();
 
@@ -179,7 +179,7 @@ draw_klocked_body(login, username)
 }
 
 static void
-redraw_klocked_body()
+redraw_klocked_body(void)
 {
     ClearScreen();
 

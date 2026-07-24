@@ -266,8 +266,7 @@ int     ready_for_winch = 0;
 
   ----*/
 int
-read_with_timeout(time_out)
-     int time_out;
+read_with_timeout(int time_out)
 {
 #ifdef USE_POLL
      struct pollfd pollfd;
@@ -782,7 +781,7 @@ read_char(time_out)
 things.
   ----*/
 int
-read_command()
+read_command(void)
 {
     int ch, tm;
 

@@ -99,13 +99,13 @@ int   compare_message_dates(const QSType *, const QSType *);
 int   compare_size(const QSType *, const QSType *);
 char *get_index_cache(long);
 int   i_cache_size(long);
-int   i_cache_width();
+int   i_cache_width(void);
 #ifdef	DOS
 void  i_cache_hit(long);
 void  icread(void);
 void  icwrite(void);
 #endif
-void  sort_blip();
+void  sort_blip(void);
 
 
 /*-----------

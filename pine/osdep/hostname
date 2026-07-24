@@ -8,9 +8,7 @@
          -1 if not (and errno is set).
  ----*/
 int
-hostname(hostname,size)
-    char *hostname;
-    int size;
+hostname(char *hostname, int size)
 {
     return(gethostname(hostname, size));
 }
