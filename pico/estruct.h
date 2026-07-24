@@ -83,10 +83,6 @@
 #define CTLX    0x0400                  /* ^X flag, or'ed in            */
 #define	SPEC	0x0800			/* special key (arrow's, etc)	*/
 #define	FUNC	0x1000			/* special key (function keys)	*/
-#if	MSDOS
-#define	SHFT	0x2000			/* shifted (for function keys)	*/
-#define	ALTD	0x4000			/* ALT key...			*/
-#endif
 
 #define	QNORML	0x0000			/* Flag meaning no flag ;)	*/
 #define	QFFILE	0x0001			/* Flag buffer for file neme	*/

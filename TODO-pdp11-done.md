@@ -5167,3 +5167,62 @@ was doubly dead.
   `-Wmissing-prototypes` already mostly landed via the `two` remote's
   parallel work -- see the `two/main` merge commit) and the ASan/
   `-fanalyzer` build-target item.
+
+### Dead-code survey and sweep of `pico/` and `c-client/`
+
+After finishing the `pine/` dead-code-sweep buckets, surveyed the two
+other source trees for the same `DOS`/never-defined-macro pattern.
+
+**`c-client/` (`imap/ANSI/c-client/`)**: essentially nothing left --
+already heavily swept in earlier sessions (SMTP client removed, phile
+driver dropped from the build, the DRIVER dispatch abstraction
+removed, `mbox.c`/`sm_unix.c` deleted). The only files this build's
+`makefile.lnx` actually compiles into `c-client.a`
+(`mail.c`/`bezerk.c`/`dummy.c`/`rfc822.c`/`misc.c`/`os_lnx.c`) have
+exactly one preprocessor conditional between them: `bezerk.c`'s
+`#ifdef NFSKLUDGE` NFS-lock-file workaround, and `NFSKLUDGE` **is**
+defined in `os_lnx.h` (the header this build actually uses) -- a real,
+live guard, not dead code, so left untouched. The other `os_*.c`
+files, plus `phile.c`/`smtp.c`, aren't in `makefile.lnx` at all, but
+per this project's own established precedent (matching
+`pine/osdep/os-*.h`'s other-platform variants) those are intentionally
+preserved portability/protocol reference source excluded from this
+build, not dead code -- confirmed via their own removal commits
+("drop phile driver from c-client build", "remove SMTP client") which
+explicitly left the source files in place. Nothing to cut here.
+
+**`pico/`**: also heavily swept already (DOS-only color/mouse code,
+address book, compose-side attachments, `ansi.c` itself already
+deleted as "permanently dead, never-enabled alternate terminal
+driver"). Found one direct sibling that was missed plus two small
+scraps:
+- **`pico/tinfo.c`** (603 lines) -- an entire alternate,
+  terminfo-based terminal driver (`tinfoopen`/`tinfoclose`/
+  `tinfomove`/etc., paralleling `tcap.c`'s termcap-based one), never
+  referenced in `pico/makefile.lnx`'s `OFILES` and never `#include`d
+  or called from any other file in the tree -- the exact same
+  situation as the already-deleted `ansi.c`, just missed in that
+  earlier pass. Deleted outright (`git rm`).
+- **`pico/estruct.h`**: an `#if MSDOS` block defining `SHFT`/`ALTD`
+  (function-key shift/alt modifier bits) -- confirmed via grep that
+  `MSDOS` (distinct spelling from the project's usual `DOS` knob) is
+  never `#define`'d anywhere in the tree, and `SHFT`/`ALTD` have zero
+  readers elsewhere. Removed.
+- **`pico/display.c`** (2 sites): `wmsg()`'s dead `#if MSDOS
+  vtmove(1,0); vteeol(); #endif` pair ahead of the real mode-line
+  redraw call, removed; `wkeyhelp()`'s dead `#if defined(DOS) &&
+  defined(MOUSE) register_keys(...) #endif` mouse-registration call
+  (and its now-inapplicable "make hardware cursor position change
+  known!!" comment) removed.
+- **Verified**: `./build clean && ./build lnx`, exit 0, no new
+  warnings (same pre-existing Tier 2 `-Wshadow`/`-Wsign-compare` set
+  as before, none in the touched lines). Full smoketest suite, 26/26.
+  Manually drove a composer session (`c` from Main Menu, typed body
+  text, `^C`-cancelled) through a raw pty to confirm `wmsg()`'s
+  mode-line and `wkeyhelp()`'s key-menu-footer painting -- both
+  functions this change touched -- still render correctly.
+- **Size delta**: `bin/pico` text 110299 -> 110299 (0 bytes) --
+  confirmed by diffing against a clean build of the pre-change tree;
+  every site removed here was preprocessor-stripped dead weight
+  already, same as most of dead-code-sweep buckets 1 and 2. `bin/pine`
+  unaffected (pico runs as a separate subprocess, not linked in).
