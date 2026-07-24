@@ -600,12 +600,6 @@ struct pine {
     unsigned     painted_footer_on_startup:1;
     unsigned     open_readonly_on_startup:1;
 
-#ifdef	DOS
-    unsigned     blank_user_id:1;
-    unsigned     blank_personal_name:1;
-    unsigned     blank_user_domain:1;
-#endif
-
     int         *initial_cmds;         /* cmds to execute on startup */
 
     char         c_client_error[300];  /* when nowhow_error is set and PARSE */
@@ -767,10 +761,6 @@ void	 gf_nvtnl_local(FILTER_S *, int, int);
 void	 gf_local_nvtnl(FILTER_S *, int, int);
 void	 gf_prefix(FILTER_S *, int, int);
 void	 gf_prefix_opt(char *);
-#ifdef	DOS
-void	 gf_translate(FILTER_S *, int, int);
-void	 gf_translate_opt(unsigned char *, unsigned);
-#endif
 
 /*--- folder.c ---*/
 void        folder_screen(struct pine *);
@@ -867,7 +857,6 @@ char *last_cmpnt(char *);
 int   expand_foldername(char *);
 char *fnexpand(char *, int);
 char *filter_filename(char *);
-long  disk_quota(char *, int *);
 char *read_file(char *);
 FILE *create_tmpfile(void);
 char *temp_nam(char *, char *);

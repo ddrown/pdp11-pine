@@ -5078,3 +5078,92 @@ commented out in every `pine/osdep/os-*.h` variant including
   not code size.
 - **Remaining**: bucket 3 (`init.c`/`filter.c`/`status.c`/`os.c`)
   still open in `TODO-pdp11.md`.
+
+### Dead-code sweep, bucket 3 of 3: `init.c`, `filter.c`, `status.c`, `os.c`
+
+Third and final bucket of the DOS/never-defined-macro dead-code survey.
+`init.c` also had a `FIRST_FOLDER_TRY`-guarded site the TODO flagged for
+the same never-defined confirmation given to `LWP`/`PCTCP`/`PCNFS`/
+`NO_KEYBOARD_LOCK` earlier -- confirmed via tree-wide grep that
+`FIRST_FOLDER_TRY` is never `#define`'d anywhere, and its guarded body
+references `V_LOCAL_MAIL_FORMAT`/`DF_LOCAL_MAIL_FORMAT`, neither of
+which exist anywhere else in the current tree (`V_LOCAL_MAIL_FORMAT`
+was already cut in an earlier `variables[]` reduction session) -- the
+block wouldn't even compile if the macro were ever turned on, so it
+was doubly dead.
+
+- **`init.c`** (12 sites): the `"user-id"` `variables[]` entry's
+  `#ifdef DOS`/`#else` pair (`is_used` 1 vs. 0) collapsed to the Unix
+  (`0`) half; the dead `FIRST_FOLDER_TRY` block removed outright;
+  `init_vars()`'s 40-line DOS pinerc-location-search comment-and-block
+  collapsed to the real `.pinerc`-in-`$HOME` `#else` half; a
+  `sprintf()`'s DOS-vs-Unix path-separator character (`'\\'` vs `'/'`)
+  collapsed to `/`; `expand_variables()`'s always-true `#ifndef DOS`
+  wrapping its backslash-escape/`~`-expansion branches unwrapped,
+  dropping the dead one-branch DOS `#else`; `init_username()`'s DOS/
+  Unix `VAR_USER_ID` lookup pair collapsed to the real
+  `get_system_login()` half, a dead `ps->blank_personal_name = 1`
+  write removed, and a dead DOS drive-letter (`X:`) check ahead of
+  `build_path()` removed; `init_hostname()`'s always-true `#ifndef
+  DOS` local-lookup guard and DOS/Unix `maildomain`-selection pair
+  both unwrapped/collapsed, and a dead `ps->blank_user_domain`-gated
+  early return removed; `init_debug()`'s DOS/Unix debug-file-rotation
+  pair (36 lines) collapsed to the real 4-generation
+  `.pine-debug[1-4]`-rotation `#else` half. Chain reaction: once the
+  `blank_user_id`/`blank_personal_name`/`blank_user_domain` write
+  sites were all gone, grep confirmed zero readers or writers
+  remained anywhere for those three `pine.h` struct bitfields (which
+  were themselves already `#ifdef DOS`-guarded in the struct
+  definition, so already dead-by-construction) -- removed all three
+  fields.
+- **`filter.c`** (10 sites): `so_get()`'s and `so_reaquire()`'s DOS/
+  Unix `fopen()` mode-string pairs (`"a+b"`/`"rb"` vs. `"a+"`/`"r"`)
+  each collapsed to the Unix half; `so_get()`'s DOS `TmpFileStar`-
+  coercion block (working around an MSC `tmpfile()` quirk) removed,
+  keeping the Unix `temp_nam()` half; `gf_pipe()`'s four DOS sites
+  (a progress-spinner's static state/init, an error-path spinner
+  clear, a per-1024-bytes spinner tick, and an end-of-pipe spinner
+  clear) all removed as dead UI decoration with no Unix equivalent;
+  `gf_nvtnl_local()`/`gf_local_nvtnl()`'s DOS-vs-Unix newline-
+  convention `#ifdef`/`#else` pairs each collapsed to the Unix
+  CRLF-conversion half; the entire trailing `#ifdef DOS` block
+  (`gf_translate()`/`gf_translate_opt()`, a DOS-codepage-to-charset
+  translation filter pair, 44 lines) deleted outright -- grep
+  confirmed both functions had zero callers anywhere, only their
+  own `#ifdef DOS`-guarded prototypes in `pine.h`, which were removed
+  too.
+- **`status.c`** (2 sites, both in `radio_help()`): the DOS/Unix
+  help-text-fetch pair (`get_help_text()` vs. plain `text = help`)
+  collapsed to the Unix half; the paired DOS-only
+  `free_help_text(text)` cleanup call removed.
+- **`os.c`** (1 site, via its real source fragment
+  `pine/osdep/diskquot.non` -- `os.c` itself is a generated,
+  fragment-assembled file per this project's build process, never
+  hand-edited): `disk_quota()` was already wrapped in `#if
+  defined(USE_QUOTAS)`, and `USE_QUOTAS` is confirmed commented out
+  in every `pine/osdep/os-*.h` variant including `os-lnx.h` (same
+  never-turned-on standard as `NO_KEYBOARD_LOCK`), and had zero
+  callers anywhere in the tree besides its own now-removed `pine.h`
+  prototype -- emptied the fragment, deleting the function entirely.
+- **Verified**: `./build clean && ./build lnx`, exit 0. No new
+  warnings attributable to this bucket's edits (the handful of
+  `-Wsign-compare`/`-Wstrict-prototypes` warnings clang/gcc still
+  report in `status.c`/`os.c` are pre-existing, in functions this
+  bucket didn't touch -- part of the still-open Tier 2 warning-flag
+  cleanup). Full smoketest suite, 26/26. Manually verified
+  `init_debug()`'s restructured Unix debug-file-rotation logic by
+  running `bin/pine -d 9` twice against an isolated `$HOME` and
+  confirming `.pine-debug1` was created with the expected banner text
+  and rotated to `.pine-debug2` on the second run.
+- **Size delta**: `bin/pine` text 317183 -> 315839 (-1344 bytes), data
+  unchanged at 10768 -- unlike buckets 1 and 2, most of this bucket's
+  removed code (all of `filter.c`'s sites, most of `init.c`'s) was
+  genuinely compiled, not preprocessor-stripped, so this is a real
+  code-size win rather than just a source-readability one.
+- **Remaining**: this closes out all three dead-code-sweep buckets
+  from the original tree-wide survey. What's left open in
+  `TODO-pdp11.md` is the Tier 2 warning-flag cleanup
+  (`-Wsign-compare`/`-Wshadow`, `-Wstrict-prototypes`/
+  `-Wmissing-prototypes` already mostly landed via the `two` remote's
+  parallel work -- see the `two/main` merge commit) and the ASan/
+  `-fanalyzer` build-target item.

@@ -120,11 +120,7 @@ so_get(source, name, rtype)
     int		rtype;			/* file access type	  */
 {
     STORE_S *so;
-#ifdef	DOS
-    char    *type = (rtype&WRITE_ACCESS) ? "a+b" : "rb";
-#else
     char    *type = (rtype&WRITE_ACCESS) ? "a+" : "r";
-#endif
 
     so = (STORE_S *)fs_get(sizeof(STORE_S));
     memset(so, 0, sizeof(STORE_S));
@@ -132,21 +128,8 @@ so_get(source, name, rtype)
     
     if(name)					/* stash the name */
       so->name = cpystr(name);
-#ifdef	DOS
-    else if(source == TmpFileStar || source == FileStar){
-	/*
-	 * Coerce to TmpFileStar.  The MSC library's "tmpfile()"
-	 * doesn't observe the "TMP" or "TEMP" environment vars and 
-	 * always wants to write "\".  This is problematic in shared,
-	 * networked environments.
-	 */
-	source   = TmpFileStar;
-	so->name = (char *)temp_nam(NULL, "pi");
-    }
-#else
     else if(source == TmpFileStar)		/* make one up! */
       so->name = cpystr(temp_nam(NULL, "pine-tmp"));
-#endif
 
     so->src = source;
     if(so->src == FileStar || so->src == TmpFileStar){
@@ -380,11 +363,7 @@ so_reaquire(so)
 STORE_S *so;
 {
     int   rv = 1;
-#ifdef	DOS
-    char  *type = ((so->flags)&WRITE_ACCESS) ? "a+b" : "rb";
-#else
     char  *type = ((so->flags)&WRITE_ACCESS) ? "a+" : "r";
-#endif
 
     if(!so->txt && (so->src == FileStar || so->src == TmpFileStar)){
 	if((so->txt=(void *)fopen(so->name, type)) == NULL){
@@ -694,23 +673,10 @@ gf_pipe(gc, pc)
     gf_io_t gc, pc;			/* how to get a character */
 {
     unsigned char c;
-#ifdef	DOS
-    static long n;
-    static unsigned times;
-    static char fig[] = { '/', '-', '\\', '|' };
-
-    MoveCursor(0, 1);
-    StartInverse();
-    n = 0L;
-#endif
     /*
      * set up for any errors a filter may encounter
      */
     if(setjmp(gf_error_state)){
-#ifdef	DOS
-	ibmoutc(' ');
-	EndInverse();
-#endif
 	return(gf_error_string); 	/*  */
     }
 
@@ -724,11 +690,6 @@ gf_pipe(gc, pc)
      * while there are chars to process, send them thru the pipe
      */
     while((*gc)(&c)){
-#ifdef	DOS
-        if(++n%1024 == 0)
-          ibmoutc(fig[++times%4]);
-#endif
-
         (*gf_master->f)(gf_master, (c&0xff), GF_DATA);
     }
 
@@ -738,10 +699,6 @@ gf_pipe(gc, pc)
      */
     (*gf_master->f)(gf_master, 0, GF_EOD);
 
-#ifdef	DOS
-    ibmoutc(' ');
-    EndInverse();
-#endif
     return(NULL);			/* everything went OK */
 }
 
@@ -1568,14 +1525,6 @@ gf_nvtnl_local(f, c, flg)
     int       c, flg;
 {
     if(flg == GF_DATA){
-#ifdef	DOS
-	/*
-	 * NOOP in DOS!
-	 * (this function should be put in the various os-dependent
-	 * files!)
-	 */
-	(*f->next->f)(f->next, c, GF_DATA);
-#else
 	switch(f->f1){
 	  case CCR:
 	    f->f1 = DFL;
@@ -1595,7 +1544,6 @@ gf_nvtnl_local(f, c, flg)
 
 	    break;
 	}
-#endif
     }
     else if(flg == GF_EOD){
 	(*f->next->f)(f->next, 0, GF_EOD);
@@ -1615,69 +1563,15 @@ gf_local_nvtnl(f, c, flg)
     int       c, flg;
 {
     if(flg == GF_DATA){
-#ifdef	DOS
-	/*
-	 * NOOP in DOS!
-	 * (this function should be put in the various os-dependent
-	 * files!)
-	 */
-	(*f->next->f)(f->next, c, GF_DATA);
-#else
 	if(c == '\012'){
 	  (*f->next->f)(f->next, '\015', GF_DATA);
 	  (*f->next->f)(f->next, '\012', GF_DATA);
 	}
 	else
 	  (*f->next->f)(f->next, c, GF_DATA);
-#endif
     }
     else if(flg == GF_EOD){
 	(*f->next->f)(f->next, 0, GF_EOD);
     }
 }
-
-#ifdef	DOS
-/*
- * DOS CodePage to Character Set Translation (and back) filters
- */
-
-/*
- * Charset and CodePage mapping table pointer and length
- */
-static unsigned char *gf_xlate_tab;
-static unsigned gf_xlate_tab_len;
-
-/*
- * the simple filter takes DOS Code Page values and maps them into
- * the indicated external CharSet mapping or vice-versa.
- */
-void
-gf_translate(f, c, flg)
-    FILTER_S *f;
-    int       c, flg;
-{
-    /* GF_RESET case a no-op */
-    if(flg == GF_DATA){
-	if(c >= 0 && c < (int) gf_xlate_tab_len)
-	  (*f->next->f)(f->next, (int)gf_xlate_tab[c], GF_DATA);
-    }
-    else if(flg == GF_EOD){
-	(*f->next->f)(f->next, 0, GF_EOD);
-    }
-}
-
-
-/*
- * function called from the outside to set
- * prefix filter's prefix string
- */
-void
-gf_translate_opt(xlatetab, xlatetablen)
-    unsigned char *xlatetab;
-    unsigned       xlatetablen;
-{
-    gf_xlate_tab     = xlatetab;
-    gf_xlate_tab_len = xlatetablen;
-}
-#endif
 
