@@ -100,10 +100,6 @@ output_keymenu(km, bm, row, column)
     int                  i, c, ufk, real_row, fkey, max_column;
     char                 temp[20];
     int			 off;
-#if	defined(DOS) && defined(MOUSE)
-    extern void          register_key();
-    int    j = -1;
-#endif
 
     off    	  = km->which * 12;
     fkey          = 0;         /* Avoid ref before set warning */
@@ -122,9 +118,6 @@ output_keymenu(km, bm, row, column)
 		   km == NULL ? "(no km)" 
 		   : km->keys[e].label == NULL ? "(null)" 
 		   : km->keys[e].label, km ? km->keys[e].column : 0));
-#if	defined(DOS) && defined(MOUSE)
-	register_key(i, NO_OP_COMMAND, "", 0, 0, 0);
-#endif
     }
     ufk = F_ON(F_USE_FK,ps_global);
     real_row = row > 0 ? row : ps_global->ttyo->screen_rows + row;
@@ -136,9 +129,6 @@ output_keymenu(km, bm, row, column)
         CleartoEOLN();
         for(c = 0, el = off+i, k = &km->keys[el]; k < &km->keys[off+12];
 							k += 2, el += 2) {
-#if	defined(DOS) && defined(MOUSE)
-	    j++;
-#endif
             if(ufk)
               fkey =  1 + k - &km->keys[off];
             if(!bitnset(el,bm) || k->name == NULL || k->column > max_column)
@@ -170,15 +160,6 @@ output_keymenu(km, bm, row, column)
             if(c + strlen(temp) >= max_column)
               temp[max(0,max_column - c)] = '\0';
             Write_to_screen(temp);
-#if	defined(DOS) && defined(MOUSE)
-	    register_key(j, (ufk) ? PF1 + fkey - 1 : 
-				(k->name[0] == '^') ? ctrl(k->name[1]) : 
-				(!strucmp(k->name, "return")) ? ctrl('M') : 
-				(!strucmp(k->name, "tab")) ? '\t' : 
-				(!strucmp(k->name, "spc")) ? ' ' :
-				 k->name[0],
-			 k->label, real_row+i, c, strlen(temp));
-#endif
             
             c = strlen(k->label) + 1 + k->column +
                 (ufk ? (fkey > 9 ? 3 : 2) :strlen(k->name));

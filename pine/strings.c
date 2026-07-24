@@ -750,31 +750,6 @@ char *
 comatose(number) 
     long number;
 {
-#ifdef	DOS
-    static char buf[16];		/* no numbers > 1 trillion! */
-    char *b;
-    short i;
-
-    if(!number)
-	return("0");
-
-    if(number < 0x7FFFFFFFL){		/* largest DOS signed long */
-        buf[15] = '\0';
-        b = &buf[14];
-        i = 2;
-	while(number){
- 	    *b-- = (number%10) + '0';
-	    if((number /= 10) && i-- == 0 ){
-		*b-- = ',';
-		i = 2;
-	    }
-	}
-    }
-    else
-      return("Number too big!");		/* just fits! */
-
-    return(++b);
-#else
     long        i, x, done_one;
     static char buf[100];
     char       *b;
@@ -803,7 +778,6 @@ comatose(number)
     dprint(9, (debugfile, "\"%s\"\n", buf));
 
     return(buf);
-#endif	/* DOS */
 }
 
 

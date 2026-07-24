@@ -4936,3 +4936,68 @@ move the compiled binary -- the real win is `set_variable()` and
 `flush_index_cache()`, which *were* compiling in with zero callers.
 `bin/pine` text 317519 -> 317247 (-272 bytes), data unchanged at
 10768. `bin/pico` unaffected.
+
+### Dead-code sweep, bucket 1 of 3: `reply.c`, `screen.c`, `args.c`, `strings.c`, `context.c`
+
+First of three roughly-equal-sized buckets covering the rest of the
+tree's `#ifdef DOS`/never-defined-macro dead weight, split out because
+the leftover surface (~73 sites across 14 files) was too big for one
+pass. User confirmed `PCTCP`/`PCNFS` (dead network-stack variants
+guarding `reply.c`'s message-ID-generation code) don't apply to any
+target platform this project cares about, same as `LWP` -- all three
+confirmed never defined anywhere in the tree (not even commented out),
+same standard as `DOS`/`MOUSE`/etc.
+
+- **`reply.c`** (biggest file in this bucket, 16+ sites): removed a
+  dead DOS `IN_RESERVE`/`malloc()` pre-allocation block from both
+  `reply()` and `forward()` (paired with its `free()` at each
+  function's exit) -- once removed, the `char *reserve;` locals became
+  unused and were deleted too. Removed three near-identical dead
+  "fetch part into storage object" `FileStar`-vs-`CharStar` branch
+  pairs (`forward()` x2, `fetch_contents()` x2 more) -- each kept its
+  `CharStar`/live half. `get_body_part_text()`'s DOS
+  `mailgets`/`append_file`/`dos_gets` disk-paged-fetch setup and
+  cleanup were dead; removing them left the local `MESSAGECACHE *mc`
+  variable's only assignment (`mail_elt()`) with no reader, so that
+  got removed too -- an actual (not just preprocessor-stripped) dead
+  function call, the one real size win in this file.
+  `generate_message_id()`'s `STACK` character macro (fed by the now-
+  confirmed-dead `LWP`/`PCTCP`/`PCNFS`) was entirely inside `#ifdef
+  DOS` and only used by the DOS half of an `#ifdef`/`#else` `sprintf()`
+  format-string choice -- deleted the macro and the DOS format string,
+  kept the real one. `get_signature()`'s DOS-vs-Unix signature-path
+  logic (backslash/drive-letter paths vs. `/`/`~`-relative paths)
+  collapsed to the Unix half.
+- **`screen.c`** (4 sites, all `#if defined(DOS) && defined(MOUSE)`):
+  dead mouse-registration calls in the key-menu-footer painter
+  (`register_key()`/an unused `extern void register_key()` decl and
+  `int j` counter) -- `sed` was used instead of the Edit tool for these
+  specific deletions after the tool's literal-string matching kept
+  missing on this function's mixed tab/space indentation.
+- **`args.c`** (3 sites): the `-P <pine.conf>` command-line flag's
+  `case` label, its handler, and its `-h` usage-text line were each
+  wrapped in an always-true `#ifndef DOS` -- unwrapped all three (the
+  flag was already fully functional, just needlessly conditional).
+- **`context.c`** (1 site): `context_isambig()`'s DOS drive-letter
+  (`C:`) ambiguity check was dead; removed, leaving the real dot/
+  alphanumeric ambiguity check as the sole `else` branch.
+- **`strings.c`** (1 site): `comatose()`'s entire DOS half (a 16-byte-
+  buffer, non-locale-aware number-with-commas formatter, "no numbers >
+  1 trillion!") was dead; kept the real 100-byte-buffer version with
+  proper 3-digit grouping.
+- **Verified**: `./build clean && ./build lnx`, 0 warnings across all
+  five files. Full smoketest suite, 26/26, run twice for stability.
+  Manually drove a session exercising every behavior-relevant site
+  touched: Reply with original text included (confirms
+  `get_signature()`'s path logic and the quoted-text/signature
+  insertion still work); Forward (confirms `forward()`'s storage-object
+  fetch path); `bin/pine -h`'s usage text still lists `-P <pine.conf>`.
+  No new regression test added -- dead-code removal with no intended
+  behavior change, not a bug fix.
+- **Size delta**: `bin/pine` text 317247 -> 317183 (-64 bytes, all from
+  `reply.c`'s `mail_elt()`/`mc` removal -- the only site in this bucket
+  that was compiling in live code, not just preprocessor-stripped
+  branches), data unchanged at 10768. `bin/pico` unaffected.
+- **Remaining**: bucket 2 (`signals.c`/`newmail.c`/`imap.c`/`ttyin.c`/
+  `other.c`) and bucket 3 (`init.c`/`filter.c`/`status.c`/`os.c`) still
+  open in `TODO-pdp11.md`.
