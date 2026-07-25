@@ -518,12 +518,13 @@ static char sccsid[] = "@(#)tmpnam.c	4.5 (Berkeley) 6/27/88";
  Result: Malloc'd string equal to new name is returned.  It must be free'd
 	 by the caller.  Returns the string on success and NULL on failure.
   ----*/
+static char *our_mktemp(char *);
+
 char *
 temp_nam(char *dir, char *prefix)
 {
     struct stat buf;
     char *f, *name;
-    char *our_mktemp(char *);
 
     if (!(name = malloc((unsigned int)MAXPATHLEN)))
         return((char *)NULL);
@@ -585,7 +586,6 @@ static char sccsid[] = "@(#)mktemp.c	5.7 (Berkeley) 6/27/88";
 static int
 _gettemp(char *as)
 {
-	extern int	errno;
 	register char	*start, *trv;
 	struct stat	sbuf;
 	unsigned int	pid;
@@ -636,7 +636,7 @@ _gettemp(char *as)
 	/*NOTREACHED*/
 }
 
-char *
+static char *
 our_mktemp(char *as)
 {
 	return(_gettemp(as) ? as : (char *)NULL);
@@ -653,22 +653,6 @@ coredump()
     abort();
 }
 
-
-
-/*----------------------------------------------------------------------
-       Call system gethostname
-
-  Args: hostname -- buffer to return host name in 
-        size     -- Size of buffer hostname is to be returned in
-
- Result: returns 0 if the hostname is correctly set,
-         -1 if not (and errno is set).
- ----*/
-int
-hostname(char *hostname, int size)
-{
-    return(gethostname(hostname, size));
-}
 
 
 

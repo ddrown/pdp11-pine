@@ -265,7 +265,7 @@ int     ready_for_winch = 0;
           timeout expired, or a KEY_RESIZE if a resize even occured.
 
   ----*/
-int
+static int
 read_with_timeout(int time_out)
 {
 #ifdef USE_POLL

@@ -551,7 +551,7 @@ bktoshell(int f, int n)		/* suspend MicroEMACS and wait to wake up */
  * rtfrmshell - back from shell, fix modes and return
  */
 SIGTYPE
-rtfrmshell(int s)
+rtfrmshell(int signo)
 {
 #ifdef	SIGCONT
     signal(SIGCONT, SIG_DFL);
@@ -589,7 +589,7 @@ rtfrmshell(int s)
  * do_hup_signal - jump back in the stack to where we can handle this
  */
 SIGTYPE
-do_hup_signal(int s)
+do_hup_signal(int signo)
 {
     if(Pmaster){
 	extern jmp_buf finstate;
@@ -803,7 +803,7 @@ char *
 getfnames(char *dn, int *n)
 {
     long           l;
-    char          *names, *np, *p;
+    char          *namebuf, *np, *p;
     struct stat    sbuf;
 #if	defined(ct)
     FILE          *dirp;
@@ -843,7 +843,7 @@ getfnames(char *dn, int *n)
 	}
     }
 
-    if((names=(char *)malloc(sizeof(char)*l)) == NULL){
+    if((namebuf=(char *)malloc(sizeof(char)*l)) == NULL){
 	emlwrite("\007Can't malloc space for file names", NULL);
 	return(NULL);
     }
@@ -852,11 +852,11 @@ getfnames(char *dn, int *n)
     if((dirp=opendir(dn)) == NULL){
 	sprintf(s,"\007Can't open \"%s\": %s", dn, errstr(errno));
 	emlwrite(s, NULL);
-	free((char *)names);
+	free((char *)namebuf);
 	return(NULL);
     }
 
-    np = names;
+    np = namebuf;
 
 #if	defined(ct)
     while(fread(&dp, sizeof(struct direct), 1, dirp) > 0) {
@@ -880,7 +880,7 @@ getfnames(char *dn, int *n)
 #endif
 
     closedir(dirp);					/* shut down */
-    return(names);
+    return(namebuf);
 }
 
 
@@ -923,7 +923,7 @@ fioperr(int e, char *f)
  * pfnexpand - pico's function to expand the given file name if there is 
  *	       a leading '~'
  */
-char *pfnexpand(char *fn, int len)
+static char *pfnexpand(char *fn, int len)
 {
     struct passwd *pw;
     register char *x, *y, *z;
@@ -1224,9 +1224,9 @@ ffclose()
  *	Hopefully it'll be easy to exec the command into a temporary file, 
  *	and return a file pointer to that opened file or something.
  */
-FILE *P_open(char *s)
+FILE *P_open(char *cmd)
 {
-    return(popen(s, "r"));
+    return(popen(cmd, "r"));
 }
 
 

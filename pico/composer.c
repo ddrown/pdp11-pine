@@ -1940,22 +1940,22 @@ resolve_niks(int entry)
  *          end of the given line.  otherwise FALSE.
  */
 int
-strend(char *s, int ch)
+strend(char *str, int ch)
 {
     register char *b;
     register char  c;
 
     c = (char)ch;
 
-    if(s == NULL)
+    if(str == NULL)
       return(FALSE);
 
-    if(*s == '\0')
+    if(*str == '\0')
       return(FALSE);
 
-    b = &s[strlen(s)];
+    b = &str[strlen(str)];
     while(isspace(*--b)){
-	if(b == s)
+	if(b == str)
 	  return(FALSE);
     }
 
@@ -1967,14 +1967,14 @@ strend(char *s, int ch)
  * strqchr - returns pointer to first non-quote-enclosed occurance of c in 
  *           the given string.  otherwise NULL.
  */
-char *strqchr(char *s, int ch)
+char *strqchr(char *str, int ch)
 {
     register char *b;
     register char  c;
 
     c = (char)ch;
 
-    if((b = s) == NULL)
+    if((b = str) == NULL)
       return(NULL);
 
     while(*b != '\0'){
@@ -2091,17 +2091,17 @@ SaveHeaderLines()
  *		Pointer to the best break point in s, or
  *		Pointer to the beginning of s if no break point found
  */
-char *break_point(char *s, int l, int ch)
+char *break_point(char *str, int l, int ch)
 {
     register char *b;
     register char  c;
 
     c = (char) ch;
-    b = s+l;
-    while(b != s){
+    b = str+l;
+    while(b != str){
 	if(*b == c){
 	    if(c == ' '){
-		if(b + 1 < s + l){
+		if(b + 1 < str + l){
 		    b++;			/* leave the ' ' */
 		    break;
 		}
@@ -2111,7 +2111,7 @@ char *break_point(char *s, int l, int ch)
 		 * if break char isn't a space, leave a space after
 		 * the break char.
 		 */
-		if(!(b+1 >= s+l || (b[1] == ' ' && b+2 == s+l))){
+		if(!(b+1 >= str+l || (b[1] == ' ' && b+2 == str+l))){
 		    b += (b[1] == ' ') ? 2 : 1;
 		    break;
 		}
@@ -2302,12 +2302,12 @@ zotentry(register struct hdr_line *l)
  *	      of the given line
  */
 void
-zotcomma(char *s)
+zotcomma(char *str)
 {
     register char *p;
 
-    p = &s[strlen(s)];
-    while(--p >= s){
+    p = &str[strlen(str)];
+    while(--p >= str){
 	if(*p != ' '){
 	    if(*p == ',')
 	      *p = '\0';

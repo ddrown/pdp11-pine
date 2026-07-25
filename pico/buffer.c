@@ -63,14 +63,14 @@ zotbuf(register BUFFER *bp)	/* kill the buffer pointed to by bp */
 {
     register BUFFER *bp1;
     register BUFFER *bp2;
-    register int    s;
+    register int    status;
 
         if (bp->b_nwnd != 0) {                  /* Error if on screen.  */
                 mlwrite("Buffer is being displayed", NULL);
                 return (FALSE);
         }
-        if ((s=bclear(bp)) != TRUE)             /* Blow text away.      */
-                return (s);
+        if ((status=bclear(bp)) != TRUE)             /* Blow text away.      */
+                return (status);
         free((char *) bp->b_linep);             /* Release header line. */
         bp1 = NULL;                             /* Find the header.     */
         bp2 = bheadp;
@@ -196,20 +196,20 @@ int
 bclear(register BUFFER *bp)
 {
         register LINE   *lp;
-        register int    s = FALSE;
+        register int    status = FALSE;
 
 	if(Pmaster){
 	    if ((bp->b_flag&BFTEMP) == 0 	/* Not scratch buffer.  */
 		&& (bp->b_flag&BFCHG) != 0){	/* Something changed    */
 		emlwrite("buffer lines not freed.", NULL);
-		return (s);
+		return (status);
 	    }
 	}
 	else{
 	    if ((bp->b_flag&BFTEMP) == 0	/* Not scratch buffer.  */
 		&& (bp->b_flag&BFCHG) != 0	/* Something changed    */
-		&& (s=mlyesno("Discard changes", -1)) != TRUE){
-		return (s);
+		&& (status=mlyesno("Discard changes", -1)) != TRUE){
+		return (status);
 	    }
 	}
 
@@ -234,7 +234,6 @@ bclear(register BUFFER *bp)
 int
 packbuf(char **buf, int *blen, int lcrlf)	/* EOLs are local or CRLF */
 {
-    register int    s;
     register int    i = 0;
     register LINE   *lp;
     register int    retval = 0;
@@ -320,21 +319,21 @@ readbuf(char **buf)
         register BUFFER *bp;
         register WINDOW *wp;
         register int    i;
-        register int    s;
+        register int    status;
         char   *sptr;          /* pointer into buffer string */
         int		nbytes;
         char            line[NLINE];
 	CELL            ac;
- 
+
 	bp = curbp;
         bp->b_flag &= ~(BFTEMP|BFCHG);
 	sptr = *buf;
 	ac.a  = 0;
 
-        while((s=sgetline(&sptr,&nbytes,line,NLINE)) == FIOSUC || s == FIOLNG){
+        while((status=sgetline(&sptr,&nbytes,line,NLINE)) == FIOSUC || status == FIOLNG){
 
                 if ((lp1=lalloc(nbytes)) == NULL) {
-                        s = FIOERR;             /* Keep message on the  */
+                        status = FIOERR;             /* Keep message on the  */
                         break;                  /* display.             */
                 }
                 lp2 = lback(curbp->b_linep);

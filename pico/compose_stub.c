@@ -28,7 +28,7 @@
 /*
  * write_field - write one length-prefixed field to a handoff/result file
  */
-void
+static void
 write_field(FILE *fp, char *tag, char *buf)
 {
     long len = buf ? strlen(buf) : 0L;
@@ -46,7 +46,7 @@ write_field(FILE *fp, char *tag, char *buf)
  *              string (possibly empty), or NULL on a format/tag mismatch
  *              or short read.
  */
-char *
+static char *
 read_field(FILE *fp, char *tag)
 {
     char got_tag[FIELDTAGLEN + 1];

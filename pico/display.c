@@ -1851,11 +1851,11 @@ pputc(int c, int a)			/* c: char to write */
  * pputs - print a string and keep track of the cursor
  */
 void
-pputs(register char *s, register int a)	/* s: string to write */
+pputs(register char *str, register int a)	/* str: string to write */
 						/* a: and its attribute */
 {
-    while (*s != '\0')
-      pputc(*s++, a);
+    while (*str != '\0')
+      pputc(*str++, a);
 }
 
 
