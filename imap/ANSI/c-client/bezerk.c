@@ -1041,39 +1041,6 @@ int bezerk_lock (char *file,int flags,int mode,char *lock,int op)
   strcat (bezerk_file (lock,file),".lock");
   do {				/* until OK or out of tries */
     gettimeofday (&tp,NIL);	/* get the time now */
-#ifdef NFSKLUDGE
-  /* SUN-OS had an NFS, As kludgy as an albatross;
-   * And everywhere that it was installed, It was a total loss.  -- MRC 9/25/91
-   */
-				/* build hitching post file name */
-    sprintf (tmp,"%s.%ld.%d.",lock,time (0),getpid ());
-    j = strlen (tmp);		/* append local host name */
-    gethostname (tmp + j,(MAILTMPLEN - j) - 1);
-				/* try to get hitching-post file */
-    if ((ld = open (tmp,O_WRONLY|O_CREAT|O_EXCL,0666)) < 0) {
-				/* prot fail & non-ex, don't use lock files */
-      if ((errno == EACCES) && (stat (tmp,&sb))) *lock = '\0';
-      else {			/* otherwise something strange is going on */
-	sprintf (tmp,"Error creating %s: %s",lock,strerror (errno));
-	mm_log (tmp,WARN);	/* this is probably not good */
-				/* don't use lock files if not one of these */
-	if ((errno != EEXIST) && (errno != EACCES)) *lock = '\0';
-      }
-    }
-    else {			/* got a hitching-post */
-      chmod (tmp,0666);		/* make sure others can break the lock */
-      close (ld);		/* close the hitching-post */
-      link (tmp,lock);		/* tie hitching-post to lock, ignore failure */
-      stat (tmp,&sb);		/* get its data */
-      unlink (tmp);		/* flush hitching post */
-      /* If link count .ne. 2, hitch failed.  Set ld to -1 as if open() failed
-	 so we try again.  If extant lock file and time now is .gt. file time
-	 plus timeout interval, flush the lock so can win next time around. */
-      if ((ld = (sb.st_nlink != 2) ? -1 : 0) && (!stat (lock,&sb)) &&
-	  (tp.tv_sec > sb.st_ctime + LOCKTIMEOUT * 60)) unlink (lock);
-    }
-
-#else
   /* This works on modern Unix systems which are not afflicted with NFS mail.
    * "Modern" means that O_EXCL works.  I think that NFS mail is a terrible
    * idea -- that's what IMAP is for -- but some people insist upon losing...
@@ -1098,7 +1065,6 @@ int bezerk_lock (char *file,int flags,int mode,char *lock,int op)
       chmod (lock,0666);	/* make sure others can break the lock */
       close (ld);		/* close the lock file */
     }
-#endif
     if ((ld < 0) && *lock) {	/* if failed to make lock file and retry OK */
       if (!(i%15)) {
 	sprintf (tmp,"Mailbox %s is locked, will override in %d seconds...",

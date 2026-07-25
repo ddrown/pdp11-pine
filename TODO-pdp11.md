@@ -10,47 +10,6 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-### Remove `NFSKLUDGE` -- irrelevant for a local-mbox-only, no-NFS target
-
-- [ ] `imap/ANSI/c-client/bezerk.c`'s `bezerk_lock()` has an
-      `#ifdef NFSKLUDGE ... #else ... #endif` pair (~lines 1044-1101)
-      choosing between two mailbox-lock-file creation strategies: the
-      `NFSKLUDGE` branch builds a "hitching post" temp file and
-      `link()`s it into place (a dance needed only because NFS's
-      `O_EXCL` isn't reliably atomic over the wire), while the
-      `#else` branch just does a plain `open(...,O_EXCL,...)`, which
-      is atomic and sufficient on any real local filesystem. This
-      target is UUCP-connected, local-mbox-only, with no networking
-      at all (see `README.md`/`CLAUDE.md`) -- the mail spool is never
-      NFS-mounted, so the `NFSKLUDGE` branch can never be the right
-      choice here.
-    - `NFSKLUDGE` is `#define`'d in `os_lnx.h` (this build's dev
-      target), which is why it was left alone during the `pico`/
-      `c-client` dead-code survey (correctly identified as "genuinely
-      defined for the header this build uses," not yet as "wrong for
-      this project"). But of the other `os_*.h` variants, `os_bsi.h`
-      (a BSD-derived target, the closest existing precedent to the
-      eventual 2.11BSD cross-build) does **not** define it -- neither
-      do `os_mac.h`/`os_sco.h`/`os_t20.h`. That's a strong signal
-      `NFSKLUDGE` shouldn't be defined for this project's target
-      either, dev build included, since the dev build's whole point
-      is to mirror the real target's behavior (local mbox, no NFS).
-    - Proposed fix: remove `#define NFSKLUDGE` from `os_lnx.h`, then
-      collapse `bezerk.c`'s `#ifdef NFSKLUDGE`/`#else`/`#endif` down
-      to just the `#else` (plain `O_EXCL`) body, using the same
-      never-defined-macro collapse technique used throughout this
-      project (grep-confirm no header this build uses defines it,
-      then delete the dead branch).
-    - Unlike most of this project's `#ifdef` collapses, this one
-      changes *live, exercised* locking behavior on the dev build too
-      (currently takes the hitching-post path on every lock, would
-      switch to plain `O_EXCL`) -- so budget for real verification,
-      not just a clean rebuild: confirm mailbox locking still works
-      under concurrent access (e.g. two `bin/pine` instances opening
-      the same mbox, or pine + sendmail delivering concurrently),
-      not just that the smoketest suite stays green (it likely
-      doesn't stress lock contention at all).
-
 ### Investigate removing the DEBUG/dprint() infrastructure entirely
 
 - [ ] Disabling the `-DDEBUG` build define (`pine/makefile.lnx`'s

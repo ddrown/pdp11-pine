@@ -5401,3 +5401,47 @@ Follow-on to the `-p`/`-P` removal above. Two more loose ends:
   the underlying `DEBUG`-gated machinery itself in place -- see the
   new TODO to investigate removing it outright rather than just
   disabling the build define.
+
+### Remove `NFSKLUDGE` -- irrelevant for a local-mbox-only, no-NFS target
+
+`imap/ANSI/c-client/bezerk.c`'s `bezerk_lock()` had an `#ifdef
+NFSKLUDGE ... #else ... #endif` pair choosing between two mailbox-
+lock-file creation strategies: `NFSKLUDGE`'s "hitching post" temp-file-
+plus-`link()` dance (needed only because NFS's `O_EXCL` isn't reliably
+atomic over the wire) versus a plain `open(...,O_EXCL,...)`, which is
+atomic and sufficient on any real local filesystem. `NFSKLUDGE` was
+`#define`'d in `os_lnx.h` (this build's dev target) but **not** in
+`os_bsi.h` (the closest existing precedent among the other-platform
+headers to the eventual 2.11BSD cross-build) -- confirming it was
+wrong for this no-NFS, local-mbox-only, UUCP-connected target, dev
+build included.
+
+- **What changed**: removed `#define NFSKLUDGE` from `os_lnx.h`, then
+  collapsed `bezerk_lock()`'s `#ifdef NFSKLUDGE`/`#else`/`#endif` down
+  to just the `#else` (plain `O_EXCL`) body -- deleted the opening
+  `#ifdef NFSKLUDGE` line through the `#else` line (the entire
+  hitching-post branch, ~32 lines including its "SUN-OS had an NFS...
+  kludgy as an albatross" comment), and the closing `#endif`. Left
+  `j` declared (`int fd,ld,j;`) since it's reused later in the same
+  function (`j = errno;` in the error-path cleanup) independent of
+  either branch. `imap/ANSI/c-client/osdep.h` is a gitignored
+  build-time hard link of `os_lnx.h` (`ln os_lnx.h osdep.h`, same
+  pattern as `pine/os.c`), so it picked up the change automatically on
+  rebuild -- no separate edit needed. The other `os_*.h` variants that
+  still define `NFSKLUDGE` (`os_a32.h`/`os_aix.h`/`os_nxt.h`/
+  `os_osf.h`) are other-platform portability reference material,
+  untouched per this project's established precedent.
+- **Verified**: unlike most `#ifdef` collapses here, this changes
+  *live, exercised* locking behavior, not a dead branch -- so beyond
+  `./build clean && ./build lnx` (exit 0, 52 warnings, unchanged) and
+  the full smoketest suite (25/25), manually drove real lock
+  contention: pre-created a fresh `<mbox>.lock` file, launched
+  `bin/pine -f <mbox>` against it via a raw pty, and confirmed it hit
+  the `EEXIST` branch and printed the periodic "Folder ... is locked,
+  will override in N seconds..." status message (correctly timed to
+  the retry loop's `i%15==0`/`LOCKTIMEOUT`-derived cadence, confirming
+  the surrounding retry-loop bookkeeping the edit sits inside was
+  untouched); removed the lock file mid-wait and confirmed the retry
+  loop picked it up and opened the folder normally (reached MAIN
+  MENU); confirmed pine's own lock file was cleaned up on quit.
+- **Size delta**: `bin/pine` text 780448 -> 780168 (-280 bytes).

@@ -38,7 +38,6 @@
 #define ACTIVEFILE "/usr/lib/news/active"
 #define NEWSSPOOL "/usr/spool/news"
 #define NEWSRC strcat (strcpy (tmp,myhomedir ()),"/.newsrc")
-#define NFSKLUDGE
 
 #include <stdlib.h>
 #include <string.h>
