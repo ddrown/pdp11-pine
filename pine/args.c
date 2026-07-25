@@ -119,9 +119,6 @@ Loop: while(--ac > 0 && **++av == '-') {
 		 case 'h':
 		   do_help = 1;
 		   break;  /* break back to inner-while */
-		 case 'z':
-		   F_TURN_ON(F_CAN_SUSPEND,pine_state);
-		   break;
 		 case 'i':
 		   pine_state->start_in_index = 1;
 		   break;
@@ -233,7 +230,6 @@ args_help(void)
 #endif
 	printf("\t -f <folder>\tFolder - give folder name to open\n");
 	printf("\t -h \t\tHelp - give this list of options\n");
-	printf("\t -z \t\tSuspend - allow use of ^Z suspension\n");
         printf("\t -sort <sort> \tSort - Specify sort order of folder:\n");
         printf("\t\t\t        subject, arrival, date, from, size, /reverse\n");
         printf("\t -i\t\tIndex - Go directly to index, bypassing mail menu\n");

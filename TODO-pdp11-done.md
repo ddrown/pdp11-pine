@@ -5482,3 +5482,62 @@ the flag entirely.
   every test's normal (non-`-o`) folder-open still works, which the
   suite already covers extensively.
 - **Size delta**: `bin/pine` text 780168 -> 779840 (-328 bytes).
+
+### Make suspend (`^Z`) the default, remove the `-z` flag
+
+`-z` (`pine/args.c`) turned on the `F_CAN_SUSPEND` feature bit,
+checked at ~10 call sites almost always paired with a
+`have_job_control()` check (`pine/os.c`, unconditionally returns 1 on
+this Linux target) that already tests the real runtime capability.
+2.11BSD has job control, so made `^Z` suspend always available
+(equivalent to always passing `-z`) and removed the flag, as a
+two-phase job like the `F_USE_FK` cut.
+
+- **Phase 1** -- collapsed every `F_ON(F_CAN_SUSPEND,...)`/
+  `F_OFF(F_CAN_SUSPEND,...)` site to its fixed-true outcome:
+  - `pine/args.c`: removed the `-z` case and its `args_help()` line.
+  - `pine/mailbox.c`, `pine/imap.c` (identical duplicated disk-full
+    "drop to shell" recovery prompt): collapsed the `if(F_ON(...)){^Z
+    prompt} else {! prompt}` to always show the `^Z` prompt. The
+    second site, `while(!(ch == F_ON(F_CAN_SUSPEND,ps_global) ?
+    ctrl('Z') : '!' || ch == '\r'))`, turned out to already be a
+    mis-parenthesized ternary (see the new TODO) -- substituted the
+    literal `1` for the macro call to preserve the exact existing
+    (buggy) behavior rather than silently fixing an unrelated bug
+    as a side effect of this collapse.
+  - `pine/mailindx.c`, `pine/folder.c`, `pine/mailview.c`, `pine/pine.c`
+    (four near-identical `case ctrl('Z'): if(!have_job_control())
+    goto <bleep-label>; if(F_OFF(F_CAN_SUSPEND,...)){message; break;}
+    else {do_suspend(...);}` sites): collapsed to unconditionally
+    calling `do_suspend(...)`, dropping the "Pine suspension not
+    enabled" message branch entirely.
+  - `pine/status.c`: `if(!have_job_control() ||
+    F_OFF(F_CAN_SUSPEND,ps_global))` collapsed to just
+    `if(!have_job_control())`.
+  - `pine/ttyin.c` (`optionally_enter()`'s `^Z` case): `if(F_ON(...))
+    {suspend} else {goto bleep;}` collapsed to the suspend body
+    unconditionally.
+  - `pine/send.c`: `pine_flags |= (F_ON(F_CAN_SUSPEND,...)) ?
+    P_SUSPEND : 0;` collapsed to `pine_flags |= P_SUSPEND;`.
+- **Phase 2** -- with `F_CAN_SUSPEND` gone, grepped for any remaining
+  `F_ON`/`F_OFF`/`F_TURN_ON`/`F_TURN_OFF`/`F_SET`/`feature_list`
+  reference and found none, confirming it really was the last tenant
+  of the feature-list framework. Deleted all five macros, the
+  `F_CAN_SUSPEND` `#define`, and the `feature_list` `BITMAP` field
+  from `struct pine` (`pine.h`) -- the entire abstraction is gone.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 52 warnings
+  (unchanged). Full smoketest suite, 25/25. Since this makes `^Z`
+  suspend *live* behavior for the first time by default (previously
+  only reachable via `-z`), drove a real pty session past a clean
+  rebuild: sent `^Z`, confirmed `bin/pine`'s process actually entered
+  the kernel's `T (stopped)` state (`/proc/<pid>/status`) right after
+  the "Pine suspended. Give the \"fg\" command to come back." message
+  -- i.e. `stop_process()`'s real `kill(0, SIGSTOP)` fired, not just
+  the message -- then sent `SIGCONT` and confirmed the process
+  returned to `S (sleeping)` and pine correctly redrew back to MAIN
+  MENU (`init_screen()`/`init_tty_driver()` reinitialization intact).
+- **Discovered but not fixed**: the mis-parenthesized ternary in
+  `mailbox.c`/`imap.c` noted above -- added as its own TODO rather
+  than fixed inline, since fixing it needs a dedicated repro (forcing
+  a mailbox write failure) independent of this task.
+- **Size delta**: `bin/pine` text 779840 -> 779024 (-816 bytes).

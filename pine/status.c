@@ -670,7 +670,7 @@ radio_buttons(prompt, line, column, buttons, labels, deefault, on_ctrl_C,
 
             
           case ctrl('Z'):
-            if(!have_job_control() || F_OFF(F_CAN_SUSPEND,ps_global)) {
+            if(!have_job_control()) {
                 Writechar('\007');
             } else {
                 EndInverse();

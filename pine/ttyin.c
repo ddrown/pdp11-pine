@@ -1187,15 +1187,11 @@ optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
           case ctrl('Z'):
             if(!have_job_control() || passwd)
               goto bleep;
-            if(F_ON(F_CAN_SUSPEND,ps_global)) {
-                EndInverse();
-                Writechar('\n');
-                Writechar('\n');
-                do_suspend(ps_global);
-                return_v = 4;
-            } else {
-                goto bleep;
-            }
+            EndInverse();
+            Writechar('\n');
+            Writechar('\n');
+            do_suspend(ps_global);
+            return_v = 4;
 
   
           default:

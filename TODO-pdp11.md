@@ -36,30 +36,36 @@ DONE elsewhere or referenced in passing below.
       done) so production/size-measurement builds never pay for it by
       accident.
 
-### Make suspend (`^Z`) the default, remove the `-z` flag
+### Fix mis-parenthesized ternary in the disk-full "drop to shell" prompt
 
-- [ ] `-z` (`pine/args.c`) turns on the `F_CAN_SUSPEND` feature bit,
-      checked at ~8 call sites (`mailbox.c`, `imap.c`, `mailindx.c`,
-      `mailview.c`, `folder.c`, `status.c`, `pine.c`, `ttyin.c`,
-      `send.c`) almost always paired with a `have_job_control()` check
-      (`pine/os.c`) that already tests the real runtime capability.
-      Since 2.11BSD has job control, make `^Z` suspend always
-      available (equivalent to always passing `-z`) and remove the
-      flag: collapse every `F_ON(F_CAN_SUSPEND,...)`/
-      `F_OFF(F_CAN_SUSPEND,...)` check to its fixed-true outcome,
-      relying solely on the already-present `have_job_control()` guard
-      where the two are currently paired.
-    - **Bigger finding**: after the `F_USE_FK`/`F_EXPANDED_FOLDERS`
-      removals (`TODO-pdp11-done.md`), `F_CAN_SUSPEND` (bit 0) is now
-      the **only** feature bit left in `pine.h`. Once it's collapsed
-      away too, the entire feature-list abstraction becomes dead code:
-      `F_ON`/`F_OFF`/`F_TURN_ON`/`F_TURN_OFF`/`F_SET` macros,
-      `process_feature_list()`-adjacent plumbing already removed
-      earlier, and the `feature_list` `BITMAP` field in `struct pine`
-      itself. Treat this as a two-phase job like the `F_USE_FK` cut:
-      phase 1 collapses `F_CAN_SUSPEND`'s own readers, phase 2 deletes
-      the now-fully-unused feature-bit framework it was the last
-      tenant of.
+- [ ] `pine/mailbox.c` and `pine/imap.c` each have an identical
+      duplicated `bezerk`-write-failure recovery prompt with:
+      `while(!(ch == 1 ? ctrl('Z') : '!' || ch == '\r'))` (found while
+      collapsing `F_CAN_SUSPEND` to always-true -- see
+      `TODO-pdp11-done.md`; the `1` used to be
+      `F_ON(F_CAN_SUSPEND,ps_global)`, which was itself always the
+      same bug). `?:` binds looser than both `==` and `||`, so this
+      actually parses as `(ch == 1) ? ctrl('Z') : ('!' || (ch ==
+      '\r'))` -- and since `'!'` is a nonzero constant, the `else`
+      branch is *always* truthy regardless of `ch`. Combined with the
+      outer `!(...)`, the loop condition is false on the very first
+      keystroke almost no matter what was typed (only `ch==1`, which
+      real key codes essentially never are, takes the `ctrl('Z')`
+      branch) -- so this "keep bleeping until `^Z`/`!`/Return" retry
+      loop actually falls through to the `switch(ch)` below after
+      reading just one keystroke, silently doing nothing for any key
+      besides the three real cases instead of re-prompting. Almost
+      certainly meant `ch == (F_ON(F_CAN_SUSPEND,ps_global) ?
+      ctrl('Z') : '!') || ch == '\r'`.
+    - This is real but low-severity (only reachable via a mailbox
+      write failure, e.g. a full disk, and the visible symptom --
+      accepting a stray keystroke instead of re-bleeping -- is minor).
+      Left as-is rather than fixed inline to keep the `F_CAN_SUSPEND`
+      collapse a pure behavior-preserving substitution; fix both
+      identical sites together, with a real repro (fill the target
+      disk or otherwise force a mailbox write failure) per CLAUDE.md's
+      verification discipline, and add a regression test if the
+      harness can drive it.
 
 ### Turn on Tier 2 warning flags: sign-compare, shadow, strict-prototypes
 

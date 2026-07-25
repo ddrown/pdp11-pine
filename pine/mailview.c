@@ -1384,13 +1384,7 @@ whereis:
           case ctrl('Z'):
             if(!have_job_control())
               goto df;
-            if(F_OFF(F_CAN_SUSPEND,ps_global)) {
-                q_status_message(1, 1, 3,
-                        "\007Pine suspension not enabled - see help text");
-                break;
-            }else {
-                do_suspend(ps_global);
-            }
+            do_suspend(ps_global);
             /*-- Fall through to redraw --*/
 
             /*-------------- refresh -------------*/

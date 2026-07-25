@@ -781,13 +781,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
           case ctrl('Z'):
             if(!have_job_control())
               goto bleep;
-            if(F_OFF(F_CAN_SUSPEND,ps)) {
-                q_status_message(1, 1,3,
-                          "\007Pine suspension not enabled - see help text");
-                break;
-            } else {
-                do_suspend(ps);
-            }
+            do_suspend(ps);
             /* Fall through to redraw-*/
 
 

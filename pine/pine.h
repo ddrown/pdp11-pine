@@ -298,19 +298,6 @@
 #define VAR_SORT_KEY                 vars[V_SORT_KEY].current_val.p
 #define VAR_USE_ONLY_DOMAIN_NAME     vars[V_USE_ONLY_DOMAIN_NAME].current_val.p
 
-/* Feature list support (can have up to LARGEST_BITMAP features) */
-/* Is feature "feature" turned on? */
-#define F_ON(feature,ps)   (bitnset((feature),(ps)->feature_list))
-#define F_OFF(feature,ps)  (!F_ON(feature,ps))
-#define F_TURN_ON(feature,ps)   (setbitn((feature),(ps)->feature_list))
-#define F_TURN_OFF(feature,ps)  (clrbitn((feature),(ps)->feature_list))
-/* turn off or on depending on value */
-#define F_SET(feature,ps,value) ((value) ? F_TURN_ON((feature),(ps))       \
-					 : F_TURN_OFF((feature),(ps)))
-
-/* list of feature numbers (which bit goes with which feature) */
-#define F_CAN_SUSPEND               0
-
 
 
 /*======================================================================
@@ -580,7 +567,6 @@ struct pine {
     unsigned     compose_mime:1;
     unsigned     do_local_lookup:1;  /* look up in passwd even if using
                                            user defined domain */
-    BITMAP       feature_list;       /* a bitmap of all the features */
 
     /*--- Command line flags, modify only on start up ---*/
     unsigned     start_in_index:1;

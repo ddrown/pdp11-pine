@@ -685,13 +685,7 @@ main_menu_screen(pine_state)
           case ctrl('Z'):
             if(!have_job_control())
               goto bleep;
-            if(F_OFF(F_CAN_SUSPEND,pine_state)) {
-                q_status_message(1, 1,3,
-                           "\007Pine suspension not enabled - see help text");
-                break;
-            } else {
-                do_suspend(pine_state);
-            }
+            do_suspend(pine_state);
             /*-- Fall through to redraw --*/
 
           case KEY_RESIZE:
