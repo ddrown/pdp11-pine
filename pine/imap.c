@@ -451,11 +451,7 @@ mm_diskerror (stream, errcode, serious)
             ps_global->last_error);
     d_q_status_message();
     PutLine0(line+1, 0, q); */
-    if(F_ON(F_CAN_SUSPEND,ps_global)) {
-        sprintf(q,  "Press return to retry saving or press ^Z to suspend Pine: ");
-    } else {
-        sprintf(q,  "Press return to retry saving or press ! to get to system prompt: ");
-    }
+    sprintf(q,  "Press return to retry saving or press ^Z to suspend Pine: ");
     PutLine0(line+2, 0, q);
     Writechar('\007');
     ch = strlen(q); /* Use ch temporarily */
@@ -465,7 +461,10 @@ mm_diskerror (stream, errcode, serious)
     MoveCursor(line+2, strlen(q));
 
     ch = read_char(0);
-    while(!(ch == F_ON(F_CAN_SUSPEND,ps_global) ? ctrl('Z') : '!' || ch == '\r')) {
+    /* NB: pre-existing mis-parenthesized ternary, kept as-is -- see
+     * TODO-pdp11.md's note on this site.
+     */
+    while(!(ch == 1 ? ctrl('Z') : '!' || ch == '\r')) {
         Writechar('\007');
         ch = read_char(0);
     }
@@ -479,7 +478,6 @@ mm_diskerror (stream, errcode, serious)
        
       case '!':
         EndInverse();
-        end_keyboard(ps_global != NULL ? F_ON(F_USE_FK,ps_global) : 0);
         end_tty_driver(ps_global);
         printf("\n\nPlease attempt to correct the error preventing the saving of the mail folder.\n");
         printf("For example if the disk is out of space try removing uneeded files.\n");
@@ -489,7 +487,6 @@ mm_diskerror (stream, errcode, serious)
         system("csh");
 
         init_tty_driver(ps_global);
-        init_keyboard(F_ON(F_USE_FK,ps_global));
         MoveCursor(line - 2, 0);
         return (0L); /* go retry it again */
        

@@ -683,8 +683,7 @@ do_sortindex:
         bogus:
           q_status_message2(0, 0, 2,
 	      "\007Command \"%s\" not defined for this screen. Use %s for help",
-                          (void *)pretty_command(orig_command),
-			  F_ON(F_USE_FK,ps_global) ? "F1" : "?");
+                          (void *)pretty_command(orig_command), "?");
           break;
       }
 
@@ -779,7 +778,7 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
 
     /* set up extra command option keys */
     rc = 0;
-    ekey[rc].ch      = (F_ON(F_USE_FK,ps_global)) ? PF4 + rc : ctrl('T');
+    ekey[rc].ch      = ctrl('T');
     ekey[rc].rval    =  2;
     ekey[rc].name    = "^T";
     ekey[rc++].label = "To Fldrs";
@@ -1253,8 +1252,7 @@ broach_folder(qline, allow_list, context)
 
     /* set up extra command option keys */
     rc = 0;
-    ekey[rc].ch  = (allow_list) ? (F_ON(F_USE_FK,ps_global)) 
-					 ? PF4 + rc : ctrl('T') : 0 ;
+    ekey[rc].ch  = (allow_list) ? ctrl('T') : 0;
     ekey[rc].rval    = (allow_list) ? 2 : 0;
     ekey[rc].name    = (allow_list) ? "^T" : "";
     ekey[rc++].label = (allow_list) ? "ToFldrs" : "";
@@ -1508,14 +1506,6 @@ do_broach_folder(new_folder, new_context)
     
     q_status_message1(0, 1, 1, "Opening \"%s\"...", pretty_fn(new_folder));
     display_message('x'); /* So they see the message */
-
-    /* 
-     * if requested, make access to folder readonly (only once)
-     */
-    if (ps_global->open_readonly_on_startup) {
-	openmode |= OP_READONLY ;
-	ps_global->open_readonly_on_startup = 0 ;
-    }
 
     m = context_open((new_context && !open_inbox) ? new_context->context:NULL,
 		     NULL,

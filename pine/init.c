@@ -180,7 +180,6 @@ void
 init_vars(ps)
      struct pine *ps;
 {
-    char	 buf[MAXPATH +1];
     register struct variable *vars = ps->vars;
 
     /*--- The defaults here are defined in os-xxx.h so they can vary
@@ -192,11 +191,6 @@ init_vars(ps)
     vars[V_SAVED_MSG_NAME_RULE].global_val.p = cpystr(DF_SAVED_MSG_NAME_RULE);
     vars[V_SIGNATURE_FILE].global_val.p   = cpystr(DF_SIGNATURE_FILE);
     vars[V_MAIL_DIRECTORY].global_val.p   = cpystr(DF_MAIL_DIRECTORY);
-
-    if(!ps_global->pinerc) {
-      build_path(buf, ps->home_dir, ".pinerc");
-      ps_global->pinerc = cpystr(buf);
-    }
 
     set_current_val(vars, V_INBOX_PATH, TRUE);
 
@@ -346,11 +340,6 @@ process_init_cmds(ps, list)
       sleep(5);
       i = 0;
     }
-
-    if(fkeys && !not_fkeys)
-      F_TURN_ON(F_USE_FK,ps);
-    if(!fkeys && not_fkeys)
-      F_TURN_OFF(F_USE_FK,ps);
 
     ps->initial_cmds = (int *)fs_get((i+1) * sizeof(int));
     for(j = 0; j < i; j++)

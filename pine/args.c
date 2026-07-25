@@ -83,7 +83,7 @@ pine_args(pine_state, argc, argv, addrs)
 {
     register int    ac;
     register char **av;
-    int   a0_len, c;
+    int   c;
     char *str;
     char *folder          = NULL;
     char *cmd_list        = NULL;
@@ -119,26 +119,11 @@ Loop: while(--ac > 0 && **++av == '-') {
 		 case 'h':
 		   do_help = 1;
 		   break;  /* break back to inner-while */
-		 case 'k':
-		   F_TURN_ON(F_USE_FK,pine_state);
-		   break;
-		 case 'z':
-		   F_TURN_ON(F_CAN_SUSPEND,pine_state);
-		   break;
-		 case 'o':
-		   pine_state->open_readonly_on_startup = 1;
-		   break;
 		 case 'i':
 		   pine_state->start_in_index = 1;
 		   break;
-/* JUST WHILETESTINGFOLDERS */
-		 case 'l':
-		   F_TURN_ON(F_EXPANDED_FOLDERS,pine_state);
-		   break;
-/* END OF WHILETESTINGFOLDERS */
 		 /* these take arguments */
-		 case 'f': case 'p': case 'I':  /* string args */
-		 case 'P':  /* also a string */
+		 case 'f': case 'I':  /* string args */
 		 case 'd': case 'n':  /* integer args */
 		   if(*++*av) {
 		      str = *av;
@@ -156,14 +141,6 @@ Loop: while(--ac > 0 && **++av == '-') {
 		       break;
 		     case 'I':
 		       cmd_list = str;
-		       break;
-		     case 'p':
-		       if(str != NULL)
-			  pine_state->pinerc = cpystr(str);
-		       break;
-		     case 'P':
-		       if(str != NULL)
-			  pine_state->pine_conf = cpystr(str);
 		       break;
 #ifdef	DEBUG
 		     case 'd':
@@ -218,17 +195,10 @@ Loop: while(--ac > 0 && **++av == '-') {
 	}
     }
 
-#define PINEF_LEN 5
-    a0_len = strlen(argv[0]);
-    if(a0_len >= PINEF_LEN && strcmp(argv[0]+a0_len-PINEF_LEN, "pinef") == 0)
-        F_TURN_ON(F_USE_FK,pine_state);
-
     if(do_help || usage)
-      args_help(); 
+      args_help();
     if(usage)
       exit(-1);
-
-    pine_state->orig_use_fkeys = F_ON(F_USE_FK,pine_state);
 
     pine_state->show_folders_dir = 0;
 
@@ -260,18 +230,11 @@ args_help(void)
 #endif
 	printf("\t -f <folder>\tFolder - give folder name to open\n");
 	printf("\t -h \t\tHelp - give this list of options\n");
-	printf("\t -k \t\tKeys - Force use of function keys\n");
-	printf("\t -z \t\tSuspend - allow use of ^Z suspension\n");
         printf("\t -sort <sort> \tSort - Specify sort order of folder:\n");
         printf("\t\t\t        subject, arrival, date, from, size, /reverse\n");
         printf("\t -i\t\tIndex - Go directly to index, bypassing mail menu\n");
         printf("\t -I <keystroke_list>\tInitial keystrokes to be executed\n");
         printf("\t -n <number>\tEntry in index to begin on\n");
-	printf("\t -o \t\tReadOnly - Open first folder read-only\n");
-        printf("\t -p <pinerc>\tSpecify alternate .pinerc file\n");
-        printf("\t -P <pine.conf>\tSpecify alternate pine.conf file\n");
-/* WHILE TESTING FOLDERS */
-printf("\t -l\t\tList - Expand List of folder collections by default\n");
 	printf("\n");
 	printf("\n");
 	exit(1);

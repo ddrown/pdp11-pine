@@ -5344,3 +5344,318 @@ outright rather than just correcting its type.
   item (this session's `repeat_char()` repro was done ad hoc per
   CLAUDE.md's existing manual process, underscoring that a real build
   target would make this kind of check routine instead of one-off).
+
+### Remove `-k`/`F_USE_FK`/`init_keyboard`/`end_keyboard`
+
+This target is a UUCP-connected local station: real serial terminals
+or a Linux console, never NCSA Telnet on a PC. `init_keyboard()`/
+`end_keyboard()` (`ttyin.c`) sent `ESC[99h`/`ESC[99l` to put a vt100's
+keypad in "function key" mode, but only when `termname` (from
+`$TERM`/`tgetent()`) was exactly `"vt100"` or `"vt102"` *and*
+`F_USE_FK` was on -- and `F_USE_FK` defaults off, only ever turned on
+by the `-k` flag or a `pinef` argv0 alias. The function's own comment
+self-describes the sequence as "a hack for NCSA telnet on an IBM PC,"
+not a standard DEC keypad-mode escape (real DECKPAM/DECKPNM is
+`ESC=`/`ESC>`). Asked by the user whether this machinery was needed
+for real vt100 hardware or a Linux console; the answer was no for
+either, so removed `-k`, `F_USE_FK`, and `init_keyboard`/
+`end_keyboard` entirely, collapsing every reader to its permanent
+`F_USE_FK`-off outcome.
+
+- **`pine/ttyin.c`**: deleted `init_keyboard()`/`end_keyboard()` and
+  the `extern char termname[]` used only by them. Collapsed
+  `optionally_enter()`'s `PF2`/`PF3`/`^C` cases (PF2 now always
+  bleeps instead of acting as Enter; PF3 now always bleeps instead of
+  conditionally cancelling; `^C` cancels unless `disallow_cancel`) and
+  `validatekeys()` (PF1-PF12 are now unconditionally `KEY_JUNK`, since
+  function-key input mode can no longer be active). Removed the
+  now-dead `F_SET(F_USE_FK,...)` restore in `read_char()`'s
+  initial-command-sequence handling, and the `end_keyboard()` call in
+  `read_with_timeout()`'s fatal-read-error path.
+- **`pine/args.c`**: removed the `-k` flag's `case 'k'` handler, its
+  `args_help()` line, the `pinef` argv0-suffix alias that also set
+  `F_USE_FK`, and the now-unused `a0_len` local that alias needed.
+- **`pine/pine.h`**: removed the `F_USE_FK` feature-bit `#define`
+  (bit 2, numerically last, so no renumbering needed) and the
+  `orig_use_fkeys:1` bitfield from `struct pine` -- it existed solely
+  to save/restore `F_USE_FK` around the composer subprocess call and
+  has no other reader once `F_USE_FK` is gone.
+- **`pine/init.c`**: removed `process_init_cmds()`'s two
+  `F_TURN_ON`/`F_TURN_OFF(F_USE_FK,...)` calls; `fkeys`/`not_fkeys`
+  stay, still used by the "can't mix characters and function keys"
+  error check above them.
+- **`pine/imap.c`, `pine/mailbox.c`, `pine/signals.c`**: removed the
+  paired `end_keyboard()`/`init_keyboard()` calls bracketing the
+  disk-full "drop to a shell" escape hatch (`imap.c`/`mailbox.c`, two
+  near-identical copies of the same retry function) and `do_suspend()`
+  (`signals.c`).
+- **`pine/pine.c`**: removed the startup `init_keyboard()` call and
+  four more `end_keyboard()` sites (address-on-command-line exit,
+  folder-open failure, `quit_screen()`, `panic()`); collapsed the
+  default-command-key ternary (`ch = F_ON(F_USE_FK,...) ? f_key :
+  key`) to always use `key`; collapsed the "command not defined" `"F1"
+  : "?"` ternary to always `"?"`; collapsed `show_main_screen()`'s
+  keymenu-name ternary (`f_key` vs `key`) to always `key`; removed
+  `do_menu()`'s `use_fkeys` local and its `""  : pretty_command(key)`
+  ternary, always showing the key name now. Since `mkeys[].f_key` had
+  no readers left anywhere after these collapses, removed the
+  `f_key` field from `struct menu_key` and its value from all 11
+  `mkeys[]` initializer entries (chain-reaction orphaned-field
+  cleanup, same pattern as prior buckets).
+- **`pine/send.c`**: removed the dead `F_SET(F_USE_FK,...)` restore
+  in the composer's initial-command-sequence-cancel block, and the
+  `pine_flags |= F_ON(F_USE_FK,...) ? P_FKEYS : 0` line (pico's own
+  `-k`/`MDFKEY` toggle in `main.c` is independent and untouched --
+  this only removed pine's now-permanently-false contribution).
+- **`pine/mailcmd.c`, `pine/mailview.c`**: collapsed three more
+  `"F1" : "?"`/`PF4+rc : ctrl('T')` ternaries (bogus-command message
+  in `mailcmd.c` and `mailview.c`; the save-to-folder `^T` extra-key
+  setup in `mailcmd.c`, two sites) to their `F_USE_FK`-off half.
+- **`pine/screen.c`**: `output_keymenu()` and `format_keymenu()` had
+  the deepest `ufk` (`F_ON(F_USE_FK,...)`) entanglement -- column-width
+  math throughout `format_keymenu()` branched between `strlen(name)`
+  (alpha labels) and a fixed `2`/`3` width (`"F1"`.."F12"` labels).
+  Removed the `ufk`/`fkey` locals in both functions and collapsed
+  every branch to the alpha-label arithmetic; also collapsed
+  `format_keymenu()`'s cache-invalidation condition -- previously
+  `(F_ON(...) && orig_use_fkeys) || (F_OFF(...) && !orig_use_fkeys)`,
+  which is unconditionally true once both operands are permanently
+  false -- to just always refreshing the cached width/bitmap.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 164 warnings
+  both before and after (the pre-existing Tier 2 `-Wshadow`/
+  `-Wsign-compare` set -- none new, confirming no orphaned
+  locals/params were left behind by the collapses). Full smoketest
+  suite, 26/26. Manually drove a raw-pty session: Main Menu and its
+  keymenu footer show plain alpha key names (`?`/`C`/`I`/`L`/`S`/`Q`),
+  never `F1`-style labels; a bogus command (`9`) produces `Command
+  "9" not defined for this screen. Use ? for help` (not `Use F1 for
+  help`); `q` still raises the `Really quit pine` confirmation and
+  `n` still cancels back to the Main Menu.
+- **Size delta**: `bin/pine` text 818456 -> 816608 (-1848 bytes) --
+  a real win, since most of this code (the `screen.c` keymenu-layout
+  math especially) was genuinely compiled, not preprocessor-stripped.
+
+### Remove `-l`/`-p`/`-P` and their dead `F_EXPANDED_FOLDERS`/`pinerc`/`pine_conf` backing fields
+
+Follow-on survey of every remaining `pine/args.c` flag, asking of each
+"does anything still read the state this sets?" Three didn't:
+
+- **`-l`** (`F_EXPANDED_FOLDERS`): grepped the entire tree for any
+  `F_ON(F_EXPANDED_FOLDERS,...)` reader -- there was none, anywhere,
+  ever (unlike `F_USE_FK`, which at least had real readers before
+  this project turned them all off). The surrounding `/* JUST
+  WHILETESTINGFOLDERS */`/`/* END OF WHILETESTINGFOLDERS */` comments
+  suggest this was UW-internal test scaffolding that never got wired
+  to anything. Removed the `-l` case, its `args_help()` line, and the
+  `F_EXPANDED_FOLDERS` `#define` (bit 1; `F_CAN_SUSPEND`, bit 0, is
+  now the only feature bit left).
+- **`-p <pinerc>`**/**`-P <pine.conf>`**: both just stored a path into
+  `pine_state->pinerc`/`pine_conf`, but `read_pinerc()` -- the only
+  function that would ever open either path -- was already deleted
+  entirely in an earlier session ("Removed `read_pinerc()` and
+  `first_time_user` entirely", above). Grepped for every `->pinerc`/
+  `->pine_conf` reference: only the `-p`/`-P` writes themselves and
+  `init.c`'s `if(!ps_global->pinerc) build_path(...)` default-path
+  fallback (itself just populating a field nothing reads). Removed
+  both flag cases, their `args_help()` lines, the `pinerc`/`pine_conf`
+  fields from `struct pine` (`pine.h`), and `init_vars()`'s default-path
+  block along with the now-unused `buf[MAXPATH+1]` local it needed.
+- **Kept**: `-h`, `-z` (`F_CAN_SUSPEND`, real job-control suspend),
+  `-i`/`-n` (`start_in_index`/`start_entry`, read in `pine.c`/
+  `init.c`/`mailcmd.c`), `-o` (`open_readonly_on_startup`, read in
+  `mailcmd.c`), `-f` (folder to open), `-sort`, `-I` (initial
+  keystrokes, drives `process_init_cmds()`), and `-d` (already
+  `#ifdef DEBUG`-gated, feeds `dprint()`) -- all confirmed to have
+  real live consumers.
+- **Test harness fallout**: `test/smoketest.py`'s `Session` was
+  unconditionally passing `-p <tmp-path>` to every spawned `bin/pine`
+  (to isolate `.pinerc` reads from a real one, back when
+  `read_pinerc()` still existed) -- with `-p` gone this made every
+  single test hit `args.c`'s `default: ... ++usage;` path and exit
+  via `args_help()`, dropping the suite from 26/26 to 2/26. Fixed by
+  no longer passing `-p` at all and just writing the seed `.pinerc` to
+  the conventional `$HOME/.pinerc` path when a test asks for one --
+  `test_pinerc_not_parsed.py` still writes there and still confirms
+  the content is never consulted, since nothing reads that path by
+  any mechanism now. Updated both files' stale comments (referencing
+  the since-fully-removed `read_pinerc()`/`first_time_user`) to match.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 52 warnings
+  before and after (this merge's post-`two/main` baseline -- none
+  new). Full smoketest suite, 26/26 (after the harness fix above;
+  first run without it caught the `-p` breakage immediately).
+- **Size delta**: `bin/pine` text 816328 -> 815600 (-728 bytes).
+
+### Remove `test_pinerc_not_parsed`, its `.pinerc` seeding, and disable `-DDEBUG`
+
+Follow-on to the `-p`/`-P` removal above. Two more loose ends:
+
+- **`test/cases/test_pinerc_not_parsed.py`**: now that `-p` is gone
+  and nothing reads `.pinerc` by any mechanism, this test's own
+  premise (seed a `.pinerc`, confirm it's ignored) has nothing left
+  to guard against -- there's no code path left that could regress
+  into reading it. Deleted the test case, and removed
+  `test/smoketest.py`'s `Session(pinerc=...)` parameter and its
+  `.pinerc`-file-writing logic (its only caller).
+- **`pine/makefile.lnx`**: `DEBUG=-g -DDEBUG` unconditionally compiled
+  in the `-DDEBUG` preprocessor define, which is what makes `dprint()`
+  (`pine.h`) expand to a real `fprintf`-to-`debugfile` call instead of
+  its no-op `#else` branch -- so hundreds of `dprint(...)` call sites
+  throughout the tree, plus the `-d`/debug-level argv handling and the
+  `debug`/`debugfile` globals, were all being compiled into every dev
+  build. Changed `DEBUG=` to just `-g` (keeping debug symbols for
+  gdb, dropping the `DEBUG` macro itself). Every `#ifdef DEBUG` site
+  checked beforehand was already cleanly gated (`headers.h`'s
+  `debug`/`debugfile` externs, `pine.h`'s `init_debug()` prototype,
+  `args.c`'s `-d` case), so no orphaned-reference fallout.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 52 warnings
+  (unchanged -- the dropped `dprint()` call sites weren't warning
+  sources). Full smoketest suite, 25/25 (one fewer than before,
+  matching the deleted test case).
+- **Size delta**: `bin/pine` text 815600 -> 780448 (**-35152 bytes**)
+  -- by far the largest single-change win in this project so far,
+  confirming `dprint()`'s hundreds of call sites (format strings,
+  `debugfile`/`debug` checks, the arguments computed just to log them)
+  were real compiled weight, not preprocessor-stripped noise. Left
+  the underlying `DEBUG`-gated machinery itself in place -- see the
+  new TODO to investigate removing it outright rather than just
+  disabling the build define.
+
+### Remove `NFSKLUDGE` -- irrelevant for a local-mbox-only, no-NFS target
+
+`imap/ANSI/c-client/bezerk.c`'s `bezerk_lock()` had an `#ifdef
+NFSKLUDGE ... #else ... #endif` pair choosing between two mailbox-
+lock-file creation strategies: `NFSKLUDGE`'s "hitching post" temp-file-
+plus-`link()` dance (needed only because NFS's `O_EXCL` isn't reliably
+atomic over the wire) versus a plain `open(...,O_EXCL,...)`, which is
+atomic and sufficient on any real local filesystem. `NFSKLUDGE` was
+`#define`'d in `os_lnx.h` (this build's dev target) but **not** in
+`os_bsi.h` (the closest existing precedent among the other-platform
+headers to the eventual 2.11BSD cross-build) -- confirming it was
+wrong for this no-NFS, local-mbox-only, UUCP-connected target, dev
+build included.
+
+- **What changed**: removed `#define NFSKLUDGE` from `os_lnx.h`, then
+  collapsed `bezerk_lock()`'s `#ifdef NFSKLUDGE`/`#else`/`#endif` down
+  to just the `#else` (plain `O_EXCL`) body -- deleted the opening
+  `#ifdef NFSKLUDGE` line through the `#else` line (the entire
+  hitching-post branch, ~32 lines including its "SUN-OS had an NFS...
+  kludgy as an albatross" comment), and the closing `#endif`. Left
+  `j` declared (`int fd,ld,j;`) since it's reused later in the same
+  function (`j = errno;` in the error-path cleanup) independent of
+  either branch. `imap/ANSI/c-client/osdep.h` is a gitignored
+  build-time hard link of `os_lnx.h` (`ln os_lnx.h osdep.h`, same
+  pattern as `pine/os.c`), so it picked up the change automatically on
+  rebuild -- no separate edit needed. The other `os_*.h` variants that
+  still define `NFSKLUDGE` (`os_a32.h`/`os_aix.h`/`os_nxt.h`/
+  `os_osf.h`) are other-platform portability reference material,
+  untouched per this project's established precedent.
+- **Verified**: unlike most `#ifdef` collapses here, this changes
+  *live, exercised* locking behavior, not a dead branch -- so beyond
+  `./build clean && ./build lnx` (exit 0, 52 warnings, unchanged) and
+  the full smoketest suite (25/25), manually drove real lock
+  contention: pre-created a fresh `<mbox>.lock` file, launched
+  `bin/pine -f <mbox>` against it via a raw pty, and confirmed it hit
+  the `EEXIST` branch and printed the periodic "Folder ... is locked,
+  will override in N seconds..." status message (correctly timed to
+  the retry loop's `i%15==0`/`LOCKTIMEOUT`-derived cadence, confirming
+  the surrounding retry-loop bookkeeping the edit sits inside was
+  untouched); removed the lock file mid-wait and confirmed the retry
+  loop picked it up and opened the folder normally (reached MAIN
+  MENU); confirmed pine's own lock file was cleaned up on quit.
+- **Size delta**: `bin/pine` text 780448 -> 780168 (-280 bytes).
+
+### Remove read-only mode (`-o` flag)
+
+`-o` (`pine/args.c`) set `pine_state->open_readonly_on_startup`,
+consumed exactly once (`mailcmd.c`, ~line 1513) to OR `OP_READONLY`
+into the first startup folder-open's mode flags, then self-clear.
+Grepped the whole tree for `OP_READONLY`: that one site was the
+*only* place it was ever passed to `mail_open()`/`context_open()`
+anywhere in this codebase -- no other caller, no pinerc-driven
+default, nothing. On a single-user local mail station there's no
+concurrent-access reason to defensively open read-only, so removed
+the flag entirely.
+
+- **What changed**: removed `args.c`'s `case 'o'` and its
+  `args_help()` line, `pine.h`'s `open_readonly_on_startup:1`
+  bitfield, and `mailcmd.c`'s `if(ps_global->open_readonly_on_startup)
+  { openmode |= OP_READONLY; ... }` block. `openmode` itself stays --
+  it's also OR'd with `OP_DEBUG` a few lines earlier, so it remains a
+  live, meaningful local.
+- **Left untouched (confirmed genuinely separate)**: `MAILSTREAM`'s
+  general `->readonly` field has its own independent setters --
+  `bezerk.c`'s `bezerk_open()` sets it itself when the lock-file
+  couldn't be acquired (`stream->readonly = !LOCAL->ld;`, a real
+  runtime permission/contention detection, nothing to do with `-o`)
+  and when the mailbox name starts with `*`; `pine/signals.c` sets it
+  directly during crash/dead-stream cleanup. All of `->readonly`'s
+  readers (`mailcmd.c`, `mailview.c`, `newmail.c`, `screen.c`'s
+  titlebar `ReadOnly`/`Normal` display) don't care why a stream is
+  readonly, so they're unaffected either way. Verified via grep that
+  `OP_READONLY` had exactly one setter in the entire tree before this
+  change (the one just removed) and zero after.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 52 warnings
+  (unchanged). Full smoketest suite, 25/25 -- none of them exercised
+  `-o`, so no manual live-behavior check was needed beyond confirming
+  every test's normal (non-`-o`) folder-open still works, which the
+  suite already covers extensively.
+- **Size delta**: `bin/pine` text 780168 -> 779840 (-328 bytes).
+
+### Make suspend (`^Z`) the default, remove the `-z` flag
+
+`-z` (`pine/args.c`) turned on the `F_CAN_SUSPEND` feature bit,
+checked at ~10 call sites almost always paired with a
+`have_job_control()` check (`pine/os.c`, unconditionally returns 1 on
+this Linux target) that already tests the real runtime capability.
+2.11BSD has job control, so made `^Z` suspend always available
+(equivalent to always passing `-z`) and removed the flag, as a
+two-phase job like the `F_USE_FK` cut.
+
+- **Phase 1** -- collapsed every `F_ON(F_CAN_SUSPEND,...)`/
+  `F_OFF(F_CAN_SUSPEND,...)` site to its fixed-true outcome:
+  - `pine/args.c`: removed the `-z` case and its `args_help()` line.
+  - `pine/mailbox.c`, `pine/imap.c` (identical duplicated disk-full
+    "drop to shell" recovery prompt): collapsed the `if(F_ON(...)){^Z
+    prompt} else {! prompt}` to always show the `^Z` prompt. The
+    second site, `while(!(ch == F_ON(F_CAN_SUSPEND,ps_global) ?
+    ctrl('Z') : '!' || ch == '\r'))`, turned out to already be a
+    mis-parenthesized ternary (see the new TODO) -- substituted the
+    literal `1` for the macro call to preserve the exact existing
+    (buggy) behavior rather than silently fixing an unrelated bug
+    as a side effect of this collapse.
+  - `pine/mailindx.c`, `pine/folder.c`, `pine/mailview.c`, `pine/pine.c`
+    (four near-identical `case ctrl('Z'): if(!have_job_control())
+    goto <bleep-label>; if(F_OFF(F_CAN_SUSPEND,...)){message; break;}
+    else {do_suspend(...);}` sites): collapsed to unconditionally
+    calling `do_suspend(...)`, dropping the "Pine suspension not
+    enabled" message branch entirely.
+  - `pine/status.c`: `if(!have_job_control() ||
+    F_OFF(F_CAN_SUSPEND,ps_global))` collapsed to just
+    `if(!have_job_control())`.
+  - `pine/ttyin.c` (`optionally_enter()`'s `^Z` case): `if(F_ON(...))
+    {suspend} else {goto bleep;}` collapsed to the suspend body
+    unconditionally.
+  - `pine/send.c`: `pine_flags |= (F_ON(F_CAN_SUSPEND,...)) ?
+    P_SUSPEND : 0;` collapsed to `pine_flags |= P_SUSPEND;`.
+- **Phase 2** -- with `F_CAN_SUSPEND` gone, grepped for any remaining
+  `F_ON`/`F_OFF`/`F_TURN_ON`/`F_TURN_OFF`/`F_SET`/`feature_list`
+  reference and found none, confirming it really was the last tenant
+  of the feature-list framework. Deleted all five macros, the
+  `F_CAN_SUSPEND` `#define`, and the `feature_list` `BITMAP` field
+  from `struct pine` (`pine.h`) -- the entire abstraction is gone.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 52 warnings
+  (unchanged). Full smoketest suite, 25/25. Since this makes `^Z`
+  suspend *live* behavior for the first time by default (previously
+  only reachable via `-z`), drove a real pty session past a clean
+  rebuild: sent `^Z`, confirmed `bin/pine`'s process actually entered
+  the kernel's `T (stopped)` state (`/proc/<pid>/status`) right after
+  the "Pine suspended. Give the \"fg\" command to come back." message
+  -- i.e. `stop_process()`'s real `kill(0, SIGSTOP)` fired, not just
+  the message -- then sent `SIGCONT` and confirmed the process
+  returned to `S (sleeping)` and pine correctly redrew back to MAIN
+  MENU (`init_screen()`/`init_tty_driver()` reinitialization intact).
+- **Discovered but not fixed**: the mis-parenthesized ternary in
+  `mailbox.c`/`imap.c` noted above -- added as its own TODO rather
+  than fixed inline, since fixing it needs a dedicated repro (forcing
+  a mailbox write failure) independent of this task.
+- **Size delta**: `bin/pine` text 779840 -> 779024 (-816 bytes).

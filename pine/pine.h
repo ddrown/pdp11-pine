@@ -298,21 +298,6 @@
 #define VAR_SORT_KEY                 vars[V_SORT_KEY].current_val.p
 #define VAR_USE_ONLY_DOMAIN_NAME     vars[V_USE_ONLY_DOMAIN_NAME].current_val.p
 
-/* Feature list support (can have up to LARGEST_BITMAP features) */
-/* Is feature "feature" turned on? */
-#define F_ON(feature,ps)   (bitnset((feature),(ps)->feature_list))
-#define F_OFF(feature,ps)  (!F_ON(feature,ps))
-#define F_TURN_ON(feature,ps)   (setbitn((feature),(ps)->feature_list))
-#define F_TURN_OFF(feature,ps)  (clrbitn((feature),(ps)->feature_list))
-/* turn off or on depending on value */
-#define F_SET(feature,ps,value) ((value) ? F_TURN_ON((feature),(ps))       \
-					 : F_TURN_OFF((feature),(ps)))
-
-/* list of feature numbers (which bit goes with which feature) */
-#define F_CAN_SUSPEND               0
-#define F_EXPANDED_FOLDERS          1
-#define F_USE_FK                    2
-
 
 
 /*======================================================================
@@ -571,7 +556,6 @@ struct pine {
     unsigned     save_by_recipient:1;
     unsigned     save_by_last_saved:1;
     unsigned     full_header:1;         /* display full headers */
-    unsigned     orig_use_fkeys:1;
 
     unsigned     try_to_create:1;     /* flag to try mail_create during save */
     unsigned     use_full_hostname:1; /* Use full hostname vs just domain */
@@ -583,7 +567,6 @@ struct pine {
     unsigned     compose_mime:1;
     unsigned     do_local_lookup:1;  /* look up in passwd even if using
                                            user defined domain */
-    BITMAP       feature_list;       /* a bitmap of all the features */
 
     /*--- Command line flags, modify only on start up ---*/
     unsigned     start_in_index:1;
@@ -594,7 +577,6 @@ struct pine {
 
     unsigned     painted_body_on_startup:1;
     unsigned     painted_footer_on_startup:1;
-    unsigned     open_readonly_on_startup:1;
 
     int         *initial_cmds;         /* cmds to execute on startup */
 
@@ -608,9 +590,7 @@ struct pine {
                 *localdomain,    /* The (DNS) domain this host resides in */
                 *userdomain,     /* The per user domain from .pinerc or */
                 *maildomain,     /* Domain name for most uses */
-                *pine_exe,	 /* argv[0], used to find sibling pico */
-                *pine_conf,	 /* Location of global pine.conf */
-                *pinerc;	 /* Location of user's pinerc */
+                *pine_exe;	 /* argv[0], used to find sibling pico */
 
     SortOrder    sort_order, current_sort_order,
                  sort_types[20];
@@ -975,8 +955,6 @@ int optionally_enter(char *,int,int,int,int,int,char *,ESCKEY_S *,HelpType,int);
 int init_tty_driver(struct pine *);
 void end_tty_driver(struct pine *);
 int Raw(int);
-void end_keyboard(int);
-void init_keyboard(int);
 int validatekeys(int);
 
 /*-- ttyout.c --*/

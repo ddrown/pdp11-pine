@@ -416,13 +416,7 @@ mail_index_screen(state)
           case ctrl('Z'):
             if(!have_job_control())
               goto df;
-            if(F_OFF(F_CAN_SUSPEND,state)) {
-                q_status_message(1, 1, 3,
-                            "\007Pine suspension not enabled - see help text");
-                break;
-            } else {
-                do_suspend(state);
-            }
+            do_suspend(state);
             /*-- Fall through to redraw --*/
 
             /*---------- Redraw/resize ----------*/
