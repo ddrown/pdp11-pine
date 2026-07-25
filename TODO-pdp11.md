@@ -36,24 +36,6 @@ DONE elsewhere or referenced in passing below.
       done) so production/size-measurement builds never pay for it by
       accident.
 
-### Remove read-only mode (`-o` flag)
-
-- [ ] `-o` (`pine/args.c`) sets `pine_state->open_readonly_on_startup`,
-      consumed exactly once in `mailcmd.c` (~line 1513) to OR
-      `OP_READONLY` into the mail-open flags for the first folder
-      opened at startup, then self-clears (`= 0`) so it only applies
-      once. Given this target is a single-user local mail station (no
-      concurrent multi-user access to worry about, no reason to open
-      defensively read-only), investigate whether this feature is
-      worth keeping at all.
-    - **Careful**: this is distinct from `MAILSTREAM`'s general
-      `->readonly` field (c-client, used more broadly -- e.g.
-      `signals.c` sets a stream `readonly` after certain crash/dead-
-      stream cleanup paths, `mailcmd.c`/`mailview.c`/`screen.c` check
-      it for display/UI purposes). Only `-o` and
-      `open_readonly_on_startup` are the removal target; the general
-      readonly-stream machinery those other sites use stays untouched.
-
 ### Make suspend (`^Z`) the default, remove the `-z` flag
 
 - [ ] `-z` (`pine/args.c`) turns on the `F_CAN_SUSPEND` feature bit,

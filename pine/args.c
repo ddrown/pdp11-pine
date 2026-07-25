@@ -122,9 +122,6 @@ Loop: while(--ac > 0 && **++av == '-') {
 		 case 'z':
 		   F_TURN_ON(F_CAN_SUSPEND,pine_state);
 		   break;
-		 case 'o':
-		   pine_state->open_readonly_on_startup = 1;
-		   break;
 		 case 'i':
 		   pine_state->start_in_index = 1;
 		   break;
@@ -242,7 +239,6 @@ args_help(void)
         printf("\t -i\t\tIndex - Go directly to index, bypassing mail menu\n");
         printf("\t -I <keystroke_list>\tInitial keystrokes to be executed\n");
         printf("\t -n <number>\tEntry in index to begin on\n");
-	printf("\t -o \t\tReadOnly - Open first folder read-only\n");
 	printf("\n");
 	printf("\n");
 	exit(1);

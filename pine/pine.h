@@ -591,7 +591,6 @@ struct pine {
 
     unsigned     painted_body_on_startup:1;
     unsigned     painted_footer_on_startup:1;
-    unsigned     open_readonly_on_startup:1;
 
     int         *initial_cmds;         /* cmds to execute on startup */
 

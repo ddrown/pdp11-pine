@@ -1507,14 +1507,6 @@ do_broach_folder(new_folder, new_context)
     q_status_message1(0, 1, 1, "Opening \"%s\"...", pretty_fn(new_folder));
     display_message('x'); /* So they see the message */
 
-    /* 
-     * if requested, make access to folder readonly (only once)
-     */
-    if (ps_global->open_readonly_on_startup) {
-	openmode |= OP_READONLY ;
-	ps_global->open_readonly_on_startup = 0 ;
-    }
-
     m = context_open((new_context && !open_inbox) ? new_context->context:NULL,
 		     NULL,
 		     (open_inbox) ? ps_global->VAR_INBOX_PATH : expanded_file,

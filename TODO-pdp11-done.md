@@ -5445,3 +5445,40 @@ build included.
   loop picked it up and opened the folder normally (reached MAIN
   MENU); confirmed pine's own lock file was cleaned up on quit.
 - **Size delta**: `bin/pine` text 780448 -> 780168 (-280 bytes).
+
+### Remove read-only mode (`-o` flag)
+
+`-o` (`pine/args.c`) set `pine_state->open_readonly_on_startup`,
+consumed exactly once (`mailcmd.c`, ~line 1513) to OR `OP_READONLY`
+into the first startup folder-open's mode flags, then self-clear.
+Grepped the whole tree for `OP_READONLY`: that one site was the
+*only* place it was ever passed to `mail_open()`/`context_open()`
+anywhere in this codebase -- no other caller, no pinerc-driven
+default, nothing. On a single-user local mail station there's no
+concurrent-access reason to defensively open read-only, so removed
+the flag entirely.
+
+- **What changed**: removed `args.c`'s `case 'o'` and its
+  `args_help()` line, `pine.h`'s `open_readonly_on_startup:1`
+  bitfield, and `mailcmd.c`'s `if(ps_global->open_readonly_on_startup)
+  { openmode |= OP_READONLY; ... }` block. `openmode` itself stays --
+  it's also OR'd with `OP_DEBUG` a few lines earlier, so it remains a
+  live, meaningful local.
+- **Left untouched (confirmed genuinely separate)**: `MAILSTREAM`'s
+  general `->readonly` field has its own independent setters --
+  `bezerk.c`'s `bezerk_open()` sets it itself when the lock-file
+  couldn't be acquired (`stream->readonly = !LOCAL->ld;`, a real
+  runtime permission/contention detection, nothing to do with `-o`)
+  and when the mailbox name starts with `*`; `pine/signals.c` sets it
+  directly during crash/dead-stream cleanup. All of `->readonly`'s
+  readers (`mailcmd.c`, `mailview.c`, `newmail.c`, `screen.c`'s
+  titlebar `ReadOnly`/`Normal` display) don't care why a stream is
+  readonly, so they're unaffected either way. Verified via grep that
+  `OP_READONLY` had exactly one setter in the entire tree before this
+  change (the one just removed) and zero after.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 52 warnings
+  (unchanged). Full smoketest suite, 25/25 -- none of them exercised
+  `-o`, so no manual live-behavior check was needed beyond confirming
+  every test's normal (non-`-o`) folder-open still works, which the
+  suite already covers extensively.
+- **Size delta**: `bin/pine` text 780168 -> 779840 (-328 bytes).
