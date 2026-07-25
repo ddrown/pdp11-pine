@@ -190,7 +190,7 @@
 			    else					      \
 			      faf_msgno = 1L;				      \
 									      \
-			    if(faf_msgno < s->nmsgs){			      \
+			    if(faf_msgno < (long)s->nmsgs){		      \
 				char         faf_sequence[48];		      \
 									      \
 				sprintf(faf_sequence,"%ld:%ld", faf_msgno, s->nmsgs); \

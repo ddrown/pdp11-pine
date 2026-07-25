@@ -1124,7 +1124,7 @@ optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
             /* Make string so it will fit */
             kb = cpystr(kill_buffer);
             dprint(2, (debugfile, "Undelete: %d %d\n", (int) strlen(string), field_len));
-            if(strlen(kb) + strlen(string) > field_len)
+            if(strlen(kb) + strlen(string) > (size_t)field_len)
                 kb[field_len - strlen(string)] = '\0';
             dprint(2, (debugfile, "Undelete: %d %d\n", (int) (field_len - strlen(string)),
                        (int) strlen(kb)));

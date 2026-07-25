@@ -326,7 +326,6 @@ yank(int f, int n)
 {
     register int    c;
     register int    i;
-    extern   int    kused;
 
     if (curbp->b_mode&MDVIEW)	/* don't allow this command if	*/
       return(rdonly());	/* we are in read only mode	*/

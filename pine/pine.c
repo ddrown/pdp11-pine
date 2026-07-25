@@ -1040,7 +1040,7 @@ count_deleted(stream)
 
     FETCH_ALL_FLAGS(stream);
 
-    for(i = 0 ; i < stream->nmsgs; i++) {
+    for(i = 0 ; i < (int)stream->nmsgs; i++) {
 	mc = mail_elt(stream, (long)(i+1));
         if(mc != NULL && mc->deleted)
           delete_count++;
@@ -1070,7 +1070,7 @@ count_seen_not_deleted(stream)
 
     FETCH_ALL_FLAGS(stream);
 
-    for(i = 0 ; i < stream->nmsgs; i++) {
+    for(i = 0 ; i < (int)stream->nmsgs; i++) {
 	mc = mail_elt(stream, (long)(i+1));
         if(mc != NULL && mc->seen && !mc->deleted)
           cnt++;
@@ -1096,13 +1096,13 @@ first_sorted_unread(stream )
 
     FETCH_ALL_FLAGS(stream);
 
-    for(i = 1 ; i <= stream->nmsgs; i++) {
+    for(i = 1 ; i <= (MsgNo)stream->nmsgs; i++) {
 	mc = mail_elt(stream, (long)(ps_global->sort[i]));
         if(mc != NULL && !mc->seen && !mc->deleted)
           break;
     }
-    if(i > stream->nmsgs)
-      i = stream->nmsgs;
+    if(i > (MsgNo)stream->nmsgs)
+      i = (MsgNo)stream->nmsgs;
     dprint(4, (debugfile, "First unseen returning %ld\n", (long)i));
     return(i);
 }
@@ -1134,7 +1134,7 @@ next_sorted_un(stream, start, found_is_new, read_or_deleted)
 
     FETCH_ALL_FLAGS(stream);
 
-    for(i = start ; i <= stream->nmsgs; i++) {
+    for(i = start ; i <= (MsgNo)stream->nmsgs; i++) {
 	mc = mail_elt(stream, (long)(ps_global->sort[i]));
         if(mc != NULL && !mc->deleted && (read_or_deleted || !mc->seen)) {
             if(found_is_new)
@@ -1144,7 +1144,7 @@ next_sorted_un(stream, start, found_is_new, read_or_deleted)
         }
     }
 
-    return(min(i, stream->nmsgs));
+    return(min(i, (MsgNo)stream->nmsgs));
 }
 
 

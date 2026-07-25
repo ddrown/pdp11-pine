@@ -916,9 +916,9 @@ modeline(WINDOW *wp)
 	    sprintf(tline," File: ");
 	    cp = &bp->b_fname[0];
 
-	    if(strlen(cp) > (term.t_ncol-n-22)){   /* room for full path ? */
+	    if((int)strlen(cp) > (term.t_ncol-n-22)){   /* room for full path ? */
 		strcat(tline,".../");
-		while(strlen(cp) >= (term.t_ncol-n-22)){
+		while((int)strlen(cp) >= (term.t_ncol-n-22)){
 		    if(strchr(cp,'/') == NULL)
 		      cp = (char *)strchr(&bp->b_fname[0],'\0')-term.t_ncol-n-22;
 		    else
@@ -967,7 +967,7 @@ modeline(WINDOW *wp)
 	  cp = "          ";
 
 	c.c = lchar;
-	while (n < (term.t_ncol - strlen(cp))){	    /* Pad to full width. */
+	while (n < (term.t_ncol - (int)strlen(cp))){	    /* Pad to full width. */
 	    vtputc(c);
 	    ++n;
         }
@@ -1249,7 +1249,7 @@ mlreplyd(char *prompt, char *buf, int nbuf, int flg)
 	    return(changed);
 
 	  default : 
-	    if(strlen(buf) >= maxl){		/* contain the text      */
+	    if((int)strlen(buf) >= maxl){		/* contain the text      */
 		(*term.t_beep)();
 		continue;
 	    }

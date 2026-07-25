@@ -728,7 +728,9 @@ repeat_char(n, c)
      int  c;
 {
     static char bb[512];
-    if(n > sizeof(bb))
+    if(n < 0)
+      n = 0;
+    else if(n >= (int)sizeof(bb))
        n = sizeof(bb) - 1;
     bb[n--] = '\0';
     while(n >= 0)

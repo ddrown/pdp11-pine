@@ -25,7 +25,7 @@ fnexpand(buf, len)
           pw = getpwnam(name);
         if(pw == NULL)
           return((char *)NULL);
-        if(strlen(pw->pw_dir) + strlen(buf) > len) {
+        if(strlen(pw->pw_dir) + strlen(buf) > (size_t)len) {
           return((char *)NULL);
         }
         rplstr(buf, x - buf, pw->pw_dir);

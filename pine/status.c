@@ -585,10 +585,10 @@ radio_buttons(prompt, line, column, buttons, labels, deefault, on_ctrl_C,
     /*---- Find longest label ----*/
     max_label = 0;
     for(ll = labels; *ll != NULL; ll++)
-      max_label = max(max_label, strlen(*ll));
+      max_label = max(max_label, (int)strlen(*ll));
     
     q = cpystr(prompt); /* So we can truncate string below if need be */
-    if(strlen(q) + max_label > ps_global->ttyo->screen_cols) 
+    if(strlen(q) + max_label > (size_t)ps_global->ttyo->screen_cols)
         q[ps_global->ttyo->screen_cols - max_label] = '\0';
 
     draw_radio_prompt(real_line, column, q, help_on, help_text);

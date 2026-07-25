@@ -5226,3 +5226,121 @@ scraps:
   every site removed here was preprocessor-stripped dead weight
   already, same as most of dead-code-sweep buckets 1 and 2. `bin/pine`
   unaffected (pico runs as a separate subprocess, not linked in).
+
+### Finish Tier 2 warning-flag cleanup: `-Wsign-compare`, plus closing out `-Wshadow`/`-Wstrict-prototypes`/`-Wmissing-prototypes`
+
+Closes out the Tier 2 warning-flag item (`-Wsign-compare`/`-Wshadow`/
+`-Wstrict-prototypes`/`-Wmissing-prototypes`, all four now enabled in
+both `makefile.lnx`s). `-Wstrict-prototypes`/`-Wmissing-prototypes`
+(including `imap/ANSI/c-client`, which is in scope for this audit like
+every other tree here) and `-Wshadow` were finished in an earlier
+commit (`336bd1d`); this session cleared the last flag, `-Wsign-compare`
+(52 raw warnings after merging `origin/main`'s bucket-3/`tinfo.c`
+dead-code work), across `pine/`, `pico/`, and their generated-file
+fragments. A clean `./build clean && ./build lnx` now reports **zero**
+warnings of any kind across both Tier 1 and Tier 2 flag sets.
+
+Nearly all 52 sites were `size_t`-vs-`int`/`long` or
+`unsigned`-vs-`long` comparisons (`strlen()` against an `int` byte
+budget, or c-client's `unsigned long nmsgs`/`msgno`/`size.bytes`
+against pine's signed `MsgNo`/`long` message-number types) where the
+values involved are non-negative in every real call path, so the fix
+is a same-signedness cast at the comparison (not a suppression --
+each site was checked for whether the "wrong" side could actually go
+negative first; see the two real bugs below, which are exactly the
+cases where it could). Representative fix:
+`pine/pine.h`'s `FETCH_ALL_FLAGS` macro (used by `pine.c`/`mailcmd.c`)
+compared a signed `faf_msgno` against `s->nmsgs` (c-client's
+`unsigned long`) -- cast the latter to `long` once in the macro body
+rather than at every call site. Similarly `pine/mailindx.c`'s
+`compare_size()` had `size_a = mc != NULL ? mc->rfc822_size : -1;`
+where the ternary's usual-arithmetic-conversions silently promoted the
+whole expression (and thus the `-1` sentinel) to `unsigned long`
+before it got assigned back into the signed `long size_a` -- harmless
+on any two's-complement platform (round-trips back to `-1`) but worth
+an explicit `(long)mc->rfc822_size` cast so the ternary's type doesn't
+depend on that implementation detail.
+
+**Two real bugs found and fixed along the way** (per CLAUDE.md's
+standing note that finding genuine bugs during an audit like this is
+expected, not scope creep):
+
+- **`pine/strings.c`'s `repeat_char()`: off-by-one static-buffer
+  overflow, plus no negative-`n` guard.** The original bound check was
+  `if(n > sizeof(bb)) n = sizeof(bb) - 1;` with `static char bb[512]`.
+  Two bugs: (1) it's `>` not `>=`, so `n == 512` exactly (a legal,
+  in-range-looking value) sailed through unclamped, and the very next
+  line, `bb[n--] = '\0'`, wrote `bb[512]` -- one byte past the end of
+  the 512-byte static array; (2) `n` is `int` and the comparison's
+  unsigned promotion (`sizeof` returns `size_t`) happened to clamp
+  negative `n` up to 511 as a side effect, which is the wrong
+  direction -- a negative `n` should never reach the fill loop at all.
+  Reachable in practice via `pine/mailindx.c:985`'s
+  `repeat_char(mess_count, '.')`, the "Still sorting.." progress-dots
+  call in `sort_blip()` -- `mess_count` increments once per
+  `DISPLAY_COUNT`-comparisons-and-15-real-seconds-elapsed tick during
+  a qsort of the folder index, so it reaches exactly 512 only on a
+  folder sort that runs uninterrupted for roughly 2+ hours. Essentially
+  unreachable on this x86-64 dev box, but exactly the class of bug
+  CLAUDE.md flags as invisible here and potentially fatal on the actual
+  PDP-11 target, where sorting a large folder could plausibly take
+  that long. Fixed to clamp both ends explicitly:
+  `if(n < 0) n = 0; else if(n >= (int)sizeof(bb)) n = sizeof(bb) - 1;`.
+  **Verified per the CLAUDE.md ASan-repro protocol**: extracted
+  `repeat_char()` into a standalone file gated `#ifdef FIXED`, called
+  with `n == 512`. Buggy version: `AddressSanitizer: global-buffer-
+  overflow ... WRITE of size 1 ... 0 bytes after global variable 'bb'
+  ... of size 512`. Fixed version: clean exit, `len=511`. (Valgrind
+  would not have caught this one -- it's a global/static array, not a
+  heap allocation, and per CLAUDE.md's note valgrind also can't reason
+  about adjacent-variable overflows even for locals.) No regression
+  test added under `test/cases/` -- reaching `n == 512` through the
+  real code path needs ~2 hours of continuous folder-sort wall time,
+  which isn't practical to drive through the pexpect-based pty
+  harness; the ASan repro above is the verification record instead.
+- **`pine/mailcmd.c`'s `expunge_and_close()`: narrow-terminal folder-
+  name truncation silently skipped.** `max_folder = screen_cols - 50`
+  is a signed `long` that goes negative on a terminal narrower than
+  ~50 columns; the old `if(strlen(temp) > max_folder)` compared
+  `size_t` against `long`, so a negative `max_folder` got promoted to
+  a huge unsigned value and the "does the folder name need
+  truncating" check always came back false exactly when truncation
+  was most needed. Not a buffer overflow (`short_folder_name` is sized
+  identically to the already-bounded `temp`), just a cosmetic
+  wrong-branch bug on pathologically narrow terminals -- fixed with an
+  explicit `(long)strlen(temp) > max_folder`, which now correctly
+  treats "no room at all" (negative budget) as "truncate". Found the
+  same pattern, same fix, in `pico/display.c`'s `modeline()`
+  (`term.t_ncol-n-22` going negative on a narrow terminal skipped the
+  `.../`-truncation of a long buffer filename in the mode line) and
+  its pad-to-width loop a few lines down (`term.t_ncol - strlen(cp)`
+  going negative would have made the `while(n < ...)` padding loop
+  run far longer than intended, though `vtputc()`'s own internal
+  `vtcol >= term.t_ncol` column clamp stops it from actually writing
+  out of bounds -- a latent hang/wasted-cycles bug on a tiny terminal,
+  not memory corruption). All three fixed the same way: cast the
+  `strlen()` side down to `int`/`long` so the comparison stays signed
+  and a negative budget compares as "no room" rather than wrapping to
+  "unlimited room".
+
+Also found and fixed one pre-existing `extern`/definition type
+mismatch surfaced while chasing a `-Wsign-compare` site:
+`pico/line.c` defines the kill-buffer-used counter as `unsigned kused`,
+but `pico/random.c`'s `yank()` had a stale `extern int kused;` --
+mismatched-type external declarations for the same object are
+undefined behavior (harmless in practice here since `int`/`unsigned
+int` share representation on every platform this project targets, but
+still wrong). Grepped and confirmed the declaration was never actually
+referenced by name inside `yank()` (it calls `kremove()`, which
+internally reads the real `kused`) -- dead and wrong, so removed
+outright rather than just correcting its type.
+
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings of
+  any kind (Tier 1 and all four Tier 2 flags). Full smoketest suite,
+  26/26. Standalone ASan repro for the `repeat_char()` fix as
+  described above.
+- **Remaining**: Tier 2 warning-flag cleanup is now fully closed. What's
+  left open in `TODO-pdp11.md` is the ASan/`-fanalyzer` build-target
+  item (this session's `repeat_char()` repro was done ad hoc per
+  CLAUDE.md's existing manual process, underscoring that a real build
+  target would make this kind of check routine instead of one-off).

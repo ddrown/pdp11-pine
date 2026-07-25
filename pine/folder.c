@@ -2105,7 +2105,7 @@ folder_entry(i, flist)
     int   i;
     void *flist;
 {
-    return((i >= ((FLIST *)flist)->used) ? NULL:((FLIST *)flist)->folders[i]);
+    return((i < 0 || (unsigned)i >= ((FLIST *)flist)->used) ? NULL:((FLIST *)flist)->folders[i]);
 }
 
 
@@ -2249,7 +2249,7 @@ folder_insert_index(folder, index, flist)
     register FOLDER_S **flp, **iflp;
 
     /* if index is beyond size, place at end of list */
-    index = min(index, ((FLIST *)flist)->used);
+    index = min(index, (int)((FLIST *)flist)->used);
 
     /* grow array ? */
     if(((FLIST *)flist)->used + 1 > ((FLIST *)flist)->allocated){
@@ -2285,14 +2285,14 @@ folder_delete(index, flist)
     FOLDER_S     *f;
 
     if(((FLIST *)flist)->used 
-       && (index < 0 || index >= ((FLIST *)flist)->used))
+       && (index < 0 || index >= (int)((FLIST *)flist)->used))
       return;				/* bogus call! */
 
     if((f = folder_entry(index, flist))->nickname)
       fs_give((void **)&(f->nickname));
 
     fs_give((void **)&(((FLIST *)flist)->folders[index]));
-    for(i = index; i < ((FLIST *)flist)->used - 1; i++)
+    for(i = index; i < (int)((FLIST *)flist)->used - 1; i++)
       ((FLIST *)flist)->folders[i] = ((FLIST *)flist)->folders[i+1];
 
 

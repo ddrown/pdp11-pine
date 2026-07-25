@@ -542,7 +542,7 @@ HeaderEditor(int f, int n)
 		    ShowPrompt();
 		}
 
-		if(ods.p_off > strlen(ods.cur_l->text))
+		if((size_t)ods.p_off > strlen(ods.cur_l->text))
 		  ods.p_off = strlen(ods.cur_l->text);
 
 		if(status){
@@ -566,7 +566,7 @@ HeaderEditor(int f, int n)
 
 		i = ods.cur_e;
 		ods.cur_l = prev_line(&ods.cur_e, ods.cur_l);
-		if(ods.p_off > strlen(ods.cur_l->text))
+		if((size_t)ods.p_off > strlen(ods.cur_l->text))
 		  ods.p_off = strlen(ods.cur_l->text);
 
 		if(i != ods.cur_e){		/* new field ! */
@@ -748,7 +748,7 @@ LineEdit(int allowedit)
 			 * during the format, the dot may have moved
 			 * down to the next line...
 			 */
-			if(ods.p_off >= strlen(strng)){
+			if((size_t)ods.p_off >= strlen(strng)){
 			    ods.p_line++;
 			    ods.p_off -= strlen(strng);
 			    ods.cur_l = ods.cur_l->next;
@@ -771,7 +771,7 @@ LineEdit(int allowedit)
             switch (ch = normal(ch, ckm, 2)) {
 	      case (CTRL|'@') :		/* word skip */
 		while(!isspace(strng[ods.p_off])){
-		    if(ods.p_off == strlen(strng)){
+		    if((size_t)ods.p_off == strlen(strng)){
 			ods.p_off = 0;
 			return(K_PAD_DOWN);
 		    }
@@ -869,7 +869,7 @@ LineEdit(int allowedit)
 		    (*term.t_beep)();
 		    continue;
 		}
-		else if(ods.p_off >= strlen(strng))
+		else if((size_t)ods.p_off >= strlen(strng))
 		  continue;
 
 		pputc(strng[ods.p_off++], 0); 	/* drop through and rubout */
@@ -1004,7 +1004,7 @@ FormatLines(struct hdr_line *h, char *instr, int maxlen, int entry)
       return(-1);
 
     if(l >= maxlen){				/* break then fixup below */
-	if(strlen(instr) < maxlen){		/* room for more */
+	if(strlen(instr) < (size_t)maxlen){		/* room for more */
 
 	    if(addr && ((bp = (char *)strchr(instr, ',')) != NULL)){
 		if(bp[1] == ' ')
@@ -1151,7 +1151,7 @@ FormatLines(struct hdr_line *h, char *instr, int maxlen, int entry)
 	}
 	else{
 	    if(!strlen(buf) && breakp == NULL){
-		if(strlen(ostr) + strlen(nlp->text) >= maxlen){
+		if(strlen(ostr) + strlen(nlp->text) >= (size_t)maxlen){
 		    breakp = break_point(nlp->text, maxlen-strlen(ostr), 
 					 addr ? ',' : ' ');
 		    

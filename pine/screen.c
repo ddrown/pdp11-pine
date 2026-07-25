@@ -147,7 +147,7 @@ output_keymenu(km, bm, row, column)
             } else {
                 strcpy(temp, k->name);
             }
-            if(strlen(temp) + k->column > max_column)
+            if(strlen(temp) + k->column > (size_t)max_column)
               temp[max_column - k->column] = '\0';
             Write_to_screen(temp);
             EndInverse();
@@ -157,7 +157,7 @@ output_keymenu(km, bm, row, column)
               Writechar(' ');
 
             strcpy(temp, k->label);
-            if(c + strlen(temp) >= max_column)
+            if(c + strlen(temp) >= (size_t)max_column)
               temp[max(0,max_column - c)] = '\0';
             Write_to_screen(temp);
             

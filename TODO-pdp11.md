@@ -10,30 +10,6 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-### Turn on Tier 2 warning flags: sign-compare, shadow, strict-prototypes
-
-- [ ] `-Wsign-compare`/`-Wshadow`/`-Wstrict-prototypes`/
-      `-Wmissing-prototypes` are now all enabled in both
-      `makefile.lnx`s (landed via the `two` remote's parallel work,
-      see the `two/main` merge commit -- CLAUDE.md's memory has
-      background on that second `pine-two` checkout). Most of
-      `-Wstrict-prototypes`/`-Wmissing-prototypes` is already fixed by
-      that commit; `-Wsign-compare` and `-Wshadow` are still wide
-      open. A clean `./build clean && ./build lnx` as of the
-      `init.c`/`filter.c`/`status.c`/`os.c` dead-code-sweep bucket 3
-      commit shows 164 raw warnings, dominated by `-Wshadow`'s
-      recurring `declaration of 's' shadows a global declaration`
-      (many `.c` files reuse a local named `s` that collides with
-      some global) and `-Wsign-compare`'s `size_t`-vs-`int`/`long`
-      comparisons (worth extra attention on this target -- 16-bit
-      `int` truncation on the PDP-11 makes sign bugs bite harder than
-      on x86-64) plus a handful of leftover
-      `-Wstrict-prototypes`/`-Wmissing-prototypes` stragglers (e.g.
-      `os.c`/`status.c`). Treat as an opportunistic "fix while already
-      touching that function" goal rather than a single mechanical
-      pass, same pattern as the completed `-Wold-style-definition`
-      sweep.
-
 ### Formalize an ASan build target and try `-fanalyzer`
 
 - [ ] CLAUDE.md's verification discipline already leans on ad hoc

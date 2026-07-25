@@ -582,9 +582,9 @@ format_message(msgno, env, body, flgs, pc)
 
         /*----- Figure display lengths for nice display -----*/
         for(a = ps_global->atmts; a->description != NULL; a++) {
-	    if(strlen(a->number) > max_num_l)
+	    if(strlen(a->number) > (size_t)max_num_l)
 	      max_num_l = strlen(a->number);
-	    if(strlen(a->size) > max_size_l)
+	    if(strlen(a->size) > (size_t)max_size_l)
 	      max_size_l = strlen(a->size);
 	}
 
@@ -1901,7 +1901,7 @@ display_parameters(parameter_list)
         need = 0;
 
         for(p = parameter_list; p != NULL; p = p->next){
-          longest_attribute = max(longest_attribute, (p->attribute == NULL ?
+          longest_attribute = max(longest_attribute, (int)(p->attribute == NULL ?
                                                       0 :
                                                       strlen(p->attribute)));
           /*
