@@ -952,11 +952,7 @@ optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
     }
 
 
-#ifdef	DOS
-    help_text = (help != NO_HELP) ? get_help_text(help, NULL) : (char **)NULL;
-#else
     help_text = help;
-#endif
     if(help_text != (char **)NULL) {
         /*---- Show help text -----*/
         MoveCursor(real_y_base + 1, x_base);
@@ -964,11 +960,8 @@ optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
         PutLine0(real_y_base+1, x_base, help_text[0]);
         MoveCursor(real_y_base + 2, x_base);
         CleartoEOLN();
-        if(help_text[1] != NULL) 
+        if(help_text[1] != NULL)
           PutLine0(real_y_base + 2, x_base, help_text[1]);
-#ifdef	DOS
-	free_help_text(help_text);
-#endif
 
     } else {
 	BITMAP bitmap;

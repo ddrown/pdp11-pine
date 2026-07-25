@@ -83,9 +83,6 @@ core dump. Ultrix can't do this so we don't try to catch the signals.
 void
 init_signals()
 {
-#ifdef	DOS
-    dont_interrupt();
-#else
 #ifdef DEBUG
 #ifdef ULT
     if(debug < 2)
@@ -133,9 +130,8 @@ init_signals()
        resulting in Pine getting sent a SIGTSTP. Ignore it here.
        probably better to ignore it than let it happen in any case
      */
-    signal(SIGTSTP, SIG_IGN); 
+    signal(SIGTSTP, SIG_IGN);
 #endif /* SIGTSTP */
-#endif	/* !DOS */
 }
 
 
@@ -146,9 +142,6 @@ init_signals()
 void
 end_signals()
 {
-#ifdef	DOS
-    interrupt_ok();
-#else
     dprint(5, (debugfile, "end_signals\n"));
     if(signal(SIGILL,  SIG_DFL) == SIG_ERR) {
         fprintf(stderr, "Error resetting signals: %s\n",
@@ -171,7 +164,6 @@ end_signals()
 #ifdef SIGTSTP
     signal(SIGTSTP, SIG_DFL);
 #endif /* SIGTSTP */
-#endif	/* !DOS */
 }
 
 
@@ -202,7 +194,6 @@ static SigType
 quit_signal(int signo)
 {
     dprint(1, (debugfile, "\n\n  *** Received QUIT signal ***  \n\n"));
-#ifndef	DOS
     if(want_to("\007Pine emergency exit. REALLY ABORT PINE RIGHT NOW", 'n',
                'n', h_wt_auger_in, 0) == 'n') {
         q_status_message(0, 2,3,
@@ -219,7 +210,6 @@ quit_signal(int signo)
     fprintf(stderr, "\n\nPine aborting and dumping core\n\n");
     dprint(1, (debugfile, "\n *** Dumping Core ***\n"));
     coredump();
-#endif	/* !DOS */
 }
 
 
@@ -232,7 +222,6 @@ Not much to do. Rely on periodic mail file check pointing.
 static int
 fast_clean_up(void)
 {
-#ifndef	DOS
     if(ps_global->inbox_stream != NULL && !ps_global->inbox_stream->lock){
         if(ps_global->inbox_stream == ps_global->mail_stream)
           ps_global->mail_stream = NULL; 
@@ -251,7 +240,6 @@ fast_clean_up(void)
 #ifdef DEBUG
     fclose(debugfile);
 #endif
-#endif	/* !DOS */
 
     return(0);
 }
@@ -287,7 +275,6 @@ term_signal(int signo)
 }
 
 
-#ifndef	DOS
 /*----------------------------------------------------------------------
       handle hang up signal -- SIGUSR2
 
@@ -318,7 +305,6 @@ usr2_signal(int signo)
 	dprint(1, (debugfile, "** secondary folder went read-only **\n\n"));
     }
 }
-#endif
 
 
 #ifdef RESIZING
@@ -364,9 +350,6 @@ void
 do_suspend(pine) 
     struct pine *pine;
 {
-#ifdef	DOS
-    int  result;
-#endif
     long now, then;
     char curf[MAXPATH+1];
 
@@ -380,30 +363,18 @@ do_suspend(pine)
     end_keyboard(F_ON(F_USE_FK,pine));
     end_tty_driver(pine);
     end_screen();
-#ifdef	DOS
-    printf("\nPine suspended. Give the \"exit\" command to come back.\n");
-#else
     printf("\nPine suspended. Give the \"fg\" command to come back.\n");
-#endif
-    if(curf[0] == '{') 
+    if(curf[0] == '{')
       printf("Warning: Your IMAP connection will be closed if Pine\nis suspended for more than 30 minutes\n\n");
 
-#ifdef	DOS
-    result = system("command");
-#else
     stop_process();
-#endif	/* DOS */
     now = time(0);
     dprint(1, (debugfile, "\n\n ---- RETURN FROM SUSPEND ----  %s",
                ctime(&now)));
     init_screen();
     init_tty_driver(pine);
     init_keyboard(F_ON(F_USE_FK,pine));
- 
-#ifdef	DOS
-    if(result == -1)
-      q_status_message(0,2,2,"\007Error loading COMMAND.COM");
-#endif
+
     if(curf[0] == '{' &&
        (char *)mail_ping(ps_global->mail_stream) == NULL) {
         q_status_message(1, 3, 6,
@@ -412,11 +383,7 @@ do_suspend(pine)
 }
 
 
-#ifdef	DOS
-SigType (*hold_int)(int), (*hold_term)(int);
-#else
 SigType (*hold_hup)(int), (*hold_int)(int), (*hold_term)(int), (*hold_usr2)(int);
-#endif
 
 /*----------------------------------------------------------------------
      Ignore signals when imap is running through critical code
@@ -429,10 +396,8 @@ mm_critical(stream)
      MAILSTREAM *stream;
 {
     stream = stream; /* For compiler complaints that this isn't used */
-#ifndef	DOS
     hold_hup  = signal(SIGHUP, SIG_IGN);
     hold_usr2 = signal(SIGUSR2, SIG_IGN);
-#endif
     hold_int  = signal(SIGINT, SIG_IGN);
     hold_term = signal(SIGTERM, SIG_IGN);
     dprint(9, (debugfile, "Done with IMAP critical on %s\n",
@@ -450,10 +415,8 @@ mm_nocritical(stream)
 { 
     stream = stream; /* For compiler complaints that this isn't used */
 
-#ifndef	DOS
     (void)signal(SIGHUP, hold_hup);
     (void)signal(SIGUSR2, hold_usr2);
-#endif
     (void)signal(SIGINT, hold_int);
     (void)signal(SIGTERM, hold_term);
     dprint(9, (debugfile, "Done with IMAP critical on %s\n",

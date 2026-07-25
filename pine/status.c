@@ -701,11 +701,7 @@ radio_help(line, column, help)
 {
     char **text;
 
-#ifdef	DOS
-    text = get_help_text(help, NULL);
-#else
     text = help;
-#endif
     if(text == NULL)
       return;
     
@@ -717,9 +713,6 @@ radio_help(line, column, help)
     CleartoEOLN();
     PutLine0(line + 2, column, text[1]);
     StartInverse();
-#ifdef	DOS
-    free_help_text(text);
-#endif
     fflush(stdout);
 }
 

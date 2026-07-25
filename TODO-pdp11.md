@@ -12,41 +12,27 @@ DONE elsewhere or referenced in passing below.
 
 ### Turn on Tier 2 warning flags: sign-compare, shadow, strict-prototypes
 
-- [ ] Follow-on to Tier 1 above, once that's landed and 0-warning
-      again. These flags have a real bug-catching rate but are noisier
-      -- treat as an opportunistic "fix while already touching that
-      function" goal, same pattern as the completed
-      `-Wold-style-definition` sweep, rather than a single mechanical
-      pass: `-Wsign-compare` (16 hits in `pico/*.c`, 38 in `pine/*.c`
-      trial-compiled standalone -- signed/unsigned comparison bugs,
-      worth extra attention on this target since 16-bit `int`
-      truncation on the PDP-11 makes sign bugs bite harder than on
-      x86-64), `-Wshadow` (36 in pico, 8 in pine -- variable shadowing),
-      `-Wstrict-prototypes`/`-Wmissing-prototypes` (5/16 in pico --
-      declaration-side K&R leftovers the just-finished
-      definition-side ANSI sweep didn't touch; pine's standalone count
-      is inflated by the shared-header fan-out described in the Tier 1
-      entry above, so re-scope by unique site once counted for real).
-
-### Dead-code sweep, bucket 2: `signals.c`, `newmail.c`, `imap.c`, `ttyin.c`, `other.c`
-
-- [ ] Second bucket, ~24 sites total: `signals.c` (12 -- **caveat**:
-      mixed in with real, legitimate platform conditionals on
-      `SIGEMT`/`SIGTSTP`/`RESIZING`/`ULT`, which vary by real target
-      OS and are NOT the same as the project's own never-defined build
-      knobs -- only touch the `DOS` sites here, leave the signal-macro
-      ones alone), `newmail.c` (6), `imap.c` (3), `ttyin.c` (2 --
-      `TODO-pdp11-done.md`'s "broader MS-DOS dead-code sweep" entry
-      already cut this file's two giant Unix/DOS halves; these are
-      leftover scattered mouse/DOS-keyboard scraps past that, noted
-      but skipped there), `other.c` (1).
-
-### Dead-code sweep, bucket 3: `init.c`, `filter.c`, `status.c`, `os.c`
-
-- [ ] Third bucket, ~24 sites total: `init.c` (11), `filter.c` (10 --
-      also has a `FIRST_FOLDER_TRY` guard, needs the same
-      never-defined confirmation as `LWP`/`PCTCP`/`PCNFS` above before
-      cutting), `status.c` (2), `os.c` (1).
+- [ ] `-Wsign-compare`/`-Wshadow`/`-Wstrict-prototypes`/
+      `-Wmissing-prototypes` are now all enabled in both
+      `makefile.lnx`s (landed via the `two` remote's parallel work,
+      see the `two/main` merge commit -- CLAUDE.md's memory has
+      background on that second `pine-two` checkout). Most of
+      `-Wstrict-prototypes`/`-Wmissing-prototypes` is already fixed by
+      that commit; `-Wsign-compare` and `-Wshadow` are still wide
+      open. A clean `./build clean && ./build lnx` as of the
+      `init.c`/`filter.c`/`status.c`/`os.c` dead-code-sweep bucket 3
+      commit shows 164 raw warnings, dominated by `-Wshadow`'s
+      recurring `declaration of 's' shadows a global declaration`
+      (many `.c` files reuse a local named `s` that collides with
+      some global) and `-Wsign-compare`'s `size_t`-vs-`int`/`long`
+      comparisons (worth extra attention on this target -- 16-bit
+      `int` truncation on the PDP-11 makes sign bugs bite harder than
+      on x86-64) plus a handful of leftover
+      `-Wstrict-prototypes`/`-Wmissing-prototypes` stragglers (e.g.
+      `os.c`/`status.c`). Treat as an opportunistic "fix while already
+      touching that function" goal rather than a single mechanical
+      pass, same pattern as the completed `-Wold-style-definition`
+      sweep.
 
 ### Formalize an ASan build target and try `-fanalyzer`
 

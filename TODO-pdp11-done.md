@@ -5001,3 +5001,228 @@ same standard as `DOS`/`MOUSE`/etc.
 - **Remaining**: bucket 2 (`signals.c`/`newmail.c`/`imap.c`/`ttyin.c`/
   `other.c`) and bucket 3 (`init.c`/`filter.c`/`status.c`/`os.c`) still
   open in `TODO-pdp11.md`.
+
+### Dead-code sweep, bucket 2 of 3: `signals.c`, `newmail.c`, `imap.c`, `ttyin.c`, `other.c`
+
+Second of three buckets covering the DOS/never-defined-macro dead code
+identified in the earlier tree-wide survey. `signals.c` has a mix of
+the project's own dead `DOS` conditionals and *real* platform
+conditionals (`SIGEMT`, `SIGTSTP`, `RESIZING`, `ULT`) that vary by
+actual target OS -- confirmed via grep that `RESIZING` **is** defined
+in `os-lnx.h` (the header this build actually uses), so that guard and
+everything gated on `SIGEMT`/`SIGTSTP`/`ULT` were left untouched; only
+the `DOS` sites were removed. Also confirmed `NO_KEYBOARD_LOCK` is
+commented out in every `pine/osdep/os-*.h` variant including
+`os-lnx.h` (same never-turned-on standard as `DOS`), justifying
+`other.c`'s cut.
+
+- **`signals.c`** (12 sites): `init_signals()`/`end_signals()` --
+  unwrapped `#ifdef DOS x #else y #endif` pairs to their `#else` (real)
+  bodies. `quit_signal()`/`fast_clean_up()`/`usr2_signal()` -- each
+  wrapped in an always-true `#ifndef DOS`; unwrapped, keeping the
+  bodies (`usr2_signal()` was gated as a whole function). `do_suspend()`
+  -- removed a dead `int result;` local and its two `#ifdef DOS`
+  read/write sites (`system("command")`/error check), unwrapped the
+  `#ifdef DOS x #else y #endif` message-and-suspend-mechanism pairs to
+  their real (`stop_process()`) halves. The `hold_int`/`hold_term` vs.
+  `hold_hup`/`hold_int`/`hold_term`/`hold_usr2` `SigType` declaration
+  pair collapsed to the latter (always-compiled) form.
+  `mm_critical()`/`mm_nocritical()` -- unwrapped two more always-true
+  `#ifndef DOS` guards around the `SIGHUP`/`SIGUSR2` hold/restore
+  calls.
+- **`newmail.c`** (6 sites, all in `new_mail()`): collapsed
+  `old_sort`'s DOS-only `FILE *`/`old_sort_val` declaration pair to the
+  real `long *old_sort` form; unwrapped the sort-array growth strategy,
+  the `old_sort` populate step (DOS: temp-file-backed via
+  `create_tmpfile()`; real: `fs_get()`-backed array copy), the
+  "lowest changed position" scan (DOS: `fseek()`/`fread()`-based; real:
+  direct array indexing), and the final `old_sort` cleanup
+  (`fclose()` vs. `fs_give()`) to their real halves.
+- **`imap.c`** (3 sites): deleted the entire `#ifdef DOS` password-
+  cache block wholesale -- `PASSFILE`/`FIRSTCH`/`LASTCH`/`TABSZ`
+  macros, `encrypt_key`, and the `xsum()`/`encrypt()`/`decrypt()`/
+  `passfile()` functions (132 lines, a self-contained XOR-rotation
+  password obfuscator writing to a `pine.pwd` file next to the
+  `.pinerc` -- meaningless on this build since `.pinerc` itself is
+  never read/written). `mm_login()`'s two remaining `passfile()` call
+  sites (the "check for a leftover password from last session" read,
+  and the post-login write) were both dead and removed; the local
+  `char *p` this orphaned was removed from the declaration too.
+- **`ttyin.c`** (2 sites, in `optionally_enter()`): the help-text-
+  fetch DOS/real branch (`get_help_text()` vs. plain `help_text = help`
+  assignment) collapsed to the real half; the paired DOS-only
+  `free_help_text(help_text)` cleanup call removed.
+- **`other.c`** (1 site): the entire file body past its forward decls
+  (`lock_keyboard()` and its three `redraw_*`/`draw_klocked_body()`
+  helpers -- the whole keyboard-lock screen) was wrapped in an
+  always-true `#ifndef NO_KEYBOARD_LOCK`; unwrapped, keeping the body,
+  matching the guard's dead status confirmed in `pine.c`'s prior
+  `NO_KEYBOARD_LOCK` unwrap (see the `mailindx.c`/`pine.c` sweep
+  entry above).
+- **Verified**: `./build clean && ./build lnx`, 0 warnings across all
+  five files. Full smoketest suite, 26/26. Manually drove a pty
+  session through `other.c`'s restructured keyboard-lock flow end to
+  end: `k` from Main Menu -> enter lock password -> confirm -> screen
+  shows "This keyboard is locked" -> re-entering the same password
+  unlocks back to Main Menu. (A mismatched-password re-prompt path was
+  also spot-checked but hit a pexpect timeout waiting for the
+  "doesn't match" status message under a scripted rapid-fire
+  send -- not a regression, since that logic path wasn't touched by
+  this sweep, just a timing/redraw quirk in the manual test harness.)
+- **Size delta**: `bin/pine` text 317183 -> 317183 (0 bytes), data
+  unchanged at 10768 -- confirmed by diffing against a clean build of
+  the pre-bucket-2 tree. Every site in this bucket was inside an
+  `#ifdef DOS`/`#ifndef NO_KEYBOARD_LOCK` branch the preprocessor
+  already stripped before compilation, so none of it carried binary
+  weight to begin with; the win here is source-size and readability,
+  not code size.
+- **Remaining**: bucket 3 (`init.c`/`filter.c`/`status.c`/`os.c`)
+  still open in `TODO-pdp11.md`.
+
+### Dead-code sweep, bucket 3 of 3: `init.c`, `filter.c`, `status.c`, `os.c`
+
+Third and final bucket of the DOS/never-defined-macro dead-code survey.
+`init.c` also had a `FIRST_FOLDER_TRY`-guarded site the TODO flagged for
+the same never-defined confirmation given to `LWP`/`PCTCP`/`PCNFS`/
+`NO_KEYBOARD_LOCK` earlier -- confirmed via tree-wide grep that
+`FIRST_FOLDER_TRY` is never `#define`'d anywhere, and its guarded body
+references `V_LOCAL_MAIL_FORMAT`/`DF_LOCAL_MAIL_FORMAT`, neither of
+which exist anywhere else in the current tree (`V_LOCAL_MAIL_FORMAT`
+was already cut in an earlier `variables[]` reduction session) -- the
+block wouldn't even compile if the macro were ever turned on, so it
+was doubly dead.
+
+- **`init.c`** (12 sites): the `"user-id"` `variables[]` entry's
+  `#ifdef DOS`/`#else` pair (`is_used` 1 vs. 0) collapsed to the Unix
+  (`0`) half; the dead `FIRST_FOLDER_TRY` block removed outright;
+  `init_vars()`'s 40-line DOS pinerc-location-search comment-and-block
+  collapsed to the real `.pinerc`-in-`$HOME` `#else` half; a
+  `sprintf()`'s DOS-vs-Unix path-separator character (`'\\'` vs `'/'`)
+  collapsed to `/`; `expand_variables()`'s always-true `#ifndef DOS`
+  wrapping its backslash-escape/`~`-expansion branches unwrapped,
+  dropping the dead one-branch DOS `#else`; `init_username()`'s DOS/
+  Unix `VAR_USER_ID` lookup pair collapsed to the real
+  `get_system_login()` half, a dead `ps->blank_personal_name = 1`
+  write removed, and a dead DOS drive-letter (`X:`) check ahead of
+  `build_path()` removed; `init_hostname()`'s always-true `#ifndef
+  DOS` local-lookup guard and DOS/Unix `maildomain`-selection pair
+  both unwrapped/collapsed, and a dead `ps->blank_user_domain`-gated
+  early return removed; `init_debug()`'s DOS/Unix debug-file-rotation
+  pair (36 lines) collapsed to the real 4-generation
+  `.pine-debug[1-4]`-rotation `#else` half. Chain reaction: once the
+  `blank_user_id`/`blank_personal_name`/`blank_user_domain` write
+  sites were all gone, grep confirmed zero readers or writers
+  remained anywhere for those three `pine.h` struct bitfields (which
+  were themselves already `#ifdef DOS`-guarded in the struct
+  definition, so already dead-by-construction) -- removed all three
+  fields.
+- **`filter.c`** (10 sites): `so_get()`'s and `so_reaquire()`'s DOS/
+  Unix `fopen()` mode-string pairs (`"a+b"`/`"rb"` vs. `"a+"`/`"r"`)
+  each collapsed to the Unix half; `so_get()`'s DOS `TmpFileStar`-
+  coercion block (working around an MSC `tmpfile()` quirk) removed,
+  keeping the Unix `temp_nam()` half; `gf_pipe()`'s four DOS sites
+  (a progress-spinner's static state/init, an error-path spinner
+  clear, a per-1024-bytes spinner tick, and an end-of-pipe spinner
+  clear) all removed as dead UI decoration with no Unix equivalent;
+  `gf_nvtnl_local()`/`gf_local_nvtnl()`'s DOS-vs-Unix newline-
+  convention `#ifdef`/`#else` pairs each collapsed to the Unix
+  CRLF-conversion half; the entire trailing `#ifdef DOS` block
+  (`gf_translate()`/`gf_translate_opt()`, a DOS-codepage-to-charset
+  translation filter pair, 44 lines) deleted outright -- grep
+  confirmed both functions had zero callers anywhere, only their
+  own `#ifdef DOS`-guarded prototypes in `pine.h`, which were removed
+  too.
+- **`status.c`** (2 sites, both in `radio_help()`): the DOS/Unix
+  help-text-fetch pair (`get_help_text()` vs. plain `text = help`)
+  collapsed to the Unix half; the paired DOS-only
+  `free_help_text(text)` cleanup call removed.
+- **`os.c`** (1 site, via its real source fragment
+  `pine/osdep/diskquot.non` -- `os.c` itself is a generated,
+  fragment-assembled file per this project's build process, never
+  hand-edited): `disk_quota()` was already wrapped in `#if
+  defined(USE_QUOTAS)`, and `USE_QUOTAS` is confirmed commented out
+  in every `pine/osdep/os-*.h` variant including `os-lnx.h` (same
+  never-turned-on standard as `NO_KEYBOARD_LOCK`), and had zero
+  callers anywhere in the tree besides its own now-removed `pine.h`
+  prototype -- emptied the fragment, deleting the function entirely.
+- **Verified**: `./build clean && ./build lnx`, exit 0. No new
+  warnings attributable to this bucket's edits (the handful of
+  `-Wsign-compare`/`-Wstrict-prototypes` warnings clang/gcc still
+  report in `status.c`/`os.c` are pre-existing, in functions this
+  bucket didn't touch -- part of the still-open Tier 2 warning-flag
+  cleanup). Full smoketest suite, 26/26. Manually verified
+  `init_debug()`'s restructured Unix debug-file-rotation logic by
+  running `bin/pine -d 9` twice against an isolated `$HOME` and
+  confirming `.pine-debug1` was created with the expected banner text
+  and rotated to `.pine-debug2` on the second run.
+- **Size delta**: `bin/pine` text 317183 -> 315839 (-1344 bytes), data
+  unchanged at 10768 -- unlike buckets 1 and 2, most of this bucket's
+  removed code (all of `filter.c`'s sites, most of `init.c`'s) was
+  genuinely compiled, not preprocessor-stripped, so this is a real
+  code-size win rather than just a source-readability one.
+- **Remaining**: this closes out all three dead-code-sweep buckets
+  from the original tree-wide survey. What's left open in
+  `TODO-pdp11.md` is the Tier 2 warning-flag cleanup
+  (`-Wsign-compare`/`-Wshadow`, `-Wstrict-prototypes`/
+  `-Wmissing-prototypes` already mostly landed via the `two` remote's
+  parallel work -- see the `two/main` merge commit) and the ASan/
+  `-fanalyzer` build-target item.
+
+### Dead-code survey and sweep of `pico/` and `c-client/`
+
+After finishing the `pine/` dead-code-sweep buckets, surveyed the two
+other source trees for the same `DOS`/never-defined-macro pattern.
+
+**`c-client/` (`imap/ANSI/c-client/`)**: essentially nothing left --
+already heavily swept in earlier sessions (SMTP client removed, phile
+driver dropped from the build, the DRIVER dispatch abstraction
+removed, `mbox.c`/`sm_unix.c` deleted). The only files this build's
+`makefile.lnx` actually compiles into `c-client.a`
+(`mail.c`/`bezerk.c`/`dummy.c`/`rfc822.c`/`misc.c`/`os_lnx.c`) have
+exactly one preprocessor conditional between them: `bezerk.c`'s
+`#ifdef NFSKLUDGE` NFS-lock-file workaround, and `NFSKLUDGE` **is**
+defined in `os_lnx.h` (the header this build actually uses) -- a real,
+live guard, not dead code, so left untouched. The other `os_*.c`
+files, plus `phile.c`/`smtp.c`, aren't in `makefile.lnx` at all, but
+per this project's own established precedent (matching
+`pine/osdep/os-*.h`'s other-platform variants) those are intentionally
+preserved portability/protocol reference source excluded from this
+build, not dead code -- confirmed via their own removal commits
+("drop phile driver from c-client build", "remove SMTP client") which
+explicitly left the source files in place. Nothing to cut here.
+
+**`pico/`**: also heavily swept already (DOS-only color/mouse code,
+address book, compose-side attachments, `ansi.c` itself already
+deleted as "permanently dead, never-enabled alternate terminal
+driver"). Found one direct sibling that was missed plus two small
+scraps:
+- **`pico/tinfo.c`** (603 lines) -- an entire alternate,
+  terminfo-based terminal driver (`tinfoopen`/`tinfoclose`/
+  `tinfomove`/etc., paralleling `tcap.c`'s termcap-based one), never
+  referenced in `pico/makefile.lnx`'s `OFILES` and never `#include`d
+  or called from any other file in the tree -- the exact same
+  situation as the already-deleted `ansi.c`, just missed in that
+  earlier pass. Deleted outright (`git rm`).
+- **`pico/estruct.h`**: an `#if MSDOS` block defining `SHFT`/`ALTD`
+  (function-key shift/alt modifier bits) -- confirmed via grep that
+  `MSDOS` (distinct spelling from the project's usual `DOS` knob) is
+  never `#define`'d anywhere in the tree, and `SHFT`/`ALTD` have zero
+  readers elsewhere. Removed.
+- **`pico/display.c`** (2 sites): `wmsg()`'s dead `#if MSDOS
+  vtmove(1,0); vteeol(); #endif` pair ahead of the real mode-line
+  redraw call, removed; `wkeyhelp()`'s dead `#if defined(DOS) &&
+  defined(MOUSE) register_keys(...) #endif` mouse-registration call
+  (and its now-inapplicable "make hardware cursor position change
+  known!!" comment) removed.
+- **Verified**: `./build clean && ./build lnx`, exit 0, no new
+  warnings (same pre-existing Tier 2 `-Wshadow`/`-Wsign-compare` set
+  as before, none in the touched lines). Full smoketest suite, 26/26.
+  Manually drove a composer session (`c` from Main Menu, typed body
+  text, `^C`-cancelled) through a raw pty to confirm `wmsg()`'s
+  mode-line and `wkeyhelp()`'s key-menu-footer painting -- both
+  functions this change touched -- still render correctly.
+- **Size delta**: `bin/pico` text 110299 -> 110299 (0 bytes) --
+  confirmed by diffing against a clean build of the pre-change tree;
+  every site removed here was preprocessor-stripped dead weight
+  already, same as most of dead-code-sweep buckets 1 and 2. `bin/pine`
+  unaffected (pico runs as a separate subprocess, not linked in).

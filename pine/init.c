@@ -127,11 +127,7 @@ The current value is the one that is actually in use.
 static struct variable variables[] = {
 {"personal-name",              0, 1, 0, 1, 0, 0,
   PERSONAL_NAME_TEXT},
-#ifdef DOS		/* Have to have this on DOS, PC's, Macs, etc... */
-{"user-id",                    0, 1, 0, 1, 0, 0,
-#else			/* Don't allow on UNIX machines for some security */
-{"user-id",                    0, 0, 0, 1, 0, 0,
-#endif
+{"user-id",                    0, 0, 0, 1, 0, 0,	/* Don't allow on UNIX machines for some security */
   "Your login/e-mail user name"},
 {"user-domain",                0, 1, 0, 1, 1, 0,
   USER_DOMAIN_TEXT},
@@ -194,55 +190,13 @@ init_vars(ps)
     vars[V_USE_ONLY_DOMAIN_NAME].global_val.p = cpystr(DF_USE_ONLY_DOMAIN_NAME);
     vars[V_SORT_KEY].global_val.p         = cpystr(DF_SORT_KEY);
     vars[V_SAVED_MSG_NAME_RULE].global_val.p = cpystr(DF_SAVED_MSG_NAME_RULE);
-#ifdef FIRST_FOLDER_TRY
-    vars[V_LOCAL_MAIL_FORMAT].global_val.p= cpystr(DF_LOCAL_MAIL_FORMAT);
-#endif
     vars[V_SIGNATURE_FILE].global_val.p   = cpystr(DF_SIGNATURE_FILE);
     vars[V_MAIL_DIRECTORY].global_val.p   = cpystr(DF_MAIL_DIRECTORY);
 
-#ifdef	DOS
-    /*
-     * Rules for the config/support file locations under DOS are:
-     *
-     * 1) The location of the PINERC is searched for in the following
-     *    order of precedence:
-     *       - File pointed to by PINERC environment variable
-     *       - $HOME\pine
-     *       - same dir as argv[0]
-     *
-     * 2) The HOME environment variable, if not set, defaults to 
-     *    root of the current working drive (see pine.c)
-     * 
-     * 3) The default for external files (PINE.SIG and ADDRBOOK) is the
-     *    same directory as the pinerc
-     *
-     * 4) The support files (PINE.HLP and PINE.NDX) are searched for
-     *    in:
-     *       - the directory pointed to by PINEHOME environment variable
-     *       - the same directory as PINERC
-     *       - the same directory as PINE.EXE.
-     *
-     */
-    if(!ps_global->pinerc) {
-	char *p;
-	int   l;
-
-	if(p = getenv("PINERC")){
-	    ps_global->pinerc = cpystr(p);
-	}
-	else{
-	    char buf2[MAXPATH];
-	    build_path(buf2, ps_global->home_dir, DF_PINEDIR);
-	    build_path(buf, buf2, SYSTEM_PINERC);
-	    ps_global->pinerc = cpystr(buf);
-	}
-    }
-#else
     if(!ps_global->pinerc) {
       build_path(buf, ps->home_dir, ".pinerc");
       ps_global->pinerc = cpystr(buf);
     }
-#endif
 
     set_current_val(vars, V_INBOX_PATH, TRUE);
 
@@ -262,12 +216,7 @@ init_vars(ps)
     set_current_val(vars, V_FOLDER_SPEC, TRUE);
     if(VAR_FOLDER_SPEC == NULL){
 	char *lvalue[2];
-	sprintf(tmp_20k_buf, "%s%c[]", VAR_MAIL_DIRECTORY,
-#ifdef	DOS
-		'\\');
-#else
-		'/');
-#endif
+	sprintf(tmp_20k_buf, "%s%c[]", VAR_MAIL_DIRECTORY, '/');
 	lvalue[0] = tmp_20k_buf;
 	lvalue[1] = NULL;
 	set_variable_list(V_FOLDER_SPEC, lvalue);
@@ -525,7 +474,6 @@ char *linein, *lineout;
       return(NULL);
 
     while ( *src ) {			/* something in input string */
-#ifndef	DOS
         if (*src == '\\' && *(src+1) == '$') {
 	    /*
 	     * backslash to escape chars we're interested in, else
@@ -549,9 +497,6 @@ char *linein, *lineout;
 
 	    continue;
         } else if (*src == '$') {	/* shell variable */
-#else
-        if (*src == '$') {		/* shell variable */
-#endif
             int found_brace=0;
 
 	    envexpand++;		/* signal that we've expanded a var */
@@ -614,15 +559,6 @@ init_username(ps)
     else
         ps->passwd = NULL;
 
-#ifdef DOS
-    if(ps->vars[V_USER_ID].user_val.p != NULL) {
-        ps->VAR_USER_ID =  cpystr(expand_variables(tmp_20k_buf,
-				             ps->vars[V_USER_ID].user_val.p));
-    } else {
-        ps->VAR_USER_ID   = cpystr("");
-	ps->blank_user_id = 1;
-    }
-#else
     if(get_system_login() != NULL) {
         ps->VAR_USER_ID = cpystr(get_system_login());
     } else {
@@ -630,7 +566,6 @@ init_username(ps)
         ps->VAR_USER_ID = cpystr("");
         rv = -1;
     }
-#endif
 
     if(ps->vars[V_PERSONAL_NAME].user_val.p != NULL) {
         ps->VAR_PERSONAL_NAME = cpystr(expand_variables(tmp_20k_buf,
@@ -639,9 +574,6 @@ init_username(ps)
         ps->VAR_PERSONAL_NAME = cpystr(get_system_fullname());
     } else {
         ps->VAR_PERSONAL_NAME   = cpystr("");
-#ifdef	DOS
-	ps->blank_personal_name = 1;
-#endif
     }
 
 
@@ -651,11 +583,6 @@ init_username(ps)
                ps->VAR_MAIL_DIRECTORY);
         return(-1);
     }
-#ifdef	DOS
-    if(ps->VAR_MAIL_DIRECTORY[1] == ':')
-      strcpy(fld_dir, ps->VAR_MAIL_DIRECTORY);
-    else
-#endif
     build_path(fld_dir, ps->home_dir, ps->VAR_MAIL_DIRECTORY);
     ps->folders_dir = cpystr(fld_dir);
 
@@ -744,26 +671,15 @@ init_hostname(ps)
 
     if(ps->VAR_USER_DOMAIN && ps->VAR_USER_DOMAIN[0]){
         ps->maildomain = ps->userdomain = cpystr(ps->VAR_USER_DOMAIN);
-#ifndef	DOS
         if(strucmp(ps->userdomain, ps->localdomain) == 0 ||
            strucmp(ps->userdomain, ps->hostname) == 0)
           ps->do_local_lookup = 1;
         else
-#endif
           ps->do_local_lookup = 0;
     } else {
-#ifdef	DOS
-	if(ps->VAR_USER_DOMAIN)
-	  ps->blank_user_domain = 1;	/* user domain set to null string! */
-
-        ps->do_local_lookup   = 0;
-        ps->maildomain        = ps->localdomain[0] ? ps->localdomain 
-						   : ps->hostname; 
-#else
         ps->do_local_lookup = 1;
         ps->maildomain = ps->use_full_hostname ? ps->hostname :
                                                  ps->localdomain;
-#endif
     }
 
     /* Set c-client idea of the host name for unqualifed addresses  */
@@ -779,10 +695,6 @@ init_hostname(ps)
                ps->maildomain));
 
     if(ps->maildomain == NULL || strlen(ps->maildomain) == 0) {
-#ifdef	DOS
-	if(ps->blank_user_domain)
-	  return(0);		/* prompt for this in send.c:dos_valid_from */
-#endif
         fprintf(stderr, "No host name or domain name set\n");
         return(-1);
     } else {
@@ -1024,15 +936,6 @@ FILE *debugfile = NULL;
 void
 init_debug()
 {
-#ifdef	DOS
-    char filename[MAXPATH+1];
-
-    strcpy(filename, DEBUGFILE);
-    unlink(filename);
-
-    if(debug){
-	int i;
-#else
     char nbuf[12];		/* enough for any int + sign + nul */
     char newfname[MAXPATH+1], filename[MAXPATH+1];
 
@@ -1061,7 +964,6 @@ init_debug()
 
       build_path(filename, ps_global->home_dir, DEBUGFILE);
       strcat(filename, "1");
-#endif	/* DOS */
 
       debugfile = fopen(filename, "w");
       if(debugfile != NULL){

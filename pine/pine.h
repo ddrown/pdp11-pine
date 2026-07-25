@@ -89,11 +89,7 @@
 #define TILDE_ESCAPE	'~'		/* escape character~    */
 #define ESCAPE		'\033'		/* the escape		*/
 
-#ifdef	DOS
-#define	NEWLINE		"\r\n"		/* local EOL convention...  */
-#else
 #define	NEWLINE		"\n"		/* necessary for gf_* funcs */
-#endif
 
 #ifndef TRUE
 #define TRUE		1
@@ -600,12 +596,6 @@ struct pine {
     unsigned     painted_footer_on_startup:1;
     unsigned     open_readonly_on_startup:1;
 
-#ifdef	DOS
-    unsigned     blank_user_id:1;
-    unsigned     blank_personal_name:1;
-    unsigned     blank_user_domain:1;
-#endif
-
     int         *initial_cmds;         /* cmds to execute on startup */
 
     char         c_client_error[300];  /* when nowhow_error is set and PARSE */
@@ -619,9 +609,7 @@ struct pine {
                 *userdomain,     /* The per user domain from .pinerc or */
                 *maildomain,     /* Domain name for most uses */
                 *pine_exe,	 /* argv[0], used to find sibling pico */
-#ifndef	DOS
                 *pine_conf,	 /* Location of global pine.conf */
-#endif
                 *pinerc;	 /* Location of user's pinerc */
 
     SortOrder    sort_order, current_sort_order,
@@ -767,10 +755,6 @@ void	 gf_nvtnl_local(FILTER_S *, int, int);
 void	 gf_local_nvtnl(FILTER_S *, int, int);
 void	 gf_prefix(FILTER_S *, int, int);
 void	 gf_prefix_opt(char *);
-#ifdef	DOS
-void	 gf_translate(FILTER_S *, int, int);
-void	 gf_translate_opt(unsigned char *, unsigned);
-#endif
 
 /*--- folder.c ---*/
 void        folder_screen(struct pine *);
@@ -867,7 +851,6 @@ char *last_cmpnt(char *);
 int   expand_foldername(char *);
 char *fnexpand(char *, int);
 char *filter_filename(char *);
-long  disk_quota(char *, int *);
 char *read_file(char *);
 FILE *create_tmpfile(void);
 char *temp_nam(char *, char *);
@@ -887,10 +870,6 @@ char *local_name_lookup(char *);
 int   change_passwd(void);
 int   mime_can_display(int, char *, PARAMETER *);
 void  gf_play_sound(FILTER_S *, int, int);
-#ifdef	DOS
-void *dos_cache(MAILSTREAM *, long, long);
-char *dos_gets(readfn_t, void *, unsigned long);
-#endif
 
 /*--- other.c ---*/
 int  lock_keyboard(void);

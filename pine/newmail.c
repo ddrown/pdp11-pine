@@ -101,12 +101,7 @@ new_mail(cursor_moved, force, time_for_check_point)
     MAILSTREAM   *stream;
     register struct pine *pine_state;
     int           checknow = 0;
-#ifdef	DOS
-    FILE	  *old_sort;
-    long           old_sort_val;
-#else
     long          *old_sort;
-#endif
 
     dprint(9, (debugfile, "new mail called (%p %d %d)\n",
                cursor_moved, force, time_for_check_point));
@@ -209,17 +204,8 @@ new_mail(cursor_moved, force, time_for_check_point)
 
         if(ps_global->sort_allocated <= ps_global->max_msgno + 1){
             /*--- Pad out the sort array if needed ----*/
-#ifdef	DOS
-	    /*
-	     * Blindly doubling the array size is too costly under
-	     * dos.
-	     */
-	    while(ps_global->sort_allocated < ps_global->max_msgno + 1)
-		ps_global->sort_allocated += 64;
-#else
             ps_global->sort_allocated = max(ps_global->max_msgno + 1,
                                             ps_global->sort_allocated * 2);
-#endif
             fs_resize((void **)&(ps_global->sort),
                       (size_t)ps_global->sort_allocated * sizeof(long));
         }
@@ -230,22 +216,9 @@ new_mail(cursor_moved, force, time_for_check_point)
         }
 
 	if(ps_global->sort_allocated) {
-#ifdef	DOS
-	    if(old_sort = create_tmpfile()){
-		for(x = 1; x <= ps_global->max_msgno; x++){
-		    if(fwrite((void *)&(ps_global->sort[x]), sizeof(long), 
-			      (size_t)1, old_sort) != 1){
-			fclose(old_sort);
-			old_sort = NULL;
-			break;
-		    }
-		}
-	    }
-#else
            old_sort = (long *)fs_get(sizeof(long)*(size_t)ps_global->sort_allocated);
            for(x = 1; x <= ps_global->max_msgno; x++)
              old_sort[x] = ps_global->sort[x];
-#endif
         }  else {
             old_sort = NULL;
         }
@@ -282,23 +255,9 @@ new_mail(cursor_moved, force, time_for_check_point)
 
         /* Figure out the lowest position message sorted too */
         if(old_sort != NULL){
-#ifdef	DOS
-	    fseek(old_sort, 0L, 0);
-#endif
 	    for(x = 1; x <= ps_global->max_msgno; x++) {
-#ifdef	DOS
-		if(fread(&old_sort_val,sizeof(long),(size_t)1,old_sort) != 1){
-		    fclose(old_sort);
-		    old_sort = NULL;
-		    break;
-		}
-
-		if(ps_global->sort[x] != old_sort_val)
-		  break;
-#else
 		if(ps_global->sort[x] != old_sort[x])
 		  break;
-#endif
 	    }
 	}
 
@@ -316,11 +275,7 @@ new_mail(cursor_moved, force, time_for_check_point)
                    min_changed_sorted_msgno));
 
         if(old_sort != NULL)
-#ifdef	DOS
-	  fclose(old_sort);
-#else
           fs_give((void **)&old_sort);
-#endif
 
 	if((ps_global->current_sort_order != SortArrival) ||
 	                                      ps_global->current_reverse_sort)

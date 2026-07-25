@@ -889,10 +889,6 @@ modeline(WINDOW *wp)
 
 	n = 0;
 	c.a = 1;
-#if     MSDOS
-	vtmove(1, 0);
-	vteeol();
-#endif
 	vscreen[n]->v_flag |= VFCHG; /* Redraw next time. */
 	vtmove(n, 0);		/* Seek to right line. */
 
@@ -2052,12 +2048,6 @@ wkeyhelp(char *keys, char *helptxt)
     char *bufend = s + sizeof(s) - 1;	/* leave room for the trailing NUL */
     int  i, j, spaces, index, copy, extra;
 
-    /*
-     * make hardware cursor position change known!!
-     */
-#if	defined(DOS) && defined(MOUSE)
-    register_keys(keys, helptxt, NODATA);
-#endif
     extra  = (kbufp && kbufp[2] == ',') ? 2 : 3;
     spaces = term.t_ncol/6;
     for(i=1;i>=0;i--){
