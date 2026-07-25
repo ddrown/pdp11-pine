@@ -59,7 +59,7 @@ LN=          ln -s
 MAKE=        make
 OPTIMIZE=    # -O
 PROFILE=     # -pg
-DEBUG=       -g -DDEBUG
+DEBUG=       -g
 
 LIBES=       -ltermcap -lc -lcrypt
 LOCLIBES=    ../pico/libpico.a ../c-client/c-client.a

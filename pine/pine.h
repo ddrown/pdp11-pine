@@ -310,7 +310,6 @@
 
 /* list of feature numbers (which bit goes with which feature) */
 #define F_CAN_SUSPEND               0
-#define F_EXPANDED_FOLDERS          1
 
 
 
@@ -606,9 +605,7 @@ struct pine {
                 *localdomain,    /* The (DNS) domain this host resides in */
                 *userdomain,     /* The per user domain from .pinerc or */
                 *maildomain,     /* Domain name for most uses */
-                *pine_exe,	 /* argv[0], used to find sibling pico */
-                *pine_conf,	 /* Location of global pine.conf */
-                *pinerc;	 /* Location of user's pinerc */
+                *pine_exe;	 /* argv[0], used to find sibling pico */
 
     SortOrder    sort_order, current_sort_order,
                  sort_types[20];

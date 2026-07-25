@@ -128,14 +128,8 @@ Loop: while(--ac > 0 && **++av == '-') {
 		 case 'i':
 		   pine_state->start_in_index = 1;
 		   break;
-/* JUST WHILETESTINGFOLDERS */
-		 case 'l':
-		   F_TURN_ON(F_EXPANDED_FOLDERS,pine_state);
-		   break;
-/* END OF WHILETESTINGFOLDERS */
 		 /* these take arguments */
-		 case 'f': case 'p': case 'I':  /* string args */
-		 case 'P':  /* also a string */
+		 case 'f': case 'I':  /* string args */
 		 case 'd': case 'n':  /* integer args */
 		   if(*++*av) {
 		      str = *av;
@@ -153,14 +147,6 @@ Loop: while(--ac > 0 && **++av == '-') {
 		       break;
 		     case 'I':
 		       cmd_list = str;
-		       break;
-		     case 'p':
-		       if(str != NULL)
-			  pine_state->pinerc = cpystr(str);
-		       break;
-		     case 'P':
-		       if(str != NULL)
-			  pine_state->pine_conf = cpystr(str);
 		       break;
 #ifdef	DEBUG
 		     case 'd':
@@ -257,10 +243,6 @@ args_help(void)
         printf("\t -I <keystroke_list>\tInitial keystrokes to be executed\n");
         printf("\t -n <number>\tEntry in index to begin on\n");
 	printf("\t -o \t\tReadOnly - Open first folder read-only\n");
-        printf("\t -p <pinerc>\tSpecify alternate .pinerc file\n");
-        printf("\t -P <pine.conf>\tSpecify alternate pine.conf file\n");
-/* WHILE TESTING FOLDERS */
-printf("\t -l\t\tList - Expand List of folder collections by default\n");
 	printf("\n");
 	printf("\n");
 	exit(1);

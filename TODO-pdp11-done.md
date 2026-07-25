@@ -5316,3 +5316,88 @@ either, so removed `-k`, `F_USE_FK`, and `init_keyboard`/
 - **Size delta**: `bin/pine` text 818456 -> 816608 (-1848 bytes) --
   a real win, since most of this code (the `screen.c` keymenu-layout
   math especially) was genuinely compiled, not preprocessor-stripped.
+
+### Remove `-l`/`-p`/`-P` and their dead `F_EXPANDED_FOLDERS`/`pinerc`/`pine_conf` backing fields
+
+Follow-on survey of every remaining `pine/args.c` flag, asking of each
+"does anything still read the state this sets?" Three didn't:
+
+- **`-l`** (`F_EXPANDED_FOLDERS`): grepped the entire tree for any
+  `F_ON(F_EXPANDED_FOLDERS,...)` reader -- there was none, anywhere,
+  ever (unlike `F_USE_FK`, which at least had real readers before
+  this project turned them all off). The surrounding `/* JUST
+  WHILETESTINGFOLDERS */`/`/* END OF WHILETESTINGFOLDERS */` comments
+  suggest this was UW-internal test scaffolding that never got wired
+  to anything. Removed the `-l` case, its `args_help()` line, and the
+  `F_EXPANDED_FOLDERS` `#define` (bit 1; `F_CAN_SUSPEND`, bit 0, is
+  now the only feature bit left).
+- **`-p <pinerc>`**/**`-P <pine.conf>`**: both just stored a path into
+  `pine_state->pinerc`/`pine_conf`, but `read_pinerc()` -- the only
+  function that would ever open either path -- was already deleted
+  entirely in an earlier session ("Removed `read_pinerc()` and
+  `first_time_user` entirely", above). Grepped for every `->pinerc`/
+  `->pine_conf` reference: only the `-p`/`-P` writes themselves and
+  `init.c`'s `if(!ps_global->pinerc) build_path(...)` default-path
+  fallback (itself just populating a field nothing reads). Removed
+  both flag cases, their `args_help()` lines, the `pinerc`/`pine_conf`
+  fields from `struct pine` (`pine.h`), and `init_vars()`'s default-path
+  block along with the now-unused `buf[MAXPATH+1]` local it needed.
+- **Kept**: `-h`, `-z` (`F_CAN_SUSPEND`, real job-control suspend),
+  `-i`/`-n` (`start_in_index`/`start_entry`, read in `pine.c`/
+  `init.c`/`mailcmd.c`), `-o` (`open_readonly_on_startup`, read in
+  `mailcmd.c`), `-f` (folder to open), `-sort`, `-I` (initial
+  keystrokes, drives `process_init_cmds()`), and `-d` (already
+  `#ifdef DEBUG`-gated, feeds `dprint()`) -- all confirmed to have
+  real live consumers.
+- **Test harness fallout**: `test/smoketest.py`'s `Session` was
+  unconditionally passing `-p <tmp-path>` to every spawned `bin/pine`
+  (to isolate `.pinerc` reads from a real one, back when
+  `read_pinerc()` still existed) -- with `-p` gone this made every
+  single test hit `args.c`'s `default: ... ++usage;` path and exit
+  via `args_help()`, dropping the suite from 26/26 to 2/26. Fixed by
+  no longer passing `-p` at all and just writing the seed `.pinerc` to
+  the conventional `$HOME/.pinerc` path when a test asks for one --
+  `test_pinerc_not_parsed.py` still writes there and still confirms
+  the content is never consulted, since nothing reads that path by
+  any mechanism now. Updated both files' stale comments (referencing
+  the since-fully-removed `read_pinerc()`/`first_time_user`) to match.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 52 warnings
+  before and after (this merge's post-`two/main` baseline -- none
+  new). Full smoketest suite, 26/26 (after the harness fix above;
+  first run without it caught the `-p` breakage immediately).
+- **Size delta**: `bin/pine` text 816328 -> 815600 (-728 bytes).
+
+### Remove `test_pinerc_not_parsed`, its `.pinerc` seeding, and disable `-DDEBUG`
+
+Follow-on to the `-p`/`-P` removal above. Two more loose ends:
+
+- **`test/cases/test_pinerc_not_parsed.py`**: now that `-p` is gone
+  and nothing reads `.pinerc` by any mechanism, this test's own
+  premise (seed a `.pinerc`, confirm it's ignored) has nothing left
+  to guard against -- there's no code path left that could regress
+  into reading it. Deleted the test case, and removed
+  `test/smoketest.py`'s `Session(pinerc=...)` parameter and its
+  `.pinerc`-file-writing logic (its only caller).
+- **`pine/makefile.lnx`**: `DEBUG=-g -DDEBUG` unconditionally compiled
+  in the `-DDEBUG` preprocessor define, which is what makes `dprint()`
+  (`pine.h`) expand to a real `fprintf`-to-`debugfile` call instead of
+  its no-op `#else` branch -- so hundreds of `dprint(...)` call sites
+  throughout the tree, plus the `-d`/debug-level argv handling and the
+  `debug`/`debugfile` globals, were all being compiled into every dev
+  build. Changed `DEBUG=` to just `-g` (keeping debug symbols for
+  gdb, dropping the `DEBUG` macro itself). Every `#ifdef DEBUG` site
+  checked beforehand was already cleanly gated (`headers.h`'s
+  `debug`/`debugfile` externs, `pine.h`'s `init_debug()` prototype,
+  `args.c`'s `-d` case), so no orphaned-reference fallout.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 52 warnings
+  (unchanged -- the dropped `dprint()` call sites weren't warning
+  sources). Full smoketest suite, 25/25 (one fewer than before,
+  matching the deleted test case).
+- **Size delta**: `bin/pine` text 815600 -> 780448 (**-35152 bytes**)
+  -- by far the largest single-change win in this project so far,
+  confirming `dprint()`'s hundreds of call sites (format strings,
+  `debugfile`/`debug` checks, the arguments computed just to log them)
+  were real compiled weight, not preprocessor-stripped noise. Left
+  the underlying `DEBUG`-gated machinery itself in place -- see the
+  new TODO to investigate removing it outright rather than just
+  disabling the build define.

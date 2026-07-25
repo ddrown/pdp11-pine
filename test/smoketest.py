@@ -64,7 +64,7 @@ class Session:
 
     def __init__(self, mbox=None, args=None, timeout=DEFAULT_TIMEOUT,
                  dismiss_splash=True, postponed_mail=None,
-                 sendmail_stub=False, pinerc=None):
+                 sendmail_stub=False):
         if not os.path.exists(PINE_BIN):
             raise SmoketestFailure(
                 "%s not found -- build it first (./build lnx)" % PINE_BIN)
@@ -103,16 +103,6 @@ class Session:
             with open(self.mbox_path, "w") as f:
                 f.write(mbox)
             argv += ["-f", self.mbox_path]
-        pinerc_path = os.path.join(self.home, ".pinerc")
-        if pinerc is not None:
-            # Seed a real .pinerc *before* pine starts, so a test can
-            # confirm read_pinerc() (pine/init.c) still notes the file's
-            # presence (first_time_user stays unset) without parsing any
-            # of its contents -- see TODO-pdp11-done.md's bootstrap-only
-            # stub cut.
-            with open(pinerc_path, "w") as f:
-                f.write(pinerc)
-        argv += ["-p", pinerc_path]
         if args:
             argv += list(args)
 
