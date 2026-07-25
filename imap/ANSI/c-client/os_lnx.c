@@ -180,7 +180,7 @@ unsigned long strcrlflen (STRING *s)
 
 static char *uname = NIL;
 
-char *myusername ()
+char *myusername (void)
 {
   return uname ? uname : (uname = cpystr (getpwuid (geteuid ())->pw_name));
 }
@@ -192,7 +192,7 @@ char *myusername ()
 
 char *hdname = NIL;
 
-char *myhomedir ()
+char *myhomedir (void)
 {
   char *home;
   if (hdname) return hdname;

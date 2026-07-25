@@ -70,6 +70,7 @@ void      parse_postponed_header(char *, char *, int);
 void      create_message_body(BODY **);
 static    char *call_sendmail(ENVELOPE *, BODY *);
 static    int   call_system(char *);
+static    int   check_addresses(ENVELOPE *);
 
 /*
  * Pines version of c-client routines, but changed to allow
@@ -944,7 +945,7 @@ Returns: 0 if OK, and 1 if the message shouldn't be sent
 Alls queues a message indicating what happened
   ---*/
 
-int
+static int
 check_addresses(ENVELOPE *e)
 {
     ADDRESS *a;
@@ -1368,7 +1369,7 @@ writing a MIME body out is complex business so we use it here.
 We must convert the network CRLF to the local new line convention, in this
 case on UNIX it's LF.
  ----*/
-int
+static int
 unix_puts(void *stream_x, char *string)
 {
     FILE *stream = (FILE *)stream_x;
@@ -1826,7 +1827,7 @@ static char       l_out_buf[L_OUT_BUF_LEN + 2];
 /*
  * l_flust_net - empties gf_io terminal function's buffer
  */
-void
+static void
 l_flush_net(void)
 {
     if(c_in_buf){
@@ -1846,7 +1847,7 @@ l_flush_net(void)
  *          (e.g. unix_puts for call_sendmail).
  *
  */
-int
+static int
 l_putc(int c)
 {
     l_out_buf[c_in_buf++] = (char) c;

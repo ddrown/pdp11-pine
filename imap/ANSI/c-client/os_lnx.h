@@ -68,6 +68,6 @@ void fatal (char *string);
 unsigned long strcrlfcpy (char **dst,unsigned long *dstl,char *src,
 			  unsigned long srcl);
 unsigned long strcrlflen (STRING *s);
-char *myusername ();
-char *myhomedir ();
+char *myusername (void);
+char *myhomedir (void);
 char *lockname (char *tmp,char *fname);

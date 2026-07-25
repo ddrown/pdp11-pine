@@ -186,19 +186,19 @@
  * minimize the number of times we have to fetch all of the flags for all
  * messages in the folder.
  */
-#define	FETCH_ALL_FLAGS(s) {long i;					      \
+#define	FETCH_ALL_FLAGS(s) {long faf_msgno;				      \
 			    if(s == ps_global->mail_stream){		      \
-				i = max(ps_global->last_msgno_flagged,1L);    \
+				faf_msgno = max(ps_global->last_msgno_flagged,1L); \
 				ps_global->last_msgno_flagged = s->nmsgs;     \
 			    }						      \
 			    else					      \
-			      i = 1L;					      \
+			      faf_msgno = 1L;				      \
 									      \
-			    if(i < s->nmsgs){				      \
-				char         sequence[48];		      \
+			    if(faf_msgno < s->nmsgs){			      \
+				char         faf_sequence[48];		      \
 									      \
-				sprintf(sequence,"%ld:%ld", i, s->nmsgs);     \
-				mail_fetchflags(s, sequence);		      \
+				sprintf(faf_sequence,"%ld:%ld", faf_msgno, s->nmsgs); \
+				mail_fetchflags(s, faf_sequence);	      \
 			    }						      \
 			   }
 
@@ -871,6 +871,8 @@ long  disk_quota(char *, int *);
 char *read_file(char *);
 FILE *create_tmpfile(void);
 char *temp_nam(char *, char *);
+int   fget_pos(FILE *, fpos_t *);
+int   fset_pos(FILE *, fpos_t *);
 void  coredump(void);
 void  getdomainnames(char *, int, char *, int);
 char *canonical_name(char *);
@@ -978,7 +980,7 @@ void sstrcpy(char **, char *);
 char *month_abbrev(int);
 char *week_abbrev(int);
 void  parse_date(char *, struct date *);
-int   compare_dated(struct date *, struct date *);
+int   compare_dates(struct date *, struct date *);
 void  convert_to_gmt(struct date *);
 char *pretty_command(int);
 char *repeat_char(int, int);
@@ -1011,7 +1013,7 @@ void PutLine1(int, int, char *, void *);
 void PutLine2(int, int, char *, void *, void *);
 void PutLine4(int, int, char *, void *, void *, void *, void *);
 void PutLine5(int, int, char *, void *, void *, void *, void *, void *);
-int  CenterLine(int, char *);
+int  Centerline(int, char *);
 void CleartoEOLN(void);
 void ClearScreen(void);
 void MoveCursor(int, int);

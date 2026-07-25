@@ -75,6 +75,7 @@ char      *show_multipart(MESSAGECACHE *, int);
 MimeShow   mime_show(BODY *);
 char      *part_desc(char *,BODY *, int);
 char      *display_parameters(PARAMETER *);
+static int match_charset(char *);
 
 
 
@@ -343,10 +344,10 @@ char *
 body_type_names(t)
      int t;
 {
-    static char *body_types[] = {"Text", "Multipart", "Message", 
+    static char *body_type_names_disp[] = {"Text", "Multipart", "Message",
                                  "Application", "Audio", "Image",
                                  "Video", "Other"};
-    return(body_types[t]);
+    return(body_type_names_disp[t]);
 }
 
 /*----------------------------------------------------------------------
@@ -795,7 +796,7 @@ decode_text(att, msgno, pc, style, display_bound)
 		 The problem was that we were sometimes preventing people
 		 from seeing text which they could at least read partially.)
   ----*/
-int
+static int
 match_charset(char *text_char_set)
 {
     if(!text_char_set || strucmp(text_char_set, "us-ascii") == 0)

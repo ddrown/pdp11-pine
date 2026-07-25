@@ -68,11 +68,11 @@ int ifile(char *);
 int
 fileread(int f, int n)
 {
-        register int    s;
+        register int    status;
         char fname[NFILEN];
 
-        if ((s=mlreply("Read file: ", fname, NFILEN, QFFILE)) != TRUE)
-                return(s);
+        if ((status=mlreply("Read file: ", fname, NFILEN, QFFILE)) != TRUE)
+                return(status);
 
         return(readin(fname, TRUE));
 }
@@ -117,7 +117,7 @@ static char *writehelp[] = {
 int
 insfile(int f, int n)
 {
-        register int    s;
+        register int    status;
         char fname[NFILEN], dir[NFILEN];
         int	retval, bye = 0;
         char	*prompt = "Insert file: ";
@@ -135,15 +135,15 @@ insfile(int f, int n)
 	    if(Pmaster == NULL)
 	      sgarbk = TRUE;
 
-            if ((s=mlreplyd(prompt,fname,NFILEN,QDEFLT|QFFILE)) != TRUE){
-		switch(s){
+            if ((status=mlreplyd(prompt,fname,NFILEN,QDEFLT|QFFILE)) != TRUE){
+		switch(status){
 		  case (CTRL|'T'):
 		    if(*fname && isdir(fname, NULL))
 		      strcpy(dir, fname);
 		    else
 		      strcpy(dir, gethomedir(NULL));
 
-		    if((s = FileBrowse(dir, fname, NULL)) == 1){
+		    if((status = FileBrowse(dir, fname, NULL)) == 1){
 			strcat(dir, S_FILESEP);
 			strcat(dir, fname);
 			retval = ifile(dir);
@@ -153,7 +153,7 @@ insfile(int f, int n)
 		      fname[0] = '\0';
 
 		    refresh(FALSE, 1);
-		    if(s != 1){
+		    if(status != 1){
 			update(); 		/* redraw on return */
 			continue;
 		    }
@@ -170,7 +170,7 @@ insfile(int f, int n)
 		    update();
 		    continue;
 		  default:
-                    retval = s;
+                    retval = status;
 		    bye++;
 		}
             }
@@ -204,7 +204,7 @@ readin(char fname[],	/* name of file to read */
         register int    i;
         register WINDOW *wp;
         register BUFFER *bp;
-        register int    s;
+        register int    status;
         register int    nbytes;
         register int    nline;
 	register char	*sptr;		/* pointer into filename string */
@@ -214,8 +214,8 @@ readin(char fname[],	/* name of file to read */
 
         bp = curbp;                             /* Cheap.               */
 	ac.a = 0;
-        if ((s=bclear(bp)) != TRUE)             /* Might be old.        */
-                return (s);
+        if ((status=bclear(bp)) != TRUE)             /* Might be old.        */
+                return (status);
         bp->b_flag &= ~(BFTEMP|BFCHG);
 	/* removed 'C' mode detection */
 	/*
@@ -225,21 +225,21 @@ readin(char fname[],	/* name of file to read */
 	 */
 	strncpy(bp->b_fname, fname, NFILEN-1);
 	bp->b_fname[NFILEN-1] = '\0';
-        if ((s=ffropen(fname)) == FIOERR)       /* Hard file open.      */
+        if ((status=ffropen(fname)) == FIOERR)       /* Hard file open.      */
                 goto out;
-        if (s == FIOFNF) {                      /* File not found.      */
+        if (status == FIOFNF) {                      /* File not found.      */
                 emlwrite("New file", NULL);
                 goto out;
         }
         emlwrite("Reading file", NULL);
         nline = 0;
 	lflag = FALSE;
-        while ((s=ffgetline(line, NLINE)) == FIOSUC || s == FIOLNG) {
-		if (s == FIOLNG)
+        while ((status=ffgetline(line, NLINE)) == FIOSUC || status == FIOLNG) {
+		if (status == FIOLNG)
 			lflag = TRUE;
                 nbytes = strlen(line);
                 if ((lp1=lalloc(nbytes)) == NULL) {
-                        s = FIOERR;             /* Keep message on the  */
+                        status = FIOERR;             /* Keep message on the  */
                         break;                  /* display.             */
                 }
                 lp2 = lback(curbp->b_linep);
@@ -254,7 +254,7 @@ readin(char fname[],	/* name of file to read */
                 ++nline;
         }
         ffclose();                              /* Ignore errors.       */
-        if (s == FIOEOF) {                      /* Don't zap message!   */
+        if (status == FIOEOF) {                      /* Don't zap message!   */
                 sprintf(line,"Read %d line%s", nline, (nline > 1) ? "s" : "");
                 emlwrite(line, NULL);
         }
@@ -278,7 +278,7 @@ out:
 			  wp->w_flag |= WFMODE|WFHARD;
                 }
         }
-        if (s == FIOERR || s == FIOFNF)		/* False if error.      */
+        if (status == FIOERR || status == FIOFNF)		/* False if error.      */
                 return(FALSE);
         return (TRUE);
 }
@@ -297,7 +297,7 @@ int
 filewrite(int f, int n)
 {
         register WINDOW *wp;
-        register int    s;
+        register int    status;
         char            fname[NFILEN];
 	char	shows[128], *bufp;
 	long	l;		/* length returned from fexist() */
@@ -312,14 +312,14 @@ filewrite(int f, int n)
 	    wkeyhelp("GC00000T0000","Get Help,Cancel,To Files");
 	    sgarbk = TRUE;
 
-	    s=mlreplyd("File Name to write : ", fname, NFILEN, QDEFLT|QFFILE);
+	    status=mlreplyd("File Name to write : ", fname, NFILEN, QDEFLT|QFFILE);
 
 	    fixpath(fname, NFILEN);		/*  fixup ~ in file name  */
 
-	    switch(s){
+	    switch(status){
 	      case FALSE:
 		if(strlen(fname) == 0)		/* no file name to write to */
-		  return(s);
+		  return(status);
 	      case TRUE:
 		break;
 	      case (CTRL|'T'):
@@ -330,14 +330,14 @@ filewrite(int f, int n)
 		else
 		  strcpy(shows, gethomedir(NULL));
 
-		s = FileBrowse(shows, fname, NULL);
+		status = FileBrowse(shows, fname, NULL);
 		strcat(shows, S_FILESEP);
 		strcat(shows, fname);
 		strcpy(fname, shows);
 
 		refresh(FALSE, 1);
 		update();
-		if(s == 1)
+		if(status == 1)
 		  break;
 		else
 		  continue;
@@ -348,17 +348,17 @@ filewrite(int f, int n)
 		update();
 		continue;
 	      default:
-		return(s);
+		return(status);
 		break;
 	    }
 
 	    if(strcmp(fname, curbp->b_fname) == 0)
 		break;
 
-	    if((s=fexist(fname, "w", &l)) == FIOSUC){ /* exists.  overwrite? */
+	    if((status=fexist(fname, "w", &l)) == FIOSUC){ /* exists.  overwrite? */
 
 		sprintf(shows, "File \"%s\" exists, OVERWRITE", fname);
-		if((s=mlyesno(shows, FALSE)) != TRUE){
+		if((status=mlyesno(shows, FALSE)) != TRUE){
 		    if((bufp = strrchr(fname,'/')) == NULL)
 		      fname[0] = '\0';
 		    else
@@ -367,17 +367,17 @@ filewrite(int f, int n)
 		else
 		  break;
 	    }
-	    else if(s == FIOFNF){
+	    else if(status == FIOFNF){
 		break;				/* go write it */
 	    }
 	    else{				/* some error, can't write */
-		fioperr(s, fname);
+		fioperr(status, fname);
 		return(ABORT);
 	    }
 	}
 	emlwrite("Writing...", NULL);
 
-        if ((s=writeout(fname)) != -1) {
+        if ((status=writeout(fname)) != -1) {
 	        if(!(gmode&MDTOOL)){
 		    strcpy(curbp->b_fname, fname);
 		    curbp->b_flag &= ~BFCHG;
@@ -385,18 +385,18 @@ filewrite(int f, int n)
 		    wp = wheadp;                    /* Update mode lines.   */
 		    while (wp != NULL) {
                         if (wp->w_bufp == curbp)
-			    if((Pmaster && s == TRUE) || Pmaster == NULL)
+			    if((Pmaster && status == TRUE) || Pmaster == NULL)
                                 wp->w_flag |= WFMODE;
                         wp = wp->w_wndp;
 		    }
 		}
 
-		if(s > 1)
-		  emlwrite("Wrote %d lines", (void *)(long)s);
+		if(status > 1)
+		  emlwrite("Wrote %d lines", (void *)(long)status);
 		else
 		  emlwrite("Wrote 1 line", NULL);
         }
-        return ((s == -1) ? FALSE : TRUE);
+        return ((status == -1) ? FALSE : TRUE);
 }
 
 
@@ -413,7 +413,7 @@ int
 filesave(int f, int n)
 {
         register WINDOW *wp;
-        register int    s;
+        register int    status;
 
 	if (curbp->b_mode&MDVIEW)	/* don't allow this command if	*/
 		return(rdonly());	/* we are in read only mode	*/
@@ -426,7 +426,7 @@ filesave(int f, int n)
         }
 
 	emlwrite("Writing...", NULL);
-        if ((s=writeout(curbp->b_fname)) != -1) {
+        if ((status=writeout(curbp->b_fname)) != -1) {
                 curbp->b_flag &= ~BFCHG;
                 wp = wheadp;                    /* Update mode lines.   */
                 while (wp != NULL) {
@@ -435,13 +435,13 @@ filesave(int f, int n)
                                 wp->w_flag |= WFMODE;
                         wp = wp->w_wndp;
                 }
-		if(s > 1){
-		    emlwrite("Wrote %d lines", (void *)(long)s);
+		if(status > 1){
+		    emlwrite("Wrote %d lines", (void *)(long)status);
 		}
 		else
 		  emlwrite("Wrote 1 line", NULL);
         }
-        return (s);
+        return (status);
 }
 
 /*
@@ -457,27 +457,27 @@ filesave(int f, int n)
 int
 writeout(char *fn)
 {
-        register int    s;
+        register int    status;
         register LINE   *lp;
         register int    nline;
 	char     line[80];
 
-        if ((s=ffwopen(fn)) != FIOSUC)          /* Open writes message. */
+        if ((status=ffwopen(fn)) != FIOSUC)          /* Open writes message. */
                 return (-1);
 
         lp = lforw(curbp->b_linep);             /* First line.          */
         nline = 0;                              /* Number of lines.     */
         while (lp != curbp->b_linep) {
-                if ((s=ffputline(&lp->l_text[0], llength(lp))) != FIOSUC)
+                if ((status=ffputline(&lp->l_text[0], llength(lp))) != FIOSUC)
                         break;
                 ++nline;
                 lp = lforw(lp);
         }
-        if (s == FIOSUC) {                      /* No write error.      */
-                s = ffclose();
+        if (status == FIOSUC) {                      /* No write error.      */
+                status = ffclose();
         } else                                  /* Ignore close error   */
                 ffclose();                      /* if a write error.    */
-        if (s != FIOSUC)                        /* Some sort of error.  */
+        if (status != FIOSUC)                        /* Some sort of error.  */
                 return (-1);
         return (nline);
 }
@@ -491,13 +491,13 @@ writeout(char *fn)
 char *writetmp(int f, int n)
 {
         static   char	fn[NFILEN];
-        register int    s;
+        register int    status;
         register LINE   *lp;
         register int    nline;
 
 	tmpname(fn);
-	
-        if ((s=ffwopen(fn)) != FIOSUC)          /* Open writes message. */
+
+        if ((status=ffwopen(fn)) != FIOSUC)          /* Open writes message. */
                 return(NULL);
 
 	chmod(fn, 0600);			/* fix access rights */
@@ -506,17 +506,17 @@ char *writetmp(int f, int n)
         nline = 0;                              /* Number of lines.     */
         while (lp != curbp->b_linep) {
 	    if(n || (!n && lp->l_text[0].c != '>')) {
-                if ((s=ffputline(&lp->l_text[0], llength(lp))) != FIOSUC)
+                if ((status=ffputline(&lp->l_text[0], llength(lp))) != FIOSUC)
                         break;
 	    }
             ++nline;
             lp = lforw(lp);
         }
-        if (s == FIOSUC) {                      /* No write error.      */
-                s = ffclose();
+        if (status == FIOSUC) {                      /* No write error.      */
+                status = ffclose();
         } else                                  /* Ignore close error   */
                 ffclose();                      /* if a write error.    */
-        if (s != FIOSUC){                       /* Some sort of error.  */
+        if (status != FIOSUC){                       /* Some sort of error.  */
 	        unlink(fn);
                 return(NULL);
 	}
@@ -537,12 +537,12 @@ int
 filename(int f, int n)
 {
         register WINDOW *wp;
-        register int    s;
+        register int    status;
         char            fname[NFILEN];
 
-        if ((s=mlreply("Name: ", fname, NFILEN, QFFILE)) == ABORT)
-                return (s);
-        if (s == FALSE)
+        if ((status=mlreply("Name: ", fname, NFILEN, QFFILE)) == ABORT)
+                return (status);
+        if (status == FALSE)
                 strcpy(curbp->b_fname, "");
         else
                 strcpy(curbp->b_fname, fname);
@@ -570,7 +570,7 @@ ifile(char fname[])
         register LINE   *lp2;
         register int    i;
         register BUFFER *bp;
-        register int    s;
+        register int    status;
         register int    nbytes;
         register int    nline;
 	int		lflag;		/* any lines longer than allowed? */
@@ -583,9 +583,9 @@ ifile(char fname[])
         bp->b_flag |= BFCHG;			/* we have changed	*/
 	bp->b_flag &= ~BFTEMP;			/* and are not temporary*/
 	ac.a = 0;
-        if ((s=ffropen(fname)) == FIOERR)       /* Hard file open.      */
+        if ((status=ffropen(fname)) == FIOERR)       /* Hard file open.      */
                 goto out;
-        if (s == FIOFNF) {                      /* File not found.      */
+        if (status == FIOFNF) {                      /* File not found.      */
 		emlwrite("No such file: %s",fname);
 		return(FALSE);
         }
@@ -599,12 +599,12 @@ ifile(char fname[])
 
         nline = 0;
 	lflag = FALSE;
-        while ((s=ffgetline(line, NLINE)) == FIOSUC || s == FIOLNG) {
-		if (s == FIOLNG)
+        while ((status=ffgetline(line, NLINE)) == FIOSUC || status == FIOLNG) {
+		if (status == FIOLNG)
 			lflag = TRUE;
                 nbytes = strlen(line);
                 if ((lp1=lalloc(nbytes)) == NULL) {
-                        s = FIOERR;             /* Keep message on the  */
+                        status = FIOERR;             /* Keep message on the  */
                         break;                  /* display.             */
                 }
 		lp0 = curwp->w_dotp;	/* line previous to insert */
@@ -626,7 +626,7 @@ ifile(char fname[])
         }
         ffclose();                              /* Ignore errors.       */
 	curwp->w_imarkp = lforw(curwp->w_imarkp);
-        if (s == FIOEOF) {                      /* Don't zap message!   */
+        if (status == FIOEOF) {                      /* Don't zap message!   */
 	        sprintf(dbuf,"Inserted %d line%s",nline,(nline>1) ? "s" : "");
 		emlwrite(dbuf, NULL);
         }
@@ -645,7 +645,7 @@ out:
 	curbp->b_markp = curwp->w_imarkp;
 	curbp->b_marko = curwp->w_imarko;
 
-        if (s == FIOERR)                        /* False if error.      */
+        if (status == FIOERR)                        /* False if error.      */
                 return (FALSE);
         return (TRUE);
 }

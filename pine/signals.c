@@ -229,8 +229,8 @@ quit_signal(int signo)
 
 Not much to do. Rely on periodic mail file check pointing.
   ----------------------------------------------------------------------*/
-int
-fast_clean_up()
+static int
+fast_clean_up(void)
 {
 #ifndef	DOS
     if(ps_global->inbox_stream != NULL && !ps_global->inbox_stream->lock){

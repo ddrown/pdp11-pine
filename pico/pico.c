@@ -460,7 +460,7 @@ suspend_composer(int f, int n)
 int
 wquit(int f, int n)
 {
-    register int    s;
+    register int    status;
 
     if(Pmaster){
 	char *prompt;
@@ -495,19 +495,19 @@ wquit(int f, int n)
         if (f != FALSE                          /* Argument forces it.  */
         || anycb() == FALSE                     /* All buffers clean.   */
 						/* User says it's OK.   */
-        || (s=mlyesno("Save modified buffer (ANSWERING \"No\" WILL DESTROY CHANGES)", -1)) == FALSE) {
+        || (status=mlyesno("Save modified buffer (ANSWERING \"No\" WILL DESTROY CHANGES)", -1)) == FALSE) {
                 vttidy();
                 exit(0);
         }
 
-	if(s == TRUE){
+	if(status == TRUE){
 	    if(filewrite(0,1) == TRUE)
 	      wquit(1, 0);
 	}
-	else if(s == ABORT){
+	else if(status == ABORT){
 	    emlwrite("\007Exit Cancelled", NULL);
 	}
-        return(s);
+        return(status);
     }
 
     return(FALSE);
@@ -603,7 +603,7 @@ pico_help(char *text[], char *title, int i)
  * zottree() - kills the key pad function key search tree
  *                and frees all lines associated with it!!!
  */
-int
+static int
 zottree(struct KBSTREE *nodeptr)
 {
     if(nodeptr != NULL){

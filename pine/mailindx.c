@@ -648,15 +648,15 @@ build_header_line(message_number)
     /*--- from ---*/
     from_length = 18 + max(0, ps_global->ttyo->screen_cols - 80 + 1)/2;
     if(envelope->from==NULL || address_is_us(envelope->from, ps_global)) {
-        ADDRESS *addr;
+        ADDRESS *to_addr;
         char    *a_string;
-        addr = envelope->to != NULL ? envelope->to :
+        to_addr = envelope->to != NULL ? envelope->to :
                  envelope->cc != NULL ? envelope->cc : NULL;
-        if(addr == NULL) {
+        if(to_addr == NULL) {
             sprintf(from, "%*.*s", from_length, from_length,
                   "                                        ");
         } else {
-            a_string =  addr_list_string(addr, 0);
+            a_string =  addr_list_string(to_addr, 0);
             sprintf(from, "To: %-*.*s", from_length - 4, from_length - 4,
                 a_string);
             fs_give((void **)&a_string);

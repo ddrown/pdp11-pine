@@ -62,12 +62,12 @@ int
 setfillcol(int f, int n)
 {
     char	numbuf[16];
-    register int s;
+    register int status;
 
     sprintf(numbuf,"%d",fillcol);
-    s = mlreplyd("Set fill column to : ", numbuf, 4, QDEFLT);
+    status = mlreplyd("Set fill column to : ", numbuf, 4, QDEFLT);
     fillcol = atoi(numbuf);
-    return(s);
+    return(status);
 }
 
 
@@ -177,7 +177,7 @@ tab(int f, int n)
 int
 newline(int f, int n)
 {
-    register int    s;
+    register int    status;
 
     if (curbp->b_mode&MDVIEW)	/* don't allow this command if	*/
       return(rdonly());	/* we are in read only mode	*/
@@ -200,8 +200,8 @@ newline(int f, int n)
 
     /* insert some lines */
     while (n--) {
-	if ((s=lnewline()) != TRUE)
-	  return (s);
+	if ((status=lnewline()) != TRUE)
+	  return (status);
     }
     return (TRUE);
 }
@@ -250,7 +250,7 @@ forwdel(int f, int n)
 int
 backdel(int f, int n)
 {
-    register int    s;
+    register int    status;
 
     if (curbp->b_mode&MDVIEW)	/* don't allow this command if	*/
       return(rdonly());	/* we are in read only mode	*/
@@ -279,10 +279,10 @@ backdel(int f, int n)
 	thisflag |= CFKILL;
     }
 
-    if ((s=backchar(f, n)) == TRUE)
-      s = ldelete(n, f);
+    if ((status=backchar(f, n)) == TRUE)
+      status = ldelete(n, f);
 
-    return (s);
+    return (status);
 }
 
 
@@ -338,11 +338,11 @@ yank(int f, int n)
 	int l;
 
 	if(worthit(&l) && !(lastflag&CFFILL)){
-	    register int  t = 0; 
-	    register int  i = 0;
+	    register int  t = 0;
+	    register int  ki = 0;
 	    register int  ch;
 
-	    while((ch=kremove(i++)) >= 0)
+	    while((ch=kremove(ki++)) >= 0)
 	      if(ch == '\n')
 		t++;
 	    if(t+l < curwp->w_toprow+curwp->w_ntrows)

@@ -96,136 +96,6 @@ killregion(int f, int n)
 
 
 /*
- * Copy all of the characters in the
- * region to the kill buffer. Don't move dot
- * at all. This is a bit like a kill region followed
- * by a yank. Bound to "M-W".
- */
-int
-copyregion(int f, int n)
-{
-    register LINE   *linep;
-    register int    loffs;
-    register int    s;
-    REGION          region;
-
-    if ((s=getregion(&region)) != TRUE)
-      return (s);
-
-    if ((lastflag&CFKILL) == 0)		/* Kill type command.   */
-      kdelete();
-
-    thisflag |= CFKILL;
-    linep = region.r_linep;		/* Current line.        */
-    loffs = region.r_offset;		/* Current offset.      */
-    while (region.r_size--) {
-	if (loffs == llength(linep)) {  /* End of line.         */
-	    if ((s=kinsert('\n')) != TRUE)
-	      return (s);
-	    linep = lforw(linep);
-	    loffs = 0;
-	} else {                        /* Middle of line.      */
-	    if ((s=kinsert(lgetc(linep, loffs).c)) != TRUE)
-	      return (s);
-	    ++loffs;
-	}
-    }
-
-    return (TRUE);
-}
-
-
-/*
- * Lower case region. Zap all of the upper
- * case characters in the region to lower case. Use
- * the region code to set the limits. Scan the buffer,
- * doing the changes. Call "lchange" to ensure that
- * redisplay is done in all buffers. Bound to
- * "C-X C-L".
- */
-int
-lowerregion(int f, int n)
-{
-    register LINE   *linep;
-    register int    loffs;
-    register int    c;
-    register int    s;
-    REGION          region;
-    CELL            ac;
-
-    ac.a = 0;
-    if (curbp->b_mode&MDVIEW)	/* don't allow this command if	*/
-      return(rdonly());	/* we are in read only mode	*/
-
-    if ((s=getregion(&region)) != TRUE)
-      return (s);
-
-    lchange(WFHARD);
-    linep = region.r_linep;
-    loffs = region.r_offset;
-    while (region.r_size--) {
-	if (loffs == llength(linep)) {
-	    linep = lforw(linep);
-	    loffs = 0;
-	} else {
-	    c = lgetc(linep, loffs).c;
-	    if (c>='A' && c<='Z'){
-		ac.c = c+'a'-'A';
-		lputc(linep, loffs, ac);
-	    }
-	    ++loffs;
-	}
-    }
-
-    return (TRUE);
-}
-
-/*
- * Upper case region. Zap all of the lower
- * case characters in the region to upper case. Use
- * the region code to set the limits. Scan the buffer,
- * doing the changes. Call "lchange" to ensure that
- * redisplay is done in all buffers. Bound to
- * "C-X C-L".
- */
-int
-upperregion(int f, int n)
-{
-    register LINE   *linep;
-    register int    loffs;
-    register int    c;
-    register int    s;
-    REGION          region;
-    CELL            ac;
-
-    ac.a = 0;
-    if (curbp->b_mode&MDVIEW)	/* don't allow this command if	*/
-      return(rdonly());	/* we are in read only mode	*/
-
-    if ((s=getregion(&region)) != TRUE)
-      return (s);
-
-    lchange(WFHARD);
-    linep = region.r_linep;
-    loffs = region.r_offset;
-    while (region.r_size--) {
-	if (loffs == llength(linep)) {
-	    linep = lforw(linep);
-	    loffs = 0;
-	} else {
-	    c = lgetc(linep, loffs).c;
-	    if (c>='a' && c<='z'){
-		ac.c = c - 'a' + 'A';
-		lputc(linep, loffs, ac);
-	    }
-	    ++loffs;
-	}
-    }
-
-    return (TRUE);
-}
-
-/*
  * This routine figures out the
  * bounds of the region in the current window, and
  * fills in the fields of the "REGION" structure pointed
@@ -302,12 +172,12 @@ markregion(int attr)
 {
     register LINE   *linep;
     register int    loffs;
-    register int    s;
+    register int    status;
     REGION          region;
     CELL            ac;
 
-    if ((s=getregion(&region)) != TRUE)
-      return (s);
+    if ((status=getregion(&region)) != TRUE)
+      return (status);
 
     lchange(WFHARD);
     linep = region.r_linep;

@@ -239,7 +239,7 @@ forwsearch(int f, int n)
 int
 readpattern(char *prompt)
 {
-	register int s;
+	register int status;
 	char tpat[NPAT+20];
 
 	strcpy(tpat, prompt);	/* copy prompt to output string */
@@ -250,14 +250,14 @@ readpattern(char *prompt)
         }
 	strcat(tpat, " : ");
 
-	s = mlreplyd(tpat, tpat, NPAT, QNORML);	 /* Read pattern */
+	status = mlreplyd(tpat, tpat, NPAT, QNORML);	 /* Read pattern */
 
-	if (s == TRUE)				/* Specified */
+	if (status == TRUE)				/* Specified */
 		strcpy(pat, tpat);
-	else if (s == FALSE && pat[0] != 0)	/* CR, but old one */
-		s = TRUE;
+	else if (status == FALSE && pat[0] != 0)	/* CR, but old one */
+		status = TRUE;
 
-	return(s);
+	return(status);
 }
 
 

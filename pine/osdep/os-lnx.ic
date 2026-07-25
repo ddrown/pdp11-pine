@@ -68,11 +68,9 @@ include(tempnam)
 ; uses a floating point exception to cause the coredump on some systems.
 include(coredump)
 
-; This is usually a call to gethostname.  That version is in the file hostname.
-; There is also a version called hostname.una which uses the uname system
-; call commonly found in SysV systems.  An unused version called
-; hostname.hom also exists.
-include(hostname)
+; No hostname() wrapper here: getdomainnames (below) calls gethostname()
+; directly, so the hostname/hostname.una/hostname.hom fragments are dead
+; code on this platform and are intentionally not included.
 
 ; Getdomainnames function.  All Unixes use domnames and DOS
 ; uses domnames.dos.

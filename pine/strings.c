@@ -347,7 +347,7 @@ week_abbrev(week_day)
 }
 
 
-int
+static int
 days_in_month(int month, int year)
 {
     static int d_i_m[] = {0,31,28,31,30,31,30,31,31,30,31,30,31};

@@ -624,13 +624,6 @@ putpad(char *str)
 }
 
 
-static int
-putnpad(char *str, int n)
-{
-    tputs(str, n, ttputc_i);
-    return(0);
-}
-
 #else
 
 int
