@@ -5226,3 +5226,93 @@ scraps:
   every site removed here was preprocessor-stripped dead weight
   already, same as most of dead-code-sweep buckets 1 and 2. `bin/pine`
   unaffected (pico runs as a separate subprocess, not linked in).
+
+### Remove `-k`/`F_USE_FK`/`init_keyboard`/`end_keyboard`
+
+This target is a UUCP-connected local station: real serial terminals
+or a Linux console, never NCSA Telnet on a PC. `init_keyboard()`/
+`end_keyboard()` (`ttyin.c`) sent `ESC[99h`/`ESC[99l` to put a vt100's
+keypad in "function key" mode, but only when `termname` (from
+`$TERM`/`tgetent()`) was exactly `"vt100"` or `"vt102"` *and*
+`F_USE_FK` was on -- and `F_USE_FK` defaults off, only ever turned on
+by the `-k` flag or a `pinef` argv0 alias. The function's own comment
+self-describes the sequence as "a hack for NCSA telnet on an IBM PC,"
+not a standard DEC keypad-mode escape (real DECKPAM/DECKPNM is
+`ESC=`/`ESC>`). Asked by the user whether this machinery was needed
+for real vt100 hardware or a Linux console; the answer was no for
+either, so removed `-k`, `F_USE_FK`, and `init_keyboard`/
+`end_keyboard` entirely, collapsing every reader to its permanent
+`F_USE_FK`-off outcome.
+
+- **`pine/ttyin.c`**: deleted `init_keyboard()`/`end_keyboard()` and
+  the `extern char termname[]` used only by them. Collapsed
+  `optionally_enter()`'s `PF2`/`PF3`/`^C` cases (PF2 now always
+  bleeps instead of acting as Enter; PF3 now always bleeps instead of
+  conditionally cancelling; `^C` cancels unless `disallow_cancel`) and
+  `validatekeys()` (PF1-PF12 are now unconditionally `KEY_JUNK`, since
+  function-key input mode can no longer be active). Removed the
+  now-dead `F_SET(F_USE_FK,...)` restore in `read_char()`'s
+  initial-command-sequence handling, and the `end_keyboard()` call in
+  `read_with_timeout()`'s fatal-read-error path.
+- **`pine/args.c`**: removed the `-k` flag's `case 'k'` handler, its
+  `args_help()` line, the `pinef` argv0-suffix alias that also set
+  `F_USE_FK`, and the now-unused `a0_len` local that alias needed.
+- **`pine/pine.h`**: removed the `F_USE_FK` feature-bit `#define`
+  (bit 2, numerically last, so no renumbering needed) and the
+  `orig_use_fkeys:1` bitfield from `struct pine` -- it existed solely
+  to save/restore `F_USE_FK` around the composer subprocess call and
+  has no other reader once `F_USE_FK` is gone.
+- **`pine/init.c`**: removed `process_init_cmds()`'s two
+  `F_TURN_ON`/`F_TURN_OFF(F_USE_FK,...)` calls; `fkeys`/`not_fkeys`
+  stay, still used by the "can't mix characters and function keys"
+  error check above them.
+- **`pine/imap.c`, `pine/mailbox.c`, `pine/signals.c`**: removed the
+  paired `end_keyboard()`/`init_keyboard()` calls bracketing the
+  disk-full "drop to a shell" escape hatch (`imap.c`/`mailbox.c`, two
+  near-identical copies of the same retry function) and `do_suspend()`
+  (`signals.c`).
+- **`pine/pine.c`**: removed the startup `init_keyboard()` call and
+  four more `end_keyboard()` sites (address-on-command-line exit,
+  folder-open failure, `quit_screen()`, `panic()`); collapsed the
+  default-command-key ternary (`ch = F_ON(F_USE_FK,...) ? f_key :
+  key`) to always use `key`; collapsed the "command not defined" `"F1"
+  : "?"` ternary to always `"?"`; collapsed `show_main_screen()`'s
+  keymenu-name ternary (`f_key` vs `key`) to always `key`; removed
+  `do_menu()`'s `use_fkeys` local and its `""  : pretty_command(key)`
+  ternary, always showing the key name now. Since `mkeys[].f_key` had
+  no readers left anywhere after these collapses, removed the
+  `f_key` field from `struct menu_key` and its value from all 11
+  `mkeys[]` initializer entries (chain-reaction orphaned-field
+  cleanup, same pattern as prior buckets).
+- **`pine/send.c`**: removed the dead `F_SET(F_USE_FK,...)` restore
+  in the composer's initial-command-sequence-cancel block, and the
+  `pine_flags |= F_ON(F_USE_FK,...) ? P_FKEYS : 0` line (pico's own
+  `-k`/`MDFKEY` toggle in `main.c` is independent and untouched --
+  this only removed pine's now-permanently-false contribution).
+- **`pine/mailcmd.c`, `pine/mailview.c`**: collapsed three more
+  `"F1" : "?"`/`PF4+rc : ctrl('T')` ternaries (bogus-command message
+  in `mailcmd.c` and `mailview.c`; the save-to-folder `^T` extra-key
+  setup in `mailcmd.c`, two sites) to their `F_USE_FK`-off half.
+- **`pine/screen.c`**: `output_keymenu()` and `format_keymenu()` had
+  the deepest `ufk` (`F_ON(F_USE_FK,...)`) entanglement -- column-width
+  math throughout `format_keymenu()` branched between `strlen(name)`
+  (alpha labels) and a fixed `2`/`3` width (`"F1"`.."F12"` labels).
+  Removed the `ufk`/`fkey` locals in both functions and collapsed
+  every branch to the alpha-label arithmetic; also collapsed
+  `format_keymenu()`'s cache-invalidation condition -- previously
+  `(F_ON(...) && orig_use_fkeys) || (F_OFF(...) && !orig_use_fkeys)`,
+  which is unconditionally true once both operands are permanently
+  false -- to just always refreshing the cached width/bitmap.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 164 warnings
+  both before and after (the pre-existing Tier 2 `-Wshadow`/
+  `-Wsign-compare` set -- none new, confirming no orphaned
+  locals/params were left behind by the collapses). Full smoketest
+  suite, 26/26. Manually drove a raw-pty session: Main Menu and its
+  keymenu footer show plain alpha key names (`?`/`C`/`I`/`L`/`S`/`Q`),
+  never `F1`-style labels; a bogus command (`9`) produces `Command
+  "9" not defined for this screen. Use ? for help` (not `Use F1 for
+  help`); `q` still raises the `Really quit pine` confirmation and
+  `n` still cancels back to the Main Menu.
+- **Size delta**: `bin/pine` text 818456 -> 816608 (-1848 bytes) --
+  a real win, since most of this code (the `screen.c` keymenu-layout
+  math especially) was genuinely compiled, not preprocessor-stripped.

@@ -347,11 +347,6 @@ process_init_cmds(ps, list)
       i = 0;
     }
 
-    if(fkeys && !not_fkeys)
-      F_TURN_ON(F_USE_FK,ps);
-    if(!fkeys && not_fkeys)
-      F_TURN_OFF(F_USE_FK,ps);
-
     ps->initial_cmds = (int *)fs_get((i+1) * sizeof(int));
     for(j = 0; j < i; j++)
 	ps->initial_cmds[j] = i_cmds[j];

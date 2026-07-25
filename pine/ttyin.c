@@ -359,7 +359,6 @@ read_with_timeout(int time_out)
      
          MoveCursor(ps_global->ttyo->screen_rows -1, 0);
          NewLine();
-         end_keyboard(F_ON(F_USE_FK,ps_global));
          end_tty_driver(ps_global);
          printf("\n\n\nPine finished. Error reading from terminal: %s\n",
            error_description(errno));
@@ -419,7 +418,6 @@ read_char(time_out)
       if(ps_global->in_init_seq) {
         ps_global->in_init_seq = 0;
         ps_global->save_in_init_seq = 0;
-	F_SET(F_USE_FK,ps_global,ps_global->orig_use_fkeys);
         /* draw screen */
         return(ctrl('L'));
       }
@@ -796,49 +794,6 @@ read_command(void)
 
 
 
-extern char termname[]; /* termname from ttyout.c-- affect keyboard*/
-/* -------------------------------------------------------------------
-     Set up the keyboard -- usually enable some function keys  (UNIX)
-
-    Args: struct pine 
-
-So far all we do here is turn on keypad mode for certain terminals
-
-Hack for NCSA telnet on an IBM PC to put the keypad in the right mode.
-This is the same for a vtXXX terminal or [zh][12]9's which we have 
-a lot of at UW
-  ----*/
-void
-init_keyboard(use_fkeys)
-     int use_fkeys;
-{
-    if(use_fkeys && (!strucmp(termname,"vt102") || !strucmp(termname,"vt100")))
-      printf("\033\133\071\071\150");
-
-}
-
-
-
-/*----------------------------------------------------------------------
-     Clear keyboard, usually disable some function keys           (UNIX)
-
-   Args:  pine state (terminal type)
-
- Result: keyboard state reset
-  ----*/
-void
-end_keyboard(use_fkeys)
-     int use_fkeys;
-{
-    if(use_fkeys && (!strcmp(termname, "vt102") || !strcmp(termname, "vt100"))){
-      printf("\033\133\071\071\154");
-      fflush(stdout);
-    }
-
-}
-
-    
-
 /*
  *
  */
@@ -1062,8 +1017,8 @@ optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
 
           /*--------------------  RETURN --------------------*/
 	  case PF2:
-	    if(F_OFF(F_USE_FK,ps_global)) goto bleep;
-	  case ctrl('J'): 
+	    goto bleep;
+	  case ctrl('J'):
 	  case ctrl('M'): 
 	    return_v = 0;
 	    break;
@@ -1146,11 +1101,11 @@ optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
             
 
 	    /*-------------------- Interrupt --------------------*/
-	  case ctrl('C'): /* ^C */ 
-	    if(F_ON(F_USE_FK,ps_global) || disallow_cancel) goto bleep;
+	  case ctrl('C'): /* ^C */
+	    if(disallow_cancel) goto bleep;
 	    goto cancel;
 	  case PF3:
-	    if(F_OFF(F_USE_FK,ps_global) || disallow_cancel) goto bleep;
+	    goto bleep;
 	  cancel:
 	    return_v = 1;
 	    if(saved_original != NULL)
@@ -1421,12 +1376,8 @@ int
 validatekeys(ch)
      int  ch;
 {
-    if(F_ON(F_USE_FK,ps_global)) {
-	if(ch >= 'a' && ch <= 'z')
-	  return(KEY_JUNK);
-    } else {
-	if(ch >= PF1 && ch <= PF12)
-	  return(KEY_JUNK);
-    }
+    if(ch >= PF1 && ch <= PF12)
+      return(KEY_JUNK);
+
     return(ch);
 }

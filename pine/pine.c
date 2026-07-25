@@ -274,8 +274,6 @@ main(int argc, char *argv[])
 
     /* put back in case we need to suppress output */
     pine_state->in_init_seq = pine_state->save_in_init_seq;
-            
-    init_keyboard(pine_state->orig_use_fkeys);
 
     strcpy(pine_state->inbox_name, INBOX_NAME);
     init_folders();		/* digest folder spec's */
@@ -318,7 +316,6 @@ main(int argc, char *argv[])
 		pine_state->save_in_init_seq = 0;
 		if (pine_state->initial_cmds)
 		    *pine_state->initial_cmds = 0;
-		F_SET(F_USE_FK,pine_state,pine_state->orig_use_fkeys);
 	    }
             do_index_border(1, 1, 1, NULL);
 	    pine_state->painted_footer_on_startup = 1;
@@ -335,7 +332,6 @@ main(int argc, char *argv[])
                 display_message('x');
                 sleep(4);
                 end_screen();
-                end_keyboard(F_ON(F_USE_FK,pine_state));
                 end_tty_driver(pine_state);
             
                 clear_index_cache();
@@ -404,7 +400,6 @@ main(int argc, char *argv[])
 
         fs_give((void **)&to);
         end_screen();
-        end_keyboard(F_ON(F_USE_FK,pine_state));
         end_tty_driver(pine_state);
         if(!good_addr) {
             fprintf(stderr, "Bad address: %s\n", error);
@@ -426,29 +421,28 @@ static unsigned char current_default_menu_item = DEFAULT_MENU_ITEM;
  */
 struct menu_key {
     char         *descrip;
-    unsigned int f_key;           /* function key that invokes this action */
     unsigned int key;             /* alpha key that invokes this action */
     unsigned int keymenu_number;  /* index into keymenu array for this cmd */
 };
 static struct menu_key mkeys[] = {
-  {"   %s     HELP               -  Get help using Pine", 
-            PF1, '?', HELP_KEY},
-  {"", UNUSED, UNUSED, UNUSED},
-  {"   %s     COMPOSE MESSAGE    -  Compose and send a message", 
-            OPF4, 'C', COMPOSE_KEY},
-  {"", UNUSED, UNUSED, UNUSED},
-  {"   %s     FOLDER INDEX       -  View messages in current folder", 
-            OPF7, 'I', INDEX_KEY},
-  {"", UNUSED, UNUSED, UNUSED},
+  {"   %s     HELP               -  Get help using Pine",
+            '?', HELP_KEY},
+  {"", UNUSED, UNUSED},
+  {"   %s     COMPOSE MESSAGE    -  Compose and send a message",
+            'C', COMPOSE_KEY},
+  {"", UNUSED, UNUSED},
+  {"   %s     FOLDER INDEX       -  View messages in current folder",
+            'I', INDEX_KEY},
+  {"", UNUSED, UNUSED},
   {"   %s     FOLDER LIST        -  Select a folder to view",
-            OPF5, 'L', FOLDER_KEY},
-  {"", UNUSED, UNUSED, UNUSED},
+            'L', FOLDER_KEY},
+  {"", UNUSED, UNUSED},
   {"   %s     SETUP              -  Configure or update Pine",
-            OPF9, 'S',SETUP_KEY},
-  {"", UNUSED, UNUSED, UNUSED},
-  {"   %s     QUIT               -  Exit the Pine program", 
-            OPF3, 'Q', QUIT_KEY},
-  {NULL, UNUSED, UNUSED, UNUSED}
+            'S',SETUP_KEY},
+  {"", UNUSED, UNUSED},
+  {"   %s     QUIT               -  Exit the Pine program",
+            'Q', QUIT_KEY},
+  {NULL, UNUSED, UNUSED}
 };
 
 /*----------------------------------------------------------------------
@@ -539,9 +533,7 @@ main_menu_screen(pine_state)
 
 	/*----- Validate the command ----*/
 	if(ch == ctrl('M') || ch == ctrl('J') || ch == PF4){/* set up default */
-	  ch = F_ON(F_USE_FK,pine_state)
-                                       ? mkeys[current_default_menu_item].f_key
-                                       : mkeys[current_default_menu_item].key;
+	  ch = mkeys[current_default_menu_item].key;
           if(ch <= 0xff && isupper(ch))
             ch = tolower(ch);
 	}
@@ -719,8 +711,7 @@ main_menu_screen(pine_state)
           bleep:
             q_status_message2(0, 0, 2,
 	      "\007Command \"%s\" not defined for this screen. Use %s for help",
-                              (void *)pretty_command(orig_ch),
-                              F_ON(F_USE_FK,pine_state) ? "F1" : "?");
+                              (void *)pretty_command(orig_ch), "?");
 	 } /* the switch */
     } /* the BIG while loop! */
 }
@@ -809,9 +800,7 @@ show_main_screen(pine_state, quick_draw, what, km)
 	      km->keys[mkeys[current_default_menu_item].keymenu_number].label);
       strcat(label, "]");
       km->keys[DEFAULT_KEY].label = label;
-      sprintf(name, "%s", F_ON(F_USE_FK,ps_global) ?
-		pretty_command(mkeys[current_default_menu_item].f_key) :
-		pretty_command(mkeys[current_default_menu_item].key));
+      sprintf(name, "%s", pretty_command(mkeys[current_default_menu_item].key));
       km->keys[DEFAULT_KEY].name = name;
       draw_keymenu(km, bitmap, ps_global->ttyo->screen_cols, -2, 0, what, 0);
       pine_state->mangled_footer = 0;
@@ -831,12 +820,10 @@ void
 do_menu(quick_draw)
     int quick_draw;
 {
-    int  dline, use_fkeys;
+    int  dline;
     char buf[MAX_SCREEN_COLS+1];
     static int last_inverse = -1;
 
-    use_fkeys = F_ON(F_USE_FK,ps_global);
-    
     /* leave room for keymenu, status line, and trademark message */
     for(dline = 3; dline < ps_global->ttyo->screen_rows - 4; dline++) {
         if(mkeys[dline-3].descrip == NULL)
@@ -849,7 +836,7 @@ do_menu(quick_draw)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
         sprintf(buf, mkeys[dline-3].descrip,
-                use_fkeys ? "" : pretty_command(mkeys[dline-3].key));
+                pretty_command(mkeys[dline-3].key));
 #pragma GCC diagnostic pop
         buf[ps_global->ttyo->screen_cols] = '\0';
 	if(dline-3 == current_default_menu_item)
@@ -990,7 +977,6 @@ quit_screen(pine_state)
     }
 
     end_screen();
-    end_keyboard(F_ON(F_USE_FK,pine_state));
     end_tty_driver(pine_state);
 
     clear_index_cache();
@@ -1298,7 +1284,6 @@ panic(message)
     MoveCursor(ps_global->ttyo->screen_rows -1, 0);
     NewLine();
     end_screen();
-    end_keyboard(ps_global != NULL ? F_ON(F_USE_FK,ps_global) : 0);
     end_tty_driver(ps_global);
     end_signals();
     dprint(1, (debugfile, "Pine Panic: %s\n", message));

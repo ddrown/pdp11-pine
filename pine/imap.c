@@ -479,7 +479,6 @@ mm_diskerror (stream, errcode, serious)
        
       case '!':
         EndInverse();
-        end_keyboard(ps_global != NULL ? F_ON(F_USE_FK,ps_global) : 0);
         end_tty_driver(ps_global);
         printf("\n\nPlease attempt to correct the error preventing the saving of the mail folder.\n");
         printf("For example if the disk is out of space try removing uneeded files.\n");
@@ -489,7 +488,6 @@ mm_diskerror (stream, errcode, serious)
         system("csh");
 
         init_tty_driver(ps_global);
-        init_keyboard(F_ON(F_USE_FK,ps_global));
         MoveCursor(line - 2, 0);
         return (0L); /* go retry it again */
        

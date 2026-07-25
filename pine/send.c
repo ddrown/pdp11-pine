@@ -710,7 +710,6 @@ pine_send(outgoing, body, editor_title, fcc, are_replying)
 	ps_global->save_in_init_seq = 0;
         if (ps_global->initial_cmds)
 	    *ps_global->initial_cmds = 0;
-	F_SET(F_USE_FK,ps_global,ps_global->orig_use_fkeys);
     }
 
     /*----- Fill in a few general parts of the envelope ----*/
@@ -748,7 +747,6 @@ pine_send(outgoing, body, editor_title, fcc, are_replying)
 
 	pine_flags  = 0;
 	pine_flags |= (F_ON(F_CAN_SUSPEND,ps_global)) ? P_SUSPEND : 0;
-	pine_flags |= (F_ON(F_USE_FK,ps_global)) ? P_FKEYS : 0;
 	pine_flags |= (are_replying || second_time) ? P_BODY : 0;
 
         dprint(9, (debugfile, "flags: %x\n", pine_flags));

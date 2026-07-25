@@ -1454,8 +1454,7 @@ unknown:
     	            /*----------- Unknown command -------*/
                     q_status_message2(0, 0, 2,
               "\007Command \"%s\" not defined for this screen. Use %s for help",
-                          (void *)pretty_command(orig_ch),
-                          F_ON(F_USE_FK,ps_global) ? "F1" : "?");
+                          (void *)pretty_command(orig_ch), "?");
     	        }
             }
             break;

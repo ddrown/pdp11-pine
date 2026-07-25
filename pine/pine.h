@@ -311,7 +311,6 @@
 /* list of feature numbers (which bit goes with which feature) */
 #define F_CAN_SUSPEND               0
 #define F_EXPANDED_FOLDERS          1
-#define F_USE_FK                    2
 
 
 
@@ -571,7 +570,6 @@ struct pine {
     unsigned     save_by_recipient:1;
     unsigned     save_by_last_saved:1;
     unsigned     full_header:1;         /* display full headers */
-    unsigned     orig_use_fkeys:1;
 
     unsigned     try_to_create:1;     /* flag to try mail_create during save */
     unsigned     use_full_hostname:1; /* Use full hostname vs just domain */
@@ -973,8 +971,6 @@ int optionally_enter(char *,int,int,int,int,int,char *,ESCKEY_S *,HelpType,int);
 int init_tty_driver(struct pine *);
 void end_tty_driver(struct pine *);
 int Raw(int);
-void end_keyboard(int);
-void init_keyboard(int);
 int validatekeys(int);
 
 /*-- ttyout.c --*/

@@ -234,7 +234,6 @@ fast_clean_up()
       mail_close(ps_global->mail_stream);
 
     end_screen();
-    end_keyboard(F_ON(F_USE_FK,ps_global));
     end_tty_driver(ps_global);
 
 #ifdef DEBUG
@@ -360,7 +359,6 @@ do_suspend(pine)
     expand_foldername(curf);
     then = time(0);
     dprint(1, (debugfile, "\n\n - %s --- SUSPEND ----  %s",curf,ctime(&then)));
-    end_keyboard(F_ON(F_USE_FK,pine));
     end_tty_driver(pine);
     end_screen();
     printf("\nPine suspended. Give the \"fg\" command to come back.\n");
@@ -373,7 +371,6 @@ do_suspend(pine)
                ctime(&now)));
     init_screen();
     init_tty_driver(pine);
-    init_keyboard(F_ON(F_USE_FK,pine));
 
     if(curf[0] == '{' &&
        (char *)mail_ping(ps_global->mail_stream) == NULL) {

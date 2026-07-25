@@ -97,12 +97,11 @@ output_keymenu(km, bm, row, column)
     int row, column;
 {
     register struct key *k;
-    int                  i, c, ufk, real_row, fkey, max_column;
+    int                  i, c, real_row, max_column;
     char                 temp[20];
     int			 off;
 
     off    	  = km->which * 12;
-    fkey          = 0;         /* Avoid ref before set warning */
     max_column    = ps_global->ttyo->screen_cols;
 
     if(ps_global->ttyo->screen_rows < 4 || max_column <= 0)
@@ -119,7 +118,6 @@ output_keymenu(km, bm, row, column)
 		   : km->keys[e].label == NULL ? "(null)" 
 		   : km->keys[e].label, km ? km->keys[e].column : 0));
     }
-    ufk = F_ON(F_USE_FK,ps_global);
     real_row = row > 0 ? row : ps_global->ttyo->screen_rows + row;
     dprint(9, (debugfile, "row: %d, real_row: %d, column: %d\n", row, 
                real_row, column)) ;
@@ -129,8 +127,6 @@ output_keymenu(km, bm, row, column)
         CleartoEOLN();
         for(c = 0, el = off+i, k = &km->keys[el]; k < &km->keys[off+12];
 							k += 2, el += 2) {
-            if(ufk)
-              fkey =  1 + k - &km->keys[off];
             if(!bitnset(el,bm) || k->name == NULL || k->column > max_column)
               continue;
      
@@ -142,11 +138,7 @@ output_keymenu(km, bm, row, column)
             }
 
             StartInverse();
-            if(ufk) {
-                sprintf(temp, "F%d", fkey);
-            } else {
-                strcpy(temp, k->name);
-            }
+            strcpy(temp, k->name);
             if(strlen(temp) + k->column > max_column)
               temp[max_column - k->column] = '\0';
             Write_to_screen(temp);
@@ -161,8 +153,7 @@ output_keymenu(km, bm, row, column)
               temp[max(0,max_column - c)] = '\0';
             Write_to_screen(temp);
             
-            c = strlen(k->label) + 1 + k->column +
-                (ufk ? (fkey > 9 ? 3 : 2) :strlen(k->name));
+            c = strlen(k->label) + 1 + k->column + strlen(k->name);
         }
     }
     fflush(stdout);
@@ -225,7 +216,7 @@ format_keymenu(km, bm, width, what, which)
     int which;  /* only used if what == AParticularTwelve */
 {
     short   spacing[6];
-    int     i, first, prev_end_top, prev_end_bot, ufk, top_column, bot_column;
+    int     i, first, prev_end_top, prev_end_bot, top_column, bot_column;
     int     off;  /* offset into keymenu */
     struct key *keytop, *keybot, *prev_keytop, *prev_keybot;
 
@@ -241,20 +232,10 @@ format_keymenu(km, bm, width, what, which)
     if(width == km->width[km->which] && equalbits(bm,km->bitmap,km->which))
       return;
 
-    /*
-     * If we're in the initial command sequence we may be using function
-     * keys instead of alphas, or vice versa, so we want to recalculate
-     * the formatting next time through.
-     */
-    if ((F_ON(F_USE_FK,ps_global) && ps_global->orig_use_fkeys) ||
-        (F_OFF(F_USE_FK,ps_global) && !ps_global->orig_use_fkeys)) {
-      km->width[km->which] = width;
-      savebits(km->bitmap, bm, km->which);
-    }
+    km->width[km->which] = width;
+    savebits(km->bitmap, bm, km->which);
 
     off = km->which * 12;
-
-    ufk = F_ON(F_USE_FK,ps_global);
 
     /* this spacing is column numbers for column key name ends in */
     /*       F1 Menu	   */
@@ -265,13 +246,10 @@ format_keymenu(km, bm, width, what, which)
 
 
     km->keys[off].column = km->keys[off+6].column = 0;
-    if(ufk)
-      first = 2;
-    else
-      first = max((bitnset(off,bm) && km->keys[off].name != NULL) ?
-	        strlen(km->keys[off].name) : 0,
-	        (bitnset(off+1,bm) && km->keys[off+1].name != NULL) ?
-	        strlen(km->keys[off+1].name) : 0);
+    first = max((bitnset(off,bm) && km->keys[off].name != NULL) ?
+	      strlen(km->keys[off].name) : 0,
+	      (bitnset(off+1,bm) && km->keys[off+1].name != NULL) ?
+	      strlen(km->keys[off+1].name) : 0);
 
     prev_keytop = &km->keys[off];
     prev_keybot = &km->keys[off+1];
@@ -286,14 +264,14 @@ format_keymenu(km, bm, width, what, which)
         if(!bitnset(ktop,bm) || keytop->name == NULL) {
             top_column = first + spacing[i];
         } else {
-            prev_end_top = 
+            prev_end_top =
                  prev_keytop->column +
-                 ((!bitnset(ktop-2,bm) || prev_keytop->name == NULL) ? 0 : 
-                   (ufk ? (i-1 >= 5 ? 3 : 2) : strlen(prev_keytop->name))) +
+                 ((!bitnset(ktop-2,bm) || prev_keytop->name == NULL) ? 0 :
+                   strlen(prev_keytop->name)) +
                  1 + ((!bitnset(ktop-2,bm) || prev_keytop->label==NULL) ? 0 :
 		 strlen(prev_keytop->label)) +
-                 1 + ((!bitnset(ktop,bm) || keytop->name == NULL) ? 0 : 
-                   (ufk ? (i >= 5 ? 3 : 2) : strlen(keytop->name)));
+                 1 + ((!bitnset(ktop,bm) || keytop->name == NULL) ? 0 :
+                   strlen(keytop->name));
             top_column = max(prev_end_top, first + spacing[i]);
             dprint(9, (debugfile,
                        "prev_col: %d, prev_end:%d, top_column:%d spacing:%d\n",
@@ -304,22 +282,22 @@ format_keymenu(km, bm, width, what, which)
         if(!bitnset(kbot,bm) || keybot->name == NULL) {
             bot_column = first + spacing[i];
         } else {
-            prev_end_bot = 
+            prev_end_bot =
                  prev_keybot->column +
                  ((!bitnset(kbot-2,bm) || prev_keybot->name  == NULL) ? 0 :
-                  (ufk ? (i-1 >= 4 ? 3 : 2) :strlen(prev_keybot->name))) +
+                  strlen(prev_keybot->name)) +
                  1 + ((!bitnset(kbot-2,bm) || prev_keybot->label==NULL) ? 0 :
 		 strlen(prev_keybot->label)) +
                  1 + ((!bitnset(kbot,bm) || keybot->name  == NULL) ? 0 :
-                  (ufk ? (i >= 4 ? 3 : 2) :strlen(keybot->name)));
+                  strlen(keybot->name));
             bot_column = max(prev_end_bot, first + spacing[i]);
         }
         keytop->column = max(bot_column, top_column) -
-                          ((!bitnset(ktop,bm) || keytop->name == NULL) ? 0 : 
-                            (ufk ? (i >= 5 ? 3 : 2) : strlen(keytop->name)));
+                          ((!bitnset(ktop,bm) || keytop->name == NULL) ? 0 :
+                            strlen(keytop->name));
         keybot->column = max(bot_column, top_column) -
                           ((!bitnset(kbot,bm) || keybot->name  == NULL) ? 0 :
-                            (ufk ? (i >= 4 ? 3 : 2) : strlen(keybot->name)));
+                            strlen(keybot->name));
 
         prev_keytop = keytop;
         prev_keybot = keybot;
