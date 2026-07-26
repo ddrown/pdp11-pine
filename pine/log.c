@@ -57,20 +57,6 @@
 #include <time.h>
 #include "headers.h"
 
-/*----------------------------------------------------------------------
-      Write imap debugging information into log file
-
-   Args: strings -- the string for the debug file
-
- Result: message written to the debug log file
-  ----*/
-void mm_dlog(string)
-     char *string;
-{
-    dprint(0, (debugfile, "IMAP DEBUG: %s\n", string));
-}
-
-
 
 /*----------------------------------------------------------------------
       Queue imap log message for display in the message line
@@ -95,14 +81,6 @@ void mm_log(string, errflg)
     now = time(0);
     tm_now = localtime(&now);
 
-    dprint((errflg == ERROR ? 1 : 2), (debugfile,
-                                     "IMAP %d:%d %d/%d mm_log %s: %s\n",
-                                     tm_now->tm_hour, tm_now->tm_min,
-                                     tm_now->tm_mon+1, tm_now->tm_mday,
-                                     errflg == ERROR ? "ERROR" :
-                                     errflg == WARN  ? "warn"  :
-                                     errflg == PARSE ? "parse" : "babble",
-                                     string));
 
     if(strncmp(string , "APPEND", 6) == 0){
 	if(ps_global->try_to_create) /* hide error if creating new folder  */

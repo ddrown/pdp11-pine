@@ -296,37 +296,6 @@ extern int errno;
 #define DEFAULT_COLUMNS_ON_TERMINAL	(80)
 
 
-/*----------------------------------------------------------------------
-    Where to put the output of pine in debug mode. Files are created
- in the user's home directory and have a number appended to them when
- there is more than one.
- ----*/
-#define DEBUGFILE	".pine-debug"
-
-/*----------------------------------------------------------------------
-    The number of debug files to save in the user's home diretory. The files
- are useful for figuring out what a user did when he complains that something
- went wrong. It's important to keep a bunch around, usually 4, so that the
- debug file in question will still be around when the problem gets 
- investigated. Users tend to go in and out of Pine a few times and there
- is one file for each pine invocation
- ----*/
-#define NUMDEBUGFILES 4
-
-/*----------------------------------------------------------------------
-   The default debug level to set (approximate meanings):
-       1 logs only highest level events and errors
-       2 logs events like file writes
-       3
-       4 logs each command
-       5
-       6 
-       7 logs details of command execution (7 is highest to run any production)
-       8
-       9 logs gross details of command execution
- ----*/
-#define DEFAULT_DEBUG 2
-
 #define LPASS8 0x0800
 
 /*----------------------------------------------------------------------

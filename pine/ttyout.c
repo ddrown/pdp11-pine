@@ -282,7 +282,6 @@ config_screen(tt)
           return(-4);
     }
 
-    dprint(1, (debugfile, "Terminal type: %s\n", termname));
 
     /*------ Figure out scrolling mode -----*/
     if(_scrollregion != NULL && _scrollregion[0] != '\0' &&
@@ -294,9 +293,6 @@ config_screen(tt)
     } else {
         _scrollmode = NoScroll;
     }
-    dprint(7, (debugfile, "Scroll mode: %s\n",
-               _scrollmode==NoScroll ? "No Scroll" :
-               _scrollmode==InsertDelete ? "InsertDelete" : "Scroll Regions"));
 
 
     if (!_left) {
@@ -349,8 +345,6 @@ struct ttyo *ttyo;
 	if(_columns == 0)
 	  _columns = DEFAULT_COLUMNS_ON_TERMINAL;
 
-        dprint(2, (debugfile, "new win size -----<%d %d>------\n",
-                   _lines, _columns));
     } else {
 	/* Depending on the OS, the ioctl() may have failed because
 	   of a 0 rows, 0 columns setting.  That happens on DYNIX/ptx 1.3
@@ -360,8 +354,6 @@ struct ttyo *ttyo;
 
         _lines   = DEFAULT_LINES_ON_TERMINAL;
         _columns = DEFAULT_COLUMNS_ON_TERMINAL;
-        dprint(1, (debugfile, "ioctl(TIOCWINSZ) failed :%s\n",
-                   error_description(errno)));
     }
     ttyo->screen_cols = _columns;
     ttyo->screen_rows = _lines ;
@@ -381,7 +373,6 @@ struct ttyo *ttyo;
 void
 end_screen()
 {
-    dprint(9, (debugfile, "end_screen called\n"));
     EndInverse();
     MoveCursor( _lines - 1, 0);
     NewLine();

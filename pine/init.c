@@ -245,21 +245,6 @@ init_vars(ps)
         set_current_val(vars, V_INIT_CMD_LIST, FALSE);
     if (VAR_INIT_CMD_LIST)
         process_init_cmds(ps, VAR_INIT_CMD_LIST);
-
-#ifdef DEBUG
-#define STRING(vv) ((vv) ? (vv) : "<unset>")
-#define LIST(vv)   (((vv) && ((vv)[0])) ? (vv)[0] : "<unset>")
-    for(vars = variables; vars->name != NULL; vars++) {
-        dprint(2, (debugfile, "%17.17s : %18.18s %18.18s %18.18s\n",
-                   vars->name, 
-		   (vars->is_list) ? LIST(vars->user_val.l) 
-		                   : STRING(vars->user_val.p),
-                   (vars->is_list) ? LIST(vars->global_val.l) 
-		                   : STRING(vars->global_val.p),
-		   (vars->is_list) ? LIST(vars->current_val.l) 
-		                   : STRING(vars->current_val.p)));
-    }
-#endif
 }
 
 
@@ -575,8 +560,6 @@ init_username(ps)
     build_path(fld_dir, ps->home_dir, ps->VAR_MAIL_DIRECTORY);
     ps->folders_dir = cpystr(fld_dir);
 
-    dprint(1, (debugfile, "Userid: %s\nFullname: \"%s\"\n",
-               ps->VAR_USER_ID, ps->VAR_PERSONAL_NAME));
     return(rv);
 }
 
@@ -674,14 +657,6 @@ init_hostname(ps)
     /* Set c-client idea of the host name for unqualifed addresses  */
     lhostn = ps_global->maildomain;
 
-    dprint(1, (debugfile,"User domain name being used \"%s\"\n",
-               ps->userdomain == NULL ? "" : ps->userdomain));
-    dprint(1, (debugfile,"Local Domain name being used \"%s\"\n",
-               ps->localdomain));
-    dprint(1, (debugfile,"Host name being used \"%s\"\n",
-               ps->hostname));
-    dprint(1, (debugfile,"Mail Domain name being used \"%s\"\n",
-               ps->maildomain));
 
     if(ps->maildomain == NULL || strlen(ps->maildomain) == 0) {
         fprintf(stderr, "No host name or domain name set\n");
@@ -907,60 +882,3 @@ init_mail_dir(dir)
 }
 
 
-#ifdef DEBUG
-/*----------------------------------------------------------------------
-     Initialize debugging - open the debug log file
-
-  Args: none
-
- Result: opens the debug logfile for dprints
-
-   Opens the file "~/.pine.debug1. Also maintains .pine.debug[2-4]
-by renaming them each time so the last 4 sessions are saved.
-  ----*/
-
-int debug = DEFAULT_DEBUG;
-FILE *debugfile = NULL;
-
-void
-init_debug()
-{
-    char nbuf[12];		/* enough for any int + sign + nul */
-    char newfname[MAXPATH+1], filename[MAXPATH+1];
-
-    /*---- Get rid of very old pine debug files ----*/
-    build_path(filename, ps_global->home_dir, "pine-debug-0.9");
-    unlink(filename);
-    build_path(filename, ps_global->home_dir, ".pine.debug.last");
-    unlink(filename);
-    
-    if (debug) {		/* setup for dprint() statements! */
-      int i;
-
-      build_path(filename, ps_global->home_dir, DEBUGFILE);
-      (void)unlink(filename); /* Just do it even though it may fail */
-
-      for(i = NUMDEBUGFILES - 1; i > 0; i--) {
-        build_path(filename, ps_global->home_dir, DEBUGFILE);
-        strcpy(newfname, filename);
-        sprintf(nbuf, "%d", i);
-        strcat(filename, nbuf);
-        sprintf(nbuf, "%d", i+1);
-        strcat(newfname, nbuf);
-        (void) rename_file(filename, newfname);
-      }
-
-
-      build_path(filename, ps_global->home_dir, DEBUGFILE);
-      strcat(filename, "1");
-
-      debugfile = fopen(filename, "w");
-      if(debugfile != NULL){
-          long now = time(0);
-          fprintf(debugfile, 
- "Debug output of the Pine program (at debug level %d).  Version %s\n%s\n",
-    	   debug, version_buff, ctime(&now));
-      }
-    }
-}
-#endif

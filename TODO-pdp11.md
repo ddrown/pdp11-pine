@@ -10,32 +10,6 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-### Investigate removing the DEBUG/dprint() infrastructure entirely
-
-- [ ] Disabling the `-DDEBUG` build define (`pine/makefile.lnx`'s
-      `DEBUG=` var, see `TODO-pdp11-done.md`) was a **-35152 byte**
-      win on its own -- by far the largest single change in this
-      project -- because `dprint(n,x)` (`pine.h`) already collapses to
-      a true no-op without it. That confirms the underlying machinery
-      itself (189 `dprint()` call sites across 20 files, the
-      `debug`/`debugfile` globals, `init_debug()`'s log-file-rotation
-      logic in `init.c`, the `-d`/`#ifdef DEBUG` argv handling in
-      `args.c`) is real compiled weight whenever it *is* turned on,
-      not preprocessor-stripped noise -- it's just off by default now.
-    - Investigate whether this whole subsystem is worth deleting
-      outright rather than leaving it as an opt-in build knob: a
-      PDP-11 with no `gdb`/coredump-analysis tooling and no spare
-      address space for a 35KB debug logger may never realistically
-      use it, but weigh that against losing a real diagnostic tool for
-      bring-up debugging on the actual target hardware, where this
-      kind of textual trace may be the *only* debugging option
-      available. Worth checking whether `TODO-pdp11.md`'s still-open
-      ASan/`-fanalyzer` item covers the same debugging needs a
-      different way before committing to deletion.
-    - If kept, at minimum leave `-DDEBUG` off by default (already
-      done) so production/size-measurement builds never pay for it by
-      accident.
-
 ### Fix mis-parenthesized ternary in the disk-full "drop to shell" prompt
 
 - [ ] `pine/mailbox.c` and `pine/imap.c` each have an identical
@@ -62,8 +36,7 @@ DONE elsewhere or referenced in passing below.
       accepting a stray keystroke instead of re-bleeping -- is minor).
       Left as-is rather than fixed inline to keep the `F_CAN_SUSPEND`
       collapse a pure behavior-preserving substitution; fix both
-      identical sites together, with a real repro (fill the target
-      disk or otherwise force a mailbox write failure) per CLAUDE.md's
+      identical sites together, with a real repro (but don't fill the disk) per CLAUDE.md's
       verification discipline, and add a regression test if the
       harness can drive it.
 

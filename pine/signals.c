@@ -83,28 +83,17 @@ core dump. Ultrix can't do this so we don't try to catch the signals.
 void
 init_signals()
 {
-#ifdef DEBUG
-#ifdef ULT
-    if(debug < 2)
-/* most systems can traceback past the sig that causes that resulted from
-   violation when we catch the sig and cushion the fall. Ultrix can't.*/
-#else
-    if(debug < 7) 
-#endif
-#endif
-      {
-          signal(SIGILL,  auger_in_signal); 
-          signal(SIGTRAP, auger_in_signal);
-          signal(SIGIOT,  auger_in_signal); 
+    signal(SIGILL,  auger_in_signal);
+    signal(SIGTRAP, auger_in_signal);
+    signal(SIGIOT,  auger_in_signal);
 #ifdef SIGEMT
-          signal(SIGEMT,  auger_in_signal);
+    signal(SIGEMT,  auger_in_signal);
 #endif
-          signal(SIGBUS,  auger_in_signal);
-          signal(SIGSEGV, auger_in_signal);
-          signal(SIGSYS,  auger_in_signal);
-          signal(SIGQUIT, quit_signal);
-          /* Don't catch SIGFPE cause it's rare and we use it in a hack below*/
-      }
+    signal(SIGBUS,  auger_in_signal);
+    signal(SIGSEGV, auger_in_signal);
+    signal(SIGSYS,  auger_in_signal);
+    signal(SIGQUIT, quit_signal);
+    /* Don't catch SIGFPE cause it's rare and we use it in a hack below*/
 
 #ifdef RESIZING
     signal(SIGWINCH, winch_signal);
@@ -142,7 +131,6 @@ init_signals()
 void
 end_signals()
 {
-    dprint(5, (debugfile, "end_signals\n"));
     if(signal(SIGILL,  SIG_DFL) == SIG_ERR) {
         fprintf(stderr, "Error resetting signals: %s\n",
                 error_description(errno));
@@ -176,7 +164,6 @@ Call panic which cleans up tty modes and then core dumps
 static SigType
 auger_in_signal(int signo)
 {
-    dprint(5, (debugfile, "auger_in_signal()\n"));
     panic("Received abort signal");
     /* No return from panic */
 }
@@ -193,7 +180,6 @@ processing here.
 static SigType
 quit_signal(int signo)
 {
-    dprint(1, (debugfile, "\n\n  *** Received QUIT signal ***  \n\n"));
     if(want_to("\007Pine emergency exit. REALLY ABORT PINE RIGHT NOW", 'n',
                'n', h_wt_auger_in, 0) == 'n') {
         q_status_message(0, 2,3,
@@ -203,12 +189,7 @@ quit_signal(int signo)
         } while(messages_queued() > 0);
         return;
     }
-#ifdef DEBUG
-    if(debug)
-      fflush(debugfile);
-#endif
     fprintf(stderr, "\n\nPine aborting and dumping core\n\n");
-    dprint(1, (debugfile, "\n *** Dumping Core ***\n"));
     coredump();
 }
 
@@ -236,10 +217,6 @@ fast_clean_up(void)
     end_screen();
     end_tty_driver(ps_global);
 
-#ifdef DEBUG
-    fclose(debugfile);
-#endif
-
     return(0);
 }
 
@@ -252,7 +229,6 @@ Not much to do. Rely on periodic mail file check pointing.
 SigType
 hup_signal(int signo)
 {
-    dprint(1, (debugfile, "\n\n** Received SIGHUP **\n\n\n\n"));
     fast_clean_up();
     printf("\n\nPine finished. Received hang up signal\n\n");
     exit(0);
@@ -267,7 +243,6 @@ Not much to do. Rely on periodic mail file check pointing.
 SigType
 term_signal(int signo)
 {
-    dprint(1, (debugfile, "\n\n** Received SIGTERM **\n\n\n\n"));
     fast_clean_up();
     printf("\n\nPine finished. Received terminate signal\n\n");
     exit(0);
@@ -283,7 +258,6 @@ static SigType
 usr2_signal(int signo)
 {
     char c;
-    dprint(1, (debugfile, "\n\n** Received SIGUSR2 **\n\n\n\n"));
 
     check_point(DoItNow);
     if(ps_global->inbox_stream != NULL && !ps_global->inbox_stream->lock
@@ -291,7 +265,6 @@ usr2_signal(int signo)
 	ps_global->inbox_stream->readonly = 1; 
 	mail_ping(ps_global->inbox_stream);
 	q_status_message(0,2,2,"Another pine access to Inbox.  Session now Read-Only.");
-	dprint(1, (debugfile, "** INBOX went read-only **\n\n"));
     }
 
     if(ps_global->mail_stream != NULL &&
@@ -301,7 +274,6 @@ usr2_signal(int signo)
 	ps_global->mail_stream->readonly = 1; 
 	mail_ping(ps_global->mail_stream);
 	q_status_message(0,2,2,"Another pine access to folder.  Session now Read-Only.");
-	dprint(1, (debugfile, "** secondary folder went read-only **\n\n"));
     }
 }
 
@@ -321,8 +293,6 @@ extern int      ready_for_winch, winch_occured;
 SigType
 static winch_signal(int signo)
 {
-    dprint(9,(debugfile, "SIGWINCH ready_for_winch: %d winch_occured:%d\n",
-               ready_for_winch, winch_occured));
     get_windsize(ps_global->ttyo);
     if(ready_for_winch)
       longjmp(winch_state, 1);
@@ -358,7 +328,6 @@ do_suspend(pine)
     strcpy(curf, ps_global->cur_folder);
     expand_foldername(curf);
     then = time(0);
-    dprint(1, (debugfile, "\n\n - %s --- SUSPEND ----  %s",curf,ctime(&then)));
     end_tty_driver(pine);
     end_screen();
     printf("\nPine suspended. Give the \"fg\" command to come back.\n");
@@ -367,8 +336,6 @@ do_suspend(pine)
 
     stop_process();
     now = time(0);
-    dprint(1, (debugfile, "\n\n ---- RETURN FROM SUSPEND ----  %s",
-               ctime(&now)));
     init_screen();
     init_tty_driver(pine);
 
@@ -397,8 +364,6 @@ mm_critical(stream)
     hold_usr2 = signal(SIGUSR2, SIG_IGN);
     hold_int  = signal(SIGINT, SIG_IGN);
     hold_term = signal(SIGTERM, SIG_IGN);
-    dprint(9, (debugfile, "Done with IMAP critical on %s\n",
-              stream ? stream->mailbox : "<no folder>" ));
 }
 
 
@@ -416,6 +381,4 @@ mm_nocritical(stream)
     (void)signal(SIGUSR2, hold_usr2);
     (void)signal(SIGINT, hold_int);
     (void)signal(SIGTERM, hold_term);
-    dprint(9, (debugfile, "Done with IMAP critical on %s\n",
-              stream ? stream->mailbox : "<no folder>" ));
 }

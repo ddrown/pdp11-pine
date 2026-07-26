@@ -301,36 +301,6 @@
 
 
 /*======================================================================
-       Macros for debug printfs 
-   n is debugging level:
-       1 logs only highest level events and errors
-       2 logs events like file writes
-       3
-       4 logs each command
-       5
-       6 
-       7 logs details of command execution (7 is highest to run any production)
-         allows core dumps without cleaning up terminal modes
-       8
-       9 logs gross details of command execution
-
- the following macro is as suggested by Larry McVoy.  Thanks! *
-  ====*/
-# ifdef DEBUG
-#  define   dprint(n,x)		{ 				\
-				   if (debugfile && debug >= (n))  { \
-				     fprintf x ; 		\
-                                     if(debug > 7)              \
-                                       fflush(debugfile);       \
-				   }				\
-				}
-# else
-#  define   dprint(n,x)
-# endif
-
-
-
-/*======================================================================
             Various structures that Pine uses
  ====*/
 
@@ -765,9 +735,6 @@ int  init_hostname(struct pine *);
 int  set_variable_list(int, char **);
 int  init_mail_dir(char *);
 char **parse_list(char *, int, char **);
-#ifdef DEBUG
-void init_debug(void);
-#endif
 
 /*---- mailcmd.c ----*/
 int   process_cmd(int, int, int, int *);

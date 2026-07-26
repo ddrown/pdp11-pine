@@ -103,8 +103,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
     CONTEXT_S         *tc;
     struct attachment *a;
 
-    dprint(4, (debugfile, "\n - process_cmd((%d)%c) -\n",
-                                                 command, (char)command));
 
     question_line             = -3;
     ps_global->status_changed = 0;
@@ -137,7 +135,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
 	   */
           helper(in_index ? h_mail_index : h_mail_view,
       in_index ? "HELP FOR FOLDER INDEX VIEW": "HELP FOR MESSAGE VIEW", 0);
-          dprint(2, (debugfile,"MAIL_CMD: did help command\n"));
           ps_global->mangled_screen = 1;
           break;
 
@@ -146,7 +143,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
         case PF3:
         case 'm':
           ps_global->next_screen = main_menu_screen;
-          dprint(2, (debugfile,"MAIL_CMD: going back to main menu"));
           break;
 
 
@@ -247,7 +243,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
         case PF9: 
         case 'd':
         case KEY_DEL:
-          dprint(4, (debugfile, "\n - delete message -\n"));
           if(ps_global->max_msgno <= 0L) {
               q_status_message(0, 1, 3,"\007No message in folder");
               break;
@@ -274,8 +269,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
                                "Can't delete message. Error accessing folder");
               break;
           }
-          dprint(3,(debugfile, "Deleted: %s\n",
-                    e != NULL && e->message_id != NULL ? e->message_id : ""));
 
 	  if(current_sorted_msgno >= ps_global->max_msgno)
 	    strcpy(prompt, "Last message ");
@@ -314,7 +307,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
           /*---------- Undelete message ----------*/
         case PF10:
         case 'u':
-          dprint(4, (debugfile, "\n - undelete -\n"));
           if(ps_global->max_msgno == 0) {
               q_status_message(0, 1, 3, "\007No message in folder");
               break;
@@ -335,7 +327,6 @@ process_cmd(command, in_index, orig_command, force_mailchk)
               break;
           }
 
-          dprint(3,(debugfile, "Undeleted: %s\n", e->message_id));
           if (ps_global->max_msgno < 1) {
              q_status_message(0, 0, 2, "No message to undelete");
           }else if(!mc->deleted) {
@@ -418,7 +409,7 @@ do_forward:
         case OPF3:
 do_quit:
 	  ps_global->next_screen = quit_screen;
-	  dprint(1, (debugfile,"MAIL_CMD: quit\n"));		    
+		    
           break;
 
 
@@ -436,7 +427,6 @@ do_quit:
 	case OPF5:
         case 'l':
           ps_global->next_screen = folder_screen;
-          dprint(2, (debugfile,"MAIL_CMD: going to folder/collection menu"));
           break;
 
 
@@ -447,8 +437,6 @@ do_quit:
 
           new_folder = broach_folder(question_line, 1, &tc);
           if(new_folder != NULL) {
-              dprint(9, (debugfile, "do_broach_folder (%s, %s)\n",
-                         new_folder, tc->context));
               if(do_broach_folder(new_folder, tc) > 0)
                   /* so we go out and come back into the index */
                   ps_global->next_screen = mail_index_screen;
@@ -558,7 +546,6 @@ do_export:
         case 'x':
           if(!in_index)
             goto bogus;
-          dprint(2, (debugfile, "\n - expunge -\n"));
 	  if(READONLY_FOLDER){
               q_status_message(1, 2, 4, "Can't expunge. Folder is read-only");
               break;
@@ -586,17 +573,12 @@ do_export:
           mc = closest_not_deleted(ps_global->mail_stream,
               		     current_sorted_msgno,
               		     ps_global->max_msgno);
-          dprint(8,(debugfile, "Expunge max:%ld cur:%ld kill:%ld ncur:%ld\n",
-                    ps_global->max_msgno, ps_global->current_sorted_msgno,
-                    del_count, mc == NULL ? 0 : mc->msgno));
           StartInverse();
           PutLine0(0,0,"**");/*Show something on the screen to indicate delay*/
 	  MoveCursor(ps_global->ttyo->screen_rows -3, 0);
           fflush(stdout);
 
           mail_expunge(ps_global->mail_stream);
-          dprint(2,(debugfile,"expunge complete cur:%ld max:%ld\n",
-                    mc==NULL ? 0 : mc->msgno, ps_global->max_msgno));
           /* mm_exists and mm_expunge take care of updating max_msgno*/
           clear_index_cache();
           reset_check_point();
@@ -635,7 +617,7 @@ do_export:
 do_sortindex:
 	  if(!in_index)
 	      goto bogus;
-	  dprint(1, (debugfile,"MAIL_CMD: sort\n"));		    
+		    
 	  select_sort(question_line);
           /*
 	   * Setting mail_box_changed will cause the call to new_mail()
@@ -722,7 +704,6 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
     ESCKEY_S   ekey[5];
     ENVELOPE  *env;
 
-    dprint(4, (debugfile, "\n - saving message -\n"));
 
     if(message == NULL) {
         q_status_message(0, 0, 2, "\007No Messages to Save");
@@ -824,7 +805,6 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
           break;
     }
 
-    dprint(9, (debugfile, "rc = %d, \"%s\"  \"%s\"\n", rc, new_folder,folder));
     if(rc == 1 || (!*new_folder && !*folder) || (rc == 2 && !*new_folder)) {
         q_status_message(0, 0, 2 ,
 			 "\007No folder named; save message cancelled");
@@ -1075,7 +1055,6 @@ export_message(q_line, sorted_msgno)
         new_file = 1;
     }
 
-    dprint(5, (debugfile, "Opening file \"%s\" for export\n", full_filename));
 
     if((store = so_get(FileStar, full_filename, WRITE_ACCESS)) == NULL){
         q_status_message2(1, 2, 4,
@@ -1148,7 +1127,6 @@ jump_to(qline, first_num)
     int      rc;
     long     jump_num;
 
-    dprint(4, (debugfile, "\n - jump_to -\n"));
 
     if(first_num){
 	jump_num_string[0] = first_num;
@@ -1331,14 +1309,10 @@ broach_folder(qline, allow_list, context)
     if(*new_folder == '\0')
       strcpy(new_folder, last_folder);
 
-    dprint(2, (debugfile, "broach folder, name entered \"%s\"\n",new_folder));
 
     /*-- Just check that we can expand this. It gets done for real later --*/
     strcpy(expanded, new_folder);
     if (! expand_foldername(expanded)) {
-        dprint(1, (debugfile,
-                    "Error: Failed on expansion of filename %s (save)\n", 
-    	  expanded));
         return(NULL);
     }
 
@@ -1383,12 +1357,6 @@ do_broach_folder(new_folder, new_context)
     CONTEXT_S  *tc;
 
     openmode = 0L;
-#ifdef	DEBUG
-    if(debug > 8)
-      openmode |= OP_DEBUG;
-#endif
-    dprint(1, (debugfile, "About to open folder \"%s\"    inbox: \"%s\"\n",
-	       new_folder, ps_global->inbox_name));
 
     /*----- Little to do to if reopening same folder -----*/
     if(new_context == ps_global->context_current && ps_global->mail_stream
@@ -1436,8 +1404,6 @@ do_broach_folder(new_folder, new_context)
     if(!open_inbox && new_context && context_isambig(new_folder)){
 	if (p = folder_is_nick(new_folder, new_context->folders)){
 	    strcpy(expanded_file, p);
-	    dprint(2, (debugfile, "broach_folder: nickname for %s is %s\n",
-		       expanded_file, new_folder));
 	}
     }
 
@@ -1459,9 +1425,6 @@ do_broach_folder(new_folder, new_context)
         ps_global->current_sort_order       = ps_global->inbox_sort_order;
         ps_global->current_reverse_sort     = ps_global->reverse_sort;
 
-	dprint(7, (debugfile, "%ld %ld %p\n", ps_global->current_sorted_msgno,
-                   ps_global->max_msgno,
-		   ps_global->mail_stream));
 	/*
 	 * remember last context and folder
 	 */
@@ -1496,9 +1459,6 @@ do_broach_folder(new_folder, new_context)
 	    ps_global->inbox_raw_msgno  = 
                              ps_global->sort[ps_global->current_sorted_msgno];
 	    ps_global->inbox_sort_order = ps_global->current_sort_order;
-	    dprint(2, (debugfile,
-		     "Close - saved inbox state: real %ld, max %ld\n",
-		     ps_global->inbox_raw_msgno, ps_global->inbox_max_msgno));
 	} else {
             expunge_and_close(ps_global->mail_stream, ps_global->cur_folder);
 	}
@@ -1512,9 +1472,6 @@ do_broach_folder(new_folder, new_context)
 		     (open_inbox) ? ps_global->VAR_INBOX_PATH : expanded_file,
 		     openmode);
 
-    dprint(8, (debugfile, "Opened folder %p \"%s\" (context: \"%s\")\n", m,
-               m != NULL ? m->mailbox : "nil", 
-	       (new_context) ? new_context->context : "nil"));
 
     /* Can get m != NULL if correct passwd for remote, but wrong name */
     if(m == NULL || ((p = strindex(m->mailbox, '<')) != NULL &&
@@ -1522,8 +1479,6 @@ do_broach_folder(new_folder, new_context)
 	/*-- non-existent local mailbox, or wrong passwd for remote mailbox--*/
         /* fall back to currently open mailbox */
         rv = 0;
-        dprint(8, (debugfile, "Old folder: \"%s\"\n",
-               old_folder == NULL ? "" : old_folder));
         if(old_folder != NULL) {
             if(strcmp(old_folder, ps_global->inbox_name) == 0){
                 ps_global->mail_stream          = ps_global->inbox_stream;
@@ -1532,10 +1487,6 @@ do_broach_folder(new_folder, new_context)
 		ps_global->current_sorted_msgno = sorted_msgno(ps_global,
 						  ps_global->inbox_raw_msgno);
 
-                dprint(8, (debugfile, "Reactivate inbox %ld %ld %p\n",
-                           ps_global->current_sorted_msgno,
-                           ps_global->max_msgno,
-                           ps_global->mail_stream));
                 strcpy(ps_global->cur_folder, ps_global->inbox_name);
             } else {
                 ps_global->mail_stream = mail_open(NULL, old_path, openmode);
@@ -1580,8 +1531,6 @@ do_broach_folder(new_folder, new_context)
     }
 
     /*----- success in opening the new folder ----*/
-    dprint(2, (debugfile, "Opened folder \"%s\" with %ld messages\n",
-	       m->mailbox, m->nmsgs));
 
 
     /*--- A Little house keeping ---*/
@@ -1694,8 +1643,6 @@ expunge_and_close(stream, folder)
     int ret;
 
     if(stream != NULL) {
-        dprint(2, (debugfile, "expunge and close mail stream \"%s\"\n",
-                   stream->mailbox));
 
         if(!stream->readonly) {
 
@@ -1875,7 +1822,6 @@ search_headers(command_line, sorted_msg, max_msg)
     char        prompt[MAX_SEARCH+50], new_string[MAX_SEARCH+1];
     HelpType	help;
 
-    dprint(4, (debugfile, "\n - search headers - \n"));
 
     sprintf(prompt, "Word to search for [%s] : ", search_string);
     help = NO_HELP;

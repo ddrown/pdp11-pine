@@ -5541,3 +5541,96 @@ two-phase job like the `F_USE_FK` cut.
   than fixed inline, since fixing it needs a dedicated repro (forcing
   a mailbox write failure) independent of this task.
 - **Size delta**: `bin/pine` text 779840 -> 779024 (-816 bytes).
+
+### Remove the DEBUG/dprint() infrastructure entirely -- deliberate loss of a diagnostic tool, user-confirmed
+
+Follow-on to disabling `-DDEBUG` by default. Asked the user how to
+resolve the open TODO ("investigate whether this whole subsystem is
+worth deleting"), laying out the tradeoff: ASan/`-fanalyzer` don't
+actually substitute for it (they catch memory-safety bugs, not
+program-logic tracing), and a PDP-11 with no source-level debugger may
+realistically need `dprint()`-style textual tracing for real hardware
+bring-up. Recommended keeping it. The user chose to delete it anyway
+("any debug printing will be ad-hoc created") -- an explicit, informed
+decision to trade away this diagnostic tool for source tidiness, not a
+dead-code removal like the rest of this project's cuts.
+
+- **Mechanical `dprint()` removal**: wrote a small comment/string-aware
+  Python script (paren-balance tracking, so it doesn't get confused by
+  `dprint(9, (debugfile, "foo(bar)", x))`-style nested parens/string
+  literals) to find and delete every `dprint(...)` call statement.
+  Handled both forms found in the wild: the common `dprint(...);` and
+  a handful of sites relying on the macro's own trailing brace (no
+  `;`) as the whole statement, e.g. `status.c`'s
+  `q_status_message()`'s trailing `dprint(9, (...))\n}` with no
+  semicolon before the function's closing brace. Ran it across all 19
+  `pine/*.c` files with any `dprint()` call plus the one fragment
+  source behind a generated file -- `pine/os.c` is `osdep/os-lnx.c`,
+  itself generated from `osdep/os-lnx.ic` via `includer`, but its two
+  `dprint()` calls (in `expand_foldername()`) live in the real,
+  hand-maintained `osdep/expnfldr` fragment, so edited that instead of
+  the generated file. 189 call sites removed total. Verified
+  immediately with a clean rebuild (0 errors, 52 warnings unchanged)
+  and 25/25 smoketests before touching anything else, to isolate any
+  mechanical-script mistakes from the manual cleanup pass to follow.
+- **Manual infrastructure cleanup** (everything the mechanical pass
+  couldn't touch -- surrounding `#ifdef DEBUG` scaffolding, not just
+  the `dprint()` calls themselves):
+  - `pine/args.c`: removed the `-d` case (both the "take an argument"
+    dispatch and its handler) and its `args_help()` line.
+  - `pine/pine.h`: removed the `dprint(n,x)` macro definition (both
+    the real and no-op halves) and `init_debug()`'s prototype.
+  - `pine/headers.h`: removed the `debug`/`debugfile` extern
+    declarations.
+  - `pine/init.c`: removed `init_debug()` itself (opens/rotates
+    `.pine-debug1-4`), the `int debug`/`FILE *debugfile` global
+    definitions, and a `#ifdef DEBUG` block in `init_vars()` that
+    dumped every `variables[]` entry (its `STRING`/`LIST` helper
+    macros and the loop, now-empty after the `dprint()` inside it was
+    already stripped, went too).
+  - `pine/pine.c`: removed the `init_debug()` call site, a `case '#'`
+    debug-only "test panic and abort" easter egg in the main-menu key
+    switch, and the `fclose(debugfile)` in both the normal shutdown
+    path and `panic()` (the `coredump()` call in `panic()` stays --
+    real, non-DEBUG cleanup code, still called from `signals.c` too).
+  - `pine/folder.c`: removed `dump_contexts()` (a whole DEBUG-only
+    helper dumping folder-context state to the debug file) and its
+    prototype and call site.
+  - `pine/signals.c`: `init_signals()`'s signal-handler-installation
+    guard was `#ifdef DEBUG #ifdef ULT if(debug<2) #else if(debug<7)
+    #endif #endif { signal(...); ... }` -- with `DEBUG` (and thus the
+    inner `ULT`, itself never `#define`'d anywhere either) gone, the
+    guard disappears entirely and the block of `signal()` calls always
+    runs unconditionally. Also removed two `fclose(debugfile)` sites
+    (`quit_signal()`, `fast_clean_up()`).
+  - `pine/mailcmd.c`: removed `broach_folder()`'s `if(debug>8) openmode
+    |= OP_DEBUG;` (c-client's own internal stream-debug flag, now
+    permanently off since nothing sets it).
+  - `pine/ttyin.c`: removed `optionally_enter()`'s debug-only `^X`
+    field-dump key (printed the edit buffer's raw contents).
+  - `pine/newmail.c`: removed four now-vestigial `#ifdef DEBUG now =
+    time(0); #endif` sites (leftover from stripping the `dprint()`
+    calls that were their only reason to exist) and, in
+    `check_point()`, a `time_t now;` local plus its two `#ifdef DEBUG
+    now = time(0); #endif` sites -- unlike `new_mail()`'s `now` (a
+    real parameter used elsewhere), this one was declared and used
+    *only* inside the now-empty DEBUG blocks.
+  - `pine/osdep/os-lnx.h`: removed the now-orphaned
+    `DEBUGFILE`/`NUMDEBUGFILES`/`DEFAULT_DEBUG` `#define`s (only
+    `init_debug()` read them). Left every other `os-*.h` variant's
+    copies untouched -- other-platform reference material, same
+    precedent as `NFSKLUDGE`.
+- **Verified no orphaned locals**: since this build's `WARNFLAGS`
+  doesn't include `-Wunused-variable`, ran a throwaway `cc
+  -Wunused-variable -Wunused-but-set-variable -fsyntax-only` scan over
+  every touched file, then repeated the same scan against a `git
+  stash`ed pre-change checkout -- the two unused-variable lists were
+  byte-for-byte identical (just shifted line numbers), confirming
+  every one of those warnings already existed before this change and
+  none were newly orphaned by the `dprint()`/DEBUG strip.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 52 warnings
+  (unchanged). Full smoketest suite, 25/25.
+- **Size delta**: `bin/pine` text 779024 -> 778960 (-64 bytes) --
+  intentionally small: `-DDEBUG` was already off by default (previous
+  entry), so every bit of this code was already compiled out; this
+  pass is a source-tidiness win, not a further binary-size one.
