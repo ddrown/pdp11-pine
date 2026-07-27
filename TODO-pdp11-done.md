@@ -5634,3 +5634,66 @@ dead-code removal like the rest of this project's cuts.
   intentionally small: `-DDEBUG` was already off by default (previous
   entry), so every bit of this code was already compiled out; this
   pass is a source-tidiness win, not a further binary-size one.
+
+### Fix mis-parenthesized ternary in the disk-full "drop to shell" prompt
+
+`pine/mailbox.c`'s and `pine/imap.c`'s identical `mm_diskerror()`
+mailbox-write-failure recovery prompt had:
+`while(!(ch == 1 ? ctrl('Z') : '!' || ch == '\r'))` -- flagged during
+the `F_CAN_SUSPEND` collapse (the `1` used to be
+`F_ON(F_CAN_SUSPEND,ps_global)`, itself the same bug). `?:` binds
+looser than both `==` and `||`, so this parses as `(ch == 1) ?
+ctrl('Z') : ('!' || (ch == '\r'))` -- and since `'!'` is a nonzero
+constant, the `else` branch is always truthy, so the loop accepted
+almost any keystroke immediately instead of re-bleeping until a real
+`^Z`/Return.
+
+- **Reproduction attempts**: tried to force a real disk-full write
+  failure live, per CLAUDE.md's verification discipline, via
+  `RLIMIT_FSIZE` (`ulimit -f`) with `SIGXFSZ` ignored (confirmed in
+  isolation that this correctly turns an over-limit `write()`/`writev()`
+  into a clean `errno==EFBIG` return with no signal) plus an mbox with
+  enough messages that `bezerk_save()`'s rewrite spans multiple
+  `writev()` batches (`bezerk_write_message()` uses 4 iovecs/message,
+  so the 16-iovec batch cap is every 4 messages) so a later batch
+  would start writing exactly at the rlimit boundary and fail cleanly.
+  The rlimit mechanism itself checked out standalone (plain `write()`
+  and `writev()` C programs both hit `EFBIG` exactly as expected,
+  including when overwriting within an already-larger pre-existing
+  file), but driving it through `bin/pine`'s actual expunge-on-quit
+  path never tripped `mm_diskerror()` -- the rewritten mailbox came out
+  fully intact past the limit every time, for a reason not tracked
+  down (not a rabbit hole worth chasing further for a low-severity,
+  cosmetic-input-validation bug). Abandoned the live repro as
+  impractical to engineer deterministically within reasonable time.
+- **Fallback verification** (per CLAUDE.md's own suggested technique
+  for exactly this situation): extracted the loop condition into a
+  standalone C file with `#ifdef FIXED` gating old vs. new, and fed it
+  every case that matters -- five bogus keys (`a`, `x`, ' ', `9`, ESC)
+  and the two real ones (`ctrl('Z')`, `'\r'`). The old form accepted
+  all 5 bogus keys immediately (should re-bleep) and both real keys
+  (correct by coincidence); the fixed form (`ch == ctrl('Z') || ch ==
+  '\r'`) correctly rejected all 5 bogus keys and accepted both real
+  ones. This is a deterministic, faithful demonstration of the exact
+  defect and fix at the expression level.
+- **What changed**: fixed the condition to `while(!(ch == ctrl('Z') ||
+  ch == '\r'))` in both files. Since `F_CAN_SUSPEND` is now permanently
+  on (see the collapse above) and the prompt text already only offers
+  `^Z` (never `!`), the intended fixed logic reduces to dropping the
+  `'!'`-vs-`^Z` choice entirely rather than restoring it -- consistent
+  with that same collapse. As a direct, provable consequence, the
+  `case '!':` "drop to a shell" block in both files' `switch(ch)` (the
+  `system("csh")` escape hatch) became unreachable code, since the
+  corrected loop condition can never let `ch` reach the switch as
+  `'!'` -- removed both, chain-reaction style, matching this project's
+  established practice.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 52 warnings
+  (unchanged). Full smoketest suite, 25/25. No smoketest-suite
+  regression test added -- the harness can't reliably force this
+  specific disk-write-failure path either (same reproduction
+  difficulty noted above), so a test would be flaky rather than a
+  real guard; the standalone extraction above is the durable record
+  of the fix's correctness instead.
+- **Size delta**: `bin/pine` text 778960 -> 778784 (-176 bytes) --
+  real removed code this time (the `case '!':` shell-escape blocks),
+  not a preprocessor-stripped no-op.
