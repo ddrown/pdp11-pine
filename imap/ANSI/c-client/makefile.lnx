@@ -37,6 +37,14 @@ OSDEFS = -DRSH=\"$(RSH)\" -DRSHPATH=\"$(RSHPATH)\"
 CFLAGS = -g -O
 LDFLAGS =
 
+# set to 1 (./build lnx ASAN=1) to build with -fsanitize=address
+# instrumentation instead of only reaching for ASan after a bug is
+# already suspected
+ASAN =
+ifeq ($(ASAN),1)
+CFLAGS += -fsanitize=address
+endif
+
 all: c-client.a
 
 clean:

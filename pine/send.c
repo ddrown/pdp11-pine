@@ -158,13 +158,13 @@ compose_mail(given_to)
 
     {
 	int ret=0;
-	build_path(file_path, ps_global->folders_dir, INTERRUPTED_MAIL);
+	build_path(file_path, sizeof(file_path), ps_global->folders_dir, INTERRUPTED_MAIL);
 	if(given_to != NULL || can_access(file_path, ACCESS_EXISTS) != 0 ||
 	   (ret=want_to("Continue interrupted composition (answering \"n\" won't erase it)", 'y', 'x', NO_HELP, 0)) == 'n')
 	  file_path[0] = '\0';
 
 	if(file_path[0] == '\0') {
-	    build_path(file_path, ps_global->folders_dir, POSTPONED_MAIL);
+	    build_path(file_path, sizeof(file_path), ps_global->folders_dir, POSTPONED_MAIL);
 	    if(given_to != NULL || can_access(file_path, ACCESS_EXISTS) != 0 ||
 	       (ret=want_to("Continue postponed composition (answering \"No\" won't erase it)", 'y', 'x', NO_HELP, 0)) == 'n')
 	      file_path[0] = '\0';

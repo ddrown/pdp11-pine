@@ -586,7 +586,7 @@ do_export:
           if(mc != NULL) {
               long j;
               for(j = 1L; j < ps_global->max_msgno; j++)
-                if(ps_global->sort[j] == mc->msgno)
+                if(ps_global->sort[j] == (long)mc->msgno)
                   break;
               if(j < ps_global->max_msgno)
                 ps_global->current_sorted_msgno = j;
@@ -1031,7 +1031,7 @@ export_message(q_line, sorted_msgno)
                 continue;
             }
         } else if(full_filename[0] != '/') {
-            build_path(full_filename, ps_global->home_dir, filename);
+            build_path(full_filename, sizeof(full_filename), ps_global->home_dir, filename);
         }
 
 
@@ -1665,7 +1665,7 @@ expunge_and_close(stream, folder)
 
 		FETCH_ALL_FLAGS(stream);
 		saved_msgs = 0;
-		for(i=1; i <= stream->nmsgs; i++) {
+		for(i=1; i <= (long)stream->nmsgs; i++) {
 		  mc = mail_elt(stream, (long)i);
 		  if(mc && mc->seen && !mc->deleted) {
 		    /* saved, set deleted flag in inbox */
@@ -1698,7 +1698,7 @@ expunge_and_close(stream, folder)
             if(delete_count != 0L)  {
                 max_folder =    ps_global->ttyo->screen_cols - 50;
                 strcpy(temp, pretty_fn(folder));
-                if(strlen(temp) > max_folder){
+                if((long)strlen(temp) > max_folder){
                    strcpy(short_folder_name, "...");
                    strcat(short_folder_name,temp + strlen(temp) -max_folder);
                 } else {
@@ -2169,7 +2169,7 @@ save_attachment(qline, msgno, a)
                 continue;
             }
         } else if(full_filename[0] != '/') {
-            build_path(full_filename, ps_global->home_dir, filename);
+            build_path(full_filename, sizeof(full_filename), ps_global->home_dir, filename);
         }
         break; /* Must have got an OK file name */
     }
@@ -2211,11 +2211,11 @@ save_attachment(qline, msgno, a)
                                      l_string,
                          is_text ?   " lines" : "",
                          full_filename,
-                         is_text || len == a->body->size.bytes ?
+                         is_text || len == (long)a->body->size.bytes ?
                                         "" : "(decoded from ",
-                         is_text || len == a->body->size.bytes ?
+                         is_text || len == (long)a->body->size.bytes ?
                                         "" : byte_string(a->body->size.bytes),
-                         is_text || len == a->body->size.bytes ?
+                         is_text || len == (long)a->body->size.bytes ?
                                         "" : ")");
         fs_give((void **)&l_string);
     }

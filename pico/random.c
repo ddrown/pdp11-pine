@@ -93,6 +93,8 @@ showcpos(int f, int n)
     cbo = 0;
     nch = 0L;
     lines = 0;
+    thisline = 0;
+    nbc = 0L;
     for (;;) {
 	if (clp==curwp->w_dotp && cbo==curwp->w_doto) {
 	    thisline = lines;
@@ -326,7 +328,6 @@ yank(int f, int n)
 {
     register int    c;
     register int    i;
-    extern   int    kused;
 
     if (curbp->b_mode&MDVIEW)	/* don't allow this command if	*/
       return(rdonly());	/* we are in read only mode	*/

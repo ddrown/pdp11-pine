@@ -930,11 +930,11 @@ compare_size(a, b)
 
     mail_fetchstructure(ps_global->mail_stream, *mess_a, NULL);
     mc = mail_elt(ps_global->mail_stream, *mess_a);
-    size_a = mc != NULL ? mc->rfc822_size : -1;
+    size_a = mc != NULL ? (long)mc->rfc822_size : -1;
 
     mail_fetchstructure(ps_global->mail_stream, *mess_b, NULL);
     mc = mail_elt(ps_global->mail_stream, *mess_b);
-    size_b = mc != NULL ? mc->rfc822_size : -1;
+    size_b = mc != NULL ? (long)mc->rfc822_size : -1;
 
     sdiff = size_a - size_b;
     if(sdiff == 0L)mdiff = *mess_a - *mess_b;
@@ -1065,7 +1065,7 @@ i_cache_size(indx)
 {
     long j;
 
-    if(icache.size != max(ps_global->ttyo->screen_cols, 80) + 1){
+    if(icache.size != (unsigned)(max(ps_global->ttyo->screen_cols, 80) + 1)){
         clear_index_cache();		/* clear cache and start over! */
 	icache.size = max(ps_global->ttyo->screen_cols, 80) + 1;
     }

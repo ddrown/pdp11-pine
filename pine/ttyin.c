@@ -1047,7 +1047,7 @@ optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
 
             /* Make string so it will fit */
             kb = cpystr(kill_buffer);
-            if(strlen(kb) + strlen(string) > field_len)
+            if(strlen(kb) + strlen(string) > (size_t)field_len)
                 kb[field_len - strlen(string)] = '\0';
             if(string[field_pos] == '\0') {
                 /*--- adding to the end of the string ----*/

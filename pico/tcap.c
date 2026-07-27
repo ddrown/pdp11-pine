@@ -360,6 +360,9 @@ kpinsert(char *kstr, int kval)
     for(;;) {
 	if(temp == NULL){
 	    temp = newnode();
+	    if(temp == NULL)
+	      return(0);
+
 	    temp->value = *buf;
 	    temp->func = 0;
 	    temp->left = NULL;
@@ -377,6 +380,9 @@ kpinsert(char *kstr, int kval)
 
 	    if(temp == NULL){   /* add new val */
 		temp = newnode();
+		if(temp == NULL)
+		  return(0);
+
 		temp->value = *buf;
 		temp->func = 0;
 		temp->left = NULL;

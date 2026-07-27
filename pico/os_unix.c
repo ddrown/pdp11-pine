@@ -941,7 +941,7 @@ static char *pfnexpand(char *fn, int len)
           pw = getpwnam(name);
         if(pw == NULL)
           return(NULL);
-        if(strlen(pw->pw_dir) + strlen(fn) > len) {
+        if(strlen(pw->pw_dir) + strlen(fn) > (size_t)len) {
             return(NULL);
         }
 	/* make room for expanded path */
@@ -965,7 +965,7 @@ fixpath(char *name, int len)
     register char *shft;
 
     if(*name != '/' && *name != '.'){		/* filenames relative to ~ */
-	if(Pmaster && (*name != '~' && strlen(name)+2 <= len)){
+	if(Pmaster && (*name != '~' && strlen(name)+2 <= (size_t)len)){
 
 	    for(shft = strchr(name, '\0'); shft >= name; shft--)
 	      shft[2] = *shft;

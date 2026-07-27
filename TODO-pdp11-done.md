@@ -5227,6 +5227,124 @@ scraps:
   already, same as most of dead-code-sweep buckets 1 and 2. `bin/pine`
   unaffected (pico runs as a separate subprocess, not linked in).
 
+### Finish Tier 2 warning-flag cleanup: `-Wsign-compare`, plus closing out `-Wshadow`/`-Wstrict-prototypes`/`-Wmissing-prototypes`
+
+Closes out the Tier 2 warning-flag item (`-Wsign-compare`/`-Wshadow`/
+`-Wstrict-prototypes`/`-Wmissing-prototypes`, all four now enabled in
+both `makefile.lnx`s). `-Wstrict-prototypes`/`-Wmissing-prototypes`
+(including `imap/ANSI/c-client`, which is in scope for this audit like
+every other tree here) and `-Wshadow` were finished in an earlier
+commit (`336bd1d`); this session cleared the last flag, `-Wsign-compare`
+(52 raw warnings after merging `origin/main`'s bucket-3/`tinfo.c`
+dead-code work), across `pine/`, `pico/`, and their generated-file
+fragments. A clean `./build clean && ./build lnx` now reports **zero**
+warnings of any kind across both Tier 1 and Tier 2 flag sets.
+
+Nearly all 52 sites were `size_t`-vs-`int`/`long` or
+`unsigned`-vs-`long` comparisons (`strlen()` against an `int` byte
+budget, or c-client's `unsigned long nmsgs`/`msgno`/`size.bytes`
+against pine's signed `MsgNo`/`long` message-number types) where the
+values involved are non-negative in every real call path, so the fix
+is a same-signedness cast at the comparison (not a suppression --
+each site was checked for whether the "wrong" side could actually go
+negative first; see the two real bugs below, which are exactly the
+cases where it could). Representative fix:
+`pine/pine.h`'s `FETCH_ALL_FLAGS` macro (used by `pine.c`/`mailcmd.c`)
+compared a signed `faf_msgno` against `s->nmsgs` (c-client's
+`unsigned long`) -- cast the latter to `long` once in the macro body
+rather than at every call site. Similarly `pine/mailindx.c`'s
+`compare_size()` had `size_a = mc != NULL ? mc->rfc822_size : -1;`
+where the ternary's usual-arithmetic-conversions silently promoted the
+whole expression (and thus the `-1` sentinel) to `unsigned long`
+before it got assigned back into the signed `long size_a` -- harmless
+on any two's-complement platform (round-trips back to `-1`) but worth
+an explicit `(long)mc->rfc822_size` cast so the ternary's type doesn't
+depend on that implementation detail.
+
+**Two real bugs found and fixed along the way** (per CLAUDE.md's
+standing note that finding genuine bugs during an audit like this is
+expected, not scope creep):
+
+- **`pine/strings.c`'s `repeat_char()`: off-by-one static-buffer
+  overflow, plus no negative-`n` guard.** The original bound check was
+  `if(n > sizeof(bb)) n = sizeof(bb) - 1;` with `static char bb[512]`.
+  Two bugs: (1) it's `>` not `>=`, so `n == 512` exactly (a legal,
+  in-range-looking value) sailed through unclamped, and the very next
+  line, `bb[n--] = '\0'`, wrote `bb[512]` -- one byte past the end of
+  the 512-byte static array; (2) `n` is `int` and the comparison's
+  unsigned promotion (`sizeof` returns `size_t`) happened to clamp
+  negative `n` up to 511 as a side effect, which is the wrong
+  direction -- a negative `n` should never reach the fill loop at all.
+  Reachable in practice via `pine/mailindx.c:985`'s
+  `repeat_char(mess_count, '.')`, the "Still sorting.." progress-dots
+  call in `sort_blip()` -- `mess_count` increments once per
+  `DISPLAY_COUNT`-comparisons-and-15-real-seconds-elapsed tick during
+  a qsort of the folder index, so it reaches exactly 512 only on a
+  folder sort that runs uninterrupted for roughly 2+ hours. Essentially
+  unreachable on this x86-64 dev box, but exactly the class of bug
+  CLAUDE.md flags as invisible here and potentially fatal on the actual
+  PDP-11 target, where sorting a large folder could plausibly take
+  that long. Fixed to clamp both ends explicitly:
+  `if(n < 0) n = 0; else if(n >= (int)sizeof(bb)) n = sizeof(bb) - 1;`.
+  **Verified per the CLAUDE.md ASan-repro protocol**: extracted
+  `repeat_char()` into a standalone file gated `#ifdef FIXED`, called
+  with `n == 512`. Buggy version: `AddressSanitizer: global-buffer-
+  overflow ... WRITE of size 1 ... 0 bytes after global variable 'bb'
+  ... of size 512`. Fixed version: clean exit, `len=511`. (Valgrind
+  would not have caught this one -- it's a global/static array, not a
+  heap allocation, and per CLAUDE.md's note valgrind also can't reason
+  about adjacent-variable overflows even for locals.) No regression
+  test added under `test/cases/` -- reaching `n == 512` through the
+  real code path needs ~2 hours of continuous folder-sort wall time,
+  which isn't practical to drive through the pexpect-based pty
+  harness; the ASan repro above is the verification record instead.
+- **`pine/mailcmd.c`'s `expunge_and_close()`: narrow-terminal folder-
+  name truncation silently skipped.** `max_folder = screen_cols - 50`
+  is a signed `long` that goes negative on a terminal narrower than
+  ~50 columns; the old `if(strlen(temp) > max_folder)` compared
+  `size_t` against `long`, so a negative `max_folder` got promoted to
+  a huge unsigned value and the "does the folder name need
+  truncating" check always came back false exactly when truncation
+  was most needed. Not a buffer overflow (`short_folder_name` is sized
+  identically to the already-bounded `temp`), just a cosmetic
+  wrong-branch bug on pathologically narrow terminals -- fixed with an
+  explicit `(long)strlen(temp) > max_folder`, which now correctly
+  treats "no room at all" (negative budget) as "truncate". Found the
+  same pattern, same fix, in `pico/display.c`'s `modeline()`
+  (`term.t_ncol-n-22` going negative on a narrow terminal skipped the
+  `.../`-truncation of a long buffer filename in the mode line) and
+  its pad-to-width loop a few lines down (`term.t_ncol - strlen(cp)`
+  going negative would have made the `while(n < ...)` padding loop
+  run far longer than intended, though `vtputc()`'s own internal
+  `vtcol >= term.t_ncol` column clamp stops it from actually writing
+  out of bounds -- a latent hang/wasted-cycles bug on a tiny terminal,
+  not memory corruption). All three fixed the same way: cast the
+  `strlen()` side down to `int`/`long` so the comparison stays signed
+  and a negative budget compares as "no room" rather than wrapping to
+  "unlimited room".
+
+Also found and fixed one pre-existing `extern`/definition type
+mismatch surfaced while chasing a `-Wsign-compare` site:
+`pico/line.c` defines the kill-buffer-used counter as `unsigned kused`,
+but `pico/random.c`'s `yank()` had a stale `extern int kused;` --
+mismatched-type external declarations for the same object are
+undefined behavior (harmless in practice here since `int`/`unsigned
+int` share representation on every platform this project targets, but
+still wrong). Grepped and confirmed the declaration was never actually
+referenced by name inside `yank()` (it calls `kremove()`, which
+internally reads the real `kused`) -- dead and wrong, so removed
+outright rather than just correcting its type.
+
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings of
+  any kind (Tier 1 and all four Tier 2 flags). Full smoketest suite,
+  26/26. Standalone ASan repro for the `repeat_char()` fix as
+  described above.
+- **Remaining**: Tier 2 warning-flag cleanup is now fully closed. What's
+  left open in `TODO-pdp11.md` is the ASan/`-fanalyzer` build-target
+  item (this session's `repeat_char()` repro was done ad hoc per
+  CLAUDE.md's existing manual process, underscoring that a real build
+  target would make this kind of check routine instead of one-off).
+
 ### Remove `-k`/`F_USE_FK`/`init_keyboard`/`end_keyboard`
 
 This target is a UUCP-connected local station: real serial terminals
@@ -5541,6 +5659,247 @@ two-phase job like the `F_USE_FK` cut.
   than fixed inline, since fixing it needs a dedicated repro (forcing
   a mailbox write failure) independent of this task.
 - **Size delta**: `bin/pine` text 779840 -> 779024 (-816 bytes).
+
+### Formalize an ASan build target (`ASAN=1`); evaluate `-fanalyzer` signal quality
+
+Two-part task. Part 1 promoted CLAUDE.md's existing ad hoc ASan repro
+process (extract-and-compile-standalone after a bug is already
+suspected) into a real, standing build target so the whole tree --
+`c-client`, `pico`, `pine` -- can be built and smoke-tested under
+AddressSanitizer instrumentation directly. Part 2 ran GCC's `-fanalyzer`
+as a one-off pass over all three trees and evaluated whether its signal
+is good enough to justify a standing target.
+
+**ASan build target**: added an `ASAN` make variable (default empty)
+to `imap/ANSI/c-client/makefile.lnx`, `pico/makefile.lnx`, and
+`pine/makefile.lnx`; `ifeq ($(ASAN),1)` appends `-fsanitize=address` to
+each file's `CFLAGS`. No changes to the `./build` script itself were
+needed -- its argument parser already forwards any non-3-character,
+non-`clean` argument straight through to `make` as-is (it only
+special-cases exactly-3-char strings as the target-platform selector,
+per its `case $1 in ... clean|???)` glob), so `./build lnx ASAN=1`
+Just Works: `makeargs` becomes `CC=cc ASAN=1`, forwarded verbatim to
+all three sub-`make`s. Chose CFLAGS-only over touching LDFLAGS too --
+`pico`'s single-line `$(CC) $(CFLAGS) main.c libpico.a ... -o pico`
+and `pine`'s final link line (`$(CC) $(LDFLAGS) $(CFLAGS) -o pine
+...`) both already include `$(CFLAGS)` at the link step, so appending
+there alone instruments both compilation and linking; `c-client` only
+ever produces a static `.a`, so `CFLAGS` alone covers it.
+
+**Immediately found a real, reachable stack-buffer overflow**: running
+the full smoketest suite under the new `ASAN=1` build, `test_save_
+attachment_overflow` (an *existing* regression test, previously green)
+crashed with `AddressSanitizer: stack-buffer-overflow ... in build_path
+os.c:254`. `pine/os.c`'s `build_path(pathbuf, first_part, second_part)`
+(real source: `pine/osdep/bld_path`) does `sprintf(pathbuf, "%s/%s",
+first_part, second_part)` with, per its own docstring, "No check is
+made for overflow." `pine/mailcmd.c`'s `save_attachment()` calls
+`build_path(full_filename, ps_global->home_dir, filename)` where
+`full_filename` is `char[MAXPATH+1]` (4097 bytes) and `filename` --
+an attachment's MIME `name=` parameter, already capped to `MAXPATH`
+(4096 bytes) by an earlier fix (see `test_save_attachment_overflow`'s
+own header comment) -- can itself be nearly 4096 bytes. `home_dir +
+"/" + filename` can therefore exceed `full_filename`'s capacity even
+though `filename` alone fits, a gap the earlier fix didn't cover
+since it never looked past `save_attachment()` into `build_path()`
+itself. A second, identical call site exists at `mailcmd.c:1054`.
+**Fixed at the root**: gave `build_path()` an explicit `pathbuf_size`
+parameter and switched its body to `snprintf`/`strncpy` with explicit
+truncation, rather than patching just the two currently-reachable
+overflow sites -- `build_path()` had *no* bound checking at any of its
+9 call sites tree-wide (`folder.c`, `init.c` x5, `pine.c`, `send.c` x2,
+`mailcmd.c` x2, `reply.c`), all passing fixed-size stack/static
+buffers. Updated the prototype in `pine.h` and every call site to pass
+`sizeof(pathbuf)`. Verified with a standalone `#ifdef FIXED`-gated
+ASan repro of just the buggy `sprintf` pattern (buggy: `global/stack-
+buffer-overflow ... WRITE of size ...`; fixed: clean exit) in addition
+to the full ASan smoketest run going 25/25 green (it had been 24/25
+with this one crash before the fix). Full clean rebuild (both plain
+and `ASAN=1`) stayed at 0 warnings throughout.
+
+**`-fanalyzer` evaluation**: ran `cc -fanalyzer -c` (not
+`-fsyntax-only` -- confirmed via a synthetic use-after-free test that
+`-fanalyzer`'s actual analysis pass only runs on a real `-c` codegen
+invocation on this GCC 16.1.1) over every `.c` file in `pine/`,
+`pico/`, and `c-client`'s five source files. Fast (~5-9s per tree,
+not the "slow" the TODO worried about) and modest volume (order of
+30 raw warnings total across all three trees), but with a real,
+identifiable false-positive pattern: **whenever an invariant is
+threaded through a heap-allocated struct field across a function call
+or loop iteration boundary, `-fanalyzer` loses track of it and flags a
+false NULL-deref/use-after-free.** Confirmed by hand for the two
+largest clusters:
+  - `pine/folder.c`: 16 warnings, all "possible NULL deref of
+    `folder_entry(...)`'s return." `folder_entry()`'s NULL return is
+    conditioned on `i >= ((FLIST*)flist)->used`; every flagged call
+    site is guarded by a `folder_total(flist)` check (which returns
+    that exact same `->used` field) or a `*index < ftotal` loop bound
+    -- `-fanalyzer` doesn't connect the two accessor functions'
+    shared invariant, so it can't see the guard. Confirmed false
+    positive at every site checked.
+  - `pico/line.c`: "use after free of `dotp`" in `ldelete()`'s
+    `while(n != 0)` loop. `dotp` is re-read fresh (`dotp =
+    curwp->w_dotp`) at the top of every iteration; `lfree()` (called
+    several stack frames down, via `ldelnewline()`) already redirects
+    every window's `w_dotp` away from the line it's about to free
+    *before* freeing it. `-fanalyzer` taints the *local* `dotp` once
+    its target is freed but doesn't model that the next iteration's
+    fresh read of `curwp->w_dotp` picks up `lfree()`'s own
+    already-applied fixup. Confirmed false positive.
+  - `pico/browse.c`'s `getfcells()` "use of uninitialized `tcp`" is
+    the same shape one level simpler: `tcp` is unconditionally set at
+    the end of every loop iteration, and the only read of it (in the
+    `else` branch) is gated on `mp->head != NULL`, which is only true
+    from the second iteration onward -- structurally provable safe,
+    analyzer just can't see it because the guard is a heap struct
+    field (`mp->head`), not a plain local.
+
+  Despite that recurring blind spot, `-fanalyzer` also found several
+  **genuine, fixed** bugs, roughly in ascending order of severity:
+  - `pine/filter.c`'s `gf_link_filter()`: local `char c` passed
+    by-value into every registered filter function on `GF_RESET`,
+    uninitialized. Every filter's `GF_RESET` branch checked (9 of
+    them) ignores the character argument, so harmless in every
+    current filter, but initialized to `0` anyway as free insurance
+    against a future filter that doesn't follow the convention.
+  - `pine/reply.c`'s `fetch_contents()`: local `got_one` used at
+    `if(!got_one) return(1);` without ever being initialized -- if
+    every message part hit the error path (`*ep++ = part_count`)
+    instead of the success path, `got_one` was read as indeterminate
+    stack garbage instead of reliably triggering the "no parts
+    fetched" bailout. Initialized to `0`.
+  - `pico/random.c`'s `showcpos()`: `thisline`/`nbc` are only set
+    inside a loop when the traversal reaches the cursor's exact
+    position, which should always happen given the buffer/window
+    invariants pico is supposed to maintain -- but initialized both to
+    `0` anyway as defense-in-depth against those invariants ever being
+    violated, matching the fix applied to the other two locals in the
+    same function that already had bulletproof initialization.
+  - `pico/composer.c`'s `resolve_niks()`: `sbuf_size = (size_t)i`
+    where `i` stays `0` if `headents[entry].hd_text` is `NULL` (which
+    it only would be if an earlier `InitEntryText()` call's `HALLOC()`
+    failed) -- `malloc(0)` can return a non-NULL, zero-capacity
+    allocation on glibc, and the following `*sbuf = '\0'` would then
+    overflow it by one byte. Only reachable under an allocation
+    failure during composer startup, but PDP-11-relevant given the
+    project's tiny target memory budget makes allocation failure far
+    more plausible there than on this dev box. Added an explicit
+    `sbuf_size == 0` guard alongside the existing malloc-NULL check.
+  - `pico/composer.c`'s `SaveHeaderLines()`: `while(--bp >= buf)`
+    decrements-then-checks, so in the "every copied character was a
+    trailing space" case `bp` is decremented one past `buf` *before*
+    the bound check runs -- comparing a pointer before the start of an
+    array with a relational operator is undefined behavior per the C
+    standard even though it happens to evaluate as expected (false)
+    on every mainstream target/compiler this project has ever run on.
+    Rewrote as check-then-decrement (`while(bp > buf){ --bp; ... }`)
+    so `bp` never forms an out-of-bounds pointer value at all,
+    identical behavior in every case that hits `break`, and now
+    bottoms out at `buf` instead of `buf-1` in the no-`break` case
+    (a value nothing downstream reads anyway).
+  - `pico/tcap.c`'s `kpinsert()`: two `newnode()` (a `malloc()`
+    wrapper) call sites dereferenced the result without a NULL check,
+    unlike every other allocation in this codebase. Added NULL checks
+    that bail out (`return(0)`) on allocation failure -- consistent
+    with the function's existing "return value carries no meaning,
+    every path returns 0" convention (confirmed via grep: none of its
+    ~30 call sites, all in terminal-capability init, check the
+    return value).
+  - `pico/display.c`'s `wstripe()`: called `pscr(line, i)->c` without
+    checking `pscr()`'s own documented NULL return (out-of-range
+    line/column) -- the `i` bound is checked by the caller's own loop
+    guard, but `line` (the function's own parameter) is never
+    validated before being handed to `pscr()`. Added a NULL check
+    that returns early ("line out of range") rather than crashing.
+  - **`pico/browse.c`'s `BrowserAnchor()` -- a real, verified crash,
+    the most serious of this batch.** `while((p = strchr(p,
+    C_FILESEP)) != NULL) if(...) break; else p++;` searches for a
+    path separator positioned late enough in `dir` to fit the
+    available display width; if none exists (a single path component
+    too long to fit, e.g. a long final directory name on a narrow
+    terminal), the loop exits with `p == NULL` by construction of its
+    own condition. The very next line was `if(*p == '\0')` -- meant
+    to detect exactly this "search exhausted" case (its own comment
+    says `/* no suitable length! */`) but checking the wrong thing
+    entirely: dereferencing `p` unconditionally, guaranteed-NULL in
+    exactly the case it was trying to detect. **Verified with a
+    standalone extracted repro**: buggy version segfaults
+    (`AddressSanitizer: SEGV on unknown address 0x0`) with a long
+    final path component and narrow terminal width; fixed version
+    (`if(p == NULL)`) runs clean. This is a real, user-triggerable
+    crash (browse a directory whose current path's last component
+    alone is too long for the terminal width) that had nothing to do
+    with signedness or any of this project's prior audit passes --
+    purely a wrong-variable-checked logic bug, caught only because
+    `-fanalyzer` happened to trace the NULL-producing path through
+    `strchr()`'s loop.
+  - `imap/ANSI/c-client/bezerk.c`'s `bezerk_search_string()`: the
+    `default:` (atomic string) case of a `switch` handling local
+    mbox-format SEARCH criteria parsing did `*n = strlen(*d = strtok
+    (c," "))` with no NULL check, while the `case '"':` (quoted
+    string) branch two lines above it *already* uses the correct
+    defensive idiom (`if(!(strchr(...) && (*d = strtok(...)) && (*n =
+    strlen(*d)))) return NIL;`) for the exact same `strtok`-can-
+    return-NULL risk. Applied the sibling branch's own established
+    pattern to the `default:` case. Since this build has no TCP/IP,
+    the SEARCH criteria string this parses only ever originates from
+    pine's own local "search messages" UI (never network input), so
+    real-world severity is a crash-on-unusual-search-string rather
+    than a network-facing vulnerability, but still a genuine
+    unguarded-NULL-deref bug worth the one-line fix.
+  - **Not fixed, deliberately**: `pine/signals.c`'s `hup_signal()`/
+    `term_signal()` and `pico/os_unix.c`'s SIGINT handler all call
+    `exit()` (not async-signal-safe) from within a signal handler,
+    correctly flagged `CWE-479`. Already call `fast_clean_up()`/
+    `printf()` (also not signal-safe) before `exit()`, so the handler
+    was never async-signal-safe to begin with by the strict standard
+    -- this is a decades-old, extremely common pattern in single-
+    threaded interactive Unix programs of this vintage for
+    intentional-termination-on-signal, not a new risk introduced
+    here. Switching to `_exit()` would skip flushing the "Pine
+    finished..." `printf()` output and any `atexit()`-registered
+    cleanup, a real behavior-change risk not worth taking without a
+    dedicated repro/verification cycle of its own -- left as a
+    documented, low-priority follow-up rather than changed inline.
+  - **Not fixed, too low-value to matter**: `pico/pico.c`'s
+    `edinit()` leaks the `bp` allocation if the subsequent `wp`
+    allocation fails (or vice versa) -- but this is a one-time
+    startup path that either `exit(1)`s the whole process or aborts
+    the composer-open attempt entirely on failure, so nothing
+    accumulates and the OS reclaims everything moments later either
+    way.
+  - **Out of scope**: `pine/pine-use.c` (a separate, UW-internal
+    usage-statistics utility with its own `pine-use:` makefile target,
+    never part of the `pine` binary's dependency chain and compiled
+    with no `$(CFLAGS)`/`$(WARNFLAGS)` at all) surfaced a handful of
+    stale K&R-era implicit-declaration/int-to-pointer warnings --
+    consistent with this project's established precedent of leaving
+    never-built-by-`./build lnx` auxiliary tools alone.
+
+  **Verdict**: keep the `ASAN=1` build target as a standing,
+  routinely-used tool -- cheap to build, zero false positives
+  observed, and it found a real, currently-shipping stack overflow on
+  its very first full-suite run. Do **not** promote `-fanalyzer` to a
+  standing/enforced CI gate in its current form: fast enough for an
+  occasional manual pass and it did catch one serious, real,
+  verified crash (`BrowserAnchor()`) plus several smaller genuine
+  bugs, but roughly half its raw output on this codebase is a
+  systematic false-positive pattern (heap-struct-field invariants
+  it can't track) that would need per-site suppression annotations
+  to gate on cleanly. Worth re-running by hand after significant
+  changes to `folder.c`/`line.c`/`browse.c`-style linked-list/struct
+  bookkeeping code, not worth wiring into every build.
+
+- **Verified**: full clean rebuild (both plain and `ASAN=1`), 0
+  warnings, 25/25 smoketests in both configurations at every
+  checkpoint. Standalone ASan repros for both the `build_path()`
+  overflow and the `BrowserAnchor()` NULL deref, confirming
+  buggy-crashes/fixed-clean in both cases.
+- **Remaining**: the mis-parenthesized-ternary and DEBUG/dprint-
+  removal items above are still open. No further `-fanalyzer`
+  findings from this pass were left unaddressed except the two
+  explicitly deferred items (signal-handler `exit()`, `edinit()`'s
+  startup-path leak) noted above.
 
 ### Remove the DEBUG/dprint() infrastructure entirely -- deliberate loss of a diagnostic tool, user-confirmed
 

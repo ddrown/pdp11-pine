@@ -557,7 +557,7 @@ init_username(ps)
                ps->VAR_MAIL_DIRECTORY);
         return(-1);
     }
-    build_path(fld_dir, ps->home_dir, ps->VAR_MAIL_DIRECTORY);
+    build_path(fld_dir, sizeof(fld_dir), ps->home_dir, ps->VAR_MAIL_DIRECTORY);
     ps->folders_dir = cpystr(fld_dir);
 
     return(rv);

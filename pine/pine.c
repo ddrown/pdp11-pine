@@ -344,7 +344,7 @@ main(int argc, char *argv[])
         if(pine_state->mangled_footer)
 	  pine_state->painted_footer_on_startup = 0;
 
-        build_path(int_mail, pine_state->folders_dir, INTERRUPTED_MAIL);
+        build_path(int_mail, sizeof(int_mail), pine_state->folders_dir, INTERRUPTED_MAIL);
         if(can_access(int_mail, ACCESS_EXISTS) == 0) {
             q_status_message(1, 4, 5, "\007Use compose command to continue composing last message. It was interrupted.");
         }
@@ -1001,7 +1001,7 @@ count_deleted(stream)
 
     FETCH_ALL_FLAGS(stream);
 
-    for(i = 0 ; i < stream->nmsgs; i++) {
+    for(i = 0 ; i < (int)stream->nmsgs; i++) {
 	mc = mail_elt(stream, (long)(i+1));
         if(mc != NULL && mc->deleted)
           delete_count++;
@@ -1031,7 +1031,7 @@ count_seen_not_deleted(stream)
 
     FETCH_ALL_FLAGS(stream);
 
-    for(i = 0 ; i < stream->nmsgs; i++) {
+    for(i = 0 ; i < (int)stream->nmsgs; i++) {
 	mc = mail_elt(stream, (long)(i+1));
         if(mc != NULL && mc->seen && !mc->deleted)
           cnt++;
@@ -1057,13 +1057,13 @@ first_sorted_unread(stream )
 
     FETCH_ALL_FLAGS(stream);
 
-    for(i = 1 ; i <= stream->nmsgs; i++) {
+    for(i = 1 ; i <= (MsgNo)stream->nmsgs; i++) {
 	mc = mail_elt(stream, (long)(ps_global->sort[i]));
         if(mc != NULL && !mc->seen && !mc->deleted)
           break;
     }
-    if(i > stream->nmsgs)
-      i = stream->nmsgs;
+    if(i > (MsgNo)stream->nmsgs)
+      i = (MsgNo)stream->nmsgs;
     return(i);
 }
 
@@ -1094,7 +1094,7 @@ next_sorted_un(stream, start, found_is_new, read_or_deleted)
 
     FETCH_ALL_FLAGS(stream);
 
-    for(i = start ; i <= stream->nmsgs; i++) {
+    for(i = start ; i <= (MsgNo)stream->nmsgs; i++) {
 	mc = mail_elt(stream, (long)(ps_global->sort[i]));
         if(mc != NULL && !mc->deleted && (read_or_deleted || !mc->seen)) {
             if(found_is_new)
@@ -1104,7 +1104,7 @@ next_sorted_un(stream, start, found_is_new, read_or_deleted)
         }
     }
 
-    return(min(i, stream->nmsgs));
+    return(min(i, (MsgNo)stream->nmsgs));
 }
 
 
