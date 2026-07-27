@@ -120,7 +120,6 @@ reply(pine_state, msgno, env, body)
     int 	include_text;
     int         ret;
 
-    dprint(4, (debugfile,"\n - reply -\n"));
 
     /*---------- Get the envelope of message we're replying to ------*/
     if(env == NULL) {
@@ -513,7 +512,6 @@ forward(pine_state, msgno, env, body)
     gf_io_t        pc;
     char          *sig;
 
-    dprint(4, (debugfile, "\n - forward -\n"));
 
     stream                = pine_state->mail_stream;
     outgoing              = mail_newenvelope();
@@ -530,8 +528,6 @@ forward(pine_state, msgno, env, body)
         removing_trailing_white_space(outgoing->subject);
 	/* this next strange compare is to see if the last few chars are
 	     already '(fwd)' before we tack another on */
-        dprint(9, (debugfile, "checking subject: \"%s\"\n",
-                   env->subject + strlen(env->subject) - 5));
 	if (strlen(outgoing->subject) < 6 ||
                   (strcmp(outgoing->subject + strlen(outgoing->subject) - 5,
                       "(fwd)") != 0))

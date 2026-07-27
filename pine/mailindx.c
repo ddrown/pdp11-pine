@@ -174,7 +174,6 @@ mail_index_screen(state)
           changed_sorted_msgno, tmp;
 
 
-    dprint(1, (debugfile, "\n\n ---- MAIL INDEX ----\n"));
     
     ch                          = 'x'; /* For displaying msg 1st time through */
     force                       = 0;
@@ -215,9 +214,6 @@ mail_index_screen(state)
 					ch == NO_OP_IDLE ? 0 :
 					ch == NO_OP_COMMAND ? 1 : 2);
 	force = 0;			/* may not need to next time around */
-        dprint(9, (debugfile, "@@@@@ changed_sorted_msgno: %ld current:%ld\n",
-                   changed_sorted_msgno,
-                   state->current_sorted_msgno));
         if(changed_sorted_msgno >= 0 || state->max_msgno != old_max_msgno) {
             /* Here we have gotten some new mail, expunged or something. 
                In any case we have to figure if some painting needs doing */
@@ -232,9 +228,6 @@ mail_index_screen(state)
                    (We can ignore changes in the index off the bottom of 
                     the screen -- no repainting will be required)
                  */
-                dprint(9, (debugfile, "@@@@@ new: %ld,  current: %ld\n",
-                           state->new_current_sorted_msgno,
-                           state->current_sorted_msgno));
                 if(state->current_sorted_msgno !=
                    state->new_current_sorted_msgno){
                     tmp = 32000; /* This code breaks for more that 32K msgs*/
@@ -495,8 +488,6 @@ redraw_index_body()
     top_ent = top_ent_calc(index_body_state.current_sorted_msgno, lines);
     ent     = max(top_ent, index_body_state.paint_from);
 
-    dprint(9, (debugfile, "Repaint starting with %ld at %ld\n",
-               ent, ent- top_ent));
     
     for(scr = ent - top_ent; scr < lines; scr++) {
         MoveCursor(2 + (int)scr, 0);
@@ -581,12 +572,8 @@ build_header_line(message_number)
     struct date   d;
 
 
-    dprint(8, (debugfile, "=== build_header_line (%ld) called ===\n",
-               message_number));
 
     if(*(buffer = get_index_cache(message_number)) != '\0') {
-        dprint(9, (debugfile, "Returning %p<%s> (%d)\n", buffer,
-		   buffer, (int) strlen(buffer)));
 	return(buffer);
     }
 
@@ -684,19 +671,16 @@ build_header_line(message_number)
     /*-- subject --*/
     subject_length = max(ps_global->ttyo->screen_cols, 80) -
 			          status_length - from_length - size_length;
-    dprint(9, (debugfile, "subject_length : %d\n", subject_length));
     mail_fetchsubject(subject, ps_global->mail_stream,
                       ps_global->sort[message_number], (long)subject_length);
     for(s = subject + strlen(subject); s < subject + subject_length; s++)
       *s = ' ';
     *s = '\0';
-    dprint(9, (debugfile, "strlen(subject : %d\n", (int) strlen(subject)));
 
     /*--- Put them all together ---*/
     sprintf(buffer, "%s%s%s%s", status, from, size, subject);
     /* Truncate it to proper size */
     buffer[min(ps_global->ttyo->screen_cols, i_cache_width())] = '\0';
-    dprint(9, (debugfile, "Returning %p<%s> (%d)\n", buffer, buffer, (int) strlen(buffer)));
     return(buffer);
 }
 
@@ -914,15 +898,9 @@ compare_message_dates(a, b)
       return(-1);  /* A is NULL, B is not */
     }
 
-    dprint(9,(debugfile,"before GMT: wkday:%d  month:%d  year:%d  day:%d  hour:%d  min:%d  sec:%d  off_gmt:%d\n",
-            d_a.wkday, d_a.month, d_a.year, d_a.day, d_a.hour, d_a.minute,
-              d_a.sec,d_a.hours_off_gmt));
 
     convert_to_gmt(&d_a);
 
-    dprint(9,(debugfile,"after GMT: wkday:%d  month:%d  year:%d  day:%d  hour:%d  min:%d  sec:%d\n",
-            d_a.wkday, d_a.month, d_a.year, d_a.day, d_a.hour, d_a.minute,
-              d_a.sec));
 
     convert_to_gmt(&d_b);
     
@@ -1000,8 +978,6 @@ sort_current_folder()
     sort = ps_global->sort;
     so   = ps_global->current_sort_order;
 
-    dprint(2, (debugfile, "Sorting by %s%s\n", sort_name(so),
-               ps_global->current_reverse_sort ? "/reverse" : ""));
 
     if(so == SortArrival){
 	for(mess_no = 1; mess_no <= ps_global->max_msgno; mess_no++)

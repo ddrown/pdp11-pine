@@ -61,20 +61,6 @@ static char rcsid[] = "$Id: imap.c,v 4.20 1993/11/11 16:41:57 mikes Exp $";
 
 #include "headers.h"
 
-/*----------------------------------------------------------------------
-      Write imap debugging information into log file
-
-   Args: strings -- the string for the debug file
-
- Result: message written to the debug log file
-  ----*/
-void mm_dlog(string)
-     char *string;
-{
-    dprint(0, (debugfile, "IMAP DEBUG: %s\n", string));
-}
-
-
 
 /*----------------------------------------------------------------------
       Queue imap log message for display in the message line
@@ -99,14 +85,6 @@ void mm_log(string, errflg)
     now = time(0);
     tm_now = localtime(&now);
 
-    dprint((errflg == ERROR ? 1 : 2), (debugfile,
-                                     "IMAP %d:%d %d/%d mm_log %s: %s\n",
-                                     tm_now->tm_hour, tm_now->tm_min,
-                                     tm_now->tm_mon+1, tm_now->tm_mday,
-                                     errflg == ERROR ? "ERROR" :
-                                     errflg == WARN  ? "warn"  :
-                                     errflg == PARSE ? "parse" : "babble",
-                                     string));
 
     if(strncmp(string , "APPEND", 6) == 0){
 	if(ps_global->try_to_create) /* hide error if creating new folder  */
@@ -161,11 +139,6 @@ void mm_notify(stream, string, errflag)
      char       *string;
      long        errflag;
 {
-    dprint(1, (debugfile, "IMAP mm_notify %s : %s : %s\n",
-               errflag == ERROR ? "error" : "warning" ,
-               stream != NULL && stream->mailbox != NULL ? stream->mailbox :
-               "-no folder-" ,
-               string));
 
     if((strncmp(string, "[TRYCREATE]", 11) == 0)){
 	ps_global->try_to_create = 1;
@@ -206,10 +179,6 @@ void mm_exists(stream, number_l)
      long number_l;
 {
     int number = (int)number_l;
-    dprint(3, (debugfile, "=== mm_exists(%ld,%s) called ===\n", number,
-	       stream == NULL ? "(no stream)" 
-	       : stream->mailbox == NULL ? "(null)" 
-	       : stream->mailbox));
     if(stream == ps_global->inbox_stream  &&
                             ps_global->inbox_stream != ps_global->mail_stream){
         ps_global->inbox_changed |= (ps_global->inbox_max_msgno != number);
@@ -250,11 +219,6 @@ void mm_expunged(stream, number_l)
      MAILSTREAM *stream;
      long        number_l;
 {
-     dprint(3, (debugfile, "mm_expunged called %s %ld\n",
-		stream == NULL ? "(no stream)" 
-		: stream->mailbox == NULL ? "(null)" 
-		: stream->mailbox, 
-		number_l));
      if(stream == ps_global->inbox_stream &&
             ps_global->inbox_stream != ps_global->mail_stream) {
          ps_global->inbox_expunge_count++;
@@ -418,11 +382,6 @@ mm_diskerror (stream, errcode, serious)
     int line, ch;
     char q[200];
 
-    dprint(0, (debugfile,
-       "\n***** DISK ERROR on stream %s. Error code %ld. Error is %sserious\n",
-               stream ? stream->mailbox : "<no mail folder>", errcode,
-               serious ? "" : "not "));
-    dprint(0, (debugfile, "***** message: \"%s\"\n\n", ps_global->last_error));
 
     if(!serious) {
 /*        q_status_message2(1, 3, 6,"\007Error saving mail folder \"%s\" : %s",
@@ -523,7 +482,6 @@ void context_mailbox(name)
     new_f->unread_count      = 0;
     folder_insert(-1, new_f, find_folder_list);
 
-    dprint(4, (debugfile, "====== context_mailbox: (%s)\n", name));
 }
 
 
@@ -563,14 +521,10 @@ char *name;
 
     new_f->name_len += strlen(new_f->prefix);
 
-    dprint(4, (debugfile, "====== context_bboard: (%s) %s, %d of %d unread\n",
-	       find_folder_context->context, new_f->name, 
-	       new_f->unread_count, new_f->msg_count));
 #endif
 
     folder_insert(folder_total(find_folder_list), new_f, find_folder_list);
 
-    dprint(4, (debugfile, "====== context_bboard: (%s)\n", name));
 }
 
 

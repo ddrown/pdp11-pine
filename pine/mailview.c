@@ -109,7 +109,6 @@ mail_view_screen(pine_state)
     gf_io_t         pc;
     SourceType	    src = CharStar;
 
-    dprint(1, (debugfile, "\n\n  -----  MAIL VIEW  -----\n"));
 
     if(pine_state->max_msgno <= 0 || pine_state->mail_stream == NULL) {
         q_status_message(0, 1, 3, "No messages to read!");
@@ -1082,9 +1081,6 @@ scrolltool(text, title, pages, style, source, att)
         if(streams_died())
           ps_global->mangled_header = 1;
 
-        dprint(9, (debugfile, "@@@@ new: %ld  current:%ld\n",
-                   ps_global->new_current_sorted_msgno,
-                   ps_global->current_sorted_msgno));
 
 
         /*==================== All Screen painting ====================*/
@@ -1424,7 +1420,6 @@ whereis:
 
 	    }else if(style == MessageText){
 	        result = process_cmd(ch, 0, orig_ch, &force); 
-	        dprint(7, (debugfile, "PROCESS_CMD return: %d\n", result));
 
                 if(ps_global->next_screen != SCREEN_FUN_NULL || result == 1){
 		    ps_global->scroll_text_level--;

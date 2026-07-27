@@ -565,10 +565,6 @@ parse_date(given_date, d)
             }
         }
     }
-    dprint(9, (debugfile, "Parse date: \"%s\" to..  hours_off_gmt:%d  min_off_gmt:%d  \"%s\"\n",
-               given_date, d->hours_off_gmt, d->min_off_gmt, d->zone_name));
-    dprint(9,(debugfile,"Parse date: wkday:%d  month:%d  year:%d  day:%d  hour:%d  min:%d  sec:%d\n",
-            d->wkday, d->month, d->year, d->day, d->hour, d->minute, d->sec));
 }
 
 
@@ -754,7 +750,6 @@ comatose(number)
     static char buf[100];
     char       *b;
 
-    dprint(9, (debugfile, "comatose(%ld) returns:", number));
     if(number == 0){
         strcpy(buf, "0");
         return(buf);
@@ -775,7 +770,6 @@ comatose(number)
     }
     *b = '\0';
 
-    dprint(9, (debugfile, "\"%s\"\n", buf));
 
     return(buf);
 }

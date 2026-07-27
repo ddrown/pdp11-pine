@@ -124,7 +124,7 @@ Loop: while(--ac > 0 && **++av == '-') {
 		   break;
 		 /* these take arguments */
 		 case 'f': case 'I':  /* string args */
-		 case 'd': case 'n':  /* integer args */
+		 case 'n':  /* integer args */
 		   if(*++*av) {
 		      str = *av;
 		   }else if(--ac) {
@@ -142,18 +142,6 @@ Loop: while(--ac > 0 && **++av == '-') {
 		     case 'I':
 		       cmd_list = str;
 		       break;
-#ifdef	DEBUG
-		     case 'd':
-		       if(!isdigit(str[0])){
-			   fprintf(stderr,
-			  "Error: Non numeric argument for flag \"%c\"\n", c);
-			   ++usage;
-			   break;
-		       }
-
-		       debug = atoi(str);
-		       break;
-#endif
 		     case 'n':
 		       if(!isdigit(str[0])){
 			   fprintf(stderr,
@@ -225,9 +213,6 @@ args_help(void)
 	printf("\nPossible Starting Arguments for Pine program:\n\n");
 	printf("\tArgument\t\tMeaning\n");
         printf("\t <addrs>...\tGo directly into composer sending to given address\n");
-#ifdef	DEBUG
-	printf("\t -d n\t\tDebug - set debug level to 'n'\n");
-#endif
 	printf("\t -f <folder>\tFolder - give folder name to open\n");
 	printf("\t -h \t\tHelp - give this list of options\n");
         printf("\t -sort <sort> \tSort - Specify sort order of folder:\n");

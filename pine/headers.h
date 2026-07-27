@@ -100,9 +100,4 @@ extern int          timeout;  /* referenced by weemacs. Set in pine.c. */
 extern char        *tmp_20k_buf;
 extern void         grow_tmp_20k_buf(size_t);
 
-#ifdef DEBUG
-extern FILE        *debugfile;	     /* file for debut output    */
-extern int          debug;	     /* flag: debugging mode on? */
-#endif
-
 #endif /* _HEADERS_INCLUDEDS */

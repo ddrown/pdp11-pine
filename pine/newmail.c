@@ -103,8 +103,6 @@ new_mail(cursor_moved, force, time_for_check_point)
     int           checknow = 0;
     long          *old_sort;
 
-    dprint(9, (debugfile, "new mail called (%p %d %d)\n",
-               cursor_moved, force, time_for_check_point));
     pine_state = ps_global;  /*  this gets called out of the composer which
                               *  doesn't know about pine_state
                               */
@@ -130,19 +128,10 @@ new_mail(cursor_moved, force, time_for_check_point)
 	PutLine0(0, 1, "*"); 		/* Show something indicate delay*/
 	MoveCursor(ps_global->ttyo->screen_rows -3, 0);
 	fflush(stdout);
-#ifdef	DEBUG
-	now = time(0);
-	dprint(7, (debugfile, "Mail_Ping(mail_stream): %s\n", ctime(&now)));
-#endif
         /*-- Ping the mailstream to check for new mail --*/
-        dprint(6, (debugfile, "New mail checked \n"));
 	if((char *)mail_ping(stream) == NULL)
 	  pine_state->dead_stream = 1;
 
-#ifdef	DEBUG
-	now = time(0);
-	dprint(7, (debugfile, "Ping complete: %s\n", ctime(&now)));
-#endif
 	PutLine0(0, 1, " ");
 	EndInverse();
 	fflush(stdout);
@@ -157,17 +146,9 @@ new_mail(cursor_moved, force, time_for_check_point)
 	PutLine0(0, 1, "*"); 		/* Show something indicate delay*/
 	MoveCursor(ps_global->ttyo->screen_rows -3, 0);
 	fflush(stdout);
-#ifdef	DEBUG
-	now = time(0);
-	dprint(7, (debugfile, "Mail_Ping(inbox_stream): %s\n", ctime(&now)));
-#endif
 	if((char *)mail_ping(pine_state->inbox_stream) == NULL)
 	  pine_state->dead_inbox = 1;
 
-#ifdef	DEBUG
-	now = time(0);
-	dprint(7, (debugfile, "Ping complete: %s\n", ctime(&now)));
-#endif
 	PutLine0(0, 1, " ");
 	EndInverse();
 	fflush(stdout);
@@ -178,13 +159,6 @@ new_mail(cursor_moved, force, time_for_check_point)
        Mail box state changed, could be additions or deletions.
       -------------------------------------------------------------*/
     if(pine_state->mail_box_changed) {
-        dprint(7, (debugfile,
-        "New mail, %s,  new_mail_count:%ld  expunge count:%ld,  max_msgno:%ld\n",
-                   pine_state->mail_stream == pine_state->inbox_stream ?
-                      "inbox" : "other",
-                   pine_state->new_mail_count,
-                   pine_state->expunge_count,
-                   pine_state->max_msgno));
 
         if(ps_global->new_mail_count > 0) {
             mailbox_mail_since_command += ps_global->new_mail_count;
@@ -198,9 +172,6 @@ new_mail(cursor_moved, force, time_for_check_point)
 
         old_current_raw_msgno = (ps_global->current_sorted_msgno <= 0L) ? 0L :
                          ps_global->sort[ps_global->current_sorted_msgno];
-        dprint(9, (debugfile,
-                  "old_current_raw_msgno: %ld  sort_allocated; %ld\n",
-                   old_current_raw_msgno, ps_global->sort_allocated));
 
         if(ps_global->sort_allocated <= ps_global->max_msgno + 1){
             /*--- Pad out the sort array if needed ----*/
@@ -270,9 +241,6 @@ new_mail(cursor_moved, force, time_for_check_point)
         } else {
             min_changed_sorted_msgno = x - 1;
         }
-        dprint(9, (debugfile, "new sorted_msgno: %ld  min_changed: %ld\n",
-                   ps_global->new_current_sorted_msgno,
-                   min_changed_sorted_msgno));
 
         if(old_sort != NULL)
           fs_give((void **)&old_sort);
@@ -286,11 +254,6 @@ new_mail(cursor_moved, force, time_for_check_point)
                        pine_state->inbox_stream != pine_state->mail_stream) {
         /*--  New mail for the inbox, queue up the notification           --*/
         /*-- If this happens then inbox is not current stream that's open --*/
-        dprint(7, (debugfile,
-         "New mail, inbox, new_mail_count:%ld expunge: %ld,  max_msgno %ld\n",
-                   pine_state->inbox_new_mail_count,
-                   pine_state->inbox_expunge_count,
-                   pine_state->inbox_max_msgno));
 
         if(pine_state->inbox_new_mail_count > 0) {
             inbox_mail_since_command       += ps_global->inbox_new_mail_count;
@@ -306,7 +269,6 @@ new_mail(cursor_moved, force, time_for_check_point)
     pine_state->mail_box_changed = 0;
     ps_global->new_mail_count    = 0;
 
-    dprint(6, (debugfile, "******** new mail returning %ld  ********\n", rv));
     return(rv);
 }
 
@@ -423,14 +385,7 @@ check_point(timing)
     int     freq, tm;
     long    adj_cca;
     long    tmp;
-#ifdef	DEBUG
-    time_t  now;
-#endif
 
-    dprint(9, (debugfile, "check_point(%s)\n", 
-               timing == GoodTime ? "GoodTime" :
-               timing == BadTime  ? "BadTime" :
-               timing == VeryBadTime  ? "VeryBadTime" : "DoItNow"));
 
     if(!ps_global->mail_stream || ps_global->mail_stream->readonly ||
 							     check_count == 0)
@@ -439,9 +394,6 @@ check_point(timing)
     freq = CHECK_POINT_FREQ * (timing==GoodTime ? 1 : timing==BadTime ? 3 : 4);
     tm   = CHECK_POINT_TIME * (timing==GoodTime ? 1 : timing==BadTime ? 2 : 3);
 
-    dprint(9, (debugfile, "freq: %d  count: %d\n", freq, check_count));
-    dprint(9, (debugfile, "tm: %d  elapsed: %ld\n", tm,
-               time(0) - first_status_change));
 
     if(!last_status_change)
         last_status_change = time(0);
@@ -450,36 +402,17 @@ check_point(timing)
     adj_cca = (tmp > check_count_ave) ?
 	  min((check_count_ave + tmp)/2, 2*check_count_ave) : check_count_ave;
 
-    dprint(9, (debugfile, "freq %d tm %d changes %d since_1st_change %ld\n",
-	       freq, tm, check_count, time(0)-first_status_change));
-    dprint(9, (debugfile, "since_status_chg %ld chk_cnt_ave %ld (tenths)\n",
-	       time(0)-last_status_change, check_count_ave));
-    dprint(9, (debugfile, "adj_chk_cnt_ave %ld (tenths)\n", adj_cca));
-    dprint(9, (debugfile, "Check:if changes(%d)xadj_cca(%ld) >= freq(%d)x200\n",
-	       check_count, adj_cca, freq));
-    dprint(9, (debugfile, "      is %ld >= %d ?\n",
-	       check_count*adj_cca, 200*freq));
 
     /* the 200 comes from 20 seconds for an average status change time
        multiplied by 10 tenths per second */
     if((timing == DoItNow || (check_count * adj_cca >= freq * 200) ||
        (time(0) - first_status_change >= tm))){
-#ifdef	DEBUG
-	now = time(0);
-	dprint(7, (debugfile,
-                     "Doing checkpoint: %s  Since 1st status change: %ld\n",
-                     ctime(&now), now - first_status_change));
-#endif
         StartInverse();
         PutLine0(0, 0, "**"); 		/* Show something indicate delay*/
 	MoveCursor(ps_global->ttyo->screen_rows -3, 0);
         fflush(stdout);
         mail_check(ps_global->mail_stream);
 					/* Causes mail file to be written */
-#ifdef	DEBUG
-	now = time(0);
-	dprint(7, (debugfile, "Checkpoint complete: %s\n", ctime(&now)));
-#endif
         check_count = 0;
         first_status_change = time(0);
         PutLine0(0, 0, "  ");
@@ -538,7 +471,6 @@ reset_check_point()
 void
 zero_new_mail_count()
 {
-    dprint(9, (debugfile, "New_mail_count zeroed\n"));
     mailbox_mail_since_command = 0L;
     inbox_mail_since_command   = 0L;
 }

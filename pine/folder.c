@@ -134,9 +134,6 @@ void      *find_folder_names(char *, char *);
 void       free_folders_in_context(CONTEXT_S *);
 FOLDER_S  *new_folder(char *);
 void       folder_delete(int, void *);
-#ifdef	DEBUG
-static int dump_contexts(FILE *);
-#endif
 
 
 static int sort_folder_entry = 0;
@@ -174,7 +171,6 @@ void
 folder_screen(pine_state)
     struct pine *pine_state;
 {
-    dprint(1, (debugfile, "=== folder_screen called ====\n"));
     pine_state->next_screen = main_menu_screen;
     folder_lister(pine_state, FolderMaint, NULL, NULL, NULL);
     pine_state->prev_screen = folder_screen;
@@ -219,7 +215,6 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
     BITMAP           bitmap;
     OtherMenu        what;
 
-    dprint(1, (debugfile, "\n\n    ---- FOLDER SCREEN ----\n"));
 
     quest_line         = -3;
     old_folder_index   = -1;
@@ -346,7 +341,6 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 
 	ch = validatekeys(ch);
 
-        dprint(5, (debugfile, "folder command: %c (%d)\n",ch,ch));
 
         /*----------- Execute command --------------*/
 	switch(ch) {
@@ -597,10 +591,6 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 		      strcpy(return_string, cur_name);
 
 		    rv = 1;
-                    dprint(5, (debugfile, "return \"%s\" in context \"%s\"\n",
-			       (return_string) ? return_string : "NULL", 
-			       (return_context) ? (*return_context)->context 
-			                        : "NULL"));
 	        }
 
 		free_folders_in_context(fs.context_list);
@@ -1042,7 +1032,6 @@ add_new_folder(quest_line, cntxt)
     int             rc;
     MAILSTREAM     *create_stream;
 
-    dprint(4, (debugfile, "\n - add_new_folder - \n"));
 
     add_folder[0] = '\0';
     help          = NO_HELP;
@@ -1127,7 +1116,6 @@ rename_folder(q_line, index, cntxt)
     FOLDER_S	*new_f;
     MAILSTREAM  *ren_stream = NULL;
 
-    dprint(4, (debugfile, "\n - rename folder -\n"));
 
     if(!ALL_FOUND(cntxt) || (cntxt->use & CNTXT_PSEUDO)){
 	q_status_message1(0,1,3, 
@@ -1222,8 +1210,6 @@ rename_folder(q_line, index, cntxt)
 		q_status_message1(1, 2, 4, "\007Error creating new \"%s\"",
 				  folder);
 
-		dprint(2, (debugfile, "Error creating \"%s\" in %s context\n",
-			   folder, cntxt->context));
 	    }
 	}
 	else{
@@ -1275,7 +1261,6 @@ delete_folder(index, cntxt, mangled_header)
 
     fp     = folder_entry(index, cntxt->folders);
     folder = fp->nickname ? fp->nickname : fp->name;
-    dprint(4, (debugfile, "=== delete_folder(%s) ===\n", folder));
 
     if(strucmp(folder, ps_global->inbox_name) == 0) {
 	q_status_message1(1, 2, 4, "\007Can't delete special folder \"%s\".",
@@ -1295,8 +1280,6 @@ delete_folder(index, cntxt, mangled_header)
 	return(0);
     }
 
-    dprint(2, (debugfile, "deleting folder \"%s\" (%s) in context \"%s\"\n",
-	       fp->name, fp->nickname ? fp->nickname : "", cntxt->context));
 
     /*
      * Use fp->name since "folder" may be a nickname...
@@ -1733,35 +1716,7 @@ init_folders(void)
 
     ps_global->context_list    = tc;	/* init pointers */
     ps_global->context_current = tc;
-
-#ifdef	DEBUG
-    if(debug > 7)
-      dump_contexts(debugfile);
-#endif
 }
-
-
-
-#ifdef	DEBUG
-static int
-dump_contexts(FILE *fp)
-{
-    FOLDER_S *f;
-    int i = 0;
-    CONTEXT_S *c = ps_global->context_list;
-
-    if(fp && c != NULL){
-	fprintf(fp, "\n***** context %s\n", c->context);
-	for(i=0;c->label[i] != NULL;i++)
-	  fprintf(fp,"LABEL: %s\n", c->label[i]);
-
-	for(i = 0; i < folder_total(c->folders); i++)
-	  fprintf(fp, "  %d) %s\n", i + 1, folder_entry(i,c->folders)->name);
-    }
-
-    return(0);
-}
-#endif
 
 
 
@@ -1831,7 +1786,6 @@ new_context(cntxt_string)
     c->context        = cpystr(cntxt_string);
     c->use            = CNTXT_NOFIND;		/* do find later! */
 
-    dprint(2, (debugfile, "Context %s\n", c->context));
 
     return(c);
 }
@@ -1879,8 +1833,6 @@ find_folders_in_context(context, search_string)
     find_folder_list  = context->folders;
     sort_folder_entry = 1;
 
-    dprint(7, (debugfile, "find_folders_in_context: %s\n",
-	       context->context));
 
     /*
      * Here's where we have to be careful.  C-client requires different

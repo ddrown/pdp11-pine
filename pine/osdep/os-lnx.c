@@ -300,7 +300,6 @@ expand_foldername(filename)
 {
     char         temp_filename[MAXPATH+1];
 
-    dprint(5, (debugfile, "=== expand_foldername called (%s) ===\n",filename));
 
     if(filename[0] != '{') {
         char *ill = filter_filename(filename);
@@ -334,7 +333,7 @@ expand_foldername(filename)
     } else {
         sprintf(filename,"%s/%s", ps_global->folders_dir, temp_filename);
     }
-    dprint(5, (debugfile, "returning \"%s\"\n", filename));    
+    
     return(1);
 }
 

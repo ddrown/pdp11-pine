@@ -130,7 +130,6 @@ end_tty_driver(ps)
     ps = ps; /* get rid of unused parameter warning */
 
     fflush(stdout);
-    dprint(2, (debugfile, "about to end_tty_driver\n"));
 
     Raw(0);
 }
@@ -302,9 +301,7 @@ read_with_timeout(int time_out)
 #ifdef USE_POLL
 	pollfd.fd = STDIN_FD;
 	pollfd.events = POLLIN;
-	dprint(9,(debugfile,"poll event %d, timeout %d\n", pollfd.events, time_out));
 	res = poll (&pollfd, 1, time_out * 1000);
-	dprint(9, (debugfile, "poll on tty returned %d, events %d\n", res, pollfd.revents));
 #else
          if(STDIN_FD == 0)
            readfds    = 1;
@@ -313,11 +310,9 @@ read_with_timeout(int time_out)
          tmo.tv_sec  = time_out;
          tmo.tv_usec = 0; 
 
-         dprint(9,(debugfile,"Select readfds:%d timeval:%d,%d\n",readfds, tmo.tv_sec,tmo.tv_usec));
 
          res = select(STDIN_FD+1, &readfds, 0, &readfds, &tmo);
 
-         dprint(9, (debugfile, "Select on tty returned %d\n", res));
 #endif
 
          if(res < 0) {
@@ -335,15 +330,12 @@ read_with_timeout(int time_out)
      }
 
      res = read(STDIN_FD, &c, 1);
-     dprint(9, (debugfile, "Read returned %d\n", res));
 
      ready_for_winch = 0;
 
      if(res <= 0) {
          /* Got an error reading from the terminal. Treat this like
             a SIGHUP: clean up and exit. */
-         dprint(1, (debugfile, "\n\n** Error reading from tty : %s\n\n",
-                error_description(errno)));
 
          if(errno == EINTR)
            return(NO_OP_COMMAND);
@@ -598,8 +590,6 @@ get_one_char:
 
      default:
      done:
-        dprint(9, (debugfile, "Read char returning: %d %s\n",
-                   ch, pretty_command(ch)));
         return(ch);
     }
 }
@@ -759,8 +749,6 @@ read_char(time_out)
 
      default:
      done:
-        dprint(9, (debugfile, "Read char returning: %d %s\n",
-                   ch, pretty_command(ch)));
         return(ch);
     }
 }
@@ -785,8 +773,6 @@ read_command(void)
 
     tm = timeout > 0 ? messages_queued() ? messages_queued() : timeout : 0;
     ch = read_char(tm);
-    dprint(9, (debugfile, "Read command returning: %d %s\n", ch,
-              pretty_command(ch)));
     if(ch != NO_OP_COMMAND && ch != NO_OP_IDLE && ch != KEY_RESIZE)
       zero_new_mail_count();
     return(ch);
@@ -880,12 +866,6 @@ optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
     char          *kill_buffer = NULL;
     char          **help_text;
 
-    dprint(5, (debugfile, "=== optionally_enter called ===\n"));
-    dprint(9, (debugfile, "string:\"%s\"  y:%d  x:%d  length: %d append: %d\n",
-               string, x_base, y_base, field_len, append_current));
-    dprint(9, (debugfile, "passwd:%d   prompt:\"%s\"   label:\"%s\"\n",
-               passwd, prompt, escape_list == NULL ? "" : 
-	       escape_list[0].label));
 
     cols       = ps_global->ttyo->screen_cols;
     prompt_len = strlen(prompt);
@@ -1023,17 +1003,6 @@ optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
 	    return_v = 0;
 	    break;
 
-#ifdef DEBUG
-          case ctrl('X'):
-            if(debug < 9)
-              goto bleep;
-            printf("field_pos: %d \n", field_pos);
-	    for(s2 = string; s2 < &string[field_len] ; s2++) 
-	      printf("%s%d --%c--\n", s2 == &string[field_pos] ?"-->" :"   ",
-                     *s2, *s2);
-            break;
-#endif
-
           /*-------------------- Destructive backspace --------------------*/
 	  case '\177': /* DEL */
 	  case ctrl('H'):
@@ -1078,11 +1047,8 @@ optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
 
             /* Make string so it will fit */
             kb = cpystr(kill_buffer);
-            dprint(2, (debugfile, "Undelete: %d %d\n", (int) strlen(string), field_len));
             if(strlen(kb) + strlen(string) > (size_t)field_len)
                 kb[field_len - strlen(string)] = '\0';
-            dprint(2, (debugfile, "Undelete: %d %d\n", (int) (field_len - strlen(string)),
-                       (int) strlen(kb)));
             if(string[field_pos] == '\0') {
                 /*--- adding to the end of the string ----*/
                 for(k = kb; *k; k++)
@@ -1179,9 +1145,6 @@ optionally_enter(string, y_base, x_base, field_len, append_current, passwd,
             }
             fflush(stdout);
 
-            dprint(9, (debugfile,
-                    "optionally_enter  RESIZE new_cols:%d  too_thin: %d\n",
-                       cols, too_thin));
             break;
 
           case ctrl('Z'):

@@ -99,8 +99,6 @@ build_address(to , full_to, error)
         strcpy(full_to, to);
         if(error != NULL)
           *error = ps_global->c_client_error;
-        dprint(2, (debugfile, "build_address returning parse error: %s\n",
-                   ps_global->c_client_error));
         return(-1);
     }
 

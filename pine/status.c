@@ -121,8 +121,6 @@ q_status_message(modal, min_time, max_time, message)
          6 messages we just over write last message */
     if(queue_length < QUEUE_LENGTH - 1 )
       queue_length++;
-    dprint(9, (debugfile, "q_status_message, Count %d, \"%s\"\n",
-	       queue_length, message))
 }
 
 
@@ -363,7 +361,6 @@ display_message(command)
                        currently_displayed.max_display_time : 
                          currently_displayed.min_display_time)
                     ) - now;
-            dprint(9, (debugfile, "diff: %ld, displayed_time: %ld, now: %ld\n", diff, displayed_time, now));
             if(diff > 0)
               return;
 	    if(queue_length > 0){
@@ -379,7 +376,6 @@ display_message(command)
     	    } else {
     	        if(command != NO_OP_COMMAND && command != NO_OP_IDLE) {
     		    /* Clear the current message and dequeue it */
-                    dprint(9, (debugfile, "Clearing status line\n"));
 		    MoveCursor(ps_global->ttyo->screen_rows - 3, 0);
 		    CleartoEOLN();
 		    queue_length         = 0;
@@ -396,7 +392,6 @@ display_message(command)
 	        message_is_displayed = 1;
     	        output_message(currently_displayed.text);
 	        displayed_time       = time(0);
-                dprint(9, (debugfile, "displayed_time: %ld\n", displayed_time));
             } while(queue_length > 0 &&
                     currently_displayed.min_display_time == 0);
 	} else {
@@ -407,10 +402,6 @@ display_message(command)
 	}
     }
     needs_clearing = 0; /* always cleared or overwritten */
-    dprint(9, (debugfile,
-               "STATUS DISPE command:%d,  disp:%d,  length:%d,  Time:%s",
-	       command, message_is_displayed,
-	       queue_length, ctime(&now)));
     fflush(stdout);
 }
 
@@ -468,7 +459,6 @@ output_message(message)
     int  col, row, max_length;
     char obuff[MAX_SCREEN_COLS + 5];
 
-    dprint(9, (debugfile, "output_message(%s)\n", message));
     row = ps_global->ttyo->screen_rows -
                      (ps_global->ttyo->screen_rows < 4 ? 0 : 3);
 
@@ -599,8 +589,6 @@ radio_buttons(prompt, line, column, buttons, labels, deefault, on_ctrl_C,
 
 	/* Timeout 5 min to keep imap mail stream alive */
         ch = read_char(600);
-        dprint(2, (debugfile,
-                   "Want_to read: %s (%d)\n", pretty_command(ch), ch));
         ch = isupper(ch) ? tolower(ch) : ch;
 
         switch(ch) {
@@ -611,8 +599,6 @@ radio_buttons(prompt, line, column, buttons, labels, deefault, on_ctrl_C,
                 Writechar('\007');
                 break;
             }
-            dprint(9, (debugfile, "label %d %s\n", (int) (p - buttons),
-                       labels[p-buttons]));
             Write_to_screen(labels[p - buttons]);
             goto out_of_loop;
 

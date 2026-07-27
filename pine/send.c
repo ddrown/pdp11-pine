@@ -152,8 +152,6 @@ compose_mail(given_to)
     gf_io_t    gc, pc;
     fpos_t     body_start;
 
-    dprint(1, (debugfile,
-                 "\n\n    ---- COMPOSE SCREEN (not in pico yet) ----\n"));
 
     fcc2 = NULL;
     file_path[0] = '\0';
@@ -692,7 +690,6 @@ pine_send(outgoing, body, editor_title, fcc, are_replying)
     unsigned pine_flags;
     char     bodyfile_path[MAXPATH + 1];
 
-    dprint(1, (debugfile,"\n === send called === \n"));
     /*
      * Remember the real current message number, as new mail arrival
      * may invalidate the current sorted message number.  Restore it
@@ -750,7 +747,6 @@ pine_send(outgoing, body, editor_title, fcc, are_replying)
 	pine_flags |= P_SUSPEND;
 	pine_flags |= (are_replying || second_time) ? P_BODY : 0;
 
-        dprint(9, (debugfile, "flags: %x\n", pine_flags));
 
         flush_status_messages();
         clear_cursor_pos();
@@ -869,8 +865,6 @@ pine_send(outgoing, body, editor_title, fcc, are_replying)
             result = append_message2(INTERRUPTED_MAIL,outgoing,*body,
                                      AppendInterrupted,
                                      fccbuf);
-            dprint(1, (debugfile, "Save composition on HUP %s\n",
-                       result < 0 ? "FAILED" : "succeeded"));
             hup_signal(SIGHUP); /* Do what we normally do on SIGHUP */
 
         } else {
@@ -1116,7 +1110,6 @@ call_mailer(fcc, envelope, body)
 	    q_status_message1(0,2,2,"\007Fcc to \"%s\" FAILED!!!", fcc);
             sprintf(error_buf,"\007Error appending %.20s in %.40s", 
 		    fcc, fcc_cntxt->context);
-            dprint(1, (debugfile, "%s", error_buf));
 	}
 
     }
@@ -1166,7 +1159,6 @@ call_sendmail(envelope, body)
     char       *tmpfile;
     int         rv;
 
-    dprint(1, (debugfile, "=== call_mailer ===\n"));
 
     if(!envelope->to && !envelope->cc && !envelope->bcc)
       return(NULL);
@@ -1180,18 +1172,9 @@ call_sendmail(envelope, body)
     sprintf(mail_cmd, "( ( %s %s ; /bin/rm -f %s ) < %s & )",
             SENDMAIL, SENDMAILFLAGS, tmpfile, tmpfile);
 
-    dprint(6, (debugfile, "Send command \"%s\"\n", mail_cmd));
 
     (void)call_system(mail_cmd);
 
-    dprint(1, (debugfile, "\n***** MAIL SENT ******\nTo: %s@%s",
-	       (envelope->to && envelope->to->mailbox) ?
-	        envelope->to->mailbox : "NULL", 
-	       (envelope->to && envelope->to->host) ?
-	        envelope->to->host : "NULL"));
-    dprint(1, (debugfile, "Subject: %s\n", envelope->subject != NULL ?
-                envelope->subject : ""));
-    dprint(1, (debugfile, "Message ID: %s\n\n", envelope->message_id));
 
     fs_give((void **)&tmpfile);
     return(NULL);
@@ -1199,8 +1182,6 @@ call_sendmail(envelope, body)
   io_error:
     sprintf(error_mess,"\007Error starting mailer process: %s",
                 error_description(errno));
-    dprint(1, (debugfile, "Error writing %s: %s\n", tmpfile,
-                error_description(errno)));
 
     fs_give((void **)&tmpfile);
     return(error_mess);
@@ -1219,7 +1200,6 @@ call_system(command)
     SigType (*hsig)(int), (*isig)(int), (*qsig)(int);
     int status, pid, r;
 
-    dprint(9, (debugfile, "Command: \"%s\"\n", command));
 
     isig = signal(SIGINT, SIG_IGN);
     qsig = signal(SIGQUIT, SIG_IGN);
@@ -1228,7 +1208,6 @@ call_system(command)
         execl("/bin/sh", "sh", "-c", command, 0);
         _exit(-1);
     }
-    dprint(9, (debugfile, "PID: %d\n", pid));
     if(pid == -1) {
         q_status_message1(1, 2, 3, "Error creating mailer process: %s",
                          error_description(errno));
@@ -1242,7 +1221,6 @@ call_system(command)
     signal(SIGINT,  isig);
     signal(SIGHUP,  hsig);
     signal(SIGQUIT, qsig);
-    dprint(9, (debugfile, "STATUS: %d\n", status));
     return(0);
 }
 
@@ -1312,13 +1290,6 @@ strings2outgoing(env, bod, to, cc, bcc)
     rfc822_parse_adrlist(&(env->to), to, maildomain);
 
     if(env->to != NULL) {
-       dprint(9, (debugfile, "to->personal %p\n", env->to->personal));
-       dprint(9, (debugfile, "to->route_list %p\n", env->to->adl));
-       dprint(9, (debugfile, "to->mailbox %p\n", env->to->mailbox));
-       dprint(9, (debugfile, "to->host %p\n", env->to->host));
-       dprint(9, (debugfile, "to->next %p\n", env->to->next));
-       dprint(4, (debugfile, "cannonized To \"%s\"\n",
-                addr_list_string(env->to, 1)));
     }
 
     mail_free_address(&(env->cc));
@@ -1430,8 +1401,6 @@ append_message2(folder, env, bod, type, fcc)
 
     if (! expand_foldername(filename)) {
         /* expand_foldername generates it's own error message */
-        dprint(1, (debugfile,
-              "Error: Failed on expansion of filename %s (save)\n", filename));
         return(-1);
     }
 
@@ -1500,8 +1469,6 @@ append_message2(folder, env, bod, type, fcc)
         truncate(filename, start_of_append);
         q_status_message2(1, 2, 4, "\007Error \"%s\" writing \"%s\"",
                           error_description(save_errno), pretty_fn(folder));
-        dprint(1, (debugfile, "Error writing %s: %s\n",
-                   filename, error_description(save_errno)));
         return(-1);
     }
     else 

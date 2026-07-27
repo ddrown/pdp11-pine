@@ -221,10 +221,6 @@ main(int argc, char *argv[])
     }
 
 
-#ifdef DEBUG
-    init_debug();
-#endif
-
     init_vars(pine_state);
 
     if(init_username(pine_state) < 0)
@@ -503,7 +499,6 @@ main_menu_screen(pine_state)
 
     km = &main_keymenu;
 
-    dprint(1, (debugfile, "\n\n    ---- MAIN_MENU_SCREEN ----\n"));
 
     while (1) {
 	/*----------- Check for new mail -----------*/
@@ -646,8 +641,6 @@ main_menu_screen(pine_state)
 	    tc = ps_global->context_current;
             new_folder = broach_folder(question_line, 1, &tc);
             if(new_folder != NULL) {
-              dprint(9, (debugfile, "do_broach_folder (%s, %s)\n",
-                         new_folder, tc->context));
               if(do_broach_folder(new_folder, tc) > 0)
                   /* so we go out and come back into the index */
                   ps_global->next_screen = mail_index_screen;
@@ -673,14 +666,6 @@ main_menu_screen(pine_state)
 	  case 'm':
 	    q_status_message(0, 1, 3, "\007Already in Main");
 	    break;
-
-#ifdef DEBUG
-          case '#':
-            if(debug > 8 &&
-               want_to("Test panic and abort now", 'n','n',NULL,0) == 'y')
-              panic("Testing panic");
-            break;
-#endif
 
           case ctrl('Z'):
             if(!have_job_control())
@@ -950,7 +935,7 @@ quit_screen(pine_state)
 {
     int cur_is_inbox, ret;
 
-    dprint(1, (debugfile, "\n\n    ---- QUIT SCREEN ----\n"));    
+    
 
     if((ret=want_to("Really quit pine", 'y', 'x', h_oe_export, 0)) != 'y') {
 	if(ret == 'x')
@@ -990,10 +975,6 @@ quit_screen(pine_state)
       fs_give((void **)&pine_state->folders_dir);
 
     fs_give((void **)&pine_state);
-
-#ifdef DEBUG
-    fclose(debugfile);
-#endif    
 
     printf("\n\n\nPine finished\n\n");
     exit(0);
@@ -1083,7 +1064,6 @@ first_sorted_unread(stream )
     }
     if(i > (MsgNo)stream->nmsgs)
       i = (MsgNo)stream->nmsgs;
-    dprint(4, (debugfile, "First unseen returning %ld\n", (long)i));
     return(i);
 }
 
@@ -1280,14 +1260,8 @@ panic(message)
     end_screen();
     end_tty_driver(ps_global);
     end_signals();
-    dprint(1, (debugfile, "Pine Panic: %s\n", message));
     fprintf(stderr, "\n\nBug in Pine detected: \"%s\".\nExiting pine.\n",
             message);
-#ifdef DEBUG
-    if(debug)
-      fclose(debugfile);
-    coredump();   /*--- If we're debugging get a core dump --*/
-#endif
 
     exit(-1);
     fatal("ffo"); /* BUG -- hack to get fatal out of library in right order*/

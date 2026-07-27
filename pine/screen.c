@@ -110,17 +110,8 @@ output_keymenu(km, bm, row, column)
     for(i = 0; i < 12; i++){
 	int e;
 	e = off + i;
-        dprint(9, (debugfile, "%d %-7.7s %-10.10s %d\n", i,
-		   km == NULL ? "(no km)" 
-		   : km->keys[e].name == NULL ? "(null)" 
-		   : km->keys[e].name, 		   
-		   km == NULL ? "(no km)" 
-		   : km->keys[e].label == NULL ? "(null)" 
-		   : km->keys[e].label, km ? km->keys[e].column : 0));
     }
     real_row = row > 0 ? row : ps_global->ttyo->screen_rows + row;
-    dprint(9, (debugfile, "row: %d, real_row: %d, column: %d\n", row, 
-               real_row, column)) ;
     for(i = 0; i < 2; i++) {
 	int el;
         MoveCursor(real_row + i, column);
@@ -273,10 +264,6 @@ format_keymenu(km, bm, width, what, which)
                  1 + ((!bitnset(ktop,bm) || keytop->name == NULL) ? 0 :
                    strlen(keytop->name));
             top_column = max(prev_end_top, first + spacing[i]);
-            dprint(9, (debugfile,
-                       "prev_col: %d, prev_end:%d, top_column:%d spacing:%d\n",
-                       prev_keytop->column, prev_end_top, top_column,
-                       spacing[i]));
         }
 
         if(!bitnset(kbot,bm) || keybot->name == NULL) {
@@ -502,9 +489,6 @@ set_titlebar(title, display_on_screen, style, current_message, current_pl,
     extern char   version_buff[];
 
 
-    dprint(9, (debugfile,
-"set_titlebar - style: %d  current_message:%ld  current_pl: %d  total_pl: %d\n",
-               style, current_message, current_pl, total_pl));
 
     as.style = style;
     as.title = title;

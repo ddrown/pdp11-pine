@@ -78,7 +78,6 @@ context_mailbox(char *name)
     new_f->unread_count      = 0;
     folder_insert(-1, new_f, find_folder_list);
 
-    dprint(4, (debugfile, "====== context_mailbox: (%s)\n", name));
 }
 
 /*----------------------------------------------------------------------
@@ -116,14 +115,10 @@ context_bboard(char *name)
 
     new_f->name_len += strlen(new_f->prefix);
 
-    dprint(4, (debugfile, "====== context_bboard: (%s) %s, %d of %d unread\n",
-	       find_folder_context->context, new_f->name, 
-	       new_f->unread_count, new_f->msg_count));
 #endif
 
     folder_insert(folder_total(find_folder_list), new_f, find_folder_list);
 
-    dprint(4, (debugfile, "====== context_bboard: (%s)\n", name));
 }
 
 /*---------------------------------------------------------------------- 
@@ -166,10 +161,6 @@ void mm_exists(stream, number_l)
      long number_l;
 {
     int number = (int)number_l;
-    dprint(3, (debugfile, "=== mm_exists(%d,%s) called ===\n", number,
-	       stream == NULL ? "(no stream)" 
-	       : stream->mailbox == NULL ? "(null)" 
-	       : stream->mailbox));
     if(stream == ps_global->inbox_stream  &&
                             ps_global->inbox_stream != ps_global->mail_stream){
         ps_global->inbox_changed |= (ps_global->inbox_max_msgno != number);
@@ -209,11 +200,6 @@ void mm_expunged(stream, number_l)
      MAILSTREAM *stream;
      long        number_l;
 {
-     dprint(3, (debugfile, "mm_expunged called %s %ld\n",
-		stream == NULL ? "(no stream)" 
-		: stream->mailbox == NULL ? "(null)" 
-		: stream->mailbox, 
-		number_l));
      if(stream == ps_global->inbox_stream &&
             ps_global->inbox_stream != ps_global->mail_stream) {
          ps_global->inbox_expunge_count++;
@@ -252,11 +238,6 @@ mm_diskerror (stream, errcode, serious)
     int line, ch;
     char q[200];
 
-    dprint(0, (debugfile,
-       "\n***** DISK ERROR on stream %s. Error code %ld. Error is %sserious\n",
-               stream ? stream->mailbox : "<no mail folder>", errcode,
-               serious ? "" : "not "));
-    dprint(0, (debugfile, "***** message: \"%s\"\n\n", ps_global->last_error));
 
     if(!serious) {
 /*        q_status_message2(1, 3, 6,"\007Error saving mail folder \"%s\" : %s",
@@ -349,11 +330,6 @@ void mm_notify(stream, string, errflag)
      char       *string;
      long        errflag;
 {
-    dprint(1, (debugfile, "IMAP mm_notify %s : %s : %s\n",
-               errflag == ERROR ? "error" : "warning" ,
-               stream != NULL && stream->mailbox != NULL ? stream->mailbox :
-               "-no folder-" ,
-               string));
 
     if((strncmp(string, "[TRYCREATE]", 11) == 0)){
 	ps_global->try_to_create = 1;
