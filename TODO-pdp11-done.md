@@ -6118,14 +6118,12 @@ never got the same treatment.
 to apply**:
 - **Predictable `/tmp/pico.<pid>` temp-file name, no `O_EXCL`**
   (the classic Pico symlink-race file-overwrite advisory) -- the
-  vulnerable code is still there verbatim (`tmpname()`/`ffwopen()` in
+  vulnerable code was still there verbatim (`tmpname()` in
   `pico/os_unix.c`), but its only caller, `writetmp()`
-  (`pico/file.c`), has zero callers anywhere else in this tree --
-  confirmed dead code, not reachable. Left as-is per this project's
-  existing dead-code precedent (not deleted outright since it's a
-  shared os-independent function, same reasoning as prior dead-code
-  finds), but worth revisiting if anything ever calls `writetmp()`
-  again.
+  (`pico/file.c`), had zero callers anywhere else in this tree --
+  confirmed dead code, not reachable. Removed both outright (see the
+  follow-on entry below) rather than leaving an unreachable-but-still-
+  vulnerable pattern lying around.
 - **URL-viewer shell-metacharacter injection** (`msg-view-url`,
   Bugtraq 1999/2001) -- the whole URL-viewer feature doesn't exist in
   this codebase (zero references to `url`/`http://` anywhere in
@@ -6148,3 +6146,31 @@ to apply**:
 - **Pine 4.02 MIME-header buffer-overrun fixes** -- too generic to
   trace to a specific mechanism; very likely already covered by this
   project's own extensive prior buffer-overflow audit passes.
+
+### Remove `writetmp()`/`tmpname()` -- dead code, confirmed while checking historical CVE applicability
+
+Follow-on to the CVE-2000-0909 fix above. While researching historical
+Pine/pico security advisories, the classic predictable-`/tmp/pico.<pid>`
+-name symlink-race temp-file advisory turned up `pico/os_unix.c`'s
+`tmpname()`, whose only caller, `pico/file.c`'s `writetmp()`, had zero
+callers anywhere else in the tree -- confirmed dead, so removed both
+outright rather than leaving an unreachable-but-still-vulnerable
+pattern lying around.
+
+- **`pico/file.c`**: deleted `writetmp()` entirely (write a temp file
+  of the composed message text via a predictable `/tmp/pico.<pid>`
+  name) -- confirmed via grep zero callers anywhere in `pico/`,
+  `pine/`, or their headers besides its own prototype.
+- **`pico/os_unix.c`** (real source; `pico/osdep.c` is its generated,
+  gitignored `cp` copy, not hand-edited): deleted `tmpname()`, its
+  only caller now gone.
+- **`pico/efunc.h`**: removed both functions' now-orphaned prototypes.
+- **Left alone**: `ffwopen()` (also called by `writetmp()`) stays --
+  confirmed it has a second, very much live caller, `writeout()`
+  (called from `pico.c`, `os_unix.c`, and `file.c` itself).
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings
+  (confirming no other caller was missed). Full smoketest suite,
+  25/25.
+- **Size delta**: `bin/pico` text 109490 -> 109066 (**-424 bytes**) --
+  a real win, this was genuinely compiled code, not preprocessor-
+  stripped weight.

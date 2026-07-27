@@ -484,47 +484,6 @@ writeout(char *fn)
 
 
 /*
- * writetmp - write a temporary file for message text, mindful of 
- *	      access restrictions and included text.  If n is true, include
- *	      lines that indicated included message text, otw forget them
- */
-char *writetmp(int f, int n)
-{
-        static   char	fn[NFILEN];
-        register int    status;
-        register LINE   *lp;
-        register int    nline;
-
-	tmpname(fn);
-
-        if ((status=ffwopen(fn)) != FIOSUC)          /* Open writes message. */
-                return(NULL);
-
-	chmod(fn, 0600);			/* fix access rights */
-
-        lp = lforw(curbp->b_linep);             /* First line.          */
-        nline = 0;                              /* Number of lines.     */
-        while (lp != curbp->b_linep) {
-	    if(n || (!n && lp->l_text[0].c != '>')) {
-                if ((status=ffputline(&lp->l_text[0], llength(lp))) != FIOSUC)
-                        break;
-	    }
-            ++nline;
-            lp = lforw(lp);
-        }
-        if (status == FIOSUC) {                      /* No write error.      */
-                status = ffclose();
-        } else                                  /* Ignore close error   */
-                ffclose();                      /* if a write error.    */
-        if (status != FIOSUC){                       /* Some sort of error.  */
-	        unlink(fn);
-                return(NULL);
-	}
-        return(fn);
-}
-
-
-/*
  * The command allows the user
  * to modify the file name associated with
  * the current buffer. It is like the "f" command
