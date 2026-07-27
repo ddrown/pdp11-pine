@@ -798,6 +798,7 @@ fetch_contents(stream, msgno, body, part_offset, start_part)
     PART *part, *ppart;
 
     nested_multipart = 0;
+    got_one          = 0;
     ep               = error_part;
     *ep              = 0;
 
@@ -1232,7 +1233,7 @@ get_signature(void)
 	    fnexpand(sig_path, sizeof(sig_path));
 	}
 	else
-	  build_path(sig_path,ps_global->home_dir,
+	  build_path(sig_path, sizeof(sig_path), ps_global->home_dir,
 		     ps_global->VAR_SIGNATURE_FILE);
 
 	if(can_access(sig_path, ACCESS_EXISTS) == 0){

@@ -2001,13 +2001,18 @@ wstripe(int line, int column, char *pmt, int key)
 
     l = strlen(pmt);
     while(1){
+	CELL *cp;
+
 	if(i >= term.t_ncol || j >= l)
 	  return;				/* equal strings */
 
 	if(pmt[j] == key)
 	  j++;
 
-	if(pscr(line, i)->c != pmt[j]){
+	if((cp = pscr(line, i)) == NULL)
+	  return;				/* line out of range */
+
+	if(cp->c != pmt[j]){
 	    if(j >= 1 && pmt[j-1] == key)
 	      j--;
 	    break;

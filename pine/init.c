@@ -572,7 +572,7 @@ init_username(ps)
                ps->VAR_MAIL_DIRECTORY);
         return(-1);
     }
-    build_path(fld_dir, ps->home_dir, ps->VAR_MAIL_DIRECTORY);
+    build_path(fld_dir, sizeof(fld_dir), ps->home_dir, ps->VAR_MAIL_DIRECTORY);
     ps->folders_dir = cpystr(fld_dir);
 
     dprint(1, (debugfile, "Userid: %s\nFullname: \"%s\"\n",
@@ -929,19 +929,19 @@ init_debug()
     char newfname[MAXPATH+1], filename[MAXPATH+1];
 
     /*---- Get rid of very old pine debug files ----*/
-    build_path(filename, ps_global->home_dir, "pine-debug-0.9");
+    build_path(filename, sizeof(filename), ps_global->home_dir, "pine-debug-0.9");
     unlink(filename);
-    build_path(filename, ps_global->home_dir, ".pine.debug.last");
+    build_path(filename, sizeof(filename), ps_global->home_dir, ".pine.debug.last");
     unlink(filename);
-    
+
     if (debug) {		/* setup for dprint() statements! */
       int i;
 
-      build_path(filename, ps_global->home_dir, DEBUGFILE);
+      build_path(filename, sizeof(filename), ps_global->home_dir, DEBUGFILE);
       (void)unlink(filename); /* Just do it even though it may fail */
 
       for(i = NUMDEBUGFILES - 1; i > 0; i--) {
-        build_path(filename, ps_global->home_dir, DEBUGFILE);
+        build_path(filename, sizeof(filename), ps_global->home_dir, DEBUGFILE);
         strcpy(newfname, filename);
         sprintf(nbuf, "%d", i);
         strcat(filename, nbuf);
@@ -951,7 +951,7 @@ init_debug()
       }
 
 
-      build_path(filename, ps_global->home_dir, DEBUGFILE);
+      build_path(filename, sizeof(filename), ps_global->home_dir, DEBUGFILE);
       strcat(filename, "1");
 
       debugfile = fopen(filename, "w");

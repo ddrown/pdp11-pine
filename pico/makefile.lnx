@@ -8,6 +8,10 @@ DASHO=		-g
 #for normal build
 #DASHO=		-O
 
+# set to 1 (./build lnx ASAN=1) to build with -fsanitize=address
+# instrumentation instead of only reaching for ASan after a bug is
+# already suspected
+ASAN=
 
 CFLAGS=	 	-Dbsd -DLINUX -DPOSIX -DJOB_CONTROL -DANSI \
 		-I/usr/include/bsd \
@@ -16,6 +20,10 @@ CFLAGS=	 	-Dbsd -DLINUX -DPOSIX -DJOB_CONTROL -DANSI \
 		-Wmisleading-indentation -Wsequence-point -Wtype-limits \
 		-Waddress -Wnonnull -Wunused-function \
 		-Wsign-compare -Wshadow -Wstrict-prototypes -Wmissing-prototypes
+
+ifeq ($(ASAN),1)
+CFLAGS += -fsanitize=address
+endif
 
 
 # switches for library building

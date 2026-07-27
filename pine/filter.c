@@ -599,7 +599,7 @@ gf_filter_init()
 int
 gf_link_filter(filter_t f)
 {
-    char      c;
+    char      c = 0;
     FILTER_S *new, *tail = gf_master;
 
     new = (FILTER_S *)fs_get(sizeof(FILTER_S));

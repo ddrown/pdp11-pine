@@ -1943,7 +1943,8 @@ search_t bezerk_search_string (search_t f,char **d,long *n)
       strtok (c,"\255");	/* reset the strtok mechanism */
       break;
     default:			/* atomic string */
-      *n = strlen (*d = strtok (c," "));
+      if (!((*d = strtok (c," ")) && (*n = strlen (*d))))
+	return NIL;
       break;
     }
     return f;

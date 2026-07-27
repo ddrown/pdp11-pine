@@ -826,7 +826,7 @@ long file_size(char *);
 int is_writable_dir(char *);
 int create_mail_dir(char *);
 int rename_file(char *, char *);
-void build_path(char *, char *, char *);
+void build_path(char *, size_t, char *, char *);
 char *last_cmpnt(char *);
 int   expand_foldername(char *);
 char *fnexpand(char *, int);

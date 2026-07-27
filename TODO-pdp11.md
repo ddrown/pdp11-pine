@@ -29,9 +29,9 @@ DONE elsewhere or referenced in passing below.
       use it, but weigh that against losing a real diagnostic tool for
       bring-up debugging on the actual target hardware, where this
       kind of textual trace may be the *only* debugging option
-      available. Worth checking whether `TODO-pdp11.md`'s still-open
-      ASan/`-fanalyzer` item covers the same debugging needs a
-      different way before committing to deletion.
+      available. Worth checking whether the now-formalized `ASAN=1`
+      build target (`TODO-pdp11-done.md`) covers the same debugging
+      needs a different way before committing to deletion.
     - If kept, at minimum leave `-DDEBUG` off by default (already
       done) so production/size-measurement builds never pay for it by
       accident.
@@ -66,22 +66,3 @@ DONE elsewhere or referenced in passing below.
       disk or otherwise force a mailbox write failure) per CLAUDE.md's
       verification discipline, and add a regression test if the
       harness can drive it.
-
-### Formalize an ASan build target and try `-fanalyzer`
-
-- [ ] CLAUDE.md's verification discipline already leans on ad hoc
-      ASan (`cc -fsanitize=address -g` on a standalone extracted repro
-      file) for the local-array-overflowing-into-adjacent-stack-
-      variable bugs valgrind can't see. Promote that from a manual
-      per-bug extraction step to a real build target -- e.g. `./build
-      lnx-asan` or an `ASAN=1` knob added to `pine/makefile.lnx`/
-      `pico/makefile.lnx` that appends `-fsanitize=address -g` to
-      `CFLAGS`/`LDFLAGS` -- so the full smoketest suite can be run
-      once under ASan instrumentation directly, rather than only
-      reaching for it after a bug is already suspected. Separately,
-      try a one-off `-fanalyzer` pass (GCC's deeper static analyzer --
-      use-after-free, double-free, null-deref, leak paths) over both
-      trees; it's slow and can be noisy on older C, so evaluate signal
-      quality on this codebase before deciding whether it's worth a
-      standing CI-style target or just an occasional manual check.
-

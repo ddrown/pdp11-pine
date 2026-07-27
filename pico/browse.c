@@ -1560,7 +1560,7 @@ BrowserAnchor(char *dir)
 	  else
 	    p++;
 
-	if(*p == '\0')				/* no suitable length! */
+	if(p == NULL)				/* no suitable length! */
 	  p = &dir[l-(term.t_ncol-i-19)];
 
 	sprintf(s,"%s Dir ...%s", (gmode&MDBRONLY) ? "" : " BROWSER  ", p);

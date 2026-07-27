@@ -60,6 +60,9 @@ MAKE=        make
 OPTIMIZE=    # -O
 PROFILE=     # -pg
 DEBUG=       -g
+ASAN=        # set to 1 (`./build lnx ASAN=1`) to build the whole
+             # tree with -fsanitize=address instrumentation, instead
+             # of only reaching for ASan after a bug is suspected
 
 LIBES=       -ltermcap -lc -lcrypt
 LOCLIBES=    ../pico/libpico.a ../c-client/c-client.a
@@ -71,6 +74,10 @@ WARNFLAGS=   -Wformat=2 -Wstringop-overflow=4 -Wstringop-truncation \
 	     -Wsign-compare -Wshadow -Wstrict-prototypes -Wmissing-prototypes
 
 CFLAGS= -DLNX $(OPTIMIZE) $(PROFILE) $(DEBUG) -ansi -I/usr/include/bsd $(WARNFLAGS)
+
+ifeq ($(ASAN),1)
+CFLAGS += -fsanitize=address
+endif
 
 obj=    addrutil.o args.o context.o filter.o \
 	folder.o help.o helptext.o init.o mailcmd.o mailindx.o \

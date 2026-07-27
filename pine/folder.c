@@ -1622,7 +1622,7 @@ pretty_fn(folder)
           return(folder);
 
     } else {
-        build_path(pfn, ps_global->VAR_MAIL_DIRECTORY, folder);
+        build_path(pfn, sizeof(pfn), ps_global->VAR_MAIL_DIRECTORY, folder);
         return(pfn);
     }
 }

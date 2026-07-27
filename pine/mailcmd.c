@@ -1051,7 +1051,7 @@ export_message(q_line, sorted_msgno)
                 continue;
             }
         } else if(full_filename[0] != '/') {
-            build_path(full_filename, ps_global->home_dir, filename);
+            build_path(full_filename, sizeof(full_filename), ps_global->home_dir, filename);
         }
 
 
@@ -2223,7 +2223,7 @@ save_attachment(qline, msgno, a)
                 continue;
             }
         } else if(full_filename[0] != '/') {
-            build_path(full_filename, ps_global->home_dir, filename);
+            build_path(full_filename, sizeof(full_filename), ps_global->home_dir, filename);
         }
         break; /* Must have got an OK file name */
     }

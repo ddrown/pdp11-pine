@@ -1836,8 +1836,13 @@ resolve_niks(int entry)
 	i += term.t_ncol;
         line = line->next;
     }
+    /* hd_text should always have at least one (possibly empty) line,
+       but if InitEntryText()'s initial allocation for this entry ever
+       failed, hd_text stays NULL and this loop leaves i at 0 -- guard
+       against malloc(0) rather than relying on it happening to return
+       non-NULL and then writing into a zero-sized allocation below */
     sbuf_size = (size_t) i;
-    if((sbuf=(char *)malloc(sbuf_size)) == NULL){
+    if(sbuf_size == 0 || (sbuf=(char *)malloc(sbuf_size)) == NULL){
 	emlwrite("Can't malloc space to expand address", NULL);
 	return(-1);
     }
@@ -2055,7 +2060,13 @@ SaveHeaderLines()
 	*bp++ = kremove(i);
     *bp = '\0';
 
-    while(--bp >= buf)				/* kill trailing white space */
+    /* check-then-decrement (rather than decrement-then-check against
+       buf) so bp never forms a pointer before the start of buf[] --
+       comparing such a pointer against buf with a relational operator
+       is undefined behavior, even though it happens to evaluate as
+       expected on every mainstream target this project builds for */
+    while(bp > buf){				/* kill trailing white space */
+      --bp;
       if(*bp != ' '){
 	  if(ods.cur_l->text[0] != '\0'){
 	      if(*bp == '>'){			/* inserting an address */
@@ -2070,6 +2081,7 @@ SaveHeaderLines()
 	  }
 	  break;
       }
+    }
 
     if(FormatLines(ods.cur_l, buf, LINELEN(), ods.cur_e) == -1)
       i = FALSE;

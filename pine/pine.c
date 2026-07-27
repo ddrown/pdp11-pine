@@ -348,7 +348,7 @@ main(int argc, char *argv[])
         if(pine_state->mangled_footer)
 	  pine_state->painted_footer_on_startup = 0;
 
-        build_path(int_mail, pine_state->folders_dir, INTERRUPTED_MAIL);
+        build_path(int_mail, sizeof(int_mail), pine_state->folders_dir, INTERRUPTED_MAIL);
         if(can_access(int_mail, ACCESS_EXISTS) == 0) {
             q_status_message(1, 4, 5, "\007Use compose command to continue composing last message. It was interrupted.");
         }
