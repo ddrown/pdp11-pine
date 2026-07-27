@@ -420,10 +420,7 @@ mm_diskerror (stream, errcode, serious)
     MoveCursor(line+2, strlen(q));
 
     ch = read_char(0);
-    /* NB: pre-existing mis-parenthesized ternary, kept as-is -- see
-     * TODO-pdp11.md's note on this site.
-     */
-    while(!(ch == 1 ? ctrl('Z') : '!' || ch == '\r')) {
+    while(!(ch == ctrl('Z') || ch == '\r')) {
         Writechar('\007');
         ch = read_char(0);
     }
@@ -434,21 +431,7 @@ mm_diskerror (stream, errcode, serious)
         MoveCursor(line -2, 0);
         fflush(stdout);
         return (0L);
-       
-      case '!':
-        EndInverse();
-        end_tty_driver(ps_global);
-        printf("\n\nPlease attempt to correct the error preventing the saving of the mail folder.\n");
-        printf("For example if the disk is out of space try removing uneeded files.\n");
-        printf("You might also contact your system administrator.\n");
-        printf("Give the command \"exit\" to get back to Pine and try saving the folder again.\n");
 
-        system("csh");
-
-        init_tty_driver(ps_global);
-        MoveCursor(line - 2, 0);
-        return (0L); /* go retry it again */
-       
       case ctrl('Z'):
         EndInverse();
         do_suspend(ps_global);
