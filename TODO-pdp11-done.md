@@ -6056,3 +6056,95 @@ almost any keystroke immediately instead of re-bleeping until a real
 - **Size delta**: `bin/pine` text 778960 -> 778784 (-176 bytes) --
   real removed code this time (the `case '!':` shell-escape blocks),
   not a preprocessor-stripped no-op.
+
+### Fix a live, unpatched recurrence of CVE-2000-0909 -- stack overflow in the automatic new-mail-check message
+
+Prompted by a web search for historical Pine security advisories to
+check which still apply to this fork. Most didn't (see below), but one
+did, essentially verbatim: **CVE-2000-0909**, "buffer overflow in the
+automatic mail checking component of Pine 4.21 and earlier... via a
+long From: header," was still present, unfixed, in `pine/newmail.c`'s
+`new_mail_mess()` -- the function that formats the "New mail!"/"Most
+recent from ..." status-line message pine's periodic background
+new-mail check displays.
+
+```c
+char from[MAX_ADDRESS+20];   /* 120 bytes (MAX_ADDRESS == 100) */
+...
+sprintf(from, " Most recent from %s", e->from->personal);        /* no cap */
+sprintf(from, " Most recent from %s@%s", e->from->mailbox, ...);  /* no cap */
+...
+sprintf(from, " From %s", e->from->personal);                    /* no cap */
+sprintf(from, " From %s@%s", e->from->mailbox, e->from->host);    /* no cap */
+```
+
+`e->from->personal`/`mailbox`/`host` come straight from the message's
+own `From:` header, copied by c-client's `rfc822_cpy()`
+(`imap/ANSI/c-client/rfc822.c`) -- which is just `cpystr()`, a plain
+heap duplicate with **no length cap**, bounded only by overall message
+size. `new_mail_mess()` is called from `new_mail()` (`pine.c`,
+`mailindx.c`, `mailview.c`, `folder.c` all poll it from their main
+event loops), pine's periodic background check for newly-arrived mail
+-- exactly the "automatic mail checking component" the original CVE
+named. Any message delivered to the local mbox (trivial via local
+`sendmail`/UUCP, this project's exact delivery model) with a long
+enough `From:` personal name overflows this 120-byte stack buffer the
+next time the background check fires, with zero user interaction.
+Notably, this same function's `subject[200]` buffer two lines below
+*does* already cap its `%s` (`%.183s`) -- the `from[]` buffer just
+never got the same treatment.
+
+- **Reproduced**: extracted the vulnerable `sprintf` pattern into a
+  standalone file (`char from[120]`, unbounded `%s` of a >5000-byte
+  string, gated `#ifdef FIXED`). Buggy: `AddressSanitizer: stack-
+  buffer-overflow ... WRITE of size 6018 ... overflows this variable`.
+  Fixed: clean exit.
+- **Fixed**: capped all four `sprintf`s' `%s` precision to fit
+  `from[]`'s fixed size -- `%.90s` for the personal-name-only case
+  (19-char longest prefix + 90 + NUL = 110 <= 120) and `%.40s@%.40s`
+  for the `mailbox@host` case (19 + 40 + 1 + 40 + NUL = 101 <= 120),
+  both with comfortable margin.
+- **No smoketest regression test added**: reaching this code path live
+  requires mail to arrive in an already-open folder and pine's
+  background check to actually fire, which is throttled to roughly
+  every `NEW_MAIL_TIME` (150) seconds minus a couple -- not practical
+  to wait out reliably in the smoketest suite (same call made for the
+  mis-parenthesized-ternary and `repeat_char()` fixes above); the
+  standalone ASan repro is the durable verification record instead.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25.
+
+**Other historical Pine/pico CVEs checked against this fork, found not
+to apply**:
+- **Predictable `/tmp/pico.<pid>` temp-file name, no `O_EXCL`**
+  (the classic Pico symlink-race file-overwrite advisory) -- the
+  vulnerable code is still there verbatim (`tmpname()`/`ffwopen()` in
+  `pico/os_unix.c`), but its only caller, `writetmp()`
+  (`pico/file.c`), has zero callers anywhere else in this tree --
+  confirmed dead code, not reachable. Left as-is per this project's
+  existing dead-code precedent (not deleted outright since it's a
+  shared os-independent function, same reasoning as prior dead-code
+  finds), but worth revisiting if anything ever calls `writetmp()`
+  again.
+- **URL-viewer shell-metacharacter injection** (`msg-view-url`,
+  Bugtraq 1999/2001) -- the whole URL-viewer feature doesn't exist in
+  this codebase (zero references to `url`/`http://` anywhere in
+  `pine/`); this fork is based on Pine 3.89 (1993), which predates
+  that feature.
+- **`message/external-body` buffer overflow (pre-4.58)** -- this
+  fork's handling (`mailview.c`, `reply.c`) only displays the
+  external-body parameters as informational text via
+  `display_parameters()`; no auto-fetch/exec mechanism exists to
+  overflow.
+- **c-client large-literal/mailbox-size integer-overflow bugs**
+  (network IMAP4 driver) and **long `X-Keywords` header overflow** --
+  both live in IMAP4 network-protocol driver code never included in
+  this no-TCP/IP build; `bezerk.c` (the local-mbox driver actually
+  compiled here) explicitly stubs out keyword support ("keywords not
+  supported yet"). This whole CVE class is structurally moot -- no
+  code path here parses untrusted network protocol input at all.
+- **`rpdump` symlink race** (Pine 4.62) -- `rpdump` doesn't exist
+  anywhere in this tree.
+- **Pine 4.02 MIME-header buffer-overrun fixes** -- too generic to
+  trace to a specific mechanism; very likely already covered by this
+  project's own extensive prior buffer-overflow audit passes.
