@@ -1041,18 +1041,7 @@ add_new_folder(quest_line, cntxt)
                                0, prompt, NULL, help, 0);
 
         if(rc == 0 && *add_folder) {
-	    if(!cntxt->proto){		/* network folder, stream reuse ? */
-		create_stream = context_same_stream(cntxt->context, add_folder,
-						    ps_global->mail_stream);
-
-		if(!create_stream 
-		   && ps_global->mail_stream != ps_global->inbox_stream)
-		  create_stream = context_same_stream(cntxt->context, 
-						      add_folder,
-						      ps_global->inbox_stream);
-	    }
-	    else
-	      create_stream = cntxt->proto;
+	    create_stream = cntxt->proto;
 
 	    if(context_create(cntxt->context, create_stream, add_folder)){
 		if(ALL_FOUND(cntxt)){
@@ -1114,7 +1103,6 @@ rename_folder(q_line, index, cntxt)
     HelpType     help;
     int          rc, ren_cur;
     FOLDER_S	*new_f;
-    MAILSTREAM  *ren_stream = NULL;
 
 
     if(!ALL_FOUND(cntxt) || (cntxt->use & CNTXT_PSEUDO)){
@@ -1178,14 +1166,7 @@ rename_folder(q_line, index, cntxt)
         ps_global->mail_stream = NULL;
     }
 
-    ren_stream = context_same_stream(cntxt->context, new_foldername,
-				     ps_global->mail_stream);
-
-    if(!ren_stream && ps_global->mail_stream != ps_global->inbox_stream)
-      ren_stream = context_same_stream(cntxt->context, new_foldername,
-				       ps_global->inbox_stream);
-      
-    if(rc = context_rename(cntxt->context,ren_stream,folder,new_foldername)){
+    if(rc = context_rename(cntxt->context,NULL,folder,new_foldername)){
 	/* insert new name */
 	new_f               = new_folder(new_foldername);
 	new_f->prefix[0]    = '\0';
@@ -1249,7 +1230,6 @@ delete_folder(index, cntxt, mangled_header)
     CONTEXT_S *cntxt;
 {
     char       *folder, ques_buf[100];
-    MAILSTREAM *del_stream = NULL;
     FOLDER_S   *fp;
     int         ret, close_opened = 0;
 
@@ -1296,15 +1276,8 @@ delete_folder(index, cntxt, mangled_header)
 	    do_broach_folder(ps_global->inbox_name, ps_global->context_list);
 	}
     }
-    else
-      del_stream = context_same_stream(cntxt->context, fp->name,
-				       ps_global->mail_stream);
 
-    if(!del_stream && ps_global->mail_stream != ps_global->inbox_stream)
-      del_stream = context_same_stream(cntxt->context, fp->name,
-				       ps_global->inbox_stream);
-
-    if(!context_delete(cntxt->context, del_stream, fp->name)){
+    if(!context_delete(cntxt->context, NULL, fp->name)){
 /*
  * BUG: what if sent-mail or saved-messages????
  */

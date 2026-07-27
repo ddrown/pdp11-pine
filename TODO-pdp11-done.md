@@ -6056,3 +6056,73 @@ almost any keystroke immediately instead of re-bleeping until a real
 - **Size delta**: `bin/pine` text 778960 -> 778784 (-176 bytes) --
   real removed code this time (the `case '!':` shell-escape blocks),
   not a preprocessor-stripped no-op.
+
+### Collapse leftover `same_stream`/`IS_REMOTE`/`default_driver`/`create_proto` fallout
+
+Fallout from an earlier cut: this build has no remote/TCP-IP mailbox
+support, so `pine/pine.c`'s `same_stream()` was already collapsed to a
+stub always returning `NIL` (its own comment explains why:
+`stream->mailbox` can never hold a `{host}mailbox`-syntax name -- no
+two streams can ever be "the same host"). But the `IS_REMOTE(X)`
+macro that same file's `default_driver()`/`create_proto()` used to
+decide between a local and remote driver was never collapsed at its
+call sites, leaving several always-constant conditions still written
+as live branches, plus every caller's dead fallback path built around
+them.
+
+- **Confirmed via grep + read, each site by hand**:
+  - `default_driver()` (`pine.c`): `IS_REMOTE(name)` can never be
+    true (the build supports exactly one, always-local, folder
+    collection -- confirmed via `folder.c`'s `init_folders()`, which
+    sets `tc->proto = default_driver(tc->context)` unconditionally
+    for the single context it creates), so the function always
+    returned `DF_DRIVER_PROTO`, never `NULL`.
+  - `create_proto()` (`pine.c`): both ternaries
+    (`IS_REMOTE(...) ? stream : ...`) always took the non-`stream`
+    branch, making its `stream` parameter entirely unused.
+  - `context_same_stream()` (`pine/context.c`): built a
+    fully-qualified name and then called `same_stream()` on it, which
+    always returns `NIL` regardless of the name -- so the FQN-building
+    work was wasted and the function always returned `NIL`.
+  - Every caller of `context_same_stream()`/`same_stream()` treated a
+    `NIL` return as "no reusable stream, open fresh" -- so every one
+    of these dead-branch call sites was already exercising the
+    surviving behavior, just via a longer code path than necessary:
+    `pine/send.c:1043-1051` (Fcc-folder auto-create),
+    `pine/send.c:1102-1107` (Fcc-append stream reuse),
+    `pine/mailcmd.c:909-917` (save-message stream reuse),
+    `pine/folder.c` in `add_new_folder()` (`!cntxt->proto` dead branch
+    -- `cntxt->proto` is always non-`NULL` per the `init_folders()`
+    argument above), and in the folder-rename and folder-delete
+    handlers (`ren_stream`/`del_stream`, same dead-reassignment shape).
+- **What changed**: deleted `same_stream()` and the `IS_REMOTE` macro
+  entirely from `pine.c`; simplified `default_driver()` to
+  unconditionally `return(DF_DRIVER_PROTO)` (kept as a named function
+  -- three real callers still want "give me the one local driver");
+  dropped `create_proto()`'s now-unused `stream` parameter (2-arg
+  signature: `context`, `folder`) and collapsed its body to a single
+  ternary on `context_isambig()`. Deleted `context_same_stream()`
+  from `context.c`/`context.h` entirely (zero remaining callers once
+  its own callers were collapsed). At every call site, replaced the
+  dead reassignment blocks with either a direct `NULL` argument (Fcc
+  append, save-message append, folder rename, folder delete) or the
+  single surviving branch made unconditional (`create_stream =
+  cntxt->proto;` in `add_new_folder()`), and removed the
+  now-single-assignment local variables that this made pointless
+  (`save_stream`, `ren_stream`, `del_stream`, the `create_stream ==
+  NULL` check in `send.c`).
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25. Since none of the affected code paths
+  have a dedicated smoketest case (folder add/rename/delete, Fcc to a
+  brand-new folder, save-message to a brand-new folder), drove all
+  five live through a real pty session against the built binary:
+  composed and sent a message with a nonexistent Fcc folder, confirmed
+  creation, and confirmed the sent text actually landed in the new
+  folder file; saved a message from the index to a brand-new folder
+  name, confirmed creation, and confirmed the message landed there
+  (with its `Delete` flag set, matching pine's normal save-and-mark-
+  deleted behavior); added, renamed, and deleted a folder from the
+  Folder List screen, confirming the on-disk file was created/renamed/
+  removed at each step. All five matched pre-existing expected
+  behavior exactly.
+- **Size delta**: `bin/pine` text 287392 -> 285904 (-1488 bytes).

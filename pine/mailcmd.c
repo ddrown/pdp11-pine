@@ -865,7 +865,6 @@ save(folder, context, message, index_sorted_msgno)
     char       *tmp, *save_folder;
     STORE_S    *so;
     STRING      msg;
-    MAILSTREAM *save_stream = NULL;
     SourceType  src;
 
     src = CharStar;
@@ -906,20 +905,9 @@ save(folder, context, message, index_sorted_msgno)
     save_folder = (strucmp(folder, ps_global->inbox_name) == 0)
                    ? ps_global->VAR_INBOX_PATH : folder;
 
-    save_stream = context_same_stream(context->context,
-				      save_folder,
-				      ps_global->mail_stream);
-
-    if(!save_stream && ps_global->mail_stream != ps_global->inbox_stream)
-      save_stream = context_same_stream(context->context,
-					save_folder,
-					ps_global->inbox_stream);
-
-
-
     ps_global->try_to_create = 0; 	/* set in mm_notify? */
     rv = rc = 0;
-    while(!(rv = context_append(context->context, save_stream,
+    while(!(rv = context_append(context->context, NULL,
 				save_folder, &msg))){
 	if(rc++ || !ps_global->try_to_create)   /* abysmal failure! */
 	  break;				/* c-client returned error? */
@@ -935,8 +923,8 @@ save(folder, context, message, index_sorted_msgno)
 	    break;
         }
 
-	if(!context_create(context->context, 
-			  create_proto(save_stream, context, save_folder),
+	if(!context_create(context->context,
+			  create_proto(context, save_folder),
 			  save_folder))
 	  break;				/* c-client returned error? */
 

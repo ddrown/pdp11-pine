@@ -1140,43 +1140,13 @@ sorted_msgno(pine_state, num)
 
 
 /*----------------------------------------------------------------------
-  See if stream can be used for a mailbox name (courtesy of Mark Crispin)
-
-   Accepts: mailbox name
-            candidate stream
-   Returns: stream if it can be used, else NIL
-
-  This is called to weed out unnecessary use of c-client streams.
-  ----*/
-MAILSTREAM *
-same_stream(name, stream)
-    char *name;
-    MAILSTREAM *stream;
-{
-    /* This build has no remote/TCP-IP mailbox support (see mail.h/mail.c's
-     * removed mail_valid_net()), so stream->mailbox can never actually hold
-     * a "{host}mailbox"-syntax name -- no two streams can ever be "the same
-     * host". Always report no match; every caller already treats a NIL
-     * return as the normal "open a fresh stream" case.
-     */
-    return NIL;
-}
-
-
-/*
- * Simple, handy macro to determine if folder name is remote 
- * (on an imap server)
- */
-#define	IS_REMOTE(X)	(*(X) == '{' && *((X) + 1) && *((X) + 1) != '}' \
-			 && strchr(((X) + 2), '}'))
-
-
-/*----------------------------------------------------------------------
   Given a fully qualified folder name, return pointer to
-  driver that the name should be created with IF LOCAL
+  driver that the name should be created with
 
-   Accepts: mailbox name
-   Returns: stream if it can be used, else NIL
+   Accepts: mailbox name (unused -- this build has no remote/TCP-IP
+            mailbox support, so there's only ever one driver to return;
+            kept so callers read the same either way)
+   Returns: driver to create the folder with
 
    NOTE: Right now, only used by create when there's nothing else
          there.  open, rename and such just do the usual driver hunt,
@@ -1187,36 +1157,22 @@ MAILSTREAM *
 default_driver(name)
     char *name;
 {
-    extern MAILSTREAM bezerkproto;	/*  HACK!  */
-    /*
-     * if the folder name is local, assign default proto
-     * BE SURE TO DO THIS if it is local, as {mail,context}_create
-     * requires a driver to create in.  For remote cases, NULL is OK
-     * as the driver is infered from the name unambiguously.
-     */
-    return(IS_REMOTE(name) ? NULL : DF_DRIVER_PROTO);
+    extern MAILSTREAM bezerkproto;
+
+    return(DF_DRIVER_PROTO);
 }
 
 
 /*
- * context_proto - given a folder and context, return the driver to 
- *                 create the folder in.  The stream passed in has to
- *                 be either NULL or a remote stream
+ * context_proto - given a folder and context, return the driver to
+ *                 create the folder in
  */
 MAILSTREAM *
-create_proto(stream, context, folder)
-    MAILSTREAM *stream;		/* stream to return if IMAP folder */
+create_proto(context, folder)
     CONTEXT_S  *context;
     char       *folder;
 {
-    if(context_isambig(folder))
-      return(IS_REMOTE(context->context) ? stream : context->proto);
-    else
-      /*
-       * Now things get a bit tougher.  If remote, check to see if
-       * a stream's already open, otherwise
-       */
-      return(IS_REMOTE(folder) ? stream : default_driver(folder));
+    return(context_isambig(folder) ? context->proto : default_driver(folder));
 }
 	
 
