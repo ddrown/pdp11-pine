@@ -10,3 +10,32 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
+### Set up a second libFuzzer harness for pine's own consuming-side code
+
+- [ ] Harness 1 (parser-level, `fuzz/rfc822_fuzz.c` -- see
+      `TODO-pdp11-done.md`) is done and already found and fixed a real
+      bug in `rfc822_parse_word()`. It only covers `rfc822_parse_msg()`
+      and what it calls into, though -- it stops at producing a valid
+      `ENVELOPE`/`BODY`, never at rendering one.
+    - **Harness 2 -- structure-aware, consuming-side**: target pine's
+      *own* formatting/display code that consumes an already-parsed
+      `ENVELOPE`/`BODY` (e.g. `pine/newmail.c`'s `new_mail_mess()`,
+      `pine/mailview.c`'s attachment/parameter display, `pine/reply.c`'s
+      quoting) directly, building the `ENVELOPE` by hand from
+      fuzzer-provided bytes (splitting them across `personal`/
+      `mailbox`/`host`/`subject`/etc. fields, e.g. via a
+      `FuzzedDataProvider`-style splitter) rather than parsing real
+      message bytes. This is the harness that would have actually
+      caught the CVE-2000-0909 recurrence -- that bug lived several
+      calls downstream of the parser, in pine's own buffer-composition
+      code, which harness 1 alone would never reach since it stops at
+      producing a valid `ENVELOPE`, not at rendering one. Slower to
+      write (needs to construct realistic-enough `ENVELOPE`/`BODY`
+      structs by hand) but higher-value given where the bugs found so
+      far have actually clustered.
+    - Dev-machine-only tooling, like harness 1 (no PDP-11 cross-compiler
+      exists yet, same tier as the `ASAN=1` target and the one-off
+      `-fanalyzer` pass) -- not something that needs to run on or
+      represent the actual target hardware, just another way to find
+      bugs before they'd bite there.
+

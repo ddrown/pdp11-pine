@@ -24,3 +24,7 @@ __pycache__/
 *.gcno
 *.gcda
 *.gcov
+fuzz/rfc822_fuzz
+fuzz/*.o
+fuzz/crash-*
+fuzz/findings/

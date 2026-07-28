@@ -6174,3 +6174,80 @@ pattern lying around.
 - **Size delta**: `bin/pico` text 109490 -> 109066 (**-424 bytes**) --
   a real win, this was genuinely compiled code, not preprocessor-
   stripped weight.
+
+### Build libFuzzer harness 1 (parser-level) for incoming-mail parsing; fix a real bug it found
+
+First of the two fuzzing harnesses from the TODO item added after
+reviewing historical Pine CVEs. Targets `rfc822_parse_msg()`
+(`imap/ANSI/c-client/rfc822.c`) -- the real trust boundary for this
+project, since any bytes delivered to the local mbox via `sendmail`/
+UUCP get parsed there before pine ever sees an `ENVELOPE`/`BODY`.
+
+- **Harness** (`fuzz/rfc822_fuzz.c`, built via `fuzz/build.sh`):
+  treats the whole fuzzer input as one raw RFC822 message, finds the
+  header/body split at the first blank line (mirroring
+  `bezerk_parse()`'s own `case '\n': /' end of header '/` convention),
+  and calls `rfc822_parse_msg()` directly -- no filesystem or mbox
+  setup needed, just a buffer and a call into the parser. Truncates
+  the input at the first embedded NUL byte before doing anything else,
+  matching `bezerk_parse()`'s own `case '\0': /' end of message '/`
+  convention -- without this, the harness could "find" crashes that
+  are really just feeding `rfc822_parse_msg()` byte sequences
+  `bezerk_parse()` itself would never hand it in real operation. Sizes
+  its scratch buffer as `max(headersize,bodysize)+1`, matching
+  `bezerk_fetchstructure()`'s real `LOCAL->buf` sizing convention
+  exactly -- undersizing it (first tried just `headersize+1`) produced
+  a harness-only false-positive overflow, since
+  `rfc822_parse_content()`'s multipart-recursion path reuses the same
+  scratch buffer to collect each MIME part's own header lines out of
+  the *body* stringstruct, not just the outer header. `fuzz/mm_stubs.c`
+  provides no-op stubs for the ~13 `mm_*()` callbacks c-client expects
+  its calling application (normally pine, see `pine/mailbox.c`) to
+  supply; `mm_fatal()` calls `abort()` on purpose so libFuzzer catches
+  and reports it. Seed corpus (`fuzz/corpus/rfc822/`) drawn from
+  `test/cases/*.py`'s existing crafted messages (already encoding
+  several historical overflow triggers) plus one plain valid message.
+
+- **Found and fixed a real bug on the very first fuzzing run**:
+  `rfc822_parse_word()` (`rfc822.c`), used throughout address/personal-
+  name parsing. Its `case '\\':` branch (an unquoted backslash
+  "escaping" the following character) did `str = st + 2` unconditionally
+  to skip the backslash and the character after it -- but if the
+  backslash is the very last character before the string's NUL
+  terminator, `st + 2` skips *past* the NUL entirely, and the next loop
+  iteration's `strpbrk()` call reads from that out-of-bounds pointer.
+  Minimized by libFuzzer to a 4-byte reproducer: a `To:` header whose
+  entire value is a single backslash (`To:\`). Verified with a
+  standalone 2-line repro extracting the exact function body (gated
+  `#ifdef FIXED`): buggy version is a clean
+  `AddressSanitizer: heap-buffer-overflow ... READ of size 1` on a
+  2-byte allocation; fixed version returns cleanly. Fixed by checking
+  `st[1]` for NUL before advancing past it -- treat a trailing,
+  nothing-following backslash the same as "no delimiter found" (return
+  the end of the string) rather than blindly assuming there's always
+  at least one more character after it. Reachable via any header value
+  (address, personal name, etc.) parsed as an RFC822 "word" that ends
+  in a bare, unescaped backslash -- plausible from a deliberately
+  malformed or merely typo'd address header.
+- **Verified**: standalone ASan repro (buggy crashes, fixed clean);
+  full clean rebuild of the whole tree (plain and `ASAN=1`), 0
+  warnings; 25/25 smoketests in both configurations. Added the
+  minimized 4-byte crash as a permanent regression seed
+  (`fuzz/corpus/rfc822/regress_trailing_backslash_address`).
+- **A second, unconfirmed lead**: a longer fuzzing run (~3M execs)
+  also hit an ASan allocator-internal consistency check failure
+  (`CHECK failed: ... CHUNK_QUARANTINE`) during `mail_free_envelope()`
+  /`mail_free_address()`'s recursive address-list teardown -- shaped
+  like a double-free from a corrupted/cyclic `ADDRESS->next` chain.
+  Did not reproduce on a standalone re-run of the saved crash input,
+  nor across a 1,000,000-run deterministic replay of the full corpus
+  -- couldn't confirm it's a real, reliably-reproducible bug (as
+  opposed to some interaction with libFuzzer's persistent-process
+  execution model) in the time available. Not fixed; flagged here as
+  a lead worth revisiting with a longer/repeated fuzzing run rather
+  than a confirmed defect.
+- **Not committed to version control**: the corpus directory the
+  fuzzer grows during a run (thousands of discovered inputs) -- only
+  the small, curated seed set is tracked. `fuzz/build.sh`'s suggested
+  invocation points libFuzzer's own growable output at a gitignored
+  `fuzz/findings/` directory instead of the tracked seed corpus.
