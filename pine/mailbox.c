@@ -62,8 +62,7 @@
  the global context (aka collection). 
  ----*/
 extern void       *find_folder_list;
-extern MAILSTREAM *find_folder_stream;
-   
+
 void
 context_mailbox(char *name)
 {
@@ -91,31 +90,6 @@ void
 context_bboard(char *name)
 {
     FOLDER_S          *new_f = new_folder(name);
-
-
-#ifdef	LATER
-/*
- * Right now it's felt that it's too costly to 
- * display the new folder count by default for newsgoups...
- * (930507)
- */
-    find_folder_stream = context_open(find_folder_context->context, 
-				      find_folder_stream, name, 0);
-
-    if(find_folder_stream != NULL) {
-	new_f->msg_count    = find_folder_stream->nmsgs;
-	new_f->unread_count = find_folder_stream->recent;
-	sprintf(new_f->prefix, "%4.4s ",
-		new_f->unread_count ? int2string(new_f->msg_count)  : "");
-    } else {
-	new_f->msg_count    = 0; /* zero message count different... */
-	new_f->unread_count = 0; /* than inaccessible group!        */
-	sprintf(new_f->prefix, "* ");
-    }
-
-    new_f->name_len += strlen(new_f->prefix);
-
-#endif
 
     folder_insert(folder_total(find_folder_list), new_f, find_folder_list);
 

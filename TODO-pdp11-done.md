@@ -6453,3 +6453,33 @@ imap.c") and nothing `#include`d it.
   as expected -- the file was never linked into the binary to begin
   with; this cut is pure repo hygiene (removing a stale duplicate that
   could mislead a future grep), not a size win.
+
+### Tiny: dead `#ifdef LATER` block in `mailbox.c`'s `context_bboard()`
+
+`pine/mailbox.c`'s `context_bboard()` had an `#ifdef LATER ... #endif`
+block rebuilding a bulletin-board's unread-count prefix via
+`context_open()`. `LATER` is never `#define`d anywhere in the tree
+(confirmed via grep -- the only other `LATER`-named macro anywhere is
+pico's unrelated `MAYBELATER`), so the block was unreachable dead
+code; the function itself stays live (called via `mm_bboard()` from
+`imap/ANSI/c-client/dummy.c`'s local-folder-name pattern matching, per
+the "mm_bboard pulled back out as a false positive" writeup elsewhere
+in this file).
+
+- **What changed**: deleted the `#ifdef LATER`/`#endif` block and its
+  body from `context_bboard()`, leaving just `new_folder()` +
+  `folder_insert()`. The block's removal orphaned the file-scope
+  `extern MAILSTREAM *find_folder_stream;` declaration at the top of
+  `mailbox.c` (its only use in this file was inside the dead block) --
+  removed that too, chain-reaction style; `find_folder_stream` the
+  global itself (defined in `folder.c`) is untouched and still used
+  elsewhere. Left the sibling `extern void *find_folder_list;` alone,
+  since `context_bboard()` and `context_mailbox()` both still use it
+  outside the dead block.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25.
+- **Size delta**: `bin/pine` text unchanged at 285736 bytes -- the
+  block was already compiled out by the preprocessor before this cut
+  (dead behind `#ifdef LATER`), so removing the source text has no
+  runtime-code effect; this is source-hygiene only, same category as
+  the `pine/imap.c` deletion above.

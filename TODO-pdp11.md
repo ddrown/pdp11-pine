@@ -10,18 +10,6 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-### Tiny: dead `#ifdef LATER` block in `mailbox.c`'s `context_bboard()`
-
-- [ ] `pine/mailbox.c`'s `context_bboard()` (~lines 90-120) has an
-      `#ifdef LATER ... #endif` block (~lines 97-114) rebuilding a
-      bulletin-board's unread-count prefix via `context_open()`.
-      `LATER` is never `#define`d anywhere in the tree, so this block
-      is unreachable dead code. The function itself stays live (it's
-      called via `mm_bboard()` from `imap/ANSI/c-client/dummy.c`'s
-      local-folder-name pattern matching, per the "mm_bboard pulled
-      back out as a false positive" writeup in `TODO-pdp11-done.md`) --
-      only the `#ifdef LATER` block itself is the cut.
-
 ### Set up a second libFuzzer harness for pine's own consuming-side code
 
 - [ ] Harness 1 (parser-level, `fuzz/rfc822_fuzz.c` -- see
