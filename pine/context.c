@@ -455,24 +455,3 @@ context_append(char *context, MAILSTREAM *stream, char *name, STRING *msg)
 
 
 
-/*
- * Context manager stream usefulness test
- * Accepts: context
- *	    mail name
- *	    mailbox name
- *	    mail stream to test against mailbox name
- * Returns: stream if useful, else NIL
- */
-MAILSTREAM *
-context_same_stream(char *context, char *name, MAILSTREAM *stream)
-{
-  char *s,tmp[MAILTMPLEN];	/* build FQN from ambiguous name */
-  if (context_isambig (name)) context_apply (s = tmp,context,name);
-  else if(name[0] != '{' && context[0] == '{' && (s = strindex(context, '}'))){
-      strncpy(tmp, context, (s - context) + 1);
-      strcpy(&tmp[(s - context)+1], name);
-      s = tmp;
-  }
-  else s = name;		/* fully-qualified name */
-  return same_stream (s,stream);
-}

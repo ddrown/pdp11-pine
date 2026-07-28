@@ -1040,16 +1040,7 @@ call_mailer(fcc, envelope, body)
 		return(0);
 	    }
 
-	    if((create_stream = default_driver(fcc)) == NULL){
-		/*
-		 * See if an already open stream will service the create
-		 */
-		create_stream = same_stream(fcc, ps_global->mail_stream);
-
-		if(!create_stream 
-		   && ps_global->mail_stream != ps_global->inbox_stream)
-		  create_stream = same_stream(fcc, ps_global->inbox_stream);
-	    }
+	    create_stream = default_driver(fcc);
 
 	    if(!mail_create(create_stream, fcc))
 	      return(0);
@@ -1093,20 +1084,12 @@ call_mailer(fcc, envelope, body)
     }
     else if(fcc_so){			/* if sent or only fcc, save it */
 	STRING      msg;
-	MAILSTREAM *fcc_stream = NULL;
 
 	so_seek(fcc_so, 0L, 0);
 	INIT(&msg, mail_string, (void *)so_text(fcc_so),
 	     strlen((char *)so_text(fcc_so)));
 
-	fcc_stream = context_same_stream(fcc_cntxt->context, fcc,
-					 ps_global->mail_stream);
-
-	if(!fcc_stream && ps_global->mail_stream != ps_global->inbox_stream)
-	  fcc_stream = context_same_stream(fcc_cntxt->context, fcc,
-					   ps_global->inbox_stream);
-
-	if(!(rrv = context_append(fcc_cntxt->context, fcc_stream, fcc, &msg))){
+	if(!(rrv = context_append(fcc_cntxt->context, NULL, fcc, &msg))){
 	    q_status_message1(0,2,2,"\007Fcc to \"%s\" FAILED!!!", fcc);
             sprintf(error_buf,"\007Error appending %.20s in %.40s", 
 		    fcc, fcc_cntxt->context);

@@ -387,12 +387,8 @@ MAILSTREAM *mail_open (MAILSTREAM *stream,char *name,long options)
       stream->mailbox = cpystr (name);
     }
     stream->lock = NIL;		/* initialize lock and options */
-    stream->debug = (options & OP_DEBUG) ? T : NIL;
-    stream->readonly = (options & OP_READONLY) ? T : NIL;
-    stream->anonymous = (options & OP_ANONYMOUS) ? T : NIL;
     stream->scache = (options & OP_SHORTCACHE) ? T : NIL;
     stream->silent = (options & OP_SILENT) ? T : NIL;
-    stream->halfopen = (options & OP_HALFOPEN) ? T : NIL;
 				/* have driver open, flush if failed */
     if (!bezerk_open (stream)) stream = mail_close (stream);
   }
@@ -1102,25 +1098,6 @@ void mail_unlock (MAILSTREAM *stream)
   else stream->lock = NIL;	/* unlock stream */
 }
 
-
-/* Mail turn on debugging telemetry
- * Accepts: mail stream
- */
-
-void mail_debug (MAILSTREAM *stream)
-{
-  stream->debug = T;		/* turn on debugging telemetry */
-}
-
-
-/* Mail turn off debugging telemetry
- * Accepts: mail stream
- */
-
-void mail_nodebug (MAILSTREAM *stream)
-{
-  stream->debug = NIL;		/* turn off debugging telemetry */
-}
 
 /* Mail parse sequence
  * Accepts: mail stream

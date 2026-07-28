@@ -173,8 +173,7 @@
 			     }
 
 #define	READONLY_FOLDER  (ps_global->mail_stream 			     \
-			  && (ps_global->mail_stream->readonly 	     \
-			      || ps_global->mail_stream->anonymous))
+			  && ps_global->mail_stream->readonly)
 
 /*
  * Macro used to fetch all flags.  Used when counting deleted messages
@@ -830,9 +829,8 @@ int  count_seen_not_deleted(MAILSTREAM *);
 void who_screen(struct pine *);
 void panic(char *);
 void panic1(char *, char *);
-MAILSTREAM *same_stream(char *, MAILSTREAM *);
 MAILSTREAM *default_driver(char *);
-MAILSTREAM *create_proto(MAILSTREAM *, CONTEXT_S *, char *);
+MAILSTREAM *create_proto(CONTEXT_S *, char *);
 MsgNo       first_sorted_unread(MAILSTREAM *);
 MsgNo       next_sorted_un(MAILSTREAM *, long, int *, int);
 MsgNo       sorted_msgno(struct pine *, MsgNo);

@@ -6057,6 +6057,129 @@ almost any keystroke immediately instead of re-bleeping until a real
   real removed code this time (the `case '!':` shell-escape blocks),
   not a preprocessor-stripped no-op.
 
+### Collapse leftover `same_stream`/`IS_REMOTE`/`default_driver`/`create_proto` fallout
+
+Fallout from an earlier cut: this build has no remote/TCP-IP mailbox
+support, so `pine/pine.c`'s `same_stream()` was already collapsed to a
+stub always returning `NIL` (its own comment explains why:
+`stream->mailbox` can never hold a `{host}mailbox`-syntax name -- no
+two streams can ever be "the same host"). But the `IS_REMOTE(X)`
+macro that same file's `default_driver()`/`create_proto()` used to
+decide between a local and remote driver was never collapsed at its
+call sites, leaving several always-constant conditions still written
+as live branches, plus every caller's dead fallback path built around
+them.
+
+- **Confirmed via grep + read, each site by hand**:
+  - `default_driver()` (`pine.c`): `IS_REMOTE(name)` can never be
+    true (the build supports exactly one, always-local, folder
+    collection -- confirmed via `folder.c`'s `init_folders()`, which
+    sets `tc->proto = default_driver(tc->context)` unconditionally
+    for the single context it creates), so the function always
+    returned `DF_DRIVER_PROTO`, never `NULL`.
+  - `create_proto()` (`pine.c`): both ternaries
+    (`IS_REMOTE(...) ? stream : ...`) always took the non-`stream`
+    branch, making its `stream` parameter entirely unused.
+  - `context_same_stream()` (`pine/context.c`): built a
+    fully-qualified name and then called `same_stream()` on it, which
+    always returns `NIL` regardless of the name -- so the FQN-building
+    work was wasted and the function always returned `NIL`.
+  - Every caller of `context_same_stream()`/`same_stream()` treated a
+    `NIL` return as "no reusable stream, open fresh" -- so every one
+    of these dead-branch call sites was already exercising the
+    surviving behavior, just via a longer code path than necessary:
+    `pine/send.c:1043-1051` (Fcc-folder auto-create),
+    `pine/send.c:1102-1107` (Fcc-append stream reuse),
+    `pine/mailcmd.c:909-917` (save-message stream reuse),
+    `pine/folder.c` in `add_new_folder()` (`!cntxt->proto` dead branch
+    -- `cntxt->proto` is always non-`NULL` per the `init_folders()`
+    argument above), and in the folder-rename and folder-delete
+    handlers (`ren_stream`/`del_stream`, same dead-reassignment shape).
+- **What changed**: deleted `same_stream()` and the `IS_REMOTE` macro
+  entirely from `pine.c`; simplified `default_driver()` to
+  unconditionally `return(DF_DRIVER_PROTO)` (kept as a named function
+  -- three real callers still want "give me the one local driver");
+  dropped `create_proto()`'s now-unused `stream` parameter (2-arg
+  signature: `context`, `folder`) and collapsed its body to a single
+  ternary on `context_isambig()`. Deleted `context_same_stream()`
+  from `context.c`/`context.h` entirely (zero remaining callers once
+  its own callers were collapsed). At every call site, replaced the
+  dead reassignment blocks with either a direct `NULL` argument (Fcc
+  append, save-message append, folder rename, folder delete) or the
+  single surviving branch made unconditional (`create_stream =
+  cntxt->proto;` in `add_new_folder()`), and removed the
+  now-single-assignment local variables that this made pointless
+  (`save_stream`, `ren_stream`, `del_stream`, the `create_stream ==
+  NULL` check in `send.c`).
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25. Since none of the affected code paths
+  have a dedicated smoketest case (folder add/rename/delete, Fcc to a
+  brand-new folder, save-message to a brand-new folder), drove all
+  five live through a real pty session against the built binary:
+  composed and sent a message with a nonexistent Fcc folder, confirmed
+  creation, and confirmed the sent text actually landed in the new
+  folder file; saved a message from the index to a brand-new folder
+  name, confirmed creation, and confirmed the message landed there
+  (with its `Delete` flag set, matching pine's normal save-and-mark-
+  deleted behavior); added, renamed, and deleted a folder from the
+  Folder List screen, confirming the on-disk file was created/renamed/
+  removed at each step. All five matched pre-existing expected
+  behavior exactly.
+- **Size delta**: `bin/pine` text 287392 -> 285904 (-1488 bytes).
+
+### Remove dead c-client stream options (`mail_debug`/`OP_HALFOPEN`/`OP_ANONYMOUS`)
+
+Spotted during the same-stream/create_proto survey: `imap/ANSI/c-client/
+mail.c`'s `mail_open()` sets three `MAILSTREAM` options bits
+(`OP_DEBUG`/`OP_ANONYMOUS`/`OP_HALFOPEN`) that no code in the built
+tree ever reads back, plus the `mail_debug()`/`mail_nodebug()`
+function pair that has zero callers anywhere.
+
+- **Confirmed via grep** across only the linked object set
+  (mail/bezerk/dummy/rfc822/misc/osdep in c-client, plus all of
+  pine/pico -- not the whole c-client source tree, which still carries
+  unbuilt smtp.c/imap4.c etc. that do read some of these):
+  - `stream->debug`/`OP_DEBUG`: only read by the never-built smtp.c;
+    `mail_debug()`/`mail_nodebug()` (whose only job was toggling this
+    field) had zero callers anywhere, built or not.
+  - `stream->halfopen`/`OP_HALFOPEN`: zero readers anywhere, built or
+    not -- IMAP half-open connect state has no meaning for a
+    local-mbox-only build.
+  - `stream->anonymous`/`OP_ANONYMOUS`: zero setters anywhere (nothing
+    ever passes `OP_ANONYMOUS` to `mail_open()`), and its only reader
+    in the whole tree was `pine/imap.c` (the stale unbuilt duplicate
+    source targeted by the next TODO item) plus `pine/pine.h`'s
+    `READONLY_FOLDER` macro's `|| ...->anonymous` disjunct -- always
+    false, so dead weight on every check.
+- **What changed**: removed `mail_debug()`/`mail_nodebug()` and their
+  `mldbug`/`mlndbg` macro aliases and prototypes; removed the
+  `debug`/`anonymous`/`halfopen` bitfields from `struct mail_stream`
+  and their three setter lines in `mail_open()`; removed the
+  `OP_DEBUG`/`OP_ANONYMOUS`/`OP_HALFOPEN` `#define`s. Collapsed
+  `READONLY_FOLDER` (`pine/pine.h`) to drop its now-nonexistent
+  `->anonymous` disjunct -- `->readonly` itself is untouched and still
+  live via its own independent setters. Left `pine/imap.c`'s stale
+  `ps_global->anonymous` reference alone (out of scope for this item;
+  that whole unbuilt file is the next TODO item) and left `smtp.c`
+  alone (already permanently unbuilt, same as every other never-linked
+  c-client driver).
+- **Spinoff finding, not fixed here**: `mail_open()` still has
+  `stream->readonly = (options & OP_READONLY) ? T : NIL;`, and grep
+  confirms no caller anywhere ever passes `OP_READONLY` (its only
+  setter, the `-o` flag, was already removed). This line always
+  evaluates to `NIL`, but `stream->readonly` itself stays genuinely
+  live via other setters (`bezerk_open()`'s lock-failure path,
+  `signals.c`'s crash cleanup) -- a dead *initializer*, not a dead
+  field. Filed as its own small TODO item rather than folded in here,
+  to keep this cut's verification scoped to what it actually touched.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25. This cut only removes writes that were
+  never read (plus one always-false macro disjunct), so no new live
+  behavior path exists to drive by hand -- the existing smoketest
+  coverage of ordinary mail_open()/mailcmd.c flows is the relevant
+  regression guard.
+- **Size delta**: `bin/pine` text 285904 -> 285656 (-248 bytes).
+
 ### Fix a live, unpatched recurrence of CVE-2000-0909 -- stack overflow in the automatic new-mail-check message
 
 Prompted by a web search for historical Pine security advisories to
@@ -6351,3 +6474,112 @@ that's documented but not yet fixed.
   and malformed address/group-syntax examples -- narrower and ~2-3x
   faster per-exec than the full `rfc822_fuzz` harness, worth reaching
   for first when chasing anything address/group-parsing-specific.
+
+### Remove dead `OP_READONLY` bit-check in `mail_open()`
+
+Spinoff from the `mail_debug`/`OP_HALFOPEN`/`OP_ANONYMOUS` cut: grep
+confirmed no caller anywhere in the built tree ever passes
+`OP_READONLY` in a `mail_open()`/`bezerk_open()` `options` argument
+(its only setter, the `-o` flag, was already removed per the "Remove
+read-only mode" writeup), so `imap/ANSI/c-client/mail.c`'s
+`stream->readonly = (options & OP_READONLY) ? T : NIL;` always
+evaluated to `NIL`.
+
+- **Extra scrutiny before cutting**: `mail_open()`'s own doc comment
+  advertises a real "recycling a stream" path (`else { ... }` when the
+  caller passes a non-`NULL` candidate stream to reuse), and
+  `bezerk_open()` has matching `if (LOCAL) { close old file ... }`
+  reuse logic keyed off `stream->local` already being populated from a
+  prior open. If that path were reachable, deleting this line outright
+  (rather than collapsing it to its always-taken branch) would be a
+  real bug, not a no-op: a stale `readonly=T` from an earlier open
+  (e.g. a lock-contention failure) could leak into a later reopen of a
+  perfectly normal, writable mailbox on the same recycled stream,
+  since `bezerk_open()`'s own lock-acquisition attempt is gated on
+  `if (!stream->readonly)`.
+- **Confirmed unreachable, not just unlikely**: grepped every
+  `mail_open()`/`context_open()` call site in the built tree. Every
+  reachable one passes `NIL`/`NULL` for the recycling-candidate stream
+  argument (`pine/context.c:343`, `pine/folder.c:1625`,
+  `pine/mailcmd.c:1458,1480`, `imap/ANSI/c-client/mail.c`'s own two
+  internal calls). The only two call sites that pass a real candidate
+  stream are `pine/mailbox.c`'s `context_bboard()` -- inside the
+  `#ifdef LATER` block from this file's own next TODO item, `LATER`
+  never `#define`d, so never compiled -- and `pine/imap.c:491`, the
+  stale unbuilt duplicate source (also a queued TODO item). So the
+  "recycling" branch in `mail_open()`, and `bezerk_open()`'s matching
+  reuse logic, are both dead code in this build: every real stream
+  open goes through `mail_open()`'s fresh-stream path, which
+  `memset()`s the new `MAILSTREAM` to all-zero before this line ever
+  runs -- making the line a true no-op (redundant `NIL` write to an
+  already-`NIL` field), not merely a dead condition. Safe to delete
+  outright, matching this TODO item's original plan.
+- **What changed**: deleted the `stream->readonly = (options &
+  OP_READONLY) ? T : NIL;` line from `mail_open()` and the
+  `OP_READONLY` `#define` from `mail.h`. Left `stream->readonly` the
+  field, `READONLY_FOLDER` (`pine/pine.h`), and `->readonly`'s other
+  independent setters (`bezerk_open()`'s lock-failure detection,
+  `signals.c`'s crash cleanup) completely untouched -- all still
+  genuinely live.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25.
+- **Size delta**: `bin/pine` text unchanged at 285736 bytes -- a
+  single redundant bitfield-store instruction is small enough to
+  vanish into existing section/function alignment padding at this
+  granularity; confirmed via `grep` that the line and `#define` are
+  genuinely gone from the source and that `mail.o` was actually
+  recompiled.
+
+### Delete `pine/imap.c` -- stale unbuilt duplicate source
+
+`pine/imap.c` (~544 lines) was never in `pine/makefile.lnx`'s `obj=`
+or `cfiles=` lists (those build `mailbox.o`/`mailbox.c`, the real
+successor -- `mailbox.c`'s own header comment says "extracted from
+imap.c") and nothing `#include`d it.
+
+- **Confirmed dead before deleting**: grepped for the file itself in
+  the build (`obj=`/`cfiles=`, confirmed absent from both) and for its
+  two functions that have no counterpart in `mailbox.c`
+  (`mm_login()`/`mm_flags()`) anywhere else in the tree -- both were
+  defined *only* in `imap.c` and referenced *nowhere*, not even by
+  c-client itself (grepped `imap/ANSI/c-client/*.c` for callers, none
+  found), meaning the build has always succeeded and run correctly
+  without them existing at all. Zero risk to delete.
+- **What changed**: `git rm pine/imap.c`. No other files touched --
+  it wasn't referenced from any makefile, build script, or `#include`.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25.
+- **Size delta**: `bin/pine` text unchanged at 285736 bytes, exactly
+  as expected -- the file was never linked into the binary to begin
+  with; this cut is pure repo hygiene (removing a stale duplicate that
+  could mislead a future grep), not a size win.
+
+### Tiny: dead `#ifdef LATER` block in `mailbox.c`'s `context_bboard()`
+
+`pine/mailbox.c`'s `context_bboard()` had an `#ifdef LATER ... #endif`
+block rebuilding a bulletin-board's unread-count prefix via
+`context_open()`. `LATER` is never `#define`d anywhere in the tree
+(confirmed via grep -- the only other `LATER`-named macro anywhere is
+pico's unrelated `MAYBELATER`), so the block was unreachable dead
+code; the function itself stays live (called via `mm_bboard()` from
+`imap/ANSI/c-client/dummy.c`'s local-folder-name pattern matching, per
+the "mm_bboard pulled back out as a false positive" writeup elsewhere
+in this file).
+
+- **What changed**: deleted the `#ifdef LATER`/`#endif` block and its
+  body from `context_bboard()`, leaving just `new_folder()` +
+  `folder_insert()`. The block's removal orphaned the file-scope
+  `extern MAILSTREAM *find_folder_stream;` declaration at the top of
+  `mailbox.c` (its only use in this file was inside the dead block) --
+  removed that too, chain-reaction style; `find_folder_stream` the
+  global itself (defined in `folder.c`) is untouched and still used
+  elsewhere. Left the sibling `extern void *find_folder_list;` alone,
+  since `context_bboard()` and `context_mailbox()` both still use it
+  outside the dead block.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25.
+- **Size delta**: `bin/pine` text unchanged at 285736 bytes -- the
+  block was already compiled out by the preprocessor before this cut
+  (dead behind `#ifdef LATER`), so removing the source text has no
+  runtime-code effect; this is source-hygiene only, same category as
+  the `pine/imap.c` deletion above.

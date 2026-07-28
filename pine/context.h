@@ -54,6 +54,5 @@ MAILSTREAM *context_open(char *, MAILSTREAM *, char *, long);
 long context_rename(char *, MAILSTREAM *, char *, char *);
 long context_delete(char *, MAILSTREAM *, char *);
 long context_append(char *, MAILSTREAM *, char *, STRING *);
-MAILSTREAM *context_same_stream(char *, char *, MAILSTREAM *);
 
 #endif /* _CONTEXT_INCLUDED */
