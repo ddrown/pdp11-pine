@@ -1,0 +1,5 @@
+To: g1: a@x.com;, g2: b@y.com, c@z.com;
+From: sender@example.com
+Subject: nested groups
+
+Body.

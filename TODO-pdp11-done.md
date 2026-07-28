@@ -6375,6 +6375,106 @@ UUCP get parsed there before pine ever sees an `ENVELOPE`/`BODY`.
   invocation points libFuzzer's own growable output at a gitignored
   `fuzz/findings/` directory instead of the tracked seed corpus.
 
+### Chase harness 1's "second lead": two more real integer-underflow bugs found and fixed, one lead still open
+
+Follow-on to harness 1's initial run. Continued fuzzing turned up two
+more real, confirmed bugs -- both the same root-cause pattern (an
+`unsigned long i` byte-counter that gets decremented without first
+checking it's still nonzero, so hitting exactly 0 makes it *wrap* to a
+huge value instead of stopping the scan) -- plus a third, harder lead
+that's documented but not yet fixed.
+
+- **Bug 1: `rfc822_parse_content()`'s multipart-boundary scanner**
+  (`rfc822.c`, the `TYPEMULTIPART` case's `while (i > j)` loop). The
+  boundary-cookie-match loop, `for (k = j,s = t; i-- && ...)`, and the
+  `--`-prefix check just above it, `if (i-- && ... && i-- && ...)`,
+  both used bare `i--` with no guard. libFuzzer minimized this to a
+  40-byte reproducer: `MIME-Version:\nContent-Type:multipart\n\n--` --
+  a multipart body whose entire content is exactly the two-dash
+  boundary prefix with nothing else, so `i` (the body's remaining byte
+  count) hits exactly 0 right as the two dashes are consumed, and the
+  very next decrement (matching the cookie's own content) underflows
+  it. Once `i` wraps, the outer `while (i > j)` loop believes there's
+  effectively unlimited data left, and `SNX()` (the STRING-reading
+  macro, itself unbounded -- it trusts the caller's own counter
+  entirely) keeps reading forward with no caller-side limit, eventually
+  walking off the end of the allocated body buffer into unmapped
+  memory. **Verified**: standalone repro extracting the exact function
+  body (gated `#ifdef FIXED`) -- buggy version segfaults deep inside
+  `strlen`/an out-of-bounds `strpbrk`-adjacent read (SEGV in
+  `rfc822_parse_content` itself, confirmed via the real compiled
+  library too, not just the extraction); fixed version runs clean.
+  Also reproduced and confirmed via `git stash` (real code, buggy vs.
+  fixed, same crash/clean result). Fixed every bare `i--` in this
+  function to `i && i--` (matching the guard idiom the surrounding
+  code already used correctly in several other spots in the very same
+  function -- this bug was simply an inconsistency, not a novel
+  pattern). Also guarded a `case '\015':`'s `i--` and the `default:`
+  case's `i--` the same way, since both had the identical unguarded
+  shape even though the fuzzer's specific minimized input didn't
+  happen to hit them.
+- **Bug 2: the same function's per-MIME-part header-collection loop**
+  (a few lines further down, iterating `body->contents.part` to parse
+  each part's own `Content-*` headers out of the body). `if (!--i)
+  *s1++ = c = '\0';` runs unconditionally at the end of every
+  inner-loop pass -- but a few lines earlier, `case '\012':`'s
+  CR-eating branch (`if ((i > 0) && (CHR (bs) == '\015')) { SNX (bs);
+  i--; }`) can *already* bring `i` to exactly 0 within the same pass,
+  so the unconditional `--i` a few lines later underflows it a second
+  time. Unlike bug 1, this manifested as heap-corruption-shaped
+  crashes (a `bad-free`/allocator-magic-number-mismatch on an
+  `ADDRESS` struct during `mail_free_envelope()`) rather than a direct
+  SEGV -- consistent with the runaway loop overwriting past `t`, the
+  scratch buffer shared across this whole parse (a *write* overflow,
+  not just an over-read), landing on and corrupting an unrelated
+  heap allocation's own bookkeeping. This is the "second lead" flagged
+  in the previous entry as unconfirmed -- confirmed here. Traced by
+  hand (the fuzzer's own crash inputs for this one never reproduced
+  standalone, single-execution or even across a 1M-run deterministic
+  corpus replay -- typical for corruption whose *effect* is detected
+  far from its *cause*) rather than via a live repro; fixed with the
+  same `i &&` guard. A subsequent ~150K-exec fuzzing run that
+  previously hit this within under 2 minutes ran clean for the
+  remainder of the session after the fix.
+- **Verified (both fixes)**: full clean rebuild (plain and `ASAN=1`),
+  0 warnings, 25/25 smoketests. Added the 40-byte bug-1 reproducer as
+  a permanent regression seed
+  (`fuzz/corpus/rfc822/regress_multipart_boundary_underflow`).
+- **A third lead, still open**: continued fuzzing (both the full
+  `rfc822_fuzz` harness and a new, narrower `fuzz/adrlist_fuzz.c` built
+  specifically to isolate it -- calls `rfc822_parse_adrlist()`
+  directly, skipping header/MIME parsing entirely) kept finding the
+  same *class* of heap-corruption crash (allocator magic-number
+  mismatches and bad-frees inside `mail_free_address()`'s recursive
+  list teardown), reproducible only via extended fuzzing runs
+  (anywhere from ~150K to ~3M execs), never via standalone replay of
+  the saved crash input, not even with `ASAN_OPTIONS=quarantine_size_mb=0`
+  forcing immediate chunk reuse. One instance's stack trace didn't
+  even include any harness/target frames at all -- the corruption was
+  purely detected inside libFuzzer's own unrelated `free()` calls,
+  confirming this is a genuine delayed-effect wild write, not an
+  artifact of the fuzzing harness itself. Every crash-triggering input
+  seen so far is `:`/`;`-heavy, pointing at
+  `rfc822_parse_adrlist()`'s RFC822 *group* address syntax
+  (`group-name: addr1, addr2;`) as the likely area -- specifically,
+  `n` (group nesting depth) is checked with `n >= 0` rather than `n >
+  0` before treating a `;` as closing an open group and unconditionally
+  appending a new marker address via `last->next = ...`, which is only
+  safe if `last` is guaranteed non-NULL; a careful trace didn't
+  conclusively prove this reachable with `last == NULL` (the "bad
+  mailbox" error path seems to intercept the specific case tried by
+  hand), but it wasn't ruled out either, and the byte patterns in every
+  captured crash strongly implicate this function. Left unfixed pending
+  a session with more time for either a debugger-assisted bisection or
+  a much longer fuzzing run against `fuzz/adrlist_fuzz` (now checked
+  in, corpus seeded with both well-formed and malformed group syntax)
+  to produce a reliably-reproducing minimal case.
+- **New tooling kept**: `fuzz/adrlist_fuzz.c` (builds via the updated
+  `fuzz/build.sh`), seeded with `fuzz/corpus/adrlist/`'s well-formed
+  and malformed address/group-syntax examples -- narrower and ~2-3x
+  faster per-exec than the full `rfc822_fuzz` harness, worth reaching
+  for first when chasing anything address/group-parsing-specific.
+
 ### Remove dead `OP_READONLY` bit-check in `mail_open()`
 
 Spinoff from the `mail_debug`/`OP_HALFOPEN`/`OP_ANONYMOUS` cut: grep
