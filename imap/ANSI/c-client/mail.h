@@ -56,7 +56,6 @@
 
 /* Open options */
 
-#define OP_READONLY (long) 2	/* read-only open */
 #define OP_SHORTCACHE (long) 8	/* short (elt-only) caching */
 #define OP_SILENT (long) 16	/* don't pass up events (internal use) */
 #define OP_PROTOTYPE (long) 32	/* return driver prototype */

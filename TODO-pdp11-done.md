@@ -6374,3 +6374,58 @@ UUCP get parsed there before pine ever sees an `ENVELOPE`/`BODY`.
   the small, curated seed set is tracked. `fuzz/build.sh`'s suggested
   invocation points libFuzzer's own growable output at a gitignored
   `fuzz/findings/` directory instead of the tracked seed corpus.
+
+### Remove dead `OP_READONLY` bit-check in `mail_open()`
+
+Spinoff from the `mail_debug`/`OP_HALFOPEN`/`OP_ANONYMOUS` cut: grep
+confirmed no caller anywhere in the built tree ever passes
+`OP_READONLY` in a `mail_open()`/`bezerk_open()` `options` argument
+(its only setter, the `-o` flag, was already removed per the "Remove
+read-only mode" writeup), so `imap/ANSI/c-client/mail.c`'s
+`stream->readonly = (options & OP_READONLY) ? T : NIL;` always
+evaluated to `NIL`.
+
+- **Extra scrutiny before cutting**: `mail_open()`'s own doc comment
+  advertises a real "recycling a stream" path (`else { ... }` when the
+  caller passes a non-`NULL` candidate stream to reuse), and
+  `bezerk_open()` has matching `if (LOCAL) { close old file ... }`
+  reuse logic keyed off `stream->local` already being populated from a
+  prior open. If that path were reachable, deleting this line outright
+  (rather than collapsing it to its always-taken branch) would be a
+  real bug, not a no-op: a stale `readonly=T` from an earlier open
+  (e.g. a lock-contention failure) could leak into a later reopen of a
+  perfectly normal, writable mailbox on the same recycled stream,
+  since `bezerk_open()`'s own lock-acquisition attempt is gated on
+  `if (!stream->readonly)`.
+- **Confirmed unreachable, not just unlikely**: grepped every
+  `mail_open()`/`context_open()` call site in the built tree. Every
+  reachable one passes `NIL`/`NULL` for the recycling-candidate stream
+  argument (`pine/context.c:343`, `pine/folder.c:1625`,
+  `pine/mailcmd.c:1458,1480`, `imap/ANSI/c-client/mail.c`'s own two
+  internal calls). The only two call sites that pass a real candidate
+  stream are `pine/mailbox.c`'s `context_bboard()` -- inside the
+  `#ifdef LATER` block from this file's own next TODO item, `LATER`
+  never `#define`d, so never compiled -- and `pine/imap.c:491`, the
+  stale unbuilt duplicate source (also a queued TODO item). So the
+  "recycling" branch in `mail_open()`, and `bezerk_open()`'s matching
+  reuse logic, are both dead code in this build: every real stream
+  open goes through `mail_open()`'s fresh-stream path, which
+  `memset()`s the new `MAILSTREAM` to all-zero before this line ever
+  runs -- making the line a true no-op (redundant `NIL` write to an
+  already-`NIL` field), not merely a dead condition. Safe to delete
+  outright, matching this TODO item's original plan.
+- **What changed**: deleted the `stream->readonly = (options &
+  OP_READONLY) ? T : NIL;` line from `mail_open()` and the
+  `OP_READONLY` `#define` from `mail.h`. Left `stream->readonly` the
+  field, `READONLY_FOLDER` (`pine/pine.h`), and `->readonly`'s other
+  independent setters (`bezerk_open()`'s lock-failure detection,
+  `signals.c`'s crash cleanup) completely untouched -- all still
+  genuinely live.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25.
+- **Size delta**: `bin/pine` text unchanged at 285736 bytes -- a
+  single redundant bitfield-store instruction is small enough to
+  vanish into existing section/function alignment padding at this
+  granularity; confirmed via `grep` that the line and `#define` are
+  genuinely gone from the source and that `mail.o` was actually
+  recompiled.

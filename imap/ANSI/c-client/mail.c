@@ -387,7 +387,6 @@ MAILSTREAM *mail_open (MAILSTREAM *stream,char *name,long options)
       stream->mailbox = cpystr (name);
     }
     stream->lock = NIL;		/* initialize lock and options */
-    stream->readonly = (options & OP_READONLY) ? T : NIL;
     stream->scache = (options & OP_SHORTCACHE) ? T : NIL;
     stream->silent = (options & OP_SILENT) ? T : NIL;
 				/* have driver open, flush if failed */
