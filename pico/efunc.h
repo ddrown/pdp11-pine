@@ -155,7 +155,6 @@ extern	int readin(char *, int);
 extern	int filewrite(int, int);
 extern	int filesave(int, int);
 extern	int writeout(char *);
-extern	char *writetmp(int, int);
 extern	int filename(int, int);
 
 /* fileio.c */
@@ -196,7 +195,6 @@ extern	char *getfnames(char *, int *);
 extern	void fioperr(int, char *);
 extern	void fixpath(char *, int);
 extern	int compresspath(char *, char *, int);
-extern	void tmpname(char *);
 extern	void makename(char *, char *);
 extern	int copy(char *, char *);
 extern	int ffwopen(char *);

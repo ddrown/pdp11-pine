@@ -1048,16 +1048,6 @@ compresspath(char *base, char *path, int len)
 
 
 /*
- * tmpname - return a temporary file name in the given buffer
- */
-void
-tmpname(char *name)
-{
-    sprintf(name, "/tmp/pico.%d", getpid());	/* tmp file name */
-}
-
-
-/*
  * Take a file name, and from it
  * fabricate a buffer name. This routine knows
  * about the syntax of file names on the target system.

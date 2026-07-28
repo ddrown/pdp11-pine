@@ -324,10 +324,14 @@ new_mail_mess(stream, folder, number, max_num)
      
     if(number > 1) {
         if(e != NULL && e->from != NULL) {
+            /* e->from->personal/mailbox/host come straight from the
+               message's own From: header (rfc822_cpy() -- a plain
+               heap copy with no length cap), so cap the %s precision
+               to fit from[]'s fixed size rather than trusting them */
             if(e->from->personal != NULL)
-              sprintf(from, " Most recent from %s", e->from->personal);
+              sprintf(from, " Most recent from %.90s", e->from->personal);
             else
-              sprintf(from, " Most recent from %s@%s", e->from->mailbox,
+              sprintf(from, " Most recent from %.40s@%.40s", e->from->mailbox,
                       e->from->host);
         } else {
             from[0] = '\0';
@@ -336,9 +340,9 @@ new_mail_mess(stream, folder, number, max_num)
     } else {
         if(e != NULL && e->from != NULL) {
             if(e->from->personal != NULL)
-              sprintf(from, " From %s", e->from->personal);
+              sprintf(from, " From %.90s", e->from->personal);
             else
-              sprintf(from, " From %s@%s", e->from->mailbox, e->from->host);
+              sprintf(from, " From %.40s@%.40s", e->from->mailbox, e->from->host);
         } else {
             from[0] = '\0';
         }

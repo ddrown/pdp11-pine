@@ -6179,3 +6179,198 @@ function pair that has zero callers anywhere.
   coverage of ordinary mail_open()/mailcmd.c flows is the relevant
   regression guard.
 - **Size delta**: `bin/pine` text 285904 -> 285656 (-248 bytes).
+
+### Fix a live, unpatched recurrence of CVE-2000-0909 -- stack overflow in the automatic new-mail-check message
+
+Prompted by a web search for historical Pine security advisories to
+check which still apply to this fork. Most didn't (see below), but one
+did, essentially verbatim: **CVE-2000-0909**, "buffer overflow in the
+automatic mail checking component of Pine 4.21 and earlier... via a
+long From: header," was still present, unfixed, in `pine/newmail.c`'s
+`new_mail_mess()` -- the function that formats the "New mail!"/"Most
+recent from ..." status-line message pine's periodic background
+new-mail check displays.
+
+```c
+char from[MAX_ADDRESS+20];   /* 120 bytes (MAX_ADDRESS == 100) */
+...
+sprintf(from, " Most recent from %s", e->from->personal);        /* no cap */
+sprintf(from, " Most recent from %s@%s", e->from->mailbox, ...);  /* no cap */
+...
+sprintf(from, " From %s", e->from->personal);                    /* no cap */
+sprintf(from, " From %s@%s", e->from->mailbox, e->from->host);    /* no cap */
+```
+
+`e->from->personal`/`mailbox`/`host` come straight from the message's
+own `From:` header, copied by c-client's `rfc822_cpy()`
+(`imap/ANSI/c-client/rfc822.c`) -- which is just `cpystr()`, a plain
+heap duplicate with **no length cap**, bounded only by overall message
+size. `new_mail_mess()` is called from `new_mail()` (`pine.c`,
+`mailindx.c`, `mailview.c`, `folder.c` all poll it from their main
+event loops), pine's periodic background check for newly-arrived mail
+-- exactly the "automatic mail checking component" the original CVE
+named. Any message delivered to the local mbox (trivial via local
+`sendmail`/UUCP, this project's exact delivery model) with a long
+enough `From:` personal name overflows this 120-byte stack buffer the
+next time the background check fires, with zero user interaction.
+Notably, this same function's `subject[200]` buffer two lines below
+*does* already cap its `%s` (`%.183s`) -- the `from[]` buffer just
+never got the same treatment.
+
+- **Reproduced**: extracted the vulnerable `sprintf` pattern into a
+  standalone file (`char from[120]`, unbounded `%s` of a >5000-byte
+  string, gated `#ifdef FIXED`). Buggy: `AddressSanitizer: stack-
+  buffer-overflow ... WRITE of size 6018 ... overflows this variable`.
+  Fixed: clean exit.
+- **Fixed**: capped all four `sprintf`s' `%s` precision to fit
+  `from[]`'s fixed size -- `%.90s` for the personal-name-only case
+  (19-char longest prefix + 90 + NUL = 110 <= 120) and `%.40s@%.40s`
+  for the `mailbox@host` case (19 + 40 + 1 + 40 + NUL = 101 <= 120),
+  both with comfortable margin.
+- **No smoketest regression test added**: reaching this code path live
+  requires mail to arrive in an already-open folder and pine's
+  background check to actually fire, which is throttled to roughly
+  every `NEW_MAIL_TIME` (150) seconds minus a couple -- not practical
+  to wait out reliably in the smoketest suite (same call made for the
+  mis-parenthesized-ternary and `repeat_char()` fixes above); the
+  standalone ASan repro is the durable verification record instead.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25.
+
+**Other historical Pine/pico CVEs checked against this fork, found not
+to apply**:
+- **Predictable `/tmp/pico.<pid>` temp-file name, no `O_EXCL`**
+  (the classic Pico symlink-race file-overwrite advisory) -- the
+  vulnerable code was still there verbatim (`tmpname()` in
+  `pico/os_unix.c`), but its only caller, `writetmp()`
+  (`pico/file.c`), had zero callers anywhere else in this tree --
+  confirmed dead code, not reachable. Removed both outright (see the
+  follow-on entry below) rather than leaving an unreachable-but-still-
+  vulnerable pattern lying around.
+- **URL-viewer shell-metacharacter injection** (`msg-view-url`,
+  Bugtraq 1999/2001) -- the whole URL-viewer feature doesn't exist in
+  this codebase (zero references to `url`/`http://` anywhere in
+  `pine/`); this fork is based on Pine 3.89 (1993), which predates
+  that feature.
+- **`message/external-body` buffer overflow (pre-4.58)** -- this
+  fork's handling (`mailview.c`, `reply.c`) only displays the
+  external-body parameters as informational text via
+  `display_parameters()`; no auto-fetch/exec mechanism exists to
+  overflow.
+- **c-client large-literal/mailbox-size integer-overflow bugs**
+  (network IMAP4 driver) and **long `X-Keywords` header overflow** --
+  both live in IMAP4 network-protocol driver code never included in
+  this no-TCP/IP build; `bezerk.c` (the local-mbox driver actually
+  compiled here) explicitly stubs out keyword support ("keywords not
+  supported yet"). This whole CVE class is structurally moot -- no
+  code path here parses untrusted network protocol input at all.
+- **`rpdump` symlink race** (Pine 4.62) -- `rpdump` doesn't exist
+  anywhere in this tree.
+- **Pine 4.02 MIME-header buffer-overrun fixes** -- too generic to
+  trace to a specific mechanism; very likely already covered by this
+  project's own extensive prior buffer-overflow audit passes.
+
+### Remove `writetmp()`/`tmpname()` -- dead code, confirmed while checking historical CVE applicability
+
+Follow-on to the CVE-2000-0909 fix above. While researching historical
+Pine/pico security advisories, the classic predictable-`/tmp/pico.<pid>`
+-name symlink-race temp-file advisory turned up `pico/os_unix.c`'s
+`tmpname()`, whose only caller, `pico/file.c`'s `writetmp()`, had zero
+callers anywhere else in the tree -- confirmed dead, so removed both
+outright rather than leaving an unreachable-but-still-vulnerable
+pattern lying around.
+
+- **`pico/file.c`**: deleted `writetmp()` entirely (write a temp file
+  of the composed message text via a predictable `/tmp/pico.<pid>`
+  name) -- confirmed via grep zero callers anywhere in `pico/`,
+  `pine/`, or their headers besides its own prototype.
+- **`pico/os_unix.c`** (real source; `pico/osdep.c` is its generated,
+  gitignored `cp` copy, not hand-edited): deleted `tmpname()`, its
+  only caller now gone.
+- **`pico/efunc.h`**: removed both functions' now-orphaned prototypes.
+- **Left alone**: `ffwopen()` (also called by `writetmp()`) stays --
+  confirmed it has a second, very much live caller, `writeout()`
+  (called from `pico.c`, `os_unix.c`, and `file.c` itself).
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings
+  (confirming no other caller was missed). Full smoketest suite,
+  25/25.
+- **Size delta**: `bin/pico` text 109490 -> 109066 (**-424 bytes**) --
+  a real win, this was genuinely compiled code, not preprocessor-
+  stripped weight.
+
+### Build libFuzzer harness 1 (parser-level) for incoming-mail parsing; fix a real bug it found
+
+First of the two fuzzing harnesses from the TODO item added after
+reviewing historical Pine CVEs. Targets `rfc822_parse_msg()`
+(`imap/ANSI/c-client/rfc822.c`) -- the real trust boundary for this
+project, since any bytes delivered to the local mbox via `sendmail`/
+UUCP get parsed there before pine ever sees an `ENVELOPE`/`BODY`.
+
+- **Harness** (`fuzz/rfc822_fuzz.c`, built via `fuzz/build.sh`):
+  treats the whole fuzzer input as one raw RFC822 message, finds the
+  header/body split at the first blank line (mirroring
+  `bezerk_parse()`'s own `case '\n': /' end of header '/` convention),
+  and calls `rfc822_parse_msg()` directly -- no filesystem or mbox
+  setup needed, just a buffer and a call into the parser. Truncates
+  the input at the first embedded NUL byte before doing anything else,
+  matching `bezerk_parse()`'s own `case '\0': /' end of message '/`
+  convention -- without this, the harness could "find" crashes that
+  are really just feeding `rfc822_parse_msg()` byte sequences
+  `bezerk_parse()` itself would never hand it in real operation. Sizes
+  its scratch buffer as `max(headersize,bodysize)+1`, matching
+  `bezerk_fetchstructure()`'s real `LOCAL->buf` sizing convention
+  exactly -- undersizing it (first tried just `headersize+1`) produced
+  a harness-only false-positive overflow, since
+  `rfc822_parse_content()`'s multipart-recursion path reuses the same
+  scratch buffer to collect each MIME part's own header lines out of
+  the *body* stringstruct, not just the outer header. `fuzz/mm_stubs.c`
+  provides no-op stubs for the ~13 `mm_*()` callbacks c-client expects
+  its calling application (normally pine, see `pine/mailbox.c`) to
+  supply; `mm_fatal()` calls `abort()` on purpose so libFuzzer catches
+  and reports it. Seed corpus (`fuzz/corpus/rfc822/`) drawn from
+  `test/cases/*.py`'s existing crafted messages (already encoding
+  several historical overflow triggers) plus one plain valid message.
+
+- **Found and fixed a real bug on the very first fuzzing run**:
+  `rfc822_parse_word()` (`rfc822.c`), used throughout address/personal-
+  name parsing. Its `case '\\':` branch (an unquoted backslash
+  "escaping" the following character) did `str = st + 2` unconditionally
+  to skip the backslash and the character after it -- but if the
+  backslash is the very last character before the string's NUL
+  terminator, `st + 2` skips *past* the NUL entirely, and the next loop
+  iteration's `strpbrk()` call reads from that out-of-bounds pointer.
+  Minimized by libFuzzer to a 4-byte reproducer: a `To:` header whose
+  entire value is a single backslash (`To:\`). Verified with a
+  standalone 2-line repro extracting the exact function body (gated
+  `#ifdef FIXED`): buggy version is a clean
+  `AddressSanitizer: heap-buffer-overflow ... READ of size 1` on a
+  2-byte allocation; fixed version returns cleanly. Fixed by checking
+  `st[1]` for NUL before advancing past it -- treat a trailing,
+  nothing-following backslash the same as "no delimiter found" (return
+  the end of the string) rather than blindly assuming there's always
+  at least one more character after it. Reachable via any header value
+  (address, personal name, etc.) parsed as an RFC822 "word" that ends
+  in a bare, unescaped backslash -- plausible from a deliberately
+  malformed or merely typo'd address header.
+- **Verified**: standalone ASan repro (buggy crashes, fixed clean);
+  full clean rebuild of the whole tree (plain and `ASAN=1`), 0
+  warnings; 25/25 smoketests in both configurations. Added the
+  minimized 4-byte crash as a permanent regression seed
+  (`fuzz/corpus/rfc822/regress_trailing_backslash_address`).
+- **A second, unconfirmed lead**: a longer fuzzing run (~3M execs)
+  also hit an ASan allocator-internal consistency check failure
+  (`CHECK failed: ... CHUNK_QUARANTINE`) during `mail_free_envelope()`
+  /`mail_free_address()`'s recursive address-list teardown -- shaped
+  like a double-free from a corrupted/cyclic `ADDRESS->next` chain.
+  Did not reproduce on a standalone re-run of the saved crash input,
+  nor across a 1,000,000-run deterministic replay of the full corpus
+  -- couldn't confirm it's a real, reliably-reproducible bug (as
+  opposed to some interaction with libFuzzer's persistent-process
+  execution model) in the time available. Not fixed; flagged here as
+  a lead worth revisiting with a longer/repeated fuzzing run rather
+  than a confirmed defect.
+- **Not committed to version control**: the corpus directory the
+  fuzzer grows during a run (thousands of discovered inputs) -- only
+  the small, curated seed set is tracked. `fuzz/build.sh`'s suggested
+  invocation points libFuzzer's own growable output at a gitignored
+  `fuzz/findings/` directory instead of the tracked seed corpus.

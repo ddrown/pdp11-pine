@@ -1057,6 +1057,15 @@ char *rfc822_parse_word (char *s,const char *delimiters)
       str = ++st;		/* continue parse */
       break;
     case '\\':			/* quoted character */
+				/* a trailing backslash with nothing after
+				   it can't quote anything -- treat it like
+				   "no delimiter found" instead of blindly
+				   skipping 2 bytes past a buffer that may
+				   have only 1 byte left */
+      if (!st[1]) {
+	while (*s != '\0') ++s;
+	return s;
+      }
       str = st + 2;		/* skip quoted character and go on */
       break;
     default:			/* found a word delimiter */
