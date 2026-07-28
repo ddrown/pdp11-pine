@@ -1,5 +1,5 @@
 .bld.hlp
-c-client
+/c-client
 imap/ANSI/c-client/makefile
 !imap/ANSI/c-client/makefile.*
 imap/ANSI/c-client/osdep.h
@@ -16,6 +16,7 @@ pico/makefile
 pine/makefile
 .*.swp
 pico/libpico.a
+imap/ANSI/c-client/c-client.a
 pico/pico
 pine/date.c
 pine/pine
