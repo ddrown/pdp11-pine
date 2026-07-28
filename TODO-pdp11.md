@@ -10,19 +10,6 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-### Delete `pine/imap.c` -- stale unbuilt duplicate source
-
-- [ ] `pine/imap.c` (~544 lines) is not in `pine/makefile.lnx`'s `obj=`
-      list (that builds `mailbox.o`, not `imap.o`) and nothing
-      `#include`s it -- confirmed zero effect on `bin/pine`. It's a
-      leftover pre-split duplicate; `pine/mailbox.c`'s own header
-      comment says "extracted from imap.c". Still defines duplicate
-      copies of `context_mailbox`/`context_bboard`/`mm_fatal`/etc. that
-      could mislead a future grep into thinking they're live or that
-      edits there matter. Zero binary-size win (it's not linked), but
-      worth deleting as pure repo cruft -- confirm nothing references
-      it (build included) before removing.
-
 ### Tiny: dead `#ifdef LATER` block in `mailbox.c`'s `context_bboard()`
 
 - [ ] `pine/mailbox.c`'s `context_bboard()` (~lines 90-120) has an

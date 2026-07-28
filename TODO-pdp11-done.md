@@ -6429,3 +6429,27 @@ evaluated to `NIL`.
   granularity; confirmed via `grep` that the line and `#define` are
   genuinely gone from the source and that `mail.o` was actually
   recompiled.
+
+### Delete `pine/imap.c` -- stale unbuilt duplicate source
+
+`pine/imap.c` (~544 lines) was never in `pine/makefile.lnx`'s `obj=`
+or `cfiles=` lists (those build `mailbox.o`/`mailbox.c`, the real
+successor -- `mailbox.c`'s own header comment says "extracted from
+imap.c") and nothing `#include`d it.
+
+- **Confirmed dead before deleting**: grepped for the file itself in
+  the build (`obj=`/`cfiles=`, confirmed absent from both) and for its
+  two functions that have no counterpart in `mailbox.c`
+  (`mm_login()`/`mm_flags()`) anywhere else in the tree -- both were
+  defined *only* in `imap.c` and referenced *nowhere*, not even by
+  c-client itself (grepped `imap/ANSI/c-client/*.c` for callers, none
+  found), meaning the build has always succeeded and run correctly
+  without them existing at all. Zero risk to delete.
+- **What changed**: `git rm pine/imap.c`. No other files touched --
+  it wasn't referenced from any makefile, build script, or `#include`.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25.
+- **Size delta**: `bin/pine` text unchanged at 285736 bytes, exactly
+  as expected -- the file was never linked into the binary to begin
+  with; this cut is pure repo hygiene (removing a stale duplicate that
+  could mislead a future grep), not a size win.
