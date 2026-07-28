@@ -56,13 +56,10 @@
 
 /* Open options */
 
-#define OP_DEBUG (long) 1	/* debug protocol negotiations */
 #define OP_READONLY (long) 2	/* read-only open */
-#define OP_ANONYMOUS (long) 4	/* anonymous open of newsgroup */
 #define OP_SHORTCACHE (long) 8	/* short (elt-only) caching */
 #define OP_SILENT (long) 16	/* don't pass up events (internal use) */
 #define OP_PROTOTYPE (long) 32	/* return driver prototype */
-#define OP_HALFOPEN (long) 64	/* half-open (IMAP connect but no select) */
 
 
 /* Cache management function codes */
@@ -305,12 +302,9 @@ typedef struct mail_stream {
 				   dispatch is gone (bezerkdriver was the
 				   only driver ever linked) */
   unsigned int lock : 1;	/* stream lock flag */
-  unsigned int debug : 1;	/* stream debug flag */
   unsigned int silent : 1;	/* silent stream from Tenex */
   unsigned int readonly : 1;	/* stream read-only flag */
-  unsigned int anonymous : 1;	/* stream anonymous access flag */
   unsigned int scache : 1;	/* stream short cache flag */
-  unsigned int halfopen : 1;	/* stream half-open flag */
   unsigned short use;		/* stream use count */
   unsigned short sequence;	/* stream sequence */
   unsigned long gensym;		/* generated tag */
@@ -431,8 +425,6 @@ extern mailcache_t mailcache;
 #define mail_expunged mlexst
 #define mail_lock mllock
 #define mail_unlock mlulck
-#define mail_debug mldbug
-#define mail_nodebug mlndbg
 #define mail_sequence mlsequ
 #define mail_newenvelope mlnenv
 #define mail_newaddr mlnadr
@@ -515,8 +507,6 @@ void mail_recent (MAILSTREAM *stream,long recent);
 void mail_expunged (MAILSTREAM *stream,long msgno);
 void mail_lock (MAILSTREAM *stream);
 void mail_unlock (MAILSTREAM *stream);
-void mail_debug (MAILSTREAM *stream);
-void mail_nodebug (MAILSTREAM *stream);
 long mail_sequence (MAILSTREAM *stream,char *sequence);
 ENVELOPE *mail_newenvelope (void);
 ADDRESS *mail_newaddr (void);

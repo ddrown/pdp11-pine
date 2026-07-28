@@ -6126,3 +6126,56 @@ them.
   removed at each step. All five matched pre-existing expected
   behavior exactly.
 - **Size delta**: `bin/pine` text 287392 -> 285904 (-1488 bytes).
+
+### Remove dead c-client stream options (`mail_debug`/`OP_HALFOPEN`/`OP_ANONYMOUS`)
+
+Spotted during the same-stream/create_proto survey: `imap/ANSI/c-client/
+mail.c`'s `mail_open()` sets three `MAILSTREAM` options bits
+(`OP_DEBUG`/`OP_ANONYMOUS`/`OP_HALFOPEN`) that no code in the built
+tree ever reads back, plus the `mail_debug()`/`mail_nodebug()`
+function pair that has zero callers anywhere.
+
+- **Confirmed via grep** across only the linked object set
+  (mail/bezerk/dummy/rfc822/misc/osdep in c-client, plus all of
+  pine/pico -- not the whole c-client source tree, which still carries
+  unbuilt smtp.c/imap4.c etc. that do read some of these):
+  - `stream->debug`/`OP_DEBUG`: only read by the never-built smtp.c;
+    `mail_debug()`/`mail_nodebug()` (whose only job was toggling this
+    field) had zero callers anywhere, built or not.
+  - `stream->halfopen`/`OP_HALFOPEN`: zero readers anywhere, built or
+    not -- IMAP half-open connect state has no meaning for a
+    local-mbox-only build.
+  - `stream->anonymous`/`OP_ANONYMOUS`: zero setters anywhere (nothing
+    ever passes `OP_ANONYMOUS` to `mail_open()`), and its only reader
+    in the whole tree was `pine/imap.c` (the stale unbuilt duplicate
+    source targeted by the next TODO item) plus `pine/pine.h`'s
+    `READONLY_FOLDER` macro's `|| ...->anonymous` disjunct -- always
+    false, so dead weight on every check.
+- **What changed**: removed `mail_debug()`/`mail_nodebug()` and their
+  `mldbug`/`mlndbg` macro aliases and prototypes; removed the
+  `debug`/`anonymous`/`halfopen` bitfields from `struct mail_stream`
+  and their three setter lines in `mail_open()`; removed the
+  `OP_DEBUG`/`OP_ANONYMOUS`/`OP_HALFOPEN` `#define`s. Collapsed
+  `READONLY_FOLDER` (`pine/pine.h`) to drop its now-nonexistent
+  `->anonymous` disjunct -- `->readonly` itself is untouched and still
+  live via its own independent setters. Left `pine/imap.c`'s stale
+  `ps_global->anonymous` reference alone (out of scope for this item;
+  that whole unbuilt file is the next TODO item) and left `smtp.c`
+  alone (already permanently unbuilt, same as every other never-linked
+  c-client driver).
+- **Spinoff finding, not fixed here**: `mail_open()` still has
+  `stream->readonly = (options & OP_READONLY) ? T : NIL;`, and grep
+  confirms no caller anywhere ever passes `OP_READONLY` (its only
+  setter, the `-o` flag, was already removed). This line always
+  evaluates to `NIL`, but `stream->readonly` itself stays genuinely
+  live via other setters (`bezerk_open()`'s lock-failure path,
+  `signals.c`'s crash cleanup) -- a dead *initializer*, not a dead
+  field. Filed as its own small TODO item rather than folded in here,
+  to keep this cut's verification scoped to what it actually touched.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25. This cut only removes writes that were
+  never read (plus one always-false macro disjunct), so no new live
+  behavior path exists to drive by hand -- the existing smoketest
+  coverage of ordinary mail_open()/mailcmd.c flows is the relevant
+  regression guard.
+- **Size delta**: `bin/pine` text 285904 -> 285656 (-248 bytes).

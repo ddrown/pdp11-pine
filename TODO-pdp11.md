@@ -10,20 +10,24 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-### Remove dead c-client stream options (mail_debug/OP_HALFOPEN/OP_ANONYMOUS)
+### Remove dead `OP_READONLY` bit-check in `mail_open()`
 
-- [ ] `imap/ANSI/c-client/mail.c`: `mail_debug()`/`mail_nodebug()`
-      (~lines 1110-1130) have zero callers anywhere in the built tree.
-      `OP_DEBUG`/`stream->debug` (set ~line 390) is never read by
-      bezerk.c/dummy.c/misc.c/osdep.o -- its only would-be reader is
-      the never-built smtp.c. `OP_HALFOPEN`/`stream->halfopen` (set
-      ~line 395) is never read anywhere in the built tree. `OP_ANONYMOUS`/
-      `stream->anonymous` (set ~line 392) is only ever read in
-      `pine/imap.c` -- which isn't compiled at all, see the next item.
-      Confirm via grep across just the linked object set (mail/bezerk/
-      dummy/rfc822/misc/osdep + pine + pico, not the whole c-client
-      tree which still has unbuilt smtp.c/imap4.c etc.), then delete the
-      dead fields/functions and their setters.
+- [ ] `imap/ANSI/c-client/mail.c`'s `mail_open()` still has
+      `stream->readonly = (options & OP_READONLY) ? T : NIL;` --
+      spotted while removing its `OP_DEBUG`/`OP_ANONYMOUS`/`OP_HALFOPEN`
+      neighbors (see `TODO-pdp11-done.md`). Confirmed via grep that no
+      caller anywhere in the built tree ever passes `OP_READONLY` in a
+      `mail_open()`/`bezerk_open()` `options` argument (its only setter
+      was the `-o` flag's block in `mailcmd.c`, already removed per the
+      "Remove read-only mode" writeup), so this line always evaluates
+      to `stream->readonly = NIL` -- a dead initializer, not a dead
+      field: `stream->readonly` itself stays genuinely live via its
+      other independent setters (`bezerk_open()`'s own lock-failure
+      detection, `signals.c`'s crash cleanup), so don't touch the field
+      or `READONLY_FOLDER` (`pine/pine.h`) -- only the `OP_READONLY`
+      `#define` (`mail.h`) and this one dead-initializer line are the
+      cut. Double check the line still reads exactly this way (options
+      parameter name may differ) before touching it.
 
 ### Delete `pine/imap.c` -- stale unbuilt duplicate source
 

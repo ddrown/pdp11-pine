@@ -173,8 +173,7 @@
 			     }
 
 #define	READONLY_FOLDER  (ps_global->mail_stream 			     \
-			  && (ps_global->mail_stream->readonly 	     \
-			      || ps_global->mail_stream->anonymous))
+			  && ps_global->mail_stream->readonly)
 
 /*
  * Macro used to fetch all flags.  Used when counting deleted messages
