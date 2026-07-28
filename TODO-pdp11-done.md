@@ -6483,3 +6483,65 @@ in this file).
   (dead behind `#ifdef LATER`), so removing the source text has no
   runtime-code effect; this is source-hygiene only, same category as
   the `pine/imap.c` deletion above.
+
+### Remove dead c-client search infrastructure (`mail_search`/`bezerk_search`)
+
+`mail_search()` (`imap/ANSI/c-client/mail.c`) is c-client's
+IMAP-SEARCH-style criteria engine -- given a criteria string like
+`"FROM foo SINCE 1-Jan-2000"`, it walks the mailbox marking messages
+that match. Grepped every `pine/*.c` file: zero callers anywhere in
+the built tree. Pine's own WhereIs feature is a separate, in-memory
+text search over already-rendered screen content and never calls into
+this c-client subsystem. That made the whole chain dead:
+`mail_search()`/`mail_searched()` in `mail.c`; `bezerk_search()` and
+its ~24 helper predicates in `bezerk.c` (`bezerk_search_all`,
+`_answered/_deleted/_flagged/_keyword/_new/_old/_recent/_seen` and
+their `un*` negations, `_before/_on/_since` date predicates,
+`_body/_subject/_text/_bcc/_cc/_from/_to` string predicates, plus the
+`bezerk_search_date`/`_flag`/`_string` helper-generator functions and
+the `search_t` function-pointer typedef); and pine's own `mm_searched()`
+callback stub in `pine/mailbox.c` (its doc comment already said
+"Result: nothing, not used by pine" -- a leftover hint from the
+original UW code that this had already gone unused).
+`phile.c` -- the only other caller of `mail_searched()` in the c-client
+source tree -- isn't built by `makefile.lnx` at all, so nothing outside
+this now-deleted chain touched any of it. `pine/pine.def` (a DOS/OS2
+`pcpine` module-definition file, unrelated to `makefile.lnx`) and
+`imap/ANSI/c-client/Internal.DOC` still mention these symbols, but
+neither is compiled or generated from source -- left untouched as
+historical/foreign-platform artifacts, same treatment as other
+not-built files elsewhere in the tree.
+
+- **What changed**:
+  - `imap/ANSI/c-client/bezerk.c`: deleted `bezerk_search()` (with its
+    comment block and the page-break form-feed preceding it) and the
+    entire trailing `bezerk_search_*` predicate block through end of
+    file (342 lines total).
+  - `imap/ANSI/c-client/bezerk.h`: removed the matching 27 prototypes
+    and the `search_t` typedef.
+  - `imap/ANSI/c-client/mail.c`: deleted `mail_search()` and
+    `mail_searched()`.
+  - `imap/ANSI/c-client/mail.h`: removed `mail_search`/`mail_searched`/
+    `mm_searched` macro aliases and prototypes (the `mm_searched`
+    prototype became dead too, once `mail_searched()` -- its only
+    caller anywhere in the built tree -- was gone).
+  - `pine/mailbox.c`: deleted the now-uncallable `mm_searched()`
+    callback implementation.
+  - `fuzz/mm_stubs.c`: dropped the matching `mm_searched()` stub (the
+    fuzz harness links against `c-client.a`, which no longer has any
+    undefined reference to it).
+  - Several deletions landed on lines with literal form-feed (`^L`)
+    page-break characters that broke the `Edit` tool's exact-string
+    matching (a recurring friction point in this codebase's older
+    files) -- used `sed` with explicit line ranges (verified via
+    `cat -A`) instead, same fallback as past cuts.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25. Final `grep -rn` sweep for
+  `mail_search|bezerk_search|mm_searched|mail_searched` across
+  `pine/`, `imap/ANSI/c-client/`, and `fuzz/` turned up nothing left
+  in the built tree.
+- **Size delta**: `bin/pine` text 285736 -> 280791 bytes, a 4945-byte
+  reduction. `bezerk.o` had been the single largest c-client object
+  file (25KB text, bigger even than `rfc822.o`'s 17KB) specifically
+  because of this dead search engine; this cut is a real code-size win,
+  not just source hygiene.

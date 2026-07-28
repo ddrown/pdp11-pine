@@ -95,25 +95,6 @@ context_bboard(char *name)
 
 }
 
-/*---------------------------------------------------------------------- 
-        receive notification that search found something           
-
- Input:  mail stream and message number of located item
-
- Result: nothing, not used by pine
-  ----*/
-void mm_searched(stream, msg_no_l)
-     MAILSTREAM *stream;
-     long        msg_no_l;
-{
-    char tmp[20];
-    int  msg_no = (int)msg_no_l;
-
-    sprintf(tmp,"%d",msg_no);
-    q_status_message2(0, 2,4, "\007 %s searched %s",
-		      stream ? stream->mailbox : "<no folder>", tmp);
-}
-
 /*----------------------------------------------------------------------
        receive notification of new mail from imap daemon
 
