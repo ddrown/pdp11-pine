@@ -10,11 +10,45 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
+### Track down the third fuzzing lead: heap corruption in address/group parsing
+
+- [ ] Continued harness-1 fuzzing (see `TODO-pdp11-done.md`) found and
+      fixed two real integer-underflow bugs in `rfc822_parse_content()`,
+      but kept turning up a third, distinct class of crash even after
+      both fixes: allocator magic-number mismatches and bad-frees
+      inside `mail_free_address()`'s recursive list teardown, implying
+      something writes through a corrupted/garbage pointer somewhere
+      *before* the eventual free. Every triggering input is
+      `:`/`;`-heavy, pointing at `rfc822_parse_adrlist()`'s RFC822
+      group-address syntax (`group-name: addr1, addr2;`) -- in
+      particular, its end-of-group handling checks `n >= 0` (`n` is
+      group nesting depth) before doing `last->next = (adr =
+      mail_newaddr ());`, which is only safe if `last` is non-NULL; a
+      manual trace didn't conclusively prove `last` can be NULL there
+      (an earlier "bad mailbox" error path seems to intercept the
+      specific case tried by hand) but didn't rule it out either.
+    - Never reproduced via standalone replay of a saved crash input,
+      not even across a 1,000,000-run deterministic corpus replay or
+      with `ASAN_OPTIONS=quarantine_size_mb=0` forcing immediate chunk
+      reuse -- classic delayed-effect wild-write signature (the
+      *detection* site is far from the *cause*). One occurrence's
+      stack trace had no harness/target frames at all, just libFuzzer's
+      own internal `free()` calls, ruling out a harness artifact.
+    - `fuzz/adrlist_fuzz.c` (new, see `fuzz/build.sh`) calls
+      `rfc822_parse_adrlist()` directly and reproduces the same crash
+      class faster (~150K-1.7M execs vs. several M through the full
+      parser) -- start there. A longer run (tens of minutes+) or a
+      debugger-assisted bisection (e.g. hardware watchpoints on
+      freshly-`mail_newaddr()`'d structs) is probably needed next,
+      since fuzzing alone hasn't produced a minimizable, reliably-
+      reproducing case yet despite several attempts.
+
 ### Set up a second libFuzzer harness for pine's own consuming-side code
 
 - [ ] Harness 1 (parser-level, `fuzz/rfc822_fuzz.c` -- see
-      `TODO-pdp11-done.md`) is done and already found and fixed a real
-      bug in `rfc822_parse_word()`. It only covers `rfc822_parse_msg()`
+      `TODO-pdp11-done.md`) is done and already found and fixed three
+      real bugs (`rfc822_parse_word()`, twice in
+      `rfc822_parse_content()`). It only covers `rfc822_parse_msg()`
       and what it calls into, though -- it stops at producing a valid
       `ENVELOPE`/`BODY`, never at rendering one.
     - **Harness 2 -- structure-aware, consuming-side**: target pine's

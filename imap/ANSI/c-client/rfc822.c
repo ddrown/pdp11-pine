@@ -555,13 +555,19 @@ void rfc822_parse_content (BODY *body,STRING *bs,char *h,char *t)
       if (m) m--;		/* get position in front of character */
       switch (c) {		/* examine each line */
       case '\015':		/* handle CRLF form */
-	if (CHR (bs) == '\012'){/* following LF? */
+	if (i && CHR (bs) == '\012'){/* following LF? */
 	  c = SNX (bs); i--;	/* yes, slurp it */
 	}
       case '\012':		/* at start of a line, start with -- ? */
-	if (i-- && ((c = SNX (bs)) == '-') && i-- && ((c = SNX (bs)) == '-')) {
+				/* i is unsigned -- i-- alone underflows it
+				   to a huge value once i hits 0, rather than
+				   stopping the scan, so every decrement here
+				   must be guarded by "i &&" first (matching
+				   the pattern already used a few lines down) */
+	if (i && i-- && ((c = SNX (bs)) == '-') && i && i-- &&
+	    ((c = SNX (bs)) == '-')) {
 				/* see if cookie matches */
-	  for (k = j,s = t; i-- && *s++ == (c = SNX (bs)) && --k;);
+	  for (k = j,s = t; i && i-- && *s++ == (c = SNX (bs)) && --k;);
 	  if (k) break;		/* strings didn't match if non-zero */
 				/* look at what follows cookie */
 	  if (i && i--) switch (c = SNX (bs)) {
@@ -593,7 +599,7 @@ void rfc822_parse_content (BODY *body,STRING *bs,char *h,char *t)
 	}
 	break;
       default:			/* not at a line */
-	c = SNX (bs); i--;	/* get next character */
+	if (i) { c = SNX (bs); i--; }	/* get next character */
 	break;
       }				/* calculate size of any final part */
     }
@@ -626,8 +632,13 @@ void rfc822_parse_content (BODY *body,STRING *bs,char *h,char *t)
 	      *s1++ = c = c1;	/* insert the character into the line */
 	      break;
 	    }
-				/* end of data ties off the header */
-	    if (!--i) *s1++ = c = '\0';
+				/* end of data ties off the header -- i is
+				   unsigned and can already be 0 here (the
+				   case '\012' CR-eating branch above can
+				   bring it to exactly 0), so guard the
+				   decrement or it underflows to a huge value
+				   instead of stopping the scan */
+	    if (i && !--i) *s1++ = c = '\0';
 	  }
 				/* find header item type */
 	  if (s = strchr (t,':')) {
