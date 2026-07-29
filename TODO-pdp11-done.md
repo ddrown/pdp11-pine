@@ -6815,3 +6815,60 @@ not-built files elsewhere in the tree.
   reachable features, just not yet exercised by any smoketest. Left
   as-is for now; `TODO-pdp11.md` still lists `reply.c`/`signals.c`/
   `ttyin.c` as the remaining files to look at.
+
+### `pine/reply.c` low-coverage investigation -- one dead function found, plus Reply coverage
+
+- [x] Continuation of the same coverage-investigation TODO item, next
+      file after `mailcmd.c` above. `reply.c` had already been through
+      its own DOS/never-defined-macro dead-code sweep ("Dead-code
+      sweep, bucket 1 of 3" above) and the F_* collapse (`F_SIG_AT_BOTTOM`/
+      `F_INCLUDE_HEADER`/`F_MIME_FORWARD`, see this file's phase-1
+      entry) well before this pass, so expected thin pickings -- read
+      `reply()`, `forward()`, and every site those two F_* cuts touched
+      looking for leftover fallout the way `mailcmd.c`'s `jump_to()`
+      had; found none there (the signature-insertion and forwarded-
+      text-header logic both read as fully collapsed already, single
+      unconditional paths, no stray guard conditions). Did find one
+      fresh item via `gcov -f`'s per-function breakdown:
+      - **`copy_envelope()`**: a 27-line "deep-copy an `ENVELOPE`"
+        helper. `grep -rn "copy_envelope"` across `pine/`, `pico/`, and
+        `imap/` found only its own prototype and definition in the
+        built tree -- its sole other mention anywhere is
+        `pine/pine.def`, a DOS/OS2 module-definition file that isn't
+        compiled or generated from source here (same "historical/
+        foreign-platform artifact, left untouched" category as other
+        `pine.def` mentions noted in this file's `mail_search`/
+        `bezerk_search` removal entry above). Deleted the function and
+        its prototype.
+      - `reply()` itself (137 lines, the biggest function in the file)
+        was 0%-covered along with everything only *it* calls
+        (`reply_delimiter()`, `generate_reply_to()`, `first_addr()`) --
+        no smoketest had ever pressed `'r'`. All confirmed live and
+        reachable (`pine/mailcmd.c:372` calls `reply()` from the Reply
+        command), not dead -- same "untested UI, not removable"
+        conclusion as `folder.c`'s Folder List screen.
+- **What changed**: `pine/reply.c` (`copy_envelope()` deletion and its
+  prototype). Also added `test/cases/test_reply_screen.py`, driving
+  Reply end to end through a real pty: the "Include original message"
+  and "Reply to all recipients" prompts, landing in the composer with
+  the quoted original text and `"On ... wrote:"` delimiter line
+  correctly generated, then Cancels out (same pattern as
+  `test_compose_cancel.py`) rather than actually sending.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite 28/28 (was 27/27) with the new test added.
+  `python3 test/run_smoketests.py --coverage`: `reply.c` 36.8%
+  (181/492) -> 54.4% (256/471) -- denominator dropped 492 -> 471,
+  confirming real code left the file; whole-suite total 46.9%
+  (4063/8659) -> 48.1% (4152/8638).
+- **Size delta**: `bin/pine` text 278309 -> 277813 bytes (-496 bytes),
+  `bss`/`data` unchanged. All from `copy_envelope()` -- a real,
+  compiled-in dead function, not a preprocessor-stripped branch.
+- Everything else `gcov -f` flagged as 0%-covered in `reply.c`
+  (`first_addr`/`generate_reply_to`/`copy_envelope` -- pre-deletion --
+  were the only 0% entries besides `reply()` and `reply_delimiter()`,
+  both now covered by the new test) is otherwise accounted for.
+  `TODO-pdp11.md` still lists `signals.c`/`ttyin.c` as the remaining
+  files to look at -- both already went through a DOS-macro sweep in
+  "bucket 2 of 3" above, so likely the same "untested, not dead"
+  outcome as `folder.c`/`reply.c`, but worth the same per-function
+  check before assuming so.

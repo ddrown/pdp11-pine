@@ -90,9 +90,11 @@ DONE elsewhere or referenced in passing below.
       removal (`jump_to()`'s always-`'\0'` `first_num` param and three
       now-unreachable `command`-range checks at its call site); added
       Jump/Search smoketest coverage; 24.4% -> 29.1%, `bin/pine` text
-      -408 bytes). Remaining files, listed as places to go looking,
-      not confirmed cuts:
-    - `reply.c` -- 36.8% (181/492 lines).
+      -408 bytes). `reply.c` is also done (see `TODO-pdp11-done.md`:
+      found one fully-dead function -- `copy_envelope()`, zero callers
+      in the built tree -- and added Reply smoketest coverage; 36.8%
+      -> 54.4%, `bin/pine` text -496 bytes). Remaining files, listed
+      as places to go looking, not confirmed cuts:
     - `signals.c` -- 29.8% (34/114) and `ttyin.c` -- 37.8% (186/492) are
       smaller but also worth a look.
 
