@@ -574,8 +574,14 @@ void rfc822_parse_content (BODY *body,STRING *bs,char *h,char *t)
 	  case '-':		/* at end if two dashes */
 	    if ((i && i--) && ((c = SNX (bs)) == '-') &&
 		((i && i--) ? (((c = SNX (bs)) == '\015') || (c=='\012')):T)) {
-				/* if have a final part calculate its size */
-	      if (part) part->body.size.bytes = m - part->offset;
+				/* if have a final part calculate its size --
+				   m can be one less than part->offset for a
+				   completely empty part (back-to-back
+				   boundary markers with nothing between
+				   them), which would underflow the unsigned
+				   subtraction; such a part is 0 bytes */
+	      if (part) part->body.size.bytes =
+		(m > part->offset) ? (m - part->offset) : 0;
 	      part = NIL; i = 1; /* terminate scan */
 	    }
 	    break;
@@ -585,7 +591,11 @@ void rfc822_parse_content (BODY *body,STRING *bs,char *h,char *t)
 	    }
 	  case '\012':		/* new line */
 	    if (part) {		/* calculate size of previous */
-	      part->body.size.bytes = m - part->offset;
+				/* m can be one less than part->offset for a
+				   completely empty part -- see the matching
+				   comment above */
+	      part->body.size.bytes =
+		(m > part->offset) ? (m - part->offset) : 0;
 				/* instantiate next */
 	      part = part->next = mail_newbody_part ();
 	    }			/* otherwise start new list */
@@ -1061,6 +1071,11 @@ char *rfc822_parse_word (char *s,const char *delimiters)
       case '\0':		/* unbalanced quoted string */
 	return NIL;		/* sick sick sick */
       case '\\':		/* quoted character */
+				/* trailing backslash -- nothing follows to
+				   quote, and the loop's own "*++st" would
+				   read past the NUL if we let it advance
+				   here; same as an unbalanced quoted string */
+	if (!st[1]) return NIL;
 	++st;			/* skip the next character */
       default:			/* ordinary character */
 	break;			/* no special action */
@@ -1110,7 +1125,12 @@ char *rfc822_quote (char *src)
     while (*src) {		/* copy string */
       if (*src == '\"') src++;	/* skip double quote entirely */
       else {
-	if (*src == '\\') src++;/* skip over single quote, copy next always */
+	if (*src == '\\') {	/* skip over single quote */
+	  src++;
+				/* trailing backslash -- nothing to escape,
+				   don't read/copy past the NUL terminator */
+	  if (!*src) break;
+	}
 	*dst++ = *src++;	/* copy character */
       }
     }

@@ -6636,6 +6636,291 @@ in this file).
   runtime-code effect; this is source-hygiene only, same category as
   the `pine/imap.c` deletion above.
 
+### Resolve the third fuzzing lead: heap-buffer-overflow in `rfc822_quote()` on a trailing backslash
+
+The third lead from the previous entry (unconfirmed heap corruption in
+`mail_free_address()`'s teardown, `:`/`;`-heavy triggering inputs)
+turned out to have nothing to do with the `rfc822_parse_adrlist()`
+group-syntax suspect flagged there -- it was a fourth instance of the
+exact same *bug class* as the very first harness-1 find
+(`rfc822_parse_word()`'s trailing-backslash overflow), this time in
+`rfc822_quote()`, a much more central, widely-called function (called
+by `rfc822_cpy()`, which is used throughout address parsing to copy
+every mailbox/host/personal-name string).
+
+- **Root cause**: `rfc822_quote()`'s in-place unquoting loop --
+  `while (*src) { if (*src=='\"') src++; else { if (*src=='\\')
+  src++; *dst++=*src++; } }` -- unconditionally does `*dst++=*src++`
+  after (possibly) skipping a backslash. If the backslash is the last
+  character before the string's NUL terminator, skipping it lands
+  `src` *on* the NUL, and the unconditional copy both writes that NUL
+  to `dst` (fine) and advances `src` *past* it (not fine) -- the next
+  loop iteration's `*src` check reads one byte past the allocation,
+  and if that byte happens to be nonzero (likely, uninitialized heap
+  data), the loop keeps going, overflowing `dst` for real.
+- **Why this eluded the default ASan build for so long**: the plain
+  `-fsanitize=address` build kept hitting the *effect* of this bug
+  (allocator magic-number corruption, bad-frees) many execs after the
+  actual overflow, since a `heap-buffer-overflow` this shape doesn't
+  always land squarely on ASan's redzone the instant it happens on
+  every allocator/size-class combination -- and once it *does* corrupt
+  an adjacent chunk's header, the failure only surfaces later, at
+  whatever unrelated `free()` happens to touch that chunk next
+  (sometimes inside libFuzzer's own bookkeeping, per the previous
+  entry). Recompiling just for diagnosis with
+  `-fsanitize-address-field-padding=1` (extra padding + stricter
+  checking around struct fields) turned the exact same bug into a
+  clean, standard `heap-buffer-overflow` report pointing straight at
+  `rfc822_quote()`, on the very first fuzzing run (~5,000 execs,
+  seconds instead of the many-minutes-to-hours the plain build needed
+  to even manifest the corruption's effect).
+- **Fixed**: after skipping a backslash, check whether `src` now
+  points at the NUL terminator and `break` immediately instead of
+  falling through to the copy -- mirrors the fix already applied to
+  `rfc822_parse_word()` for the identical underlying mistake.
+- **Verified**: standalone repro extracting the exact function body
+  (gated `#ifdef FIXED`) -- buggy version is a clean `AddressSanitizer:
+  heap-buffer-overflow ... READ of size 1` on a 2-byte allocation;
+  fixed version runs clean. Full clean rebuild (plain and `ASAN=1`),
+  0 warnings, 25/25 smoketests. Re-ran both fuzz harnesses at length
+  to confirm the fix actually closed the lead rather than just this
+  one input: `adrlist_fuzz` ran **22.4 million** executions in under 5
+  minutes with zero crashes (previous crashes in this exact harness
+  had shown up within 150K-1.7M execs); the full `rfc822_fuzz` ran
+  **14.7 million** with zero crashes (only a separate, minor memory
+  leak turned up, see the new TODO item). Added the 4-byte minimized
+  trigger (`\xff\xff\xff\` followed by a backslash) as a permanent
+  regression seed
+  (`fuzz/corpus/adrlist/regress_trailing_backslash_quote`).
+- **Diagnostic technique worth remembering**: `-fsanitize-address-
+  field-padding=1` turned a many-hours-to-reproduce delayed-corruption
+  bug into a first-run, five-second repro. Worth reaching for early
+  the next time a fuzzing lead shows the "allocator-internal CHECK
+  failure / bad-free, never reproduces standalone" signature, rather
+  than after extensive plain-ASan chasing.
+
+### Audit for other trailing-backslash instances of the same bug class: found a fourth in `rfc822_parse_word()`'s quoted-string case
+
+With three confirmed instances of the "advance past a backslash
+without checking it was the last character before the string's NUL"
+bug (`rfc822_parse_word()`'s top-level word-delimiter handling,
+`rfc822_quote()` -- see above two entries), swept the codebase for any
+other place doing the same thing.
+
+- **Found a fourth instance**, in `rfc822_parse_word()` itself but a
+  *different* loop than the one already fixed: the embedded
+  `case '"':` quoted-string scanner. `while (*++st != '"') switch
+  (*st) { ... case '\\': ++st; ... }` -- the outer `while` does
+  `*++st` on every iteration re-check, so if `case '\\':`'s own `++st`
+  lands exactly on the NUL terminator (backslash was the last real
+  character), the loop's *next* re-check does another `++st`, reading
+  one byte past the allocation.
+- **Fixed**: check `st[1]` for NUL before the `++st` and return `NIL`
+  (unbalanced quoted string) if so -- same fix shape as the other
+  three instances.
+- **Verified**: standalone repro extracting the exact function body
+  (gated `#ifdef FIXED`) -- buggy version is a clean `AddressSanitizer:
+  heap-buffer-overflow ... READ of size 1` on a 3-byte allocation
+  (`"\` + NUL); fixed version returns `NULL` cleanly, matching the
+  intended "unbalanced quoted string" semantics. Full clean rebuild
+  (plain and `ASAN=1`), 0 warnings, 25/25 smoketests both times.
+- **Swept and confirmed safe** (no fix needed, same "peek/skip
+  unconditionally" shape but already correctly guarded or provably
+  bounded): `pico/search.c`'s `pat[0]=='\\'` (uses `strcmp`, safe
+  regardless of what follows); `bezerk.c`'s `bezerk_getflags()`
+  (backslash-then-`switch` falls to `default: i=0` on NUL, and the
+  `if (i && ...)` short-circuits before any further dereference);
+  `pine/folder.c` and `pine/init.c`'s `*p=='\\' && *(p+1)=='"'` sites
+  (peek is always at most the NUL terminator itself, never past it);
+  and `rfc822_skipws()`'s own two backslash sites in comment-parsing
+  (both already explicitly check for NUL immediately after the
+  escape-skip before continuing). These confirm the bug wasn't a
+  systemic style issue in this codebase, just four genuine oversights
+  in the address-parsing code specifically.
+- Not added as a fifth harness-1 corpus regression seed under its own
+  name since the input is a near-duplicate of the existing
+  `regress_trailing_backslash_address`/`regress_trailing_backslash_quote`
+  seeds' shape; covered instead by the extended re-fuzzing run
+  described below, which exercises this code path directly.
+
+### Bonus find while re-verifying the above: unsigned-underflow SEGV in `rfc822_parse_content()`'s multipart boundary scanner on a completely empty part
+
+Found incidentally while re-running the fuzz harnesses to confirm the
+backslash audit fix above hadn't regressed anything -- a new,
+unrelated (non-backslash) crash surfaced in `rfc822_fuzz` after
+~162,000 execs (needed `ASAN_OPTIONS=detect_leaks=0` first, since an
+unrelated small leak was otherwise halting the run early).
+
+- **Root cause**: the multipart boundary-scanning state machine tracks
+  `m = GETPOS(bs); if (m) m--;` at the top of each scan iteration --
+  "position just before the current line" -- and uses it in two places
+  to compute a just-finished part's size: `part->body.size.bytes = m -
+  part->offset`. Both are an unsigned subtraction with no check that
+  `m >= part->offset`. For a completely empty part (two boundary
+  markers back-to-back with nothing between them), `GETPOS(bs)` at the
+  start of processing the *second* boundary line equals `part->offset`
+  exactly, so `m` becomes `part->offset - 1` -- one less. The
+  subtraction underflows to a value near `ULONG_MAX`, and that bogus
+  size later drives a header-collection scan loop far past the real
+  buffer, eventually segfaulting (observed at varying call depths --
+  inside `strcrlflen()`, or directly in the scan loop -- depending on
+  heap layout/ASLR).
+- Minimized (via `-minimize_crash=1`) to a 71-byte, **deterministic,
+  standalone-reproducible** input (unlike the earlier heap-corruption
+  leads, this one crashes the same way every time):
+  ```
+  MIME-Version:
+  Content-Type:multipart;boundary="BOUND"
+
+  --BOUND
+  --BOUND
+  ```
+  Confirmed via careful single-gdb-session tracing of the exact
+  underflowing values: `i = 18446744073709551607`, `part->offset = 8`,
+  `part->body.size.bytes = 18446744073709551615`.
+- **Fixed** at both sites that compute a part's size from `m -
+  part->offset` (the two-dashes/end-of-parts case, and the newline
+  case): clamp to 0 when `m <= part->offset`, since a part that starts
+  and ends at the same position is legitimately empty. Left a third,
+  similar-looking site (`part->body.size.bytes = GETPOS (bs) -
+  part->offset` after the whole scan loop ends) unchanged -- that one
+  uses `GETPOS(bs)` directly with no `m--` adjustment, so it's always
+  monotonically >= `part->offset` and can't underflow.
+- **Verified**: standalone repro isolating the arithmetic and its
+  consequence (gated `#ifdef FIXED`) -- buggy version aborts under
+  ASan (redzone corruption from scanning past a 1-byte allocation with
+  an underflowed byte count); fixed version computes 0 bytes and
+  touches nothing out of bounds. Full clean rebuild (plain and
+  `ASAN=1`), 0 warnings, 25/25 smoketests both times. Re-ran both fuzz
+  harnesses at length with all of this session's fixes in place:
+  `rfc822_fuzz` ran **58.2 million** execs in ~9 minutes with zero
+  crashes; `adrlist_fuzz` ran **51.5 million** with zero crashes.
+  Added the 71-byte minimized input as a permanent regression seed
+  (`fuzz/corpus/rfc822/regress_multipart_empty_part_underflow`).
+
+### Sweep for the general "walk a string pointer, unconditionally advance past a peeked/skipped character" bug shape outside email-parsing code
+
+All of harness 1's finds so far shared one shape: a loop walks a
+pointer over a NUL-terminated string, and on hitting some special
+character (backslash, `%`, a boundary marker) unconditionally advances
+the pointer again -- without checking whether that character was the
+last one before the terminator -- reading or writing one byte past the
+allocation. Swept the rest of the codebase (`pine/`, `pico/`, and the
+in-scope `c-client` files -- confirmed via each `makefile.lnx`'s object
+list which files are actually compiled here, since a few files like
+`phile.c`/`smtp.c` and other-platform `os-*.c` variants aren't) for
+the same shape, independent of the fuzz harnesses (which only cover
+`rfc822_parse_msg()`), since command-line arguments and interactive
+input reach a lot of code the fuzzers don't.
+
+- **Found and fixed, in `pine/init.c`'s `expand_variables()`** (expands
+  `$VAR`/`${VAR}` and a leading `~` in any pine variable's value --
+  reached at startup for `-sort`'s argument via `init_vars()`'s
+  unconditional `set_current_val(vars, V_SORT_KEY, TRUE)`, and more
+  generally for `.pinerc`-sourced values before that parsing was
+  dropped, see `TODO-pdp11-done.md`'s "simplify read_pinerc()" entry):
+    - The `$VAR`/`${VAR}` case did `while (isalnum(*src)) *p++ =
+      *src++;` copying into `char word[128]` with **no bound at all**
+      -- a `-sort` argument containing `$` followed by 128+ alnum
+      characters overflows `word[]`. Confirmed with a real
+      `AddressSanitizer: stack-buffer-overflow` (`WRITE of size 1`,
+      overflowing `word` at line 444) via `bin/pine -sort
+      '$AAAA...(300 A's)...'`. Fixed by capping the copy at
+      `sizeof(word)-1` and returning `NULL` if it doesn't fit -- an
+      already-well-exercised "expansion failed" path, since every
+      caller of `expand_variables()` already falls back cleanly (see
+      `set_current_val()`, and `cpystr(NULL)` returning `NIL`).
+    - The `~` case's own local `char buf[MAXPATH]` copy had the exact
+      same missing bound (`for(i = 0; src[i] && src[i] != '/'; i++)
+      buf[i] = src[i];`). Fixed the same way (bail out with `NULL` if
+      it doesn't fit).
+- **Found and fixed, in `pine/osdep/fnexpand`** (the source fragment
+  for `fnexpand()`, assembled into `pine/os.c` -- see CLAUDE.md's
+  "generated files" note; **do not edit `pine/os.c` directly**, it's a
+  gitignored symlink to the real, tracked, generated
+  `pine/osdep/os-lnx.c`): the `~username` expansion's own scratch copy
+  -- `for(x = buf+1, y = name; *x != '/' && *x != '\0'; *y++ = *x++);`
+  -- into `char name[20]` with no bound. This is reached one call
+  further in from the `buf[MAXPATH]` fix above (`expand_variables()`'s
+  `~` case calls `fnexpand(buf, MAXPATH)`), and is **much more easily
+  triggered**: any `~`-prefixed value with 20+ non-slash characters
+  (not 4095+, like `buf[MAXPATH]` needs) smashes `name[20]` first.
+  Confirmed with a second real `AddressSanitizer: stack-buffer-
+  overflow` (`name` at `os.c:361`, called from `expand_variables()`)
+  via `bin/pine -sort '~BBBB...(2000 B's)...'`. Fixed by capping the
+  write into `name[]` at `sizeof(name)-1` while still letting the scan
+  pointer (`x`) advance to the *true* end of the username (needed
+  correctness-wise: `x - buf` is used afterward to know how much of
+  `buf` to replace, and `x == buf + 1` distinguishes the "no username,
+  just `~/...`" case) -- an oversized username now just fails the
+  `getpwnam()` lookup like any other unknown username, instead of
+  overflowing.
+- **Process note worth remembering**: this investigation started by
+  trying to verify these fixes with `ASAN=1 ./build lnx` (as done for
+  every earlier fix this session) and getting a clean-looking build
+  that turned out to have **no ASan instrumentation at all** --
+  `ASAN=1` as a shell *environment* variable is silently overridden by
+  `pine/makefile.lnx`'s/`pico/makefile.lnx`'s own `ASAN=` assignment
+  (make doesn't honor environment overrides of makefile-set variables
+  without `-e`). The correct invocation, matching the makefile's own
+  documented comment, is `./build lnx ASAN=1` (an argument *to*
+  `./build`, forwarded as a `make` argument). Re-verified this
+  session's earlier `rfc822.c` fixes are unaffected by this mixup --
+  their real verification always went through `fuzz/build.sh` (which
+  invokes `-fsanitize=address` directly, not through this makefile
+  path) -- but any future "full-project ASAN=1 build" verification
+  step should double-check `ldd bin/pine | grep asan` actually shows
+  `libasan`, not just trust a clean-looking build log.
+- **Also found, and fixed at the root rather than chasing every
+  caller**: `pico/display.c`'s `mlwrite()` and `emlwrite()` (the
+  message-line and centered-error-message writers, used from ~140 call
+  sites across `pine/`/`pico/`) both scan their `fmt`/`message`
+  argument for `%c`/`%d`/`%D`/`%o`/`%x`/`%s`/`%%` escapes, and both had
+  the same trailing-`%` bug: on hitting `%`, each unconditionally reads
+  one more character (`switch(*++bufp)` in `emlwrite()`; `c = *fmt++;`
+  in `mlwrite()`) and then falls into an unconditional further advance
+  (the shared loop's own `bufp++`/`*fmt++`) regardless of what that
+  character was -- if `%` was the last character before the string's
+  NUL terminator, the second advance reads past it. Checked all ~140
+  call sites for whether any could plausibly pass a message/format
+  ending in a bare trailing `%` (the *only* way to trigger this --
+  `%s`-substituted `arg` content is inert data to these functions'
+  own scanner, never rescanned for further `%` sequences): several
+  compose a message dynamically via `sprintf()` first
+  (`pico/random.c`, `pico/os_unix.c`, `pico/file.c`,
+  `pico/composer.c`), but all of those have fixed trailing text after
+  any embedded dynamic content -- except `pico/composer.c:1909`, whose
+  `sprintf(s, "%s field: %s", ..., errmsg)` ends directly on `errmsg`.
+  Traced that to `(*Pmaster->buildaddr)()`, which in this fork is
+  `pico/compose_stub.c`'s `compose_buildaddr()` -- it unconditionally
+  `return(0)` (success), so the `retval == -1` branch containing this
+  call is dead code in the current build. **No currently-reachable
+  call site was found**, so this is a proactive fix (matching the
+  project's practice of hardening a shared function once the same
+  bug shape turns up in it, rather than only patching demonstrated-
+  reachable instances) rather than a demonstrated live crash. Fixed
+  both by checking for a NUL immediately after consuming the `%`, and
+  `break`-ing out of the scan loop if so (mirrors this session's
+  other trailing-escape-character fixes).
+- **Verified**: standalone repros extracting the vulnerable logic
+  (gated `#ifdef FIXED`) for both the `expand_variables()`/`fnexpand()`
+  family and the `mlwrite()`/`emlwrite()` family -- buggy versions are
+  clean `AddressSanitizer: stack-buffer-overflow` reports; fixed
+  versions run clean. The `expand_variables()`/`fnexpand()` fixes were
+  additionally confirmed via a real `bin/pine -sort ...` invocation
+  under a correctly-instrumented ASan build (see the process note
+  above), both before (real crash, full stack trace) and after (clean,
+  reaches `MAIN MENU` or exits normally). Full clean rebuild (plain and
+  correctly-invoked `ASAN=1`), 0 warnings both times (one pre-existing,
+  unrelated `-Wformat-overflow=` warning in `pico/random.c` -- a
+  `sprintf` into a fixed `buffer[80]` that only surfaces under
+  `ASAN=1`'s different codegen -- noted as a new TODO item rather than
+  fixed here, since it's a buffer-sizing issue, not this sweep's
+  pointer-walk shape), 26/26 smoketests both times. Added
+  `test/cases/test_sort_key_expand_overflow.py`, exercising both the
+  `word[128]` and `name[20]` overflows through a real `bin/pine -sort
+  ...` invocation each.
+
 ### Remove dead c-client search infrastructure (`mail_search`/`bezerk_search`)
 
 `mail_search()` (`imap/ANSI/c-client/mail.c`) is c-client's

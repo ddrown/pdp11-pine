@@ -358,7 +358,15 @@ fnexpand(buf, len)
     char name[20];
     
     if(*buf == '~') {
-        for(x = buf+1, y = name; *x != '/' && *x != '\0'; *y++ = *x++);
+			/* name is fixed-size -- x still walks the
+			   whole ~username to find where it ends (for
+			   x - buf below), but stop writing into name
+			   once it's full so an oversized username
+			   can't overflow it; getpwnam() on the
+			   resulting truncated name will just fail to
+			   match, same as any other unknown username */
+        for(x = buf+1, y = name; *x != '/' && *x != '\0'; x++)
+          if (y < name + sizeof(name) - 1) *y++ = *x;
         *y = '\0';
         if(x == buf + 1) 
           pw = getpwuid(getuid());
