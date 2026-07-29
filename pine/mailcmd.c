@@ -67,7 +67,6 @@ MESSAGECACHE      *closest_not_deleted(MAILSTREAM *, long, long);
 int                save(char *, CONTEXT_S *, MESSAGECACHE *, long);
 void               select_sort(int);
 struct attachment *attachments(int, long);
-char              *mcdate2ctime(MESSAGECACHE *);
 int                display_attachment(long, struct attachment *);
 void               save_attachment(int, long, struct attachment *);
 void		   display_text_att(long, struct attachment *);
@@ -467,17 +466,14 @@ do_index:
 do_jump:
           if(ps_global->max_msgno <= 0L) {
               q_status_message(0, 0, 2,
-			       (command == 'j' || command == OOPF7 
-				|| (command >= '0' && command <= '9'))
-			       ? "\007No messages to jump to" 
+			       (command == 'j' || command == OOPF7)
+			       ? "\007No messages to jump to"
 			       : "\007No messages to search");
               break;
           }
 
-          new_sorted_mess_num = (command == 'j' || command == OOPF7 
-	    || command == PF10 || (command >= '0' && command <= '9'))
-	      ? jump_to(question_line,
-			(command >= '0' && command <= '9') ? command : '\0')
+          new_sorted_mess_num = (command == 'j' || command == OOPF7)
+	      ? jump_to(question_line)
 	      : search_headers(question_line, current_sorted_msgno,
 			     ps_global->max_msgno);
           ps_global->mangled_footer = 1;
@@ -1106,9 +1102,7 @@ export_message(q_line, sorted_msgno)
           the mangled_footer flag is set
  ----*/
 long
-jump_to(qline, first_num)
-     int qline;
-     int first_num;
+jump_to(int qline)
 {
     char     jump_num_string[80], *j, prompt[70];
     HelpType help;
@@ -1116,12 +1110,7 @@ jump_to(qline, first_num)
     long     jump_num;
 
 
-    if(first_num){
-	jump_num_string[0] = first_num;
-	jump_num_string[1] = '\0';
-    }
-    else
-      jump_num_string[0] = '\0';
+    jump_num_string[0] = '\0';
 
     strcpy(prompt, "Message number to jump to : ");
     help = NO_HELP;
@@ -2311,18 +2300,3 @@ display_text_att(msgno, a)
 
 }
 
-
-
-/* This isn't quite ctime, because it doesn't have the \n */
-
-char *
-mcdate2ctime(m)
-     MESSAGECACHE *m;
-{
-    static char date[30];
-
-    sprintf(date, "Xxx %s %2d %02d:%02d:%02d %04d",
-    month_abbrev(m->month), m->day, m->hours, m->minutes, m->seconds,
-	    m->year + BASEYEAR);
-    return(date);
-}

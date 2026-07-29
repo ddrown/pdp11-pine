@@ -739,7 +739,7 @@ char **parse_list(char *, int, char **);
 int   process_cmd(int, int, int, int *);
 int   save_msg(int, MESSAGECACHE *, int *, long);
 char *detach(long, BODY *, char *, long *, gf_io_t, filter_t *);
-long  jump_to(int, int);
+long  jump_to(int);
 char *broach_folder(int, int, CONTEXT_S **);
 int   do_broach_folder(char *, CONTEXT_S *);
 void  expunge_and_close(MAILSTREAM *, char *);

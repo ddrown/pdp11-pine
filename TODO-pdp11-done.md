@@ -6741,3 +6741,77 @@ not-built files elsewhere in the tree.
   per the harness's own reminder) confirms no size change from
   baseline -- `bin/pine` text still 278717 bytes, as expected for a
   test-only addition with no source changes to `pine/folder.c` itself.
+
+### `pine/mailcmd.c` low-coverage investigation -- one dead function and one dead-fallout collapse found, plus Jump/Search coverage
+
+- [x] Continuation of the same coverage-investigation TODO item, next
+      file after `folder.c` above. `mailcmd.c` was flagged as worth a
+      fresh look post-F_*-collapse since `process_cmd()` was that
+      cut's biggest single beneficiary. `gcov -f` per-function
+      breakdown found two real, confirmed-dead items (this file had
+      already been through its own dead/vestigial sweep earlier, so
+      these are fresh fallout from the *later* F_* collapse, not
+      leftovers that sweep should have caught):
+      - **`mcdate2ctime()`**: a small `MESSAGECACHE` -> ctime-style
+        date-string formatter, 16 lines including its comment.
+        `grep -rn "mcdate2ctime"` across `pine/` and `imap/` turned up
+        only its own forward prototype and definition -- zero callers
+        anywhere in the built tree. Deleted outright, prototype and
+        all.
+      - **`jump_to()`'s dead `first_num` parameter, and its call
+        site's leftover digit/PF10 checks**: the F_* collapse (see
+        this file's own earlier phase-1 entry) deleted the `case '0':`
+        .. `case '9':` labels that used to fall into the shared
+        `do_jump:` label so a typed digit could seed the Jump prompt
+        with that digit already entered, and deleted `search_headers`'s
+        `F_ENABLE_JUMP` guard along with it. What that cut *didn't*
+        clean up: three residual checks at the `do_jump:` call site
+        still tested `command >= '0' && command <= '9'` (twice) and
+        `command == PF10` (once) to decide whether to call `jump_to()`
+        or `search_headers()`, and what to seed `jump_to()`'s
+        `first_num` with -- but `do_jump:` is now only ever reached by
+        falling through from `case OPF8: case 'w': case OOPF7: case
+        'j':`, and `PF10` is a *different*, non-fallthrough case block
+        entirely (`case PF10: case 'u':`, Undelete, terminated by its
+        own `break`). So `command` can never be a digit or `PF10` by
+        the time either check runs -- both were provably-dead
+        conditions, confirmed by reading every `case` label between
+        the two points, not just guessed from the F_* history.
+        Collapsed the three-way disjunction down to
+        `command == 'j' || command == OOPF7` at both call-site checks,
+        dropped `jump_to()`'s now-always-`'\0'` `first_num` parameter
+        entirely (and its prototype in `pine.h`), and collapsed the
+        function body's `if(first_num){...} else jump_num_string[0] =
+        '\0';` to the unconditional else-branch. Converted `jump_to()`'s
+        signature to ANSI style while touching it (`pine/CLAUDE.md`'s
+        standing opportunistic-conversion guidance).
+- **What changed**: `pine/mailcmd.c` (function deletion + the
+  `jump_to()`/call-site collapse above), `pine/pine.h` (`jump_to()`
+  prototype updated to match). Also added
+  `test/cases/test_index_jump_and_search.py`, driving the FOLDER
+  INDEX's Jump (`'j'`) and Search (`'w'`, "where is") commands live
+  through a real pty -- both exercise the exact code just collapsed,
+  and neither had any prior smoketest coverage.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite 27/27 (was 26/26) with the new test added.
+  Also drove Jump manually outside the harness (jump to message 3 of
+  3, confirmed the real message text/subject/body came up) to double-
+  check the collapsed logic before trusting the automated test alone.
+  `python3 test/run_smoketests.py --coverage`: `mailcmd.c` 24.4%
+  (265/1086) -> 29.1% (313/1075) -- note the *denominator* also
+  dropped (1086 -> 1075 lines), confirming real code left the file,
+  not just a numerator change from added tests; whole-suite total
+  46.2% (4006/8670) -> 46.9% (4063/8659).
+- **Size delta**: `bin/pine` text 278717 -> 278309 bytes (-408 bytes),
+  `bss` 18888 -> 18856 (-32 bytes), `data` unchanged. Small but real,
+  and -- unlike the `folder.c` entry above -- this one came from
+  actual source deletion, not just added test coverage.
+- Everything else `gcov -f` flagged as 0%-covered in `mailcmd.c`
+  (`display_text_att`/`display_attachment`/`select_sort`/
+  `search_headers`/`closest_not_deleted`/`broach_folder`/`save`/
+  `save_msg`) has a real, live caller -- attachment viewing, the sort-
+  order screen, header search, post-expunge cursor repositioning, the
+  Goto-folder prompt, and Save-message-to-folder are all genuine
+  reachable features, just not yet exercised by any smoketest. Left
+  as-is for now; `TODO-pdp11.md` still lists `reply.c`/`signals.c`/
+  `ttyin.c` as the remaining files to look at.

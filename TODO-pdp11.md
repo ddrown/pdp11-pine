@@ -84,13 +84,14 @@ DONE elsewhere or referenced in passing below.
       for dead code, found none -- both its dead-code sweep and the
       multi-collection cut already got it -- and added smoketest
       coverage for the Folder List screen instead, 16.1% -> 49.5%).
-      Remaining files, listed as places to go looking, not confirmed
-      cuts:
-    - `mailcmd.c` -- 24.4% (265/1086 lines). Its `process_cmd()` was the
-      biggest single beneficiary of the already-completed `feature-list`
-      (`F_*`) dead-check collapse (see `TODO-pdp11-done.md`); worth
-      re-checking coverage now that those dead branches are gone, since
-      remaining gaps may be a fresher signal than when first measured.
+      `mailcmd.c` is also done (see `TODO-pdp11-done.md`: found one
+      fully-dead function -- `mcdate2ctime()`, zero callers -- and one
+      dead-fallout collapse left behind by the F_* cut's digit-jump
+      removal (`jump_to()`'s always-`'\0'` `first_num` param and three
+      now-unreachable `command`-range checks at its call site); added
+      Jump/Search smoketest coverage; 24.4% -> 29.1%, `bin/pine` text
+      -408 bytes). Remaining files, listed as places to go looking,
+      not confirmed cuts:
     - `reply.c` -- 36.8% (181/492 lines).
     - `signals.c` -- 29.8% (34/114) and `ttyin.c` -- 37.8% (186/492) are
       smaller but also worth a look.
