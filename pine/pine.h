@@ -817,9 +817,6 @@ int   change_passwd(void);
 int   mime_can_display(int, char *, PARAMETER *);
 void  gf_play_sound(FILTER_S *, int, int);
 
-/*--- other.c ---*/
-int  lock_keyboard(void);
-
 /*-- pine.c --*/
 void main_menu_screen(struct pine *);
 void news_screen(struct pine *);

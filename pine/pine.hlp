@@ -128,9 +128,6 @@ Type your password for the host and login shown as part of the prompt.  Press
 ========== h_oe_searchview ==========
 Type the word or name you want to search for and press RETURN.  If you press
 RETURN without entering anything the word in [] will be searched for.
-========== h_oe_keylock ==========
-The keyboard is in use and locked by another user.  Only that user can
-unlock this keyboard by typing the password.
 ========== h_oe_export ==========
 Type the name of file in your home directory to write the mail message into and
 press RETURN.  You may also give an absolute path or use \"~\".  Use ^C to cancel

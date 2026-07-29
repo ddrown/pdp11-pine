@@ -4852,6 +4852,58 @@ used to feed them, all in `pine/init.c` unless noted:
   `bin/pico` unaffected. Combined phase 1 + phase 2 total against the
   pre-cut baseline: text -6424 bytes, data -416 bytes.
 
+### Remove the keyboard-lock feature (`pine/other.c`)
+
+Out-of-scope-feature cut, not a dead-code removal: `pine/other.c`
+implemented "Keyboard Lock" (bound to `k`/PF10 on the main menu),
+which password-locks the terminal until the same password is
+re-entered so another user can't read the current user's mail while
+they're away. Real, reachable code (0% smoketest coverage, but that
+just meant it wasn't tested, not that it was unreachable) -- confirmed
+with the user this doesn't belong on a UUCP-connected, single-user,
+local-mbox PDP-11 mail station, and cut with their explicit go-ahead.
+
+- **What changed**:
+  - `git rm pine/other.c` -- deleted `lock_keyboard()`,
+    `redraw_kl_body()`, `draw_klocked_body()`, `redraw_klocked_body()`
+    entirely.
+  - `pine/pine.c`: removed the `case PF10: case 'k': (void)lock_keyboard();
+    ...` block from the main menu's command dispatch. Blanked the
+    `main_keys[]` keymenu-footer entry that displayed `K KBLock`
+    (index `KBLOCK_KEY` = 9) to `{NULL,NULL,0}`, matching the array's
+    existing pattern for unused footer slots rather than
+    renumbering/shrinking the array (confirmed via grep that
+    `KBLOCK_KEY` itself had no other reader to worry about, unlike
+    `HELP_KEY`/`COMPOSE_KEY`/etc., which are read elsewhere for
+    keymenu highlighting). Removed the now-unused `#define KBLOCK_KEY
+    9` itself.
+  - `pine/pine.h`: removed the `lock_keyboard()` prototype.
+  - `pine/makefile.lnx`: removed `other.c`/`other.o` from `obj=`,
+    `cfiles=`, and the per-object dependency rule.
+  - `pine/pine.hlp` (the real tracked source for generated
+    `helptext.c`/`.h`): removed the `h_oe_keylock` help section, whose
+    only reader was `lock_keyboard()`. Rebuilding regenerates
+    `helptext.c`/`.h` (gitignored) without it -- confirmed via grep
+    post-build.
+  - `pine/ttyout.c`: fixed a now-stale comment above `temp_format`'s
+    declaration that referenced `redraw_klocked_body()`'s
+    `klockame`/`klockin` (previously the one call site the
+    `PutLine1..PutLine5` buffer-size audit had to special-case as
+    "unbounded, but capped by other.c's own 128-byte buffers") -- with
+    `other.c` gone, that exception no longer exists, so simplified the
+    comment to just "none pass unbounded content" instead of leaving a
+    dangling reference to a deleted file.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25. Live pty check (`test/smoketest.py`'s
+  `Session`, ad hoc script): pressing `k` at the main menu no longer
+  shows the "Enter password to LOCK keyboard" prompt or the `K KBLock`
+  footer label -- falls through as an unbound key with no crash, same
+  as any other unmapped key at that screen. Final `grep -rn` sweep for
+  `lock_keyboard|KBLock|KBLOCK_KEY|klockin|klockame|redraw_klocked_body|
+  draw_klocked_body|redraw_kl_body|h_oe_keylock` across `pine/` turned
+  up nothing left.
+- **Size delta**: `bin/pine` text 280791 -> 278717 bytes (-2074 bytes).
+
 ### `pine/mailindx.c` and `pine/pine.c` dead-code sweep -- never-defined-macro cleanup, outside the earlier four-file survey
 
 Neither file was part of the earlier `send.c`/`mailcmd.c`/`folder.c`/
