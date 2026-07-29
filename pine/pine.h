@@ -739,7 +739,7 @@ char **parse_list(char *, int, char **);
 int   process_cmd(int, int, int, int *);
 int   save_msg(int, MESSAGECACHE *, int *, long);
 char *detach(long, BODY *, char *, long *, gf_io_t, filter_t *);
-long  jump_to(int, int);
+long  jump_to(int);
 char *broach_folder(int, int, CONTEXT_S **);
 int   do_broach_folder(char *, CONTEXT_S *);
 void  expunge_and_close(MAILSTREAM *, char *);
@@ -816,9 +816,6 @@ char *local_name_lookup(char *);
 int   change_passwd(void);
 int   mime_can_display(int, char *, PARAMETER *);
 void  gf_play_sound(FILTER_S *, int, int);
-
-/*--- other.c ---*/
-int  lock_keyboard(void);
 
 /*-- pine.c --*/
 void main_menu_screen(struct pine *);

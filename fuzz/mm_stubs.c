@@ -14,7 +14,6 @@
 #include "mail.h"
 #include "osdep.h"
 
-void mm_searched(MAILSTREAM *stream, long number) { }
 void mm_exists(MAILSTREAM *stream, long number) { }
 void mm_expunged(MAILSTREAM *stream, long number) { }
 void mm_flags(MAILSTREAM *stream, long number) { }

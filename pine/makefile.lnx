@@ -81,13 +81,13 @@ endif
 
 obj=    addrutil.o args.o context.o filter.o \
 	folder.o help.o helptext.o init.o mailcmd.o mailindx.o \
-	mailview.o newmail.o other.o pine.o reply.o screen.o \
+	mailview.o newmail.o pine.o reply.o screen.o \
 	send.o signals.o status.o strings.o ttyin.o ttyout.o os.o log.o \
 	mailbox.o
 
 cfiles= addrutil.c args.c context.c filter.c \
 	folder.c help.c helptext.c init.c mailcmd.c mailindx.c \
-	mailview.c newmail.c other.c pine.c reply.c screen.c \
+	mailview.c newmail.c pine.c reply.c screen.c \
 	send.c signals.c status.c strings.c ttyin.c ttyout.c os.c log.c \
 	mailbox.c
 
@@ -122,7 +122,6 @@ mailindx.o:	mailindx.c  $(HEADERS)
 mailview.o:	mailview.c  $(HEADERS)
 newmail.o:	newmail.c   $(HEADERS)
 os.o:		os.c 	    $(HEADERS)
-other.o:	other.c     $(HEADERS)
 pine.o:		pine.c      $(HEADERS)
 reply.o:	reply.c     $(HEADERS)
 screen.o:	screen.c    $(HEADERS)

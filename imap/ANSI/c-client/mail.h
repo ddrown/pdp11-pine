@@ -364,7 +364,6 @@ extern mailcache_t mailcache;
 #ifdef __COMPILER_KCC__
 #define mm_gets mmgets
 #define mm_cache mmcach
-#define mm_searched mmsrhd
 #define mm_exists mmexst
 #define mm_expunged mmexpn
 #define mm_flags mmflag
@@ -407,7 +406,6 @@ extern mailcache_t mailcache;
 #define mail_elt mlelt
 #define mail_setflag mlsflg
 #define mail_clearflag mlcflg
-#define mail_search mlsrch
 #define mail_ping mlping
 #define mail_check mlchck
 #define mail_expunge mlexpn
@@ -418,7 +416,6 @@ extern mailcache_t mailcache;
 #define mail_date mldate
 #define mail_cdate mlcdat
 #define mail_parse_date mlpdat
-#define mail_searched mlsrch
 #define mail_exists mlexist
 #define mail_recent mlrcnt
 #define mail_expunged mlexst
@@ -443,7 +440,6 @@ extern mailcache_t mailcache;
 
 /* Function prototypes */
 
-void mm_searched (MAILSTREAM *stream,long number);
 void mm_exists (MAILSTREAM *stream,long number);
 void mm_expunged (MAILSTREAM *stream,long number);
 void mm_flags (MAILSTREAM *stream,long number);
@@ -489,7 +485,6 @@ MESSAGECACHE *mail_elt (MAILSTREAM *stream,long msgno);
 
 void mail_setflag (MAILSTREAM *stream,char *sequence,char *flag);
 void mail_clearflag (MAILSTREAM *stream,char *sequence,char *flag);
-void mail_search (MAILSTREAM *stream,char *criteria);
 long mail_ping (MAILSTREAM *stream);
 void mail_check (MAILSTREAM *stream);
 void mail_expunge (MAILSTREAM *stream);
@@ -500,7 +495,6 @@ void mail_gc (MAILSTREAM *stream,long gcflags);
 char *mail_date (char *string,MESSAGECACHE *elt);
 char *mail_cdate (char *string,MESSAGECACHE *elt);
 long mail_parse_date (MESSAGECACHE *elt,char *string);
-void mail_searched (MAILSTREAM *stream,long msgno);
 void mail_exists (MAILSTREAM *stream,long nmsgs);
 void mail_recent (MAILSTREAM *stream,long recent);
 void mail_expunged (MAILSTREAM *stream,long msgno);

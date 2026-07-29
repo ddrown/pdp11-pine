@@ -4852,6 +4852,58 @@ used to feed them, all in `pine/init.c` unless noted:
   `bin/pico` unaffected. Combined phase 1 + phase 2 total against the
   pre-cut baseline: text -6424 bytes, data -416 bytes.
 
+### Remove the keyboard-lock feature (`pine/other.c`)
+
+Out-of-scope-feature cut, not a dead-code removal: `pine/other.c`
+implemented "Keyboard Lock" (bound to `k`/PF10 on the main menu),
+which password-locks the terminal until the same password is
+re-entered so another user can't read the current user's mail while
+they're away. Real, reachable code (0% smoketest coverage, but that
+just meant it wasn't tested, not that it was unreachable) -- confirmed
+with the user this doesn't belong on a UUCP-connected, single-user,
+local-mbox PDP-11 mail station, and cut with their explicit go-ahead.
+
+- **What changed**:
+  - `git rm pine/other.c` -- deleted `lock_keyboard()`,
+    `redraw_kl_body()`, `draw_klocked_body()`, `redraw_klocked_body()`
+    entirely.
+  - `pine/pine.c`: removed the `case PF10: case 'k': (void)lock_keyboard();
+    ...` block from the main menu's command dispatch. Blanked the
+    `main_keys[]` keymenu-footer entry that displayed `K KBLock`
+    (index `KBLOCK_KEY` = 9) to `{NULL,NULL,0}`, matching the array's
+    existing pattern for unused footer slots rather than
+    renumbering/shrinking the array (confirmed via grep that
+    `KBLOCK_KEY` itself had no other reader to worry about, unlike
+    `HELP_KEY`/`COMPOSE_KEY`/etc., which are read elsewhere for
+    keymenu highlighting). Removed the now-unused `#define KBLOCK_KEY
+    9` itself.
+  - `pine/pine.h`: removed the `lock_keyboard()` prototype.
+  - `pine/makefile.lnx`: removed `other.c`/`other.o` from `obj=`,
+    `cfiles=`, and the per-object dependency rule.
+  - `pine/pine.hlp` (the real tracked source for generated
+    `helptext.c`/`.h`): removed the `h_oe_keylock` help section, whose
+    only reader was `lock_keyboard()`. Rebuilding regenerates
+    `helptext.c`/`.h` (gitignored) without it -- confirmed via grep
+    post-build.
+  - `pine/ttyout.c`: fixed a now-stale comment above `temp_format`'s
+    declaration that referenced `redraw_klocked_body()`'s
+    `klockame`/`klockin` (previously the one call site the
+    `PutLine1..PutLine5` buffer-size audit had to special-case as
+    "unbounded, but capped by other.c's own 128-byte buffers") -- with
+    `other.c` gone, that exception no longer exists, so simplified the
+    comment to just "none pass unbounded content" instead of leaving a
+    dangling reference to a deleted file.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25. Live pty check (`test/smoketest.py`'s
+  `Session`, ad hoc script): pressing `k` at the main menu no longer
+  shows the "Enter password to LOCK keyboard" prompt or the `K KBLock`
+  footer label -- falls through as an unbound key with no crash, same
+  as any other unmapped key at that screen. Final `grep -rn` sweep for
+  `lock_keyboard|KBLock|KBLOCK_KEY|klockin|klockame|redraw_klocked_body|
+  draw_klocked_body|redraw_kl_body|h_oe_keylock` across `pine/` turned
+  up nothing left.
+- **Size delta**: `bin/pine` text 280791 -> 278717 bytes (-2074 bytes).
+
 ### `pine/mailindx.c` and `pine/pine.c` dead-code sweep -- never-defined-macro cleanup, outside the earlier four-file survey
 
 Neither file was part of the earlier `send.c`/`mailcmd.c`/`folder.c`/
@@ -6868,3 +6920,183 @@ input reach a lot of code the fuzzers don't.
   `test/cases/test_sort_key_expand_overflow.py`, exercising both the
   `word[128]` and `name[20]` overflows through a real `bin/pine -sort
   ...` invocation each.
+
+### Remove dead c-client search infrastructure (`mail_search`/`bezerk_search`)
+
+`mail_search()` (`imap/ANSI/c-client/mail.c`) is c-client's
+IMAP-SEARCH-style criteria engine -- given a criteria string like
+`"FROM foo SINCE 1-Jan-2000"`, it walks the mailbox marking messages
+that match. Grepped every `pine/*.c` file: zero callers anywhere in
+the built tree. Pine's own WhereIs feature is a separate, in-memory
+text search over already-rendered screen content and never calls into
+this c-client subsystem. That made the whole chain dead:
+`mail_search()`/`mail_searched()` in `mail.c`; `bezerk_search()` and
+its ~24 helper predicates in `bezerk.c` (`bezerk_search_all`,
+`_answered/_deleted/_flagged/_keyword/_new/_old/_recent/_seen` and
+their `un*` negations, `_before/_on/_since` date predicates,
+`_body/_subject/_text/_bcc/_cc/_from/_to` string predicates, plus the
+`bezerk_search_date`/`_flag`/`_string` helper-generator functions and
+the `search_t` function-pointer typedef); and pine's own `mm_searched()`
+callback stub in `pine/mailbox.c` (its doc comment already said
+"Result: nothing, not used by pine" -- a leftover hint from the
+original UW code that this had already gone unused).
+`phile.c` -- the only other caller of `mail_searched()` in the c-client
+source tree -- isn't built by `makefile.lnx` at all, so nothing outside
+this now-deleted chain touched any of it. `pine/pine.def` (a DOS/OS2
+`pcpine` module-definition file, unrelated to `makefile.lnx`) and
+`imap/ANSI/c-client/Internal.DOC` still mention these symbols, but
+neither is compiled or generated from source -- left untouched as
+historical/foreign-platform artifacts, same treatment as other
+not-built files elsewhere in the tree.
+
+- **What changed**:
+  - `imap/ANSI/c-client/bezerk.c`: deleted `bezerk_search()` (with its
+    comment block and the page-break form-feed preceding it) and the
+    entire trailing `bezerk_search_*` predicate block through end of
+    file (342 lines total).
+  - `imap/ANSI/c-client/bezerk.h`: removed the matching 27 prototypes
+    and the `search_t` typedef.
+  - `imap/ANSI/c-client/mail.c`: deleted `mail_search()` and
+    `mail_searched()`.
+  - `imap/ANSI/c-client/mail.h`: removed `mail_search`/`mail_searched`/
+    `mm_searched` macro aliases and prototypes (the `mm_searched`
+    prototype became dead too, once `mail_searched()` -- its only
+    caller anywhere in the built tree -- was gone).
+  - `pine/mailbox.c`: deleted the now-uncallable `mm_searched()`
+    callback implementation.
+  - `fuzz/mm_stubs.c`: dropped the matching `mm_searched()` stub (the
+    fuzz harness links against `c-client.a`, which no longer has any
+    undefined reference to it).
+  - Several deletions landed on lines with literal form-feed (`^L`)
+    page-break characters that broke the `Edit` tool's exact-string
+    matching (a recurring friction point in this codebase's older
+    files) -- used `sed` with explicit line ranges (verified via
+    `cat -A`) instead, same fallback as past cuts.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite, 25/25. Final `grep -rn` sweep for
+  `mail_search|bezerk_search|mm_searched|mail_searched` across
+  `pine/`, `imap/ANSI/c-client/`, and `fuzz/` turned up nothing left
+  in the built tree.
+- **Size delta**: `bin/pine` text 285736 -> 280791 bytes, a 4945-byte
+  reduction. `bezerk.o` had been the single largest c-client object
+  file (25KB text, bigger even than `rfc822.o`'s 17KB) specifically
+  because of this dead search engine; this cut is a real code-size win,
+  not just source hygiene.
+
+### `pine/folder.c` low-coverage investigation -- no dead code found, added Folder List screen coverage instead
+
+- [x] `TODO-pdp11.md`'s "Investigation targets: low-smoketest-coverage
+      files" flagged `folder.c` at 16.1% (132/822 lines) as the
+      lowest-coverage, largest non-trivial source file in the tree, to
+      be checked (not assumed) for removable dead code -- same
+      per-site grep-confirm treatment as every other cut in this file.
+      Ran `gcov -f` for a per-function breakdown: every 0%-covered
+      function was part of the Folder List screen (`folder_lister()`,
+      321 lines, plus `add_new_folder()`/`rename_folder()`/
+      `delete_folder()`/`search_folders()`/`create_folder_display()`/
+      `display_folder()`/`folder_list_entry()`/etc.) -- bound to `'l'`/
+      `OPF5` from both the main menu (`pine.c`) and the message index
+      (`mailcmd.c`), a real, reachable single-collection folder
+      browser, not dead code.
+      This file had already been through two dedicated size-reduction
+      passes (a general dead/vestigial-code sweep, and the later
+      multi-collection-navigation cut that removed cross-collection
+      browsing, the incoming-folders pseudo-collection, and several
+      branches those cuts made provably dead). Read `folder_lister()`
+      in full plus its six largest helpers looking for anything either
+      earlier pass missed -- found nothing: no unreachable branches,
+      no leftover `CNTXT_*`/collection state, no IMAP/news remnants
+      (already fully gone). Conclusion: the coverage gap here is
+      exactly what the TODO predicted going in -- untested interactive
+      UI, not a removal candidate.
+- **What changed**: added `test/cases/test_folder_list_screen.py`,
+  driving the Folder List screen end to end through a real pty:
+  opening it from the main menu; both navigation-boundary messages
+  (`ctrl('B')`/`'p'` and `ctrl('F')`/`'n'`'s "Already on first/last
+  folder" cases); add/rename/delete a folder (`add_new_folder()`/
+  `rename_folder()`/`delete_folder()`, including clearing
+  `rename_folder()`'s prefilled-name field with `^A`/`^K` since typing
+  over it appends rather than replacing); and selecting a folder to
+  open it (the `do_broach_folder()` branch, landing in FOLDER INDEX).
+- **Verified**: full smoketest suite 26/26 (was 25/25) with the new
+  test added. `python3 test/run_smoketests.py --coverage`:
+  `folder.c` 16.1% (132/822) -> 49.5% (407/822); whole-suite total
+  42.5% (3683/8670) -> 46.2% (4006/8670). `./build clean && ./build
+  lnx` afterwards (coverage instrumentation inflates the binary,
+  per the harness's own reminder) confirms no size change from
+  baseline -- `bin/pine` text still 278717 bytes, as expected for a
+  test-only addition with no source changes to `pine/folder.c` itself.
+
+### `pine/mailcmd.c` low-coverage investigation -- one dead function and one dead-fallout collapse found, plus Jump/Search coverage
+
+- [x] Continuation of the same coverage-investigation TODO item, next
+      file after `folder.c` above. `mailcmd.c` was flagged as worth a
+      fresh look post-F_*-collapse since `process_cmd()` was that
+      cut's biggest single beneficiary. `gcov -f` per-function
+      breakdown found two real, confirmed-dead items (this file had
+      already been through its own dead/vestigial sweep earlier, so
+      these are fresh fallout from the *later* F_* collapse, not
+      leftovers that sweep should have caught):
+      - **`mcdate2ctime()`**: a small `MESSAGECACHE` -> ctime-style
+        date-string formatter, 16 lines including its comment.
+        `grep -rn "mcdate2ctime"` across `pine/` and `imap/` turned up
+        only its own forward prototype and definition -- zero callers
+        anywhere in the built tree. Deleted outright, prototype and
+        all.
+      - **`jump_to()`'s dead `first_num` parameter, and its call
+        site's leftover digit/PF10 checks**: the F_* collapse (see
+        this file's own earlier phase-1 entry) deleted the `case '0':`
+        .. `case '9':` labels that used to fall into the shared
+        `do_jump:` label so a typed digit could seed the Jump prompt
+        with that digit already entered, and deleted `search_headers`'s
+        `F_ENABLE_JUMP` guard along with it. What that cut *didn't*
+        clean up: three residual checks at the `do_jump:` call site
+        still tested `command >= '0' && command <= '9'` (twice) and
+        `command == PF10` (once) to decide whether to call `jump_to()`
+        or `search_headers()`, and what to seed `jump_to()`'s
+        `first_num` with -- but `do_jump:` is now only ever reached by
+        falling through from `case OPF8: case 'w': case OOPF7: case
+        'j':`, and `PF10` is a *different*, non-fallthrough case block
+        entirely (`case PF10: case 'u':`, Undelete, terminated by its
+        own `break`). So `command` can never be a digit or `PF10` by
+        the time either check runs -- both were provably-dead
+        conditions, confirmed by reading every `case` label between
+        the two points, not just guessed from the F_* history.
+        Collapsed the three-way disjunction down to
+        `command == 'j' || command == OOPF7` at both call-site checks,
+        dropped `jump_to()`'s now-always-`'\0'` `first_num` parameter
+        entirely (and its prototype in `pine.h`), and collapsed the
+        function body's `if(first_num){...} else jump_num_string[0] =
+        '\0';` to the unconditional else-branch. Converted `jump_to()`'s
+        signature to ANSI style while touching it (`pine/CLAUDE.md`'s
+        standing opportunistic-conversion guidance).
+- **What changed**: `pine/mailcmd.c` (function deletion + the
+  `jump_to()`/call-site collapse above), `pine/pine.h` (`jump_to()`
+  prototype updated to match). Also added
+  `test/cases/test_index_jump_and_search.py`, driving the FOLDER
+  INDEX's Jump (`'j'`) and Search (`'w'`, "where is") commands live
+  through a real pty -- both exercise the exact code just collapsed,
+  and neither had any prior smoketest coverage.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite 27/27 (was 26/26) with the new test added.
+  Also drove Jump manually outside the harness (jump to message 3 of
+  3, confirmed the real message text/subject/body came up) to double-
+  check the collapsed logic before trusting the automated test alone.
+  `python3 test/run_smoketests.py --coverage`: `mailcmd.c` 24.4%
+  (265/1086) -> 29.1% (313/1075) -- note the *denominator* also
+  dropped (1086 -> 1075 lines), confirming real code left the file,
+  not just a numerator change from added tests; whole-suite total
+  46.2% (4006/8670) -> 46.9% (4063/8659).
+- **Size delta**: `bin/pine` text 278717 -> 278309 bytes (-408 bytes),
+  `bss` 18888 -> 18856 (-32 bytes), `data` unchanged. Small but real,
+  and -- unlike the `folder.c` entry above -- this one came from
+  actual source deletion, not just added test coverage.
+- Everything else `gcov -f` flagged as 0%-covered in `mailcmd.c`
+  (`display_text_att`/`display_attachment`/`select_sort`/
+  `search_headers`/`closest_not_deleted`/`broach_folder`/`save`/
+  `save_msg`) has a real, live caller -- attachment viewing, the sort-
+  order screen, header search, post-expunge cursor repositioning, the
+  Goto-folder prompt, and Save-message-to-folder are all genuine
+  reachable features, just not yet exercised by any smoketest. Left
+  as-is for now; `TODO-pdp11.md` still lists `reply.c`/`signals.c`/
+  `ttyin.c` as the remaining files to look at.

@@ -998,8 +998,7 @@ PutLine0n8b(x, y, line, length)
 
 /*
  * Audited every PutLine1..PutLine5 call site (none pass unbounded
- * content except redraw_klocked_body()'s klockame/klockin, now capped
- * at other.c's klockin[128]/klockame[128]): worst real case is
+ * content): worst real case is
  * screen.c's "%s of %s %3d%% %s%s" (update_titlebar_message) at
  * comatose()<=~13 + comatose()<=~13 + "%3d"<=3 + BAR_STATUS()<=3 +
  * repeat_char()<=511 (its own hard internal cap) plus ~20 bytes of

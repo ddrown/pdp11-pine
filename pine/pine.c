@@ -115,7 +115,7 @@ static struct key main_keys[] =
        {{"?","Help",0},        {"O","OTHER CMDS",0},  {NULL,NULL,0},    
         {NULL,NULL, 0},        {"P","PrevCmd",0},     {"N","NextCmd",0},
 	{NULL,NULL,0},         {NULL,NULL,0},         {"R","RelNotes",0},
-	{"K","KBLock",0},      {NULL,NULL,0},         {NULL,NULL,0},
+	{NULL,NULL,0},         {NULL,NULL,0},         {NULL,NULL,0},
 	{"?","Help",0},        {"O","OTHER CMDS",0},  {"Q","Quit",0},
         {"C","Compose",0},     {"L","ListFldrs",0},   {"G","GotoFldr",0},
 	{"I","Index",0},       {NULL,NULL,0},         {"S","Setup",0},
@@ -125,7 +125,6 @@ static struct key_menu main_keymenu =
 #define HELP_KEY         0
 #define OTHER_KEY        1
 #define DEFAULT_KEY      3
-#define KBLOCK_KEY       9
 #define HELP_KEY2        12
 #define OTHER_KEY2       13
 #define QUIT_KEY         14
@@ -601,14 +600,6 @@ main_menu_screen(pine_state)
 	  case PF9:
 	  case 'r':
 	    helper(h_news, "NEWS ABOUT PINE", 0);
-	    pine_state->mangled_screen = 1;
-	    break;
-
-          /*---------- Keyboard lock ----------*/
-	  case PF10:
-	  case 'k':
-            (void)lock_keyboard();
-	    ClearScreen();
 	    pine_state->mangled_screen = 1;
 	    break;
 

@@ -662,20 +662,6 @@ void mail_clearflag (MAILSTREAM *stream,char *sequence,char *flag)
 }
 
 
-/* Mail search for messages
- * Accepts: mail stream
- *	    search criteria
- */
-
-void mail_search (MAILSTREAM *stream,char *criteria)
-{
-  long i = 1;
-  while (i <= stream->nmsgs) mail_elt (stream,i++)->searched = NIL;
-  				/* do the driver's action */
-  if (stream->open) bezerk_search (stream,criteria);
-}
-
-
 /* Mail ping mailbox
  * Accepts: mail stream
  * Returns: stream if still open else NIL
@@ -1003,20 +989,6 @@ long mail_parse_date (MESSAGECACHE *elt,char *s)
     }
   }
   return T;
-}
-
-/* Mail messages have been searched out
- * Accepts: mail stream
- *	    message number
- *
- * Calls external "mm_searched" function to notify main program
- */
-
-void mail_searched (MAILSTREAM *stream,long msgno)
-{
-				/* mark as searched */
-  mail_elt (stream,msgno)->searched = T;
-  mm_searched (stream,msgno);	/* notify main program */
 }
 
 
