@@ -6697,3 +6697,47 @@ not-built files elsewhere in the tree.
   file (25KB text, bigger even than `rfc822.o`'s 17KB) specifically
   because of this dead search engine; this cut is a real code-size win,
   not just source hygiene.
+
+### `pine/folder.c` low-coverage investigation -- no dead code found, added Folder List screen coverage instead
+
+- [x] `TODO-pdp11.md`'s "Investigation targets: low-smoketest-coverage
+      files" flagged `folder.c` at 16.1% (132/822 lines) as the
+      lowest-coverage, largest non-trivial source file in the tree, to
+      be checked (not assumed) for removable dead code -- same
+      per-site grep-confirm treatment as every other cut in this file.
+      Ran `gcov -f` for a per-function breakdown: every 0%-covered
+      function was part of the Folder List screen (`folder_lister()`,
+      321 lines, plus `add_new_folder()`/`rename_folder()`/
+      `delete_folder()`/`search_folders()`/`create_folder_display()`/
+      `display_folder()`/`folder_list_entry()`/etc.) -- bound to `'l'`/
+      `OPF5` from both the main menu (`pine.c`) and the message index
+      (`mailcmd.c`), a real, reachable single-collection folder
+      browser, not dead code.
+      This file had already been through two dedicated size-reduction
+      passes (a general dead/vestigial-code sweep, and the later
+      multi-collection-navigation cut that removed cross-collection
+      browsing, the incoming-folders pseudo-collection, and several
+      branches those cuts made provably dead). Read `folder_lister()`
+      in full plus its six largest helpers looking for anything either
+      earlier pass missed -- found nothing: no unreachable branches,
+      no leftover `CNTXT_*`/collection state, no IMAP/news remnants
+      (already fully gone). Conclusion: the coverage gap here is
+      exactly what the TODO predicted going in -- untested interactive
+      UI, not a removal candidate.
+- **What changed**: added `test/cases/test_folder_list_screen.py`,
+  driving the Folder List screen end to end through a real pty:
+  opening it from the main menu; both navigation-boundary messages
+  (`ctrl('B')`/`'p'` and `ctrl('F')`/`'n'`'s "Already on first/last
+  folder" cases); add/rename/delete a folder (`add_new_folder()`/
+  `rename_folder()`/`delete_folder()`, including clearing
+  `rename_folder()`'s prefilled-name field with `^A`/`^K` since typing
+  over it appends rather than replacing); and selecting a folder to
+  open it (the `do_broach_folder()` branch, landing in FOLDER INDEX).
+- **Verified**: full smoketest suite 26/26 (was 25/25) with the new
+  test added. `python3 test/run_smoketests.py --coverage`:
+  `folder.c` 16.1% (132/822) -> 49.5% (407/822); whole-suite total
+  42.5% (3683/8670) -> 46.2% (4006/8670). `./build clean && ./build
+  lnx` afterwards (coverage instrumentation inflates the binary,
+  per the harness's own reminder) confirms no size change from
+  baseline -- `bin/pine` text still 278717 bytes, as expected for a
+  test-only addition with no source changes to `pine/folder.c` itself.

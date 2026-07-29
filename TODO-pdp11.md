@@ -80,16 +80,19 @@ DONE elsewhere or referenced in passing below.
       branches the smoketest suite doesn't drive yet, not necessarily
       dead code -- each candidate branch needs the same per-site
       grep-confirm treatment as every other cut in this file before
-      touching it. Listed as places to go looking, not confirmed cuts:
-    - `folder.c` -- 16.1% (132/822 lines). Large file, lowest coverage
-      of any non-trivial source file in the tree.
-    - `mailcmd.c` -- 23.7% (257/1086 lines). Its `process_cmd()` was the
+      touching it. `folder.c` is done (see `TODO-pdp11-done.md`: audited
+      for dead code, found none -- both its dead-code sweep and the
+      multi-collection cut already got it -- and added smoketest
+      coverage for the Folder List screen instead, 16.1% -> 49.5%).
+      Remaining files, listed as places to go looking, not confirmed
+      cuts:
+    - `mailcmd.c` -- 24.4% (265/1086 lines). Its `process_cmd()` was the
       biggest single beneficiary of the already-completed `feature-list`
       (`F_*`) dead-check collapse (see `TODO-pdp11-done.md`); worth
       re-checking coverage now that those dead branches are gone, since
       remaining gaps may be a fresher signal than when first measured.
     - `reply.c` -- 36.8% (181/492 lines).
-    - `signals.c` -- 29.8% (34/114) and `ttyin.c` -- 35.4% (174/492) are
+    - `signals.c` -- 29.8% (34/114) and `ttyin.c` -- 37.8% (186/492) are
       smaller but also worth a look.
 
 ### Strip stray form-feed (`^L`) page-break characters from older source files
