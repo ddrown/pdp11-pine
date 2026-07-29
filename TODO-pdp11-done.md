@@ -6646,3 +6646,102 @@ every mailbox/host/personal-name string).
   the next time a fuzzing lead shows the "allocator-internal CHECK
   failure / bad-free, never reproduces standalone" signature, rather
   than after extensive plain-ASan chasing.
+
+### Audit for other trailing-backslash instances of the same bug class: found a fourth in `rfc822_parse_word()`'s quoted-string case
+
+With three confirmed instances of the "advance past a backslash
+without checking it was the last character before the string's NUL"
+bug (`rfc822_parse_word()`'s top-level word-delimiter handling,
+`rfc822_quote()` -- see above two entries), swept the codebase for any
+other place doing the same thing.
+
+- **Found a fourth instance**, in `rfc822_parse_word()` itself but a
+  *different* loop than the one already fixed: the embedded
+  `case '"':` quoted-string scanner. `while (*++st != '"') switch
+  (*st) { ... case '\\': ++st; ... }` -- the outer `while` does
+  `*++st` on every iteration re-check, so if `case '\\':`'s own `++st`
+  lands exactly on the NUL terminator (backslash was the last real
+  character), the loop's *next* re-check does another `++st`, reading
+  one byte past the allocation.
+- **Fixed**: check `st[1]` for NUL before the `++st` and return `NIL`
+  (unbalanced quoted string) if so -- same fix shape as the other
+  three instances.
+- **Verified**: standalone repro extracting the exact function body
+  (gated `#ifdef FIXED`) -- buggy version is a clean `AddressSanitizer:
+  heap-buffer-overflow ... READ of size 1` on a 3-byte allocation
+  (`"\` + NUL); fixed version returns `NULL` cleanly, matching the
+  intended "unbalanced quoted string" semantics. Full clean rebuild
+  (plain and `ASAN=1`), 0 warnings, 25/25 smoketests both times.
+- **Swept and confirmed safe** (no fix needed, same "peek/skip
+  unconditionally" shape but already correctly guarded or provably
+  bounded): `pico/search.c`'s `pat[0]=='\\'` (uses `strcmp`, safe
+  regardless of what follows); `bezerk.c`'s `bezerk_getflags()`
+  (backslash-then-`switch` falls to `default: i=0` on NUL, and the
+  `if (i && ...)` short-circuits before any further dereference);
+  `pine/folder.c` and `pine/init.c`'s `*p=='\\' && *(p+1)=='"'` sites
+  (peek is always at most the NUL terminator itself, never past it);
+  and `rfc822_skipws()`'s own two backslash sites in comment-parsing
+  (both already explicitly check for NUL immediately after the
+  escape-skip before continuing). These confirm the bug wasn't a
+  systemic style issue in this codebase, just four genuine oversights
+  in the address-parsing code specifically.
+- Not added as a fifth harness-1 corpus regression seed under its own
+  name since the input is a near-duplicate of the existing
+  `regress_trailing_backslash_address`/`regress_trailing_backslash_quote`
+  seeds' shape; covered instead by the extended re-fuzzing run
+  described below, which exercises this code path directly.
+
+### Bonus find while re-verifying the above: unsigned-underflow SEGV in `rfc822_parse_content()`'s multipart boundary scanner on a completely empty part
+
+Found incidentally while re-running the fuzz harnesses to confirm the
+backslash audit fix above hadn't regressed anything -- a new,
+unrelated (non-backslash) crash surfaced in `rfc822_fuzz` after
+~162,000 execs (needed `ASAN_OPTIONS=detect_leaks=0` first, since an
+unrelated small leak was otherwise halting the run early).
+
+- **Root cause**: the multipart boundary-scanning state machine tracks
+  `m = GETPOS(bs); if (m) m--;` at the top of each scan iteration --
+  "position just before the current line" -- and uses it in two places
+  to compute a just-finished part's size: `part->body.size.bytes = m -
+  part->offset`. Both are an unsigned subtraction with no check that
+  `m >= part->offset`. For a completely empty part (two boundary
+  markers back-to-back with nothing between them), `GETPOS(bs)` at the
+  start of processing the *second* boundary line equals `part->offset`
+  exactly, so `m` becomes `part->offset - 1` -- one less. The
+  subtraction underflows to a value near `ULONG_MAX`, and that bogus
+  size later drives a header-collection scan loop far past the real
+  buffer, eventually segfaulting (observed at varying call depths --
+  inside `strcrlflen()`, or directly in the scan loop -- depending on
+  heap layout/ASLR).
+- Minimized (via `-minimize_crash=1`) to a 71-byte, **deterministic,
+  standalone-reproducible** input (unlike the earlier heap-corruption
+  leads, this one crashes the same way every time):
+  ```
+  MIME-Version:
+  Content-Type:multipart;boundary="BOUND"
+
+  --BOUND
+  --BOUND
+  ```
+  Confirmed via careful single-gdb-session tracing of the exact
+  underflowing values: `i = 18446744073709551607`, `part->offset = 8`,
+  `part->body.size.bytes = 18446744073709551615`.
+- **Fixed** at both sites that compute a part's size from `m -
+  part->offset` (the two-dashes/end-of-parts case, and the newline
+  case): clamp to 0 when `m <= part->offset`, since a part that starts
+  and ends at the same position is legitimately empty. Left a third,
+  similar-looking site (`part->body.size.bytes = GETPOS (bs) -
+  part->offset` after the whole scan loop ends) unchanged -- that one
+  uses `GETPOS(bs)` directly with no `m--` adjustment, so it's always
+  monotonically >= `part->offset` and can't underflow.
+- **Verified**: standalone repro isolating the arithmetic and its
+  consequence (gated `#ifdef FIXED`) -- buggy version aborts under
+  ASan (redzone corruption from scanning past a 1-byte allocation with
+  an underflowed byte count); fixed version computes 0 bytes and
+  touches nothing out of bounds. Full clean rebuild (plain and
+  `ASAN=1`), 0 warnings, 25/25 smoketests both times. Re-ran both fuzz
+  harnesses at length with all of this session's fixes in place:
+  `rfc822_fuzz` ran **58.2 million** execs in ~9 minutes with zero
+  crashes; `adrlist_fuzz` ran **51.5 million** with zero crashes.
+  Added the 71-byte minimized input as a permanent regression seed
+  (`fuzz/corpus/rfc822/regress_multipart_empty_part_underflow`).

@@ -44,9 +44,11 @@ DONE elsewhere or referenced in passing below.
 ### Set up a second libFuzzer harness for pine's own consuming-side code
 
 - [ ] Harness 1 (parser-level, `fuzz/rfc822_fuzz.c` -- see
-      `TODO-pdp11-done.md`) is done and already found and fixed three
-      real bugs (`rfc822_parse_word()`, twice in
-      `rfc822_parse_content()`). It only covers `rfc822_parse_msg()`
+      `TODO-pdp11-done.md`) is done and already found and fixed five
+      real bugs (three trailing-backslash overflows across
+      `rfc822_parse_word()`/`rfc822_quote()`, plus an unsigned-
+      underflow SEGV twice in `rfc822_parse_content()`'s multipart
+      scanner). It only covers `rfc822_parse_msg()`
       and what it calls into, though -- it stops at producing a valid
       `ENVELOPE`/`BODY`, never at rendering one.
     - **Harness 2 -- structure-aware, consuming-side**: target pine's
