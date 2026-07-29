@@ -459,8 +459,12 @@ char *linein, *lineout;
 	    char buf[MAXPATH];
 	    int  i;
 
+			/* buf is fixed-size -- a ~-prefixed path
+			   component longer than it can hold would
+			   overflow the copy below */
 	    for(i = 0; src[i] && src[i] != '/'; i++)
-	      buf[i] = src[i];
+	      if (i >= (int) sizeof(buf) - 1) return NULL;
+	      else buf[i] = src[i];
 
 	    src    += i;		/* advance src pointer */
 	    buf[i]  = '\0';		/* tie off buf string */
@@ -481,8 +485,14 @@ char *linein, *lineout;
                 found_brace=1;
             }
 
-            while (isalnum(*src))	/* copy to word */
+			/* word is fixed-size -- an unbounded
+			   $variable name (e.g. from a long -sort or
+			   similar command-line argument) would
+			   overflow the copy below */
+            while (isalnum(*src)) {	/* copy to word */
+	        if (p >= word + sizeof(word) - 1) return NULL;
                 *p++ = *src++;
+	    }
 
             if ( found_brace ) {	/* look for closing  brace */
                 while (*src && *src != '}')

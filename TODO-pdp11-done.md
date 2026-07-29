@@ -6745,3 +6745,126 @@ unrelated small leak was otherwise halting the run early).
   crashes; `adrlist_fuzz` ran **51.5 million** with zero crashes.
   Added the 71-byte minimized input as a permanent regression seed
   (`fuzz/corpus/rfc822/regress_multipart_empty_part_underflow`).
+
+### Sweep for the general "walk a string pointer, unconditionally advance past a peeked/skipped character" bug shape outside email-parsing code
+
+All of harness 1's finds so far shared one shape: a loop walks a
+pointer over a NUL-terminated string, and on hitting some special
+character (backslash, `%`, a boundary marker) unconditionally advances
+the pointer again -- without checking whether that character was the
+last one before the terminator -- reading or writing one byte past the
+allocation. Swept the rest of the codebase (`pine/`, `pico/`, and the
+in-scope `c-client` files -- confirmed via each `makefile.lnx`'s object
+list which files are actually compiled here, since a few files like
+`phile.c`/`smtp.c` and other-platform `os-*.c` variants aren't) for
+the same shape, independent of the fuzz harnesses (which only cover
+`rfc822_parse_msg()`), since command-line arguments and interactive
+input reach a lot of code the fuzzers don't.
+
+- **Found and fixed, in `pine/init.c`'s `expand_variables()`** (expands
+  `$VAR`/`${VAR}` and a leading `~` in any pine variable's value --
+  reached at startup for `-sort`'s argument via `init_vars()`'s
+  unconditional `set_current_val(vars, V_SORT_KEY, TRUE)`, and more
+  generally for `.pinerc`-sourced values before that parsing was
+  dropped, see `TODO-pdp11-done.md`'s "simplify read_pinerc()" entry):
+    - The `$VAR`/`${VAR}` case did `while (isalnum(*src)) *p++ =
+      *src++;` copying into `char word[128]` with **no bound at all**
+      -- a `-sort` argument containing `$` followed by 128+ alnum
+      characters overflows `word[]`. Confirmed with a real
+      `AddressSanitizer: stack-buffer-overflow` (`WRITE of size 1`,
+      overflowing `word` at line 444) via `bin/pine -sort
+      '$AAAA...(300 A's)...'`. Fixed by capping the copy at
+      `sizeof(word)-1` and returning `NULL` if it doesn't fit -- an
+      already-well-exercised "expansion failed" path, since every
+      caller of `expand_variables()` already falls back cleanly (see
+      `set_current_val()`, and `cpystr(NULL)` returning `NIL`).
+    - The `~` case's own local `char buf[MAXPATH]` copy had the exact
+      same missing bound (`for(i = 0; src[i] && src[i] != '/'; i++)
+      buf[i] = src[i];`). Fixed the same way (bail out with `NULL` if
+      it doesn't fit).
+- **Found and fixed, in `pine/osdep/fnexpand`** (the source fragment
+  for `fnexpand()`, assembled into `pine/os.c` -- see CLAUDE.md's
+  "generated files" note; **do not edit `pine/os.c` directly**, it's a
+  gitignored symlink to the real, tracked, generated
+  `pine/osdep/os-lnx.c`): the `~username` expansion's own scratch copy
+  -- `for(x = buf+1, y = name; *x != '/' && *x != '\0'; *y++ = *x++);`
+  -- into `char name[20]` with no bound. This is reached one call
+  further in from the `buf[MAXPATH]` fix above (`expand_variables()`'s
+  `~` case calls `fnexpand(buf, MAXPATH)`), and is **much more easily
+  triggered**: any `~`-prefixed value with 20+ non-slash characters
+  (not 4095+, like `buf[MAXPATH]` needs) smashes `name[20]` first.
+  Confirmed with a second real `AddressSanitizer: stack-buffer-
+  overflow` (`name` at `os.c:361`, called from `expand_variables()`)
+  via `bin/pine -sort '~BBBB...(2000 B's)...'`. Fixed by capping the
+  write into `name[]` at `sizeof(name)-1` while still letting the scan
+  pointer (`x`) advance to the *true* end of the username (needed
+  correctness-wise: `x - buf` is used afterward to know how much of
+  `buf` to replace, and `x == buf + 1` distinguishes the "no username,
+  just `~/...`" case) -- an oversized username now just fails the
+  `getpwnam()` lookup like any other unknown username, instead of
+  overflowing.
+- **Process note worth remembering**: this investigation started by
+  trying to verify these fixes with `ASAN=1 ./build lnx` (as done for
+  every earlier fix this session) and getting a clean-looking build
+  that turned out to have **no ASan instrumentation at all** --
+  `ASAN=1` as a shell *environment* variable is silently overridden by
+  `pine/makefile.lnx`'s/`pico/makefile.lnx`'s own `ASAN=` assignment
+  (make doesn't honor environment overrides of makefile-set variables
+  without `-e`). The correct invocation, matching the makefile's own
+  documented comment, is `./build lnx ASAN=1` (an argument *to*
+  `./build`, forwarded as a `make` argument). Re-verified this
+  session's earlier `rfc822.c` fixes are unaffected by this mixup --
+  their real verification always went through `fuzz/build.sh` (which
+  invokes `-fsanitize=address` directly, not through this makefile
+  path) -- but any future "full-project ASAN=1 build" verification
+  step should double-check `ldd bin/pine | grep asan` actually shows
+  `libasan`, not just trust a clean-looking build log.
+- **Also found, and fixed at the root rather than chasing every
+  caller**: `pico/display.c`'s `mlwrite()` and `emlwrite()` (the
+  message-line and centered-error-message writers, used from ~140 call
+  sites across `pine/`/`pico/`) both scan their `fmt`/`message`
+  argument for `%c`/`%d`/`%D`/`%o`/`%x`/`%s`/`%%` escapes, and both had
+  the same trailing-`%` bug: on hitting `%`, each unconditionally reads
+  one more character (`switch(*++bufp)` in `emlwrite()`; `c = *fmt++;`
+  in `mlwrite()`) and then falls into an unconditional further advance
+  (the shared loop's own `bufp++`/`*fmt++`) regardless of what that
+  character was -- if `%` was the last character before the string's
+  NUL terminator, the second advance reads past it. Checked all ~140
+  call sites for whether any could plausibly pass a message/format
+  ending in a bare trailing `%` (the *only* way to trigger this --
+  `%s`-substituted `arg` content is inert data to these functions'
+  own scanner, never rescanned for further `%` sequences): several
+  compose a message dynamically via `sprintf()` first
+  (`pico/random.c`, `pico/os_unix.c`, `pico/file.c`,
+  `pico/composer.c`), but all of those have fixed trailing text after
+  any embedded dynamic content -- except `pico/composer.c:1909`, whose
+  `sprintf(s, "%s field: %s", ..., errmsg)` ends directly on `errmsg`.
+  Traced that to `(*Pmaster->buildaddr)()`, which in this fork is
+  `pico/compose_stub.c`'s `compose_buildaddr()` -- it unconditionally
+  `return(0)` (success), so the `retval == -1` branch containing this
+  call is dead code in the current build. **No currently-reachable
+  call site was found**, so this is a proactive fix (matching the
+  project's practice of hardening a shared function once the same
+  bug shape turns up in it, rather than only patching demonstrated-
+  reachable instances) rather than a demonstrated live crash. Fixed
+  both by checking for a NUL immediately after consuming the `%`, and
+  `break`-ing out of the scan loop if so (mirrors this session's
+  other trailing-escape-character fixes).
+- **Verified**: standalone repros extracting the vulnerable logic
+  (gated `#ifdef FIXED`) for both the `expand_variables()`/`fnexpand()`
+  family and the `mlwrite()`/`emlwrite()` family -- buggy versions are
+  clean `AddressSanitizer: stack-buffer-overflow` reports; fixed
+  versions run clean. The `expand_variables()`/`fnexpand()` fixes were
+  additionally confirmed via a real `bin/pine -sort ...` invocation
+  under a correctly-instrumented ASan build (see the process note
+  above), both before (real crash, full stack trace) and after (clean,
+  reaches `MAIN MENU` or exits normally). Full clean rebuild (plain and
+  correctly-invoked `ASAN=1`), 0 warnings both times (one pre-existing,
+  unrelated `-Wformat-overflow=` warning in `pico/random.c` -- a
+  `sprintf` into a fixed `buffer[80]` that only surfaces under
+  `ASAN=1`'s different codegen -- noted as a new TODO item rather than
+  fixed here, since it's a buffer-sizing issue, not this sweep's
+  pointer-walk shape), 26/26 smoketests both times. Added
+  `test/cases/test_sort_key_expand_overflow.py`, exercising both the
+  `word[128]` and `name[20]` overflows through a real `bin/pine -sort
+  ...` invocation each.

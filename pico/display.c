@@ -1344,7 +1344,12 @@ emlwrite(char *message, void* arg)
 	if(*bufp == '\007')
 	  (*term.t_beep)();
 	else if(*bufp == '%'){
-	    switch(*++bufp){
+			/* trailing '%' -- nothing follows to format,
+			   and the loop's own unconditional bufp++
+			   below would read past the NUL if we let
+			   this continue */
+	    if (!*++bufp) break;
+	    switch(*bufp){
 	      case 'c':
 		pputc((char)(long)arg, 0);
 		break;
@@ -1408,6 +1413,10 @@ mlwrite(char *fmt, void *arg)
 	}
         else {
             c = *fmt++;
+			/* trailing '%' -- nothing follows to format,
+			   and the outer loop's own "*fmt++" would
+			   read past the NUL if we let it continue */
+	    if (!c) break;
             switch (c) {
 	      case 'd':
 		mlputi(*(int *)ap, 10);
