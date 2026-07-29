@@ -6583,3 +6583,66 @@ in this file).
   (dead behind `#ifdef LATER`), so removing the source text has no
   runtime-code effect; this is source-hygiene only, same category as
   the `pine/imap.c` deletion above.
+
+### Resolve the third fuzzing lead: heap-buffer-overflow in `rfc822_quote()` on a trailing backslash
+
+The third lead from the previous entry (unconfirmed heap corruption in
+`mail_free_address()`'s teardown, `:`/`;`-heavy triggering inputs)
+turned out to have nothing to do with the `rfc822_parse_adrlist()`
+group-syntax suspect flagged there -- it was a fourth instance of the
+exact same *bug class* as the very first harness-1 find
+(`rfc822_parse_word()`'s trailing-backslash overflow), this time in
+`rfc822_quote()`, a much more central, widely-called function (called
+by `rfc822_cpy()`, which is used throughout address parsing to copy
+every mailbox/host/personal-name string).
+
+- **Root cause**: `rfc822_quote()`'s in-place unquoting loop --
+  `while (*src) { if (*src=='\"') src++; else { if (*src=='\\')
+  src++; *dst++=*src++; } }` -- unconditionally does `*dst++=*src++`
+  after (possibly) skipping a backslash. If the backslash is the last
+  character before the string's NUL terminator, skipping it lands
+  `src` *on* the NUL, and the unconditional copy both writes that NUL
+  to `dst` (fine) and advances `src` *past* it (not fine) -- the next
+  loop iteration's `*src` check reads one byte past the allocation,
+  and if that byte happens to be nonzero (likely, uninitialized heap
+  data), the loop keeps going, overflowing `dst` for real.
+- **Why this eluded the default ASan build for so long**: the plain
+  `-fsanitize=address` build kept hitting the *effect* of this bug
+  (allocator magic-number corruption, bad-frees) many execs after the
+  actual overflow, since a `heap-buffer-overflow` this shape doesn't
+  always land squarely on ASan's redzone the instant it happens on
+  every allocator/size-class combination -- and once it *does* corrupt
+  an adjacent chunk's header, the failure only surfaces later, at
+  whatever unrelated `free()` happens to touch that chunk next
+  (sometimes inside libFuzzer's own bookkeeping, per the previous
+  entry). Recompiling just for diagnosis with
+  `-fsanitize-address-field-padding=1` (extra padding + stricter
+  checking around struct fields) turned the exact same bug into a
+  clean, standard `heap-buffer-overflow` report pointing straight at
+  `rfc822_quote()`, on the very first fuzzing run (~5,000 execs,
+  seconds instead of the many-minutes-to-hours the plain build needed
+  to even manifest the corruption's effect).
+- **Fixed**: after skipping a backslash, check whether `src` now
+  points at the NUL terminator and `break` immediately instead of
+  falling through to the copy -- mirrors the fix already applied to
+  `rfc822_parse_word()` for the identical underlying mistake.
+- **Verified**: standalone repro extracting the exact function body
+  (gated `#ifdef FIXED`) -- buggy version is a clean `AddressSanitizer:
+  heap-buffer-overflow ... READ of size 1` on a 2-byte allocation;
+  fixed version runs clean. Full clean rebuild (plain and `ASAN=1`),
+  0 warnings, 25/25 smoketests. Re-ran both fuzz harnesses at length
+  to confirm the fix actually closed the lead rather than just this
+  one input: `adrlist_fuzz` ran **22.4 million** executions in under 5
+  minutes with zero crashes (previous crashes in this exact harness
+  had shown up within 150K-1.7M execs); the full `rfc822_fuzz` ran
+  **14.7 million** with zero crashes (only a separate, minor memory
+  leak turned up, see the new TODO item). Added the 4-byte minimized
+  trigger (`\xff\xff\xff\` followed by a backslash) as a permanent
+  regression seed
+  (`fuzz/corpus/adrlist/regress_trailing_backslash_quote`).
+- **Diagnostic technique worth remembering**: `-fsanitize-address-
+  field-padding=1` turned a many-hours-to-reproduce delayed-corruption
+  bug into a first-run, five-second repro. Worth reaching for early
+  the next time a fuzzing lead shows the "allocator-internal CHECK
+  failure / bad-free, never reproduces standalone" signature, rather
+  than after extensive plain-ASan chasing.

@@ -1110,7 +1110,12 @@ char *rfc822_quote (char *src)
     while (*src) {		/* copy string */
       if (*src == '\"') src++;	/* skip double quote entirely */
       else {
-	if (*src == '\\') src++;/* skip over single quote, copy next always */
+	if (*src == '\\') {	/* skip over single quote */
+	  src++;
+				/* trailing backslash -- nothing to escape,
+				   don't read/copy past the NUL terminator */
+	  if (!*src) break;
+	}
 	*dst++ = *src++;	/* copy character */
       }
     }

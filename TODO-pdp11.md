@@ -10,38 +10,36 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-### Track down the third fuzzing lead: heap corruption in address/group parsing
+### Track down a small memory leak found while re-verifying the third fuzzing lead's fix
 
-- [ ] Continued harness-1 fuzzing (see `TODO-pdp11-done.md`) found and
-      fixed two real integer-underflow bugs in `rfc822_parse_content()`,
-      but kept turning up a third, distinct class of crash even after
-      both fixes: allocator magic-number mismatches and bad-frees
-      inside `mail_free_address()`'s recursive list teardown, implying
-      something writes through a corrupted/garbage pointer somewhere
-      *before* the eventual free. Every triggering input is
-      `:`/`;`-heavy, pointing at `rfc822_parse_adrlist()`'s RFC822
-      group-address syntax (`group-name: addr1, addr2;`) -- in
-      particular, its end-of-group handling checks `n >= 0` (`n` is
-      group nesting depth) before doing `last->next = (adr =
-      mail_newaddr ());`, which is only safe if `last` is non-NULL; a
-      manual trace didn't conclusively prove `last` can be NULL there
-      (an earlier "bad mailbox" error path seems to intercept the
-      specific case tried by hand) but didn't rule it out either.
-    - Never reproduced via standalone replay of a saved crash input,
-      not even across a 1,000,000-run deterministic corpus replay or
-      with `ASAN_OPTIONS=quarantine_size_mb=0` forcing immediate chunk
-      reuse -- classic delayed-effect wild-write signature (the
-      *detection* site is far from the *cause*). One occurrence's
-      stack trace had no harness/target frames at all, just libFuzzer's
-      own internal `free()` calls, ruling out a harness artifact.
-    - `fuzz/adrlist_fuzz.c` (new, see `fuzz/build.sh`) calls
-      `rfc822_parse_adrlist()` directly and reproduces the same crash
-      class faster (~150K-1.7M execs vs. several M through the full
-      parser) -- start there. A longer run (tens of minutes+) or a
-      debugger-assisted bisection (e.g. hardware watchpoints on
-      freshly-`mail_newaddr()`'d structs) is probably needed next,
-      since fuzzing alone hasn't produced a minimizable, reliably-
-      reproducing case yet despite several attempts.
+- [ ] The third fuzzing lead (heap corruption in `rfc822_parse_adrlist()`
+      -- see `TODO-pdp11-done.md`) is fixed. Re-running the fuzzers to
+      confirm (22M+ execs on `adrlist_fuzz`, 14M+ on the full
+      `rfc822_fuzz`, zero further crashes) turned up a separate, minor
+      LeakSanitizer finding instead: a 2-byte `cpystr()` allocation not
+      reachable from any of `env->from`/`sender`/`reply_to`/etc. by the
+      time `mail_free_envelope()` runs, on input `From:<a;I<EYE(N)`.
+      Confirmed via `gdb`-assisted tracing that the three "a" mailbox
+      copies this input's `From:` header produces (the real one plus
+      the auto-derived `sender`/`reply_to` copies from
+      `rfc822_cpy_adr()`) are *not* the leaking allocation -- all three
+      were confirmed freed by cross-referencing their exact addresses
+      against every `free()` call in the same process run. The actual
+      leaking 2-byte string's identity wasn't pinned down in the time
+      available (multiple `malloc(2)`-sized strings exist for this
+      input -- three "a"s plus a personal-name "I" -- and a
+      `gdb`-Python attempt to auto-diff every `malloc(2)`/`free()`
+      pair hit tooling friction rather than a real answer).
+    - Not a security bug (no crash, no corruption, bounded to 2 bytes
+      per malformed message, and pine is an interactive reader, not a
+      long-running server accumulating leaks) -- much lower priority
+      than the crash-class bugs found so far, left for a future
+      session. `From:<a;I<EYE(N)` reproduces it deterministically and
+      standalone (unlike the crash-class bugs), so it should be a much
+      easier trace than those were -- likely just needs `gdb`'s
+      `commands`/`finish` combination used carefully within a *single*
+      process run rather than across separate invocations (addresses
+      aren't stable between runs).
 
 ### Set up a second libFuzzer harness for pine's own consuming-side code
 
