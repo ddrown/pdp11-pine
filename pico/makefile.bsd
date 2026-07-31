@@ -101,7 +101,7 @@ MKOVFLAGS=	-O2
 
 pico-ovl:	main.o $(OFILES)
 		$(MKOVMAKE) $(MKOVFLAGS) -o pico -f mkov *.o -ltermcap
-		$(MAKE) -f mkov
+		make -f mkov
 
 main.o:		$(HFILES)
 
