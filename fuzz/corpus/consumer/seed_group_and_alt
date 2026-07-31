@@ -1,0 +1,14 @@
+From: A <a@x>
+To: undisclosed-recipients: a@x, b@x;
+Subject: group syntax
+Content-Type: multipart/alternative; boundary="B"
+
+--B
+Content-Type: text/plain
+
+plain
+--B
+Content-Type: text/html
+
+<b>html</b>
+--B--

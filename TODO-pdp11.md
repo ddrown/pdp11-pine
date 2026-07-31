@@ -41,37 +41,28 @@ DONE elsewhere or referenced in passing below.
       process run rather than across separate invocations (addresses
       aren't stable between runs).
 
-### Set up a second libFuzzer harness for pine's own consuming-side code
+### Investigation targets: low-smoketest-coverage files
 
-- [ ] Harness 1 (parser-level, `fuzz/rfc822_fuzz.c` -- see
-      `TODO-pdp11-done.md`) is done and already found and fixed five
-      real bugs (three trailing-backslash overflows across
-      `rfc822_parse_word()`/`rfc822_quote()`, plus an unsigned-
-      underflow SEGV twice in `rfc822_parse_content()`'s multipart
-      scanner). It only covers `rfc822_parse_msg()`
-      and what it calls into, though -- it stops at producing a valid
-      `ENVELOPE`/`BODY`, never at rendering one.
-    - **Harness 2 -- structure-aware, consuming-side**: target pine's
-      *own* formatting/display code that consumes an already-parsed
-      `ENVELOPE`/`BODY` (e.g. `pine/newmail.c`'s `new_mail_mess()`,
-      `pine/mailview.c`'s attachment/parameter display, `pine/reply.c`'s
-      quoting) directly, building the `ENVELOPE` by hand from
-      fuzzer-provided bytes (splitting them across `personal`/
-      `mailbox`/`host`/`subject`/etc. fields, e.g. via a
-      `FuzzedDataProvider`-style splitter) rather than parsing real
-      message bytes. This is the harness that would have actually
-      caught the CVE-2000-0909 recurrence -- that bug lived several
-      calls downstream of the parser, in pine's own buffer-composition
-      code, which harness 1 alone would never reach since it stops at
-      producing a valid `ENVELOPE`, not at rendering one. Slower to
-      write (needs to construct realistic-enough `ENVELOPE`/`BODY`
-      structs by hand) but higher-value given where the bugs found so
-      far have actually clustered.
-    - Dev-machine-only tooling, like harness 1 (no PDP-11 cross-compiler
-      exists yet, same tier as the `ASAN=1` target and the one-off
-      `-fanalyzer` pass) -- not something that needs to run on or
-      represent the actual target hardware, just another way to find
-      bugs before they'd bite there.
+- [ ] `python3 test/run_smoketests.py --coverage` surfaces several files
+      with low line coverage. Coverage gaps mostly reflect interactive
+      branches the smoketest suite doesn't drive yet, not necessarily
+      dead code -- each candidate branch needs the same per-site
+      grep-confirm treatment as every other cut in this file before
+      touching it. `folder.c` is done (see `TODO-pdp11-done.md`: audited
+      for dead code, found none -- both its dead-code sweep and the
+      multi-collection cut already got it -- and added smoketest
+      coverage for the Folder List screen instead, 16.1% -> 49.5%).
+      `mailcmd.c` is also done (see `TODO-pdp11-done.md`: found one
+      fully-dead function -- `mcdate2ctime()`, zero callers -- and one
+      dead-fallout collapse left behind by the F_* cut's digit-jump
+      removal (`jump_to()`'s always-`'\0'` `first_num` param and three
+      now-unreachable `command`-range checks at its call site); added
+      Jump/Search smoketest coverage; 24.4% -> 29.1%, `bin/pine` text
+      -408 bytes). Remaining files, listed as places to go looking,
+      not confirmed cuts:
+    - `reply.c` -- 36.8% (181/492 lines).
+    - `signals.c` -- 29.8% (34/114) and `ttyin.c` -- 37.8% (186/492) are
+      smaller but also worth a look.
 
 ### Strip stray form-feed (`^L`) page-break characters from older source files
 

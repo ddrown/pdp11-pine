@@ -27,6 +27,7 @@ __pycache__/
 *.gcov
 fuzz/rfc822_fuzz
 fuzz/adrlist_fuzz
+fuzz/consumer_fuzz
 fuzz/*.o
 fuzz/crash-*
 fuzz/findings/
