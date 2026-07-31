@@ -159,10 +159,17 @@ main(int argc, char *argv[])
     int           rv;
     struct pine  *pine_state;
     char          int_mail[MAXPATH+1];
+    extern MAILSTREAM bezerkproto;
 
     /*----------------------------------------------------------------------
           Set up buffering and some data structures
       ----------------------------------------------------------------------*/
+
+    bezerkproto.open = T;	/* see bezerk.c: zero-initialized at load time
+				   because 2.11BSD's cc can't aggregate-
+				   initialize a bit-field; set it here instead,
+				   before any mail_open()/mail_create() call
+				   can reach the prototype stream */
 
     grow_tmp_20k_buf(TMP_20K_BUF_BASELINE);
 

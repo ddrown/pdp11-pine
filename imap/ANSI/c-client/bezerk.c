@@ -66,13 +66,18 @@ extern int errno;		/* just in case */
 /* Berkeley mail routines */
 
 
-				/* prototype stream: {local, mailbox, open} --
-				   only .open matters (T), everything else
-				   NIL/0 by omission; this positional
-				   initializer is a fragile echo of the
-				   MAILSTREAM member order in mail.h, keep
-				   them in sync if the struct is reordered */
-MAILSTREAM bezerkproto = {NIL,NIL,T};
+				/* prototype stream: zero-initialized (local,
+				   mailbox NIL; cache union, msgno, etc. all
+				   0) except .open, which must be T -- can't
+				   set that here via an aggregate initializer
+				   since 2.11BSD's cc can't initialize a
+				   bit-field member that way ("No field
+				   initialization"/"union initialization
+				   non-portable" at this line). Set instead
+				   in pine.c's main(), once, before any
+				   mail_open()/mail_create() call can reach
+				   it via default_driver()/bezerk_open(NIL) */
+MAILSTREAM bezerkproto;
 				/* standard driver's prototype */
 MAILSTREAM *mailstd_proto = &bezerkproto;
 

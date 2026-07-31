@@ -63,14 +63,20 @@
 
 /* Cache management function codes */
 
-#define CH_INIT (long) 10	/* initialize cache */
-#define CH_SIZE (long) 11	/* (re-)size the cache */
-#define CH_MAKELELT (long) 20	/* return long elt, make if needed */
-#define CH_LELT (long) 21	/* return long elt if exists */
-#define CH_MAKEELT (long) 30	/* return short elt, make if needed */
-#define CH_ELT (long) 31	/* return short elt if exists */
-#define CH_FREE (long) 40	/* free space used by elt */
-#define CH_EXPUNGE (long) 45	/* delete elt pointer from list */
+/* NB: no (long) cast on these, unlike the other constants in this file --
+ * they're used as switch/case labels in mm_cache() (mail.c), and 2.11BSD's
+ * cc rejects a cast expression in a case label ("Constant required").
+ * Safe because every use is either that switch or an argument to mm_cache()/
+ * mailcache_t, both fully prototyped with a "long op" parameter, so the
+ * int constant still widens to long correctly at the call site. */
+#define CH_INIT 10		/* initialize cache */
+#define CH_SIZE 11		/* (re-)size the cache */
+#define CH_MAKELELT 20		/* return long elt, make if needed */
+#define CH_LELT 21		/* return long elt if exists */
+#define CH_MAKEELT 30		/* return short elt, make if needed */
+#define CH_ELT 31		/* return short elt if exists */
+#define CH_FREE 40		/* free space used by elt */
+#define CH_EXPUNGE 45		/* delete elt pointer from list */
 
 
 /* Garbage collection flags */

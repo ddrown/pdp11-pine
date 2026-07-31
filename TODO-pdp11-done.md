@@ -7263,3 +7263,66 @@ not-built files elsewhere in the tree.
   the `jump_to()` fallout, and this file's dead `#else` branch --
   `bin/pine` text -904 bytes total), five new smoketest files, and
   whole-suite coverage 42.5% -> 49.5%.
+
+### Real 2.11BSD/PDP-11 `cc` build errors found bringing pine up on hardware
+
+Compiling `imap/ANSI/c-client/` against the actual 2.11BSD `cc` (not the
+gcc-based `lnx` dev build) surfaced two more gaps invisible on `lnx`,
+same tier as the pico-side `bind.c`/`tcap.c`/`os_unix.c` fixes from the
+prior hardware bring-up session.
+
+- **`mail.c:104-154`: "Constant required" on every `case` label in
+  `mm_cache()`'s switch** -- the `CH_INIT`/`CH_SIZE`/`CH_MAKELELT`/
+  `CH_LELT`/`CH_MAKEELT`/`CH_ELT`/`CH_FREE`/`CH_EXPUNGE` cache-op codes
+  are `#define`d in `mail.h` as `(long) N` (a cast expression), and
+  2.11BSD's pcc-derived `cc` rejects a cast expression in a `case`
+  label -- it wants a bare integer constant. Fixed by dropping the
+  `(long)` cast from these eight macros' definitions in `mail.h` (left
+  every other `(long) N` constant in the file alone -- only these eight
+  are ever used as `case` labels, confirmed via
+  `grep -rn "case CH_"`/`grep -rn "case (long)"` across `pine/`,
+  `pico/`, `imap/`). Safe because every other use of these macros is an
+  argument to `mm_cache()` or the `mailcache_t` function-pointer type
+  (both in `mail.c`/`bezerk.c`), and both are fully ANSI-prototyped
+  with a `long op` parameter -- so the now-bare `int` constant still
+  widens to `long` correctly at the call site via the prototype. This
+  is a different situation from the `%D`/`emlwrite()` varargs casts
+  documented earlier in this file (search "already the pattern the
+  code used for its one genuinely `long`-sized case") -- those casts
+  are load-bearing because a varargs callee can't see a prototype;
+  `mm_cache()` isn't varargs, so the cast here was only ever needed to
+  satisfy the `case`-label constant-expression rule, not for actual
+  type-correctness.
+- **`bezerk.c:75`: "No field initialization" / "warning: union
+  initialization non-portable" on `bezerkproto`'s aggregate
+  initializer** -- `MAILSTREAM bezerkproto = {NIL,NIL,T};` was setting
+  the struct's `open` member (an `unsigned int open : 1;` bit-field,
+  added when the old `dtb`-as-liveness-flag was replaced -- see this
+  file's "Collapse ... `default_driver`/`create_proto` fallout" entry)
+  via a positional aggregate initializer, with the struct's trailing
+  `cache` union left to implicit zero-fill. 2.11BSD's `cc` can't
+  initialize a bit-field member through an aggregate initializer at
+  all (a real, known pcc-era limitation, not just a style nit), and
+  separately warns that eliding down to a union member's zero-fill is
+  non-portable. Fixed by letting `bezerkproto` zero-initialize as a
+  plain declaration (`MAILSTREAM bezerkproto;`, valid everywhere, no
+  diagnostic) and setting `bezerkproto.open = T;` explicitly as the
+  first statement in `pine.c`'s `main()`, before any code path that
+  could reach the prototype stream (`default_driver()` via
+  `DF_DRIVER_PROTO`, or `bezerk_open(NIL)`'s `OP_PROTOTYPE` return).
+  Confirmed pico never links `bezerk.c`/c-client at all (`grep -n
+  "c-client\|bezerk" pico/makefile.lnx pico/makefile.bsd` -- no
+  matches), so this is entirely pine's concern and `main()` is a safe,
+  single, unconditional place to set it.
+- **Verified**: both fixes reproduce the reported `cc` diagnostics
+  exactly against the line numbers in the real 2.11BSD build output
+  (no PDP-11 cross-compiler available here to re-run `cc` directly,
+  so this is inference from the diagnostic text plus direct reading of
+  the relevant grammar limitation, not a re-run against real hardware
+  `cc`). `./build clean && ./build lnx`, exit 0, 0 warnings, both
+  before and after. Full smoketest suite 31/31 throughout.
+- **Size delta**: `bin/pine` `data` 10520 -> 10168 (-352 bytes, the
+  `bezerkproto` initializer moving out of the initialized-data segment
+  into BSS), `bss` 18856 -> 19208 (+352 bytes, symmetric move into
+  BSS); `text`/overall size unchanged. `bin/pico` untouched (no
+  c-client link).
