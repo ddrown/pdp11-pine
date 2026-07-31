@@ -87,7 +87,10 @@ showcpos(int f, int n)
     register long   nbc;
     register int    lines;
     register int    thisline;
-    char     buffer[80];
+    /* worst-case width of the two %d/%d/%d ints and two %ld/%ld longs
+       below can exceed 80 bytes on a platform with 32-bit int/64-bit
+       long (gcc's -Wformat-overflow= puts the true max at 120) */
+    char     buffer[160];
 
     clp = lforw(curbp->b_linep);            /* Grovel the data.     */
     cbo = 0;

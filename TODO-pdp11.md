@@ -10,36 +10,6 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-### Fix pico/random.c's sprintf into a too-small buffer[80], flagged by -Wformat-overflow= under ASAN=1
-
-- [ ] Found incidentally while sweeping for more instances of the
-      trailing-backslash/unbounded-pointer-walk bug class (see
-      `TODO-pdp11-done.md`'s "Sweep for the general ... bug shape"
-      entry): building with the *correctly*-invoked `./build lnx
-      ASAN=1` (as opposed to the no-op `ASAN=1 ./build lnx`
-      environment-variable form -- see that same entry's process
-      note) surfaces one warning that the plain build doesn't:
-      `random.c:114:74: warning: 'sprintf' may write a terminating nul
-      past the end of the destination [-Wformat-overflow=]`.
-    - The line: `sprintf(buffer,"line %d of %d (%d%%%%), character %ld
-      of %ld (%d%%%%)", ...)` into `char buffer[80]`. Worst-case
-      substitution widths (two `int`s up to 10 digits each, two `long`
-      percentages up to 3 digits each, two `long` counters up to
-      ~19-20 digits each on a 64-bit `long`, plus ~35 bytes of fixed
-      text/literal `%` characters) add up to comfortably over 80
-      bytes, which is why the compiler's static analysis flags it --
-      this is a real, if impractical-to-hit-by-accident (would need a
-      buffer with billions of lines/exabytes of characters open),
-      buffer-sizing bug, a different shape than the pointer-walk-past-
-      NUL bugs in the entry above (it's a classic "format string's
-      theoretical max width exceeds the destination buffer" issue, the
-      kind `sprintf`/`strcat` audits elsewhere in this codebase have
-      already found and fixed).
-    - Not yet fixed -- out of scope for the sweep that found it (a
-      different bug class), left for a dedicated pass. Likely fix:
-      either grow `buffer[]` to comfortably cover the worst case, or
-      switch to `snprintf` with the existing size.
-
 ### Track down a small memory leak found while re-verifying the third fuzzing lead's fix
 
 - [ ] The third fuzzing lead (heap corruption in `rfc822_parse_adrlist()`

@@ -7357,3 +7357,60 @@ straightforward duplicate/missing-symbol link error caught it.
   the `jump_to()` fallout, and this file's dead `#else` branch --
   `bin/pine` text -904 bytes total), five new smoketest files, and
   whole-suite coverage 42.5% -> 49.5%.
+
+### Fix `pico/random.c`'s `sprintf` into a too-small `buffer[80]`, flagged by `-Wformat-overflow=` under `ASAN=1`
+
+- [x] Found incidentally while sweeping for the trailing-backslash/
+      unbounded-pointer-walk bug class (see this file's "Sweep for the
+      general ... bug shape" entry): `./build lnx ASAN=1` (the
+      correctly-invoked form -- see the ASan-build-target entry's
+      process note about the no-op `ASAN=1 ./build lnx` env-var form)
+      surfaces `random.c:114:74: warning: 'sprintf' may write a
+      terminating nul past the end of the destination
+      [-Wformat-overflow=]`, with gcc's own note pinning the real
+      range: "'sprintf' output between 42 and 120 bytes into a
+      destination of size 80". Reproduced first, per this project's
+      standing verification discipline, before touching anything.
+      `showcpos()` (bound to `^X =`, "show cursor position") builds a
+      status line like `"line 12 of 340 (3%), character 456 of 7890
+      (5%)"` via `sprintf(buffer, "line %d of %d (%d%%%%), character
+      %ld of %ld (%d%%%%)", ...)` into `char buffer[80]`. Worst-case
+      argument widths on this dev platform (three `%d` ints at 11
+      bytes each for `INT_MIN`, two `%ld` longs at 20 bytes each for
+      `LONG_MIN` on a 64-bit `long`, ~31 bytes of literal text, plus
+      the `%%%%` pairs each expanding to one literal `%`) sum to
+      exactly the 120 bytes gcc reported -- confirmed by hand before
+      picking a fix size, not just trusting the compiler's number
+      blind. A real, if essentially unreachable in practice, buffer-
+      sizing bug: `thisline`/`lines`/`nch`/`nbc` are derived from
+      walking the actual open buffer's line/character counts, so
+      hitting the true worst case would need billions of lines or
+      exabytes of text open in the editor.
+      `snprintf` (the TODO's other suggested fix) was considered and
+      rejected: 2.11BSD (derived from 4.3BSD, 1986) predates
+      `snprintf`'s standardization, and this is pico editor code that
+      genuinely gets compiled for the real BSD target via
+      `pico/makefile.bsd` -- unlike the `os-lnx.c`/`bld_path`
+      `snprintf` calls elsewhere in the tree, which are Linux-dev-only
+      fragments never built for the PDP-11 target. Grew the fixed
+      buffer instead, sized for the worst case on whichever platform
+      has the wider types (this dev/ASan target's 64-bit `long`, wider
+      than the PDP-11 target's 32-bit `long`), so the fix is safe on
+      both.
+- **What changed**: `pico/random.c`'s `showcpos()`: `buffer[80]` ->
+  `buffer[160]` (the 120-byte computed worst case plus headroom), with
+  a short comment recording why 80 wasn't enough.
+- **Verified**: `./build clean && ./build lnx ASAN=1` -- the
+  `-Wformat-overflow=` warning on `random.c` is gone, 0 warnings
+  across the whole ASan build. `./build clean && ./build lnx` (plain)
+  also 0 warnings; full smoketest suite 31/31. No regression test
+  added -- per this project's own framing of the bug going in
+  ("impractical-to-hit-by-accident"), there's no way to construct a
+  file in the test harness that pushes line/character counts anywhere
+  near the actual overflow threshold, so there's nothing for an
+  automated test to observably distinguish.
+- **Size delta**: `bin/pico` text 109094 -> 109103 bytes (+9), the
+  cost of the larger stack buffer's frame setup; `bin/pine` unaffected
+  (`random.c` is pico-only). A tiny, expected cost for a genuine
+  safety fix, consistent with how this project has treated similar
+  small size costs from other overflow fixes.
