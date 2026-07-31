@@ -103,35 +103,6 @@ DONE elsewhere or referenced in passing below.
       represent the actual target hardware, just another way to find
       bugs before they'd bite there.
 
-### Investigation targets: low-smoketest-coverage files
-
-- [ ] `python3 test/run_smoketests.py --coverage` surfaces several files
-      with low line coverage. Coverage gaps mostly reflect interactive
-      branches the smoketest suite doesn't drive yet, not necessarily
-      dead code -- each candidate branch needs the same per-site
-      grep-confirm treatment as every other cut in this file before
-      touching it. `folder.c` is done (see `TODO-pdp11-done.md`: audited
-      for dead code, found none -- both its dead-code sweep and the
-      multi-collection cut already got it -- and added smoketest
-      coverage for the Folder List screen instead, 16.1% -> 49.5%).
-      `mailcmd.c` is also done (see `TODO-pdp11-done.md`: found one
-      fully-dead function -- `mcdate2ctime()`, zero callers -- and one
-      dead-fallout collapse left behind by the F_* cut's digit-jump
-      removal (`jump_to()`'s always-`'\0'` `first_num` param and three
-      now-unreachable `command`-range checks at its call site); added
-      Jump/Search smoketest coverage; 24.4% -> 29.1%, `bin/pine` text
-      -408 bytes). `reply.c` is also done (see `TODO-pdp11-done.md`:
-      found one fully-dead function -- `copy_envelope()`, zero callers
-      in the built tree -- and added Reply smoketest coverage; 36.8%
-      -> 54.4%, `bin/pine` text -496 bytes). `signals.c` is also done
-      (see `TODO-pdp11-done.md`: no dead code -- already swept -- but
-      every handler past `init_signals()` was untested since nothing
-      ever sent the process a real signal; added `SIGHUP`/`SIGTERM`/
-      `SIGUSR2`/`SIGQUIT`-decline/`^Z`-suspend coverage via real
-      `os.kill()`; 29.8% -> 71.9%, no size change). Remaining file,
-      listed as a place to go looking, not a confirmed cut:
-    - `ttyin.c` -- 37.8% (186/492).
-
 ### Strip stray form-feed (`^L`) page-break characters from older source files
 
 - [ ] Several of the original UW files (`imap/ANSI/c-client/mail.c`,

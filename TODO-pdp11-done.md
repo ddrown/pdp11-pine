@@ -7210,3 +7210,56 @@ not-built files elsewhere in the tree.
   `folder.c`'s and `mailcmd.c`'s/`reply.c`'s entries above, this
   file's earlier sweeps had already caught everything removable).
   `TODO-pdp11.md` still lists `ttyin.c` as the one remaining file.
+
+### `pine/ttyin.c` low-coverage investigation -- one dead `#else` branch found, plus arrow-key coverage
+
+- [x] Last file in the coverage-investigation TODO item, after
+      `signals.c` above. `ttyin.c` had already had a small DOS-macro
+      sweep ("bucket 2 of 3": two sites in `optionally_enter()`), but
+      a fresh look at `read_char()` -- the standout at 8.5% of 153
+      lines -- turned up one more dead macro that sweep didn't reach:
+      `read_char()` itself is duplicated inside an `#ifndef
+      OLD_READ_CHAR ... #else ... #endif` (lines 388-755), and
+      `grep -rn "OLD_READ_CHAR"` across `pine/` and `imap/` found only
+      that one `#ifndef` site -- never defined anywhere, not even
+      commented out, same standard as the earlier `DOS`/`LWP`/`PCTCP`/
+      `PCNFS` removals. Deleted the entire dead `#else` half (158
+      lines, an older, structurally different escape-sequence decoder
+      for the same key set) and un-wrapped the `#ifndef` around the
+      live half. Since the preprocessor had already discarded the
+      dead half in every build (this is a compile-time macro, not a
+      runtime branch), this doesn't move `gcov`'s coverable-line count
+      or `bin/pine`'s size -- pure source hygiene, same "0 byte
+      delta" pattern as the other preprocessor-only DOS-macro cuts in
+      this file's history.
+      The surviving `read_char()`'s remaining low coverage is a real
+      terminal-escape-sequence decoder (arrow keys, PF-keys, multiple
+      terminal families -- vt100/vt200 CSI, vt100 application-mode
+      SS3, Sun, DEC vt52, Zenith Z19) -- all genuinely reachable, just
+      never exercised because every existing smoketest drives pine
+      with plain ASCII keys, never a real terminal's multi-byte escape
+      sequences for cursor keys.
+- **What changed**: `pine/ttyin.c` (dead `#else`/`OLD_READ_CHAR`
+  branch removed). Also added
+  `test/cases/test_arrow_key_navigation.py`, sending the two escape
+  sequences a vt100-class terminal (like this project's real WY-60,
+  see `blog/`) actually uses for cursor keys -- CSI (`ESC [ A`/
+  `ESC [ B`) and SS3 (`ESC O A`/`ESC O B`) -- and confirming they move
+  the FOLDER INDEX cursor exactly like `'p'`/`'n'`
+  (`pine/mailcmd.c:203/219` bind `KEY_UP`/`KEY_DOWN` to the same
+  branches as those keys).
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite 31/31 (was 30/30) with the new test added, run
+  standalone first. `python3 test/run_smoketests.py --coverage`:
+  `ttyin.c` 37.8% (186/492) -> 41.9% (206/492); whole-suite total
+  49.2% (4248/8641) -> 49.5% (4277/8641).
+- **Size delta**: none -- `bin/pine` text unchanged at 277941 bytes,
+  as expected for a preprocessor-only source deletion plus a test-only
+  addition.
+- This closes out the "Investigation targets: low-smoketest-coverage
+  files" TODO item -- all five flagged files (`folder.c`, `mailcmd.c`,
+  `reply.c`, `signals.c`, `ttyin.c`) are done. Net across all five:
+  three real dead-code removals (`mcdate2ctime()`, `copy_envelope()`,
+  the `jump_to()` fallout, and this file's dead `#else` branch --
+  `bin/pine` text -904 bytes total), five new smoketest files, and
+  whole-suite coverage 42.5% -> 49.5%.
