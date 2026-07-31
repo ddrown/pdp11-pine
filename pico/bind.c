@@ -296,7 +296,13 @@ wscrollw(int begrow, int endrow, char *textp[], int textlen)
  *                  2. if c matches, but in other mode, punt it
  */
 int
+#ifdef	ANSI
 normal(int c, int list[][2], int sc)
+#else
+normal(c, list, sc)
+int c, sc;
+int list[][2];
+#endif
 {
     register int i;
 
