@@ -41,29 +41,6 @@ DONE elsewhere or referenced in passing below.
       process run rather than across separate invocations (addresses
       aren't stable between runs).
 
-### Investigation targets: low-smoketest-coverage files
-
-- [ ] `python3 test/run_smoketests.py --coverage` surfaces several files
-      with low line coverage. Coverage gaps mostly reflect interactive
-      branches the smoketest suite doesn't drive yet, not necessarily
-      dead code -- each candidate branch needs the same per-site
-      grep-confirm treatment as every other cut in this file before
-      touching it. `folder.c` is done (see `TODO-pdp11-done.md`: audited
-      for dead code, found none -- both its dead-code sweep and the
-      multi-collection cut already got it -- and added smoketest
-      coverage for the Folder List screen instead, 16.1% -> 49.5%).
-      `mailcmd.c` is also done (see `TODO-pdp11-done.md`: found one
-      fully-dead function -- `mcdate2ctime()`, zero callers -- and one
-      dead-fallout collapse left behind by the F_* cut's digit-jump
-      removal (`jump_to()`'s always-`'\0'` `first_num` param and three
-      now-unreachable `command`-range checks at its call site); added
-      Jump/Search smoketest coverage; 24.4% -> 29.1%, `bin/pine` text
-      -408 bytes). Remaining files, listed as places to go looking,
-      not confirmed cuts:
-    - `reply.c` -- 36.8% (181/492 lines).
-    - `signals.c` -- 29.8% (34/114) and `ttyin.c` -- 37.8% (186/492) are
-      smaller but also worth a look.
-
 ### Strip stray form-feed (`^L`) page-break characters from older source files
 
 - [ ] Several of the original UW files (`imap/ANSI/c-client/mail.c`,
