@@ -7101,6 +7101,100 @@ not-built files elsewhere in the tree.
   as-is for now; `TODO-pdp11.md` still lists `reply.c`/`signals.c`/
   `ttyin.c` as the remaining files to look at.
 
+### Build harness 2: a libFuzzer harness for pine's own consuming-side (envelope/MIME-display) code
+
+Harness 1 (`fuzz/rfc822_fuzz.c`) stops once `rfc822_parse_msg()` has
+produced a valid `ENVELOPE`/`BODY` -- it never exercises the code that
+actually *renders* one. That's exactly where CVE-2000-0909's
+recurrence lived (`pine/newmail.c`'s `new_mail_mess()`, several calls
+downstream of the parser -- see that entry above). This closes the gap
+with a second harness, `fuzz/consumer_fuzz.c`, targeting:
+
+- `pine/mailview.c`'s `format_envelope()` (Date/From/To/Cc/Bcc/Reply-
+  to/Newsgroups/Subject formatting for the message view), which calls
+  `pine/reply.c`'s `pretty_addr_string()` for every address field --
+  the line-wrapping address formatter.
+- `pine/mailview.c`'s `describe_mime()` (recursively walks the whole
+  MIME part tree building the attachment list), which calls
+  `type_desc()`/`format_mime_size()`/`mime_can_display()` on each leaf
+  part.
+- `pine/mailview.c`'s `display_parameters()` on the top-level body's
+  Content-Type parameters.
+
+**Design decision -- reuse the real parser instead of hand-building
+structs**: the TODO item originally proposed hand-splitting fuzzer
+bytes across `ENVELOPE` fields via a `FuzzedDataProvider`-style
+splitter, to avoid parsing overhead and get "interesting" structures
+directly. Went a different way instead: reuse `rfc822_parse_msg()`
+(the exact same header/body-splitting convention as
+`fuzz/rfc822_fuzz.c`) to build a *real*, parser-produced
+`ENVELOPE`/`BODY`, then feed that straight into the functions above.
+Reasoning: `rfc822_cpy()`/`cpystr()` never cap anything upstream, so a
+real parsed message already gives arbitrarily long/weird field content
+-- there's no "interesting state" a hand-rolled splitter reaches that
+a crafted `From:`/`Content-Type:` header couldn't also reach, and
+reusing the real parser sidesteps the risk (flagged in
+`fuzz/rfc822_fuzz.c`'s own header comment) of a hand-built splitter
+producing states the real parser could never actually produce --
+"bugs" that would really just be harness artifacts. This also means
+`consumer_fuzz` exercises the *combination* of parser and
+display/consumer code on every input, closer to what pine's real
+message-open path actually does end to end.
+
+**None of the target functions touch a live `MAILSTREAM`** (unlike
+e.g. `format_message()`, which calls `mail_fetchtext()` on a real
+stream -- out of scope for this harness, would need a fake mailbox
+driver), so they're callable directly against the hand-produced
+structures.
+
+**Linking**: `fuzz/consumer_fuzz` links the *real*
+`pine/mailview.o`/`pine/reply.o`/`pine/strings.o`/`pine/filter.o`
+(built by a normal `./build lnx`) plus `c-client.a`, exactly as they'd
+be linked into the real `bin/pine`. Everything else those object files
+reference but this harness's call graph never actually reaches at
+runtime -- screen drawing (`ClearScreen`/`MoveCursor`/...), command
+dispatch (`process_cmd`/`read_command`/...), the composer subprocess
+(`pine_send`), and live-mailbox operations (`save_attachment`,
+`new_mail`, ...) -- is stubbed out in `fuzz/pine_ui_stubs.c` (mirrors
+`fuzz/mm_stubs.c`'s approach for c-client's `mm_*` callbacks). The one
+exception is `grow_tmp_20k_buf()`, given a real, faithful
+implementation (mirroring `pine/pine.c`'s own) since
+`display_parameters()` genuinely depends on it growing `tmp_20k_buf`
+correctly -- a no-op stub there would silently turn a real bug into a
+harness artifact (an overflow of a buffer this harness itself failed
+to grow, not one pine's real code would ever produce). `ps_global` is
+a minimal `calloc`'d `struct pine`, with just `atmts`/`atmts_allocated`
+set up (mirroring `pine/pine.c`'s own init) since `describe_mime()` is
+the only target function that touches `ps_global` at all.
+
+Two build-time snags along the way, both simple: `pretty_command()`
+didn't need stubbing (it's a real function already provided once
+`pine/strings.o` is linked -- a duplicate-definition link error caught
+this immediately), and `read_file()` (called by `reply.c`'s
+`get_signature()`, unreached by this harness but still in the same
+object file) was missing from the initial stub list -- another
+straightforward duplicate/missing-symbol link error caught it.
+
+- **Verified**: builds cleanly via the updated `fuzz/build.sh`. Ran
+  ~25 million executions total across two sessions (curated seed
+  corpus covering a simple message, a multipart/mixed message, an
+  unbalanced RFC822 comment in `From:`, multipart/alternative,
+  a nested `message/rfc822` part, and an encoded-word `From:`) with
+  **zero crashes** -- a clean baseline for this newly-built harness on
+  already-hardened code (`describe_mime()`/`type_desc()`/`part_desc()`
+  had three previous overflow fixes from a prior audit pass, and
+  `pretty_addr_string()` had one; see their respective entries above).
+  Coverage plateaus quickly (cov: 25, ft: 68) with this seed corpus --
+  worth revisiting with a richer corpus (deeper MIME nesting, more
+  encoded-word variety, RFC822 group syntax in more fields) in a
+  future session. Full clean rebuild (`./build clean && ./build lnx`),
+  0 warnings, 28/28 smoketests.
+- Added `fuzz/consumer_fuzz.c`, `fuzz/pine_ui_stubs.c`, updated
+  `fuzz/build.sh` to build all three harnesses, added
+  `fuzz/corpus/consumer/` with six curated seeds, and added
+  `fuzz/consumer_fuzz` to `.gitignore` (matching the other two harness
+  binaries -- `fuzz/*.o` already covers its intermediate object file).
+
 ### `pine/reply.c` low-coverage investigation -- one dead function found, plus Reply coverage
 
 - [x] Continuation of the same coverage-investigation TODO item, next
@@ -7326,3 +7420,60 @@ prior hardware bring-up session.
   into BSS), `bss` 18856 -> 19208 (+352 bytes, symmetric move into
   BSS); `text`/overall size unchanged. `bin/pico` untouched (no
   c-client link).
+
+### Fix `pico/random.c`'s `sprintf` into a too-small `buffer[80]`, flagged by `-Wformat-overflow=` under `ASAN=1`
+
+- [x] Found incidentally while sweeping for the trailing-backslash/
+      unbounded-pointer-walk bug class (see this file's "Sweep for the
+      general ... bug shape" entry): `./build lnx ASAN=1` (the
+      correctly-invoked form -- see the ASan-build-target entry's
+      process note about the no-op `ASAN=1 ./build lnx` env-var form)
+      surfaces `random.c:114:74: warning: 'sprintf' may write a
+      terminating nul past the end of the destination
+      [-Wformat-overflow=]`, with gcc's own note pinning the real
+      range: "'sprintf' output between 42 and 120 bytes into a
+      destination of size 80". Reproduced first, per this project's
+      standing verification discipline, before touching anything.
+      `showcpos()` (bound to `^X =`, "show cursor position") builds a
+      status line like `"line 12 of 340 (3%), character 456 of 7890
+      (5%)"` via `sprintf(buffer, "line %d of %d (%d%%%%), character
+      %ld of %ld (%d%%%%)", ...)` into `char buffer[80]`. Worst-case
+      argument widths on this dev platform (three `%d` ints at 11
+      bytes each for `INT_MIN`, two `%ld` longs at 20 bytes each for
+      `LONG_MIN` on a 64-bit `long`, ~31 bytes of literal text, plus
+      the `%%%%` pairs each expanding to one literal `%`) sum to
+      exactly the 120 bytes gcc reported -- confirmed by hand before
+      picking a fix size, not just trusting the compiler's number
+      blind. A real, if essentially unreachable in practice, buffer-
+      sizing bug: `thisline`/`lines`/`nch`/`nbc` are derived from
+      walking the actual open buffer's line/character counts, so
+      hitting the true worst case would need billions of lines or
+      exabytes of text open in the editor.
+      `snprintf` (the TODO's other suggested fix) was considered and
+      rejected: 2.11BSD (derived from 4.3BSD, 1986) predates
+      `snprintf`'s standardization, and this is pico editor code that
+      genuinely gets compiled for the real BSD target via
+      `pico/makefile.bsd` -- unlike the `os-lnx.c`/`bld_path`
+      `snprintf` calls elsewhere in the tree, which are Linux-dev-only
+      fragments never built for the PDP-11 target. Grew the fixed
+      buffer instead, sized for the worst case on whichever platform
+      has the wider types (this dev/ASan target's 64-bit `long`, wider
+      than the PDP-11 target's 32-bit `long`), so the fix is safe on
+      both.
+- **What changed**: `pico/random.c`'s `showcpos()`: `buffer[80]` ->
+  `buffer[160]` (the 120-byte computed worst case plus headroom), with
+  a short comment recording why 80 wasn't enough.
+- **Verified**: `./build clean && ./build lnx ASAN=1` -- the
+  `-Wformat-overflow=` warning on `random.c` is gone, 0 warnings
+  across the whole ASan build. `./build clean && ./build lnx` (plain)
+  also 0 warnings; full smoketest suite 31/31. No regression test
+  added -- per this project's own framing of the bug going in
+  ("impractical-to-hit-by-accident"), there's no way to construct a
+  file in the test harness that pushes line/character counts anywhere
+  near the actual overflow threshold, so there's nothing for an
+  automated test to observably distinguish.
+- **Size delta**: `bin/pico` text 109094 -> 109103 bytes (+9), the
+  cost of the larger stack buffer's frame setup; `bin/pine` unaffected
+  (`random.c` is pico-only). A tiny, expected cost for a genuine
+  safety fix, consistent with how this project has treated similar
+  small size costs from other overflow fixes.
