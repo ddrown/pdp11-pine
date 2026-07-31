@@ -7157,3 +7157,56 @@ not-built files elsewhere in the tree.
   "bucket 2 of 3" above, so likely the same "untested, not dead"
   outcome as `folder.c`/`reply.c`, but worth the same per-function
   check before assuming so.
+
+### `pine/signals.c` low-coverage investigation -- no dead code found, added real-signal coverage
+
+- [x] Continuation of the same coverage-investigation TODO item, next
+      file after `reply.c` above. `signals.c` had already been through
+      its own DOS-macro sweep ("bucket 2 of 3" above), so this pass
+      was purely a hunt for reachable-but-untested code, not dead
+      code. `gcov -f` showed only `init_signals()` (called at every
+      startup) and `winch_signal()` (already exercised indirectly by
+      the composer resize tests' `SIGWINCH`) with any coverage --
+      every other handler was 0%, because no existing smoketest had
+      ever sent the process a real signal. Confirmed each 0% function
+      is a genuine, live signal handler (all wired up in
+      `init_signals()`, all with real call sites) -- same "untested
+      UI, not removable" conclusion as `folder.c`/`reply.c`, just for
+      signal handlers instead of screens.
+      Two handlers deliberately excluded from the new test since
+      exercising them means deliberately crashing the test binary:
+      `auger_in_signal()` (`SIGSEGV`/`SIGILL`/etc.) calls `panic()` ->
+      `exit(-1)`; `end_signals()` is *only* ever reached from
+      `panic()`, confirmed via `grep -rn "end_signals("` (its sole
+      caller). `quit_signal()`'s abort branch (answering "y" to the
+      "REALLY ABORT PINE" prompt) calls `coredump()` for the same
+      reason -- only its decline branch is driven.
+      Verified `do_suspend()`'s `stop_process()` (`kill(0, SIGSTOP)`,
+      `pine/os.c`) is safe to test before writing it up: `pexpect`
+      gives the spawned `pine` its own process group (confirmed via
+      `os.getpgid()` differing from the test harness's own `os.getpgrp()`
+      in a manual probe), so `kill(0, ...)` inside pine only ever
+      touches pine's own group, never the harness process.
+- **What changed**: added `test/cases/test_signal_handlers.py`, using
+  `os.kill()`/`os.killpg()` against the real spawned `pine` process
+  (exposed via `pexpect`'s `session.child.pid`) to drive: `SIGHUP` and
+  `SIGTERM` (both graceful-exit paths, `hup_signal()`/`term_signal()`
+  -> shared `fast_clean_up()` -> `exit(0)`, checked via each function's
+  distinct "Received hang up/terminate signal" message and a `wait()`
+  status of 0); `SIGUSR2` (`usr2_signal()`'s "Session now Read-Only"
+  message, then confirms the session is still fully usable afterward);
+  `SIGQUIT`'s decline path (`quit_signal()`'s emergency-exit prompt,
+  answering "n"); and `^Z` suspend/resume (`do_suspend()`, sending
+  `SIGCONT` to pine's process group and confirming it lands back at
+  MAIN MENU).
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite 30/30 (was 29/29) with the new test added, and
+  the new test run standalone first to shake out timing issues before
+  trusting it in the full run. `python3 test/run_smoketests.py
+  --coverage`: `signals.c` 29.8% (34/114) -> 71.9% (82/114); whole-
+  suite total 48.4% (4186/8641) -> 49.2% (4248/8641).
+- **Size delta**: none -- `bin/pine` text unchanged at 277941 bytes
+  (test-only addition, no source deletion this time; unlike
+  `folder.c`'s and `mailcmd.c`'s/`reply.c`'s entries above, this
+  file's earlier sweeps had already caught everything removable).
+  `TODO-pdp11.md` still lists `ttyin.c` as the one remaining file.

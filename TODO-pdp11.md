@@ -123,10 +123,14 @@ DONE elsewhere or referenced in passing below.
       -408 bytes). `reply.c` is also done (see `TODO-pdp11-done.md`:
       found one fully-dead function -- `copy_envelope()`, zero callers
       in the built tree -- and added Reply smoketest coverage; 36.8%
-      -> 54.4%, `bin/pine` text -496 bytes). Remaining files, listed
-      as places to go looking, not confirmed cuts:
-    - `signals.c` -- 29.8% (34/114) and `ttyin.c` -- 37.8% (186/492) are
-      smaller but also worth a look.
+      -> 54.4%, `bin/pine` text -496 bytes). `signals.c` is also done
+      (see `TODO-pdp11-done.md`: no dead code -- already swept -- but
+      every handler past `init_signals()` was untested since nothing
+      ever sent the process a real signal; added `SIGHUP`/`SIGTERM`/
+      `SIGUSR2`/`SIGQUIT`-decline/`^Z`-suspend coverage via real
+      `os.kill()`; 29.8% -> 71.9%, no size change). Remaining file,
+      listed as a place to go looking, not a confirmed cut:
+    - `ttyin.c` -- 37.8% (186/492).
 
 ### Strip stray form-feed (`^L`) page-break characters from older source files
 
