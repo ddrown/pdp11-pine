@@ -1,0 +1,14 @@
+From: A <a@x>
+To: b@x, c@x
+Subject: mime test
+Content-Type: multipart/mixed; boundary="B"
+
+--B
+Content-Type: text/plain; charset=us-ascii
+
+hello
+--B
+Content-Type: application/octet-stream; name="f.bin"
+
+zz
+--B--

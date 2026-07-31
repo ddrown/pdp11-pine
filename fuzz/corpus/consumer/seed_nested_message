@@ -1,0 +1,9 @@
+From: A <a@x>
+To: t@t
+Subject: nested
+Content-Type: message/rfc822
+
+From: inner@x
+Subject: inner subj
+
+inner body

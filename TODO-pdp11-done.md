@@ -7100,3 +7100,97 @@ not-built files elsewhere in the tree.
   reachable features, just not yet exercised by any smoketest. Left
   as-is for now; `TODO-pdp11.md` still lists `reply.c`/`signals.c`/
   `ttyin.c` as the remaining files to look at.
+
+### Build harness 2: a libFuzzer harness for pine's own consuming-side (envelope/MIME-display) code
+
+Harness 1 (`fuzz/rfc822_fuzz.c`) stops once `rfc822_parse_msg()` has
+produced a valid `ENVELOPE`/`BODY` -- it never exercises the code that
+actually *renders* one. That's exactly where CVE-2000-0909's
+recurrence lived (`pine/newmail.c`'s `new_mail_mess()`, several calls
+downstream of the parser -- see that entry above). This closes the gap
+with a second harness, `fuzz/consumer_fuzz.c`, targeting:
+
+- `pine/mailview.c`'s `format_envelope()` (Date/From/To/Cc/Bcc/Reply-
+  to/Newsgroups/Subject formatting for the message view), which calls
+  `pine/reply.c`'s `pretty_addr_string()` for every address field --
+  the line-wrapping address formatter.
+- `pine/mailview.c`'s `describe_mime()` (recursively walks the whole
+  MIME part tree building the attachment list), which calls
+  `type_desc()`/`format_mime_size()`/`mime_can_display()` on each leaf
+  part.
+- `pine/mailview.c`'s `display_parameters()` on the top-level body's
+  Content-Type parameters.
+
+**Design decision -- reuse the real parser instead of hand-building
+structs**: the TODO item originally proposed hand-splitting fuzzer
+bytes across `ENVELOPE` fields via a `FuzzedDataProvider`-style
+splitter, to avoid parsing overhead and get "interesting" structures
+directly. Went a different way instead: reuse `rfc822_parse_msg()`
+(the exact same header/body-splitting convention as
+`fuzz/rfc822_fuzz.c`) to build a *real*, parser-produced
+`ENVELOPE`/`BODY`, then feed that straight into the functions above.
+Reasoning: `rfc822_cpy()`/`cpystr()` never cap anything upstream, so a
+real parsed message already gives arbitrarily long/weird field content
+-- there's no "interesting state" a hand-rolled splitter reaches that
+a crafted `From:`/`Content-Type:` header couldn't also reach, and
+reusing the real parser sidesteps the risk (flagged in
+`fuzz/rfc822_fuzz.c`'s own header comment) of a hand-built splitter
+producing states the real parser could never actually produce --
+"bugs" that would really just be harness artifacts. This also means
+`consumer_fuzz` exercises the *combination* of parser and
+display/consumer code on every input, closer to what pine's real
+message-open path actually does end to end.
+
+**None of the target functions touch a live `MAILSTREAM`** (unlike
+e.g. `format_message()`, which calls `mail_fetchtext()` on a real
+stream -- out of scope for this harness, would need a fake mailbox
+driver), so they're callable directly against the hand-produced
+structures.
+
+**Linking**: `fuzz/consumer_fuzz` links the *real*
+`pine/mailview.o`/`pine/reply.o`/`pine/strings.o`/`pine/filter.o`
+(built by a normal `./build lnx`) plus `c-client.a`, exactly as they'd
+be linked into the real `bin/pine`. Everything else those object files
+reference but this harness's call graph never actually reaches at
+runtime -- screen drawing (`ClearScreen`/`MoveCursor`/...), command
+dispatch (`process_cmd`/`read_command`/...), the composer subprocess
+(`pine_send`), and live-mailbox operations (`save_attachment`,
+`new_mail`, ...) -- is stubbed out in `fuzz/pine_ui_stubs.c` (mirrors
+`fuzz/mm_stubs.c`'s approach for c-client's `mm_*` callbacks). The one
+exception is `grow_tmp_20k_buf()`, given a real, faithful
+implementation (mirroring `pine/pine.c`'s own) since
+`display_parameters()` genuinely depends on it growing `tmp_20k_buf`
+correctly -- a no-op stub there would silently turn a real bug into a
+harness artifact (an overflow of a buffer this harness itself failed
+to grow, not one pine's real code would ever produce). `ps_global` is
+a minimal `calloc`'d `struct pine`, with just `atmts`/`atmts_allocated`
+set up (mirroring `pine/pine.c`'s own init) since `describe_mime()` is
+the only target function that touches `ps_global` at all.
+
+Two build-time snags along the way, both simple: `pretty_command()`
+didn't need stubbing (it's a real function already provided once
+`pine/strings.o` is linked -- a duplicate-definition link error caught
+this immediately), and `read_file()` (called by `reply.c`'s
+`get_signature()`, unreached by this harness but still in the same
+object file) was missing from the initial stub list -- another
+straightforward duplicate/missing-symbol link error caught it.
+
+- **Verified**: builds cleanly via the updated `fuzz/build.sh`. Ran
+  ~25 million executions total across two sessions (curated seed
+  corpus covering a simple message, a multipart/mixed message, an
+  unbalanced RFC822 comment in `From:`, multipart/alternative,
+  a nested `message/rfc822` part, and an encoded-word `From:`) with
+  **zero crashes** -- a clean baseline for this newly-built harness on
+  already-hardened code (`describe_mime()`/`type_desc()`/`part_desc()`
+  had three previous overflow fixes from a prior audit pass, and
+  `pretty_addr_string()` had one; see their respective entries above).
+  Coverage plateaus quickly (cov: 25, ft: 68) with this seed corpus --
+  worth revisiting with a richer corpus (deeper MIME nesting, more
+  encoded-word variety, RFC822 group syntax in more fields) in a
+  future session. Full clean rebuild (`./build clean && ./build lnx`),
+  0 warnings, 28/28 smoketests.
+- Added `fuzz/consumer_fuzz.c`, `fuzz/pine_ui_stubs.c`, updated
+  `fuzz/build.sh` to build all three harnesses, added
+  `fuzz/corpus/consumer/` with six curated seeds, and added
+  `fuzz/consumer_fuzz` to `.gitignore` (matching the other two harness
+  binaries -- `fuzz/*.o` already covers its intermediate object file).
