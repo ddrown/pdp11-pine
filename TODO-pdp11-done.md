@@ -7194,3 +7194,166 @@ straightforward duplicate/missing-symbol link error caught it.
   `fuzz/corpus/consumer/` with six curated seeds, and added
   `fuzz/consumer_fuzz` to `.gitignore` (matching the other two harness
   binaries -- `fuzz/*.o` already covers its intermediate object file).
+
+### `pine/reply.c` low-coverage investigation -- one dead function found, plus Reply coverage
+
+- [x] Continuation of the same coverage-investigation TODO item, next
+      file after `mailcmd.c` above. `reply.c` had already been through
+      its own DOS/never-defined-macro dead-code sweep ("Dead-code
+      sweep, bucket 1 of 3" above) and the F_* collapse (`F_SIG_AT_BOTTOM`/
+      `F_INCLUDE_HEADER`/`F_MIME_FORWARD`, see this file's phase-1
+      entry) well before this pass, so expected thin pickings -- read
+      `reply()`, `forward()`, and every site those two F_* cuts touched
+      looking for leftover fallout the way `mailcmd.c`'s `jump_to()`
+      had; found none there (the signature-insertion and forwarded-
+      text-header logic both read as fully collapsed already, single
+      unconditional paths, no stray guard conditions). Did find one
+      fresh item via `gcov -f`'s per-function breakdown:
+      - **`copy_envelope()`**: a 27-line "deep-copy an `ENVELOPE`"
+        helper. `grep -rn "copy_envelope"` across `pine/`, `pico/`, and
+        `imap/` found only its own prototype and definition in the
+        built tree -- its sole other mention anywhere is
+        `pine/pine.def`, a DOS/OS2 module-definition file that isn't
+        compiled or generated from source here (same "historical/
+        foreign-platform artifact, left untouched" category as other
+        `pine.def` mentions noted in this file's `mail_search`/
+        `bezerk_search` removal entry above). Deleted the function and
+        its prototype.
+      - `reply()` itself (137 lines, the biggest function in the file)
+        was 0%-covered along with everything only *it* calls
+        (`reply_delimiter()`, `generate_reply_to()`, `first_addr()`) --
+        no smoketest had ever pressed `'r'`. All confirmed live and
+        reachable (`pine/mailcmd.c:372` calls `reply()` from the Reply
+        command), not dead -- same "untested UI, not removable"
+        conclusion as `folder.c`'s Folder List screen.
+- **What changed**: `pine/reply.c` (`copy_envelope()` deletion and its
+  prototype). Also added `test/cases/test_reply_screen.py`, driving
+  Reply end to end through a real pty: the "Include original message"
+  and "Reply to all recipients" prompts, landing in the composer with
+  the quoted original text and `"On ... wrote:"` delimiter line
+  correctly generated, then Cancels out (same pattern as
+  `test_compose_cancel.py`) rather than actually sending.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite 28/28 (was 27/27) with the new test added.
+  `python3 test/run_smoketests.py --coverage`: `reply.c` 36.8%
+  (181/492) -> 54.4% (256/471) -- denominator dropped 492 -> 471,
+  confirming real code left the file; whole-suite total 46.9%
+  (4063/8659) -> 48.1% (4152/8638).
+- **Size delta**: `bin/pine` text 278309 -> 277813 bytes (-496 bytes),
+  `bss`/`data` unchanged. All from `copy_envelope()` -- a real,
+  compiled-in dead function, not a preprocessor-stripped branch.
+- Everything else `gcov -f` flagged as 0%-covered in `reply.c`
+  (`first_addr`/`generate_reply_to`/`copy_envelope` -- pre-deletion --
+  were the only 0% entries besides `reply()` and `reply_delimiter()`,
+  both now covered by the new test) is otherwise accounted for.
+  `TODO-pdp11.md` still lists `signals.c`/`ttyin.c` as the remaining
+  files to look at -- both already went through a DOS-macro sweep in
+  "bucket 2 of 3" above, so likely the same "untested, not dead"
+  outcome as `folder.c`/`reply.c`, but worth the same per-function
+  check before assuming so.
+
+### `pine/signals.c` low-coverage investigation -- no dead code found, added real-signal coverage
+
+- [x] Continuation of the same coverage-investigation TODO item, next
+      file after `reply.c` above. `signals.c` had already been through
+      its own DOS-macro sweep ("bucket 2 of 3" above), so this pass
+      was purely a hunt for reachable-but-untested code, not dead
+      code. `gcov -f` showed only `init_signals()` (called at every
+      startup) and `winch_signal()` (already exercised indirectly by
+      the composer resize tests' `SIGWINCH`) with any coverage --
+      every other handler was 0%, because no existing smoketest had
+      ever sent the process a real signal. Confirmed each 0% function
+      is a genuine, live signal handler (all wired up in
+      `init_signals()`, all with real call sites) -- same "untested
+      UI, not removable" conclusion as `folder.c`/`reply.c`, just for
+      signal handlers instead of screens.
+      Two handlers deliberately excluded from the new test since
+      exercising them means deliberately crashing the test binary:
+      `auger_in_signal()` (`SIGSEGV`/`SIGILL`/etc.) calls `panic()` ->
+      `exit(-1)`; `end_signals()` is *only* ever reached from
+      `panic()`, confirmed via `grep -rn "end_signals("` (its sole
+      caller). `quit_signal()`'s abort branch (answering "y" to the
+      "REALLY ABORT PINE" prompt) calls `coredump()` for the same
+      reason -- only its decline branch is driven.
+      Verified `do_suspend()`'s `stop_process()` (`kill(0, SIGSTOP)`,
+      `pine/os.c`) is safe to test before writing it up: `pexpect`
+      gives the spawned `pine` its own process group (confirmed via
+      `os.getpgid()` differing from the test harness's own `os.getpgrp()`
+      in a manual probe), so `kill(0, ...)` inside pine only ever
+      touches pine's own group, never the harness process.
+- **What changed**: added `test/cases/test_signal_handlers.py`, using
+  `os.kill()`/`os.killpg()` against the real spawned `pine` process
+  (exposed via `pexpect`'s `session.child.pid`) to drive: `SIGHUP` and
+  `SIGTERM` (both graceful-exit paths, `hup_signal()`/`term_signal()`
+  -> shared `fast_clean_up()` -> `exit(0)`, checked via each function's
+  distinct "Received hang up/terminate signal" message and a `wait()`
+  status of 0); `SIGUSR2` (`usr2_signal()`'s "Session now Read-Only"
+  message, then confirms the session is still fully usable afterward);
+  `SIGQUIT`'s decline path (`quit_signal()`'s emergency-exit prompt,
+  answering "n"); and `^Z` suspend/resume (`do_suspend()`, sending
+  `SIGCONT` to pine's process group and confirming it lands back at
+  MAIN MENU).
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite 30/30 (was 29/29) with the new test added, and
+  the new test run standalone first to shake out timing issues before
+  trusting it in the full run. `python3 test/run_smoketests.py
+  --coverage`: `signals.c` 29.8% (34/114) -> 71.9% (82/114); whole-
+  suite total 48.4% (4186/8641) -> 49.2% (4248/8641).
+- **Size delta**: none -- `bin/pine` text unchanged at 277941 bytes
+  (test-only addition, no source deletion this time; unlike
+  `folder.c`'s and `mailcmd.c`'s/`reply.c`'s entries above, this
+  file's earlier sweeps had already caught everything removable).
+  `TODO-pdp11.md` still lists `ttyin.c` as the one remaining file.
+
+### `pine/ttyin.c` low-coverage investigation -- one dead `#else` branch found, plus arrow-key coverage
+
+- [x] Last file in the coverage-investigation TODO item, after
+      `signals.c` above. `ttyin.c` had already had a small DOS-macro
+      sweep ("bucket 2 of 3": two sites in `optionally_enter()`), but
+      a fresh look at `read_char()` -- the standout at 8.5% of 153
+      lines -- turned up one more dead macro that sweep didn't reach:
+      `read_char()` itself is duplicated inside an `#ifndef
+      OLD_READ_CHAR ... #else ... #endif` (lines 388-755), and
+      `grep -rn "OLD_READ_CHAR"` across `pine/` and `imap/` found only
+      that one `#ifndef` site -- never defined anywhere, not even
+      commented out, same standard as the earlier `DOS`/`LWP`/`PCTCP`/
+      `PCNFS` removals. Deleted the entire dead `#else` half (158
+      lines, an older, structurally different escape-sequence decoder
+      for the same key set) and un-wrapped the `#ifndef` around the
+      live half. Since the preprocessor had already discarded the
+      dead half in every build (this is a compile-time macro, not a
+      runtime branch), this doesn't move `gcov`'s coverable-line count
+      or `bin/pine`'s size -- pure source hygiene, same "0 byte
+      delta" pattern as the other preprocessor-only DOS-macro cuts in
+      this file's history.
+      The surviving `read_char()`'s remaining low coverage is a real
+      terminal-escape-sequence decoder (arrow keys, PF-keys, multiple
+      terminal families -- vt100/vt200 CSI, vt100 application-mode
+      SS3, Sun, DEC vt52, Zenith Z19) -- all genuinely reachable, just
+      never exercised because every existing smoketest drives pine
+      with plain ASCII keys, never a real terminal's multi-byte escape
+      sequences for cursor keys.
+- **What changed**: `pine/ttyin.c` (dead `#else`/`OLD_READ_CHAR`
+  branch removed). Also added
+  `test/cases/test_arrow_key_navigation.py`, sending the two escape
+  sequences a vt100-class terminal (like this project's real WY-60,
+  see `blog/`) actually uses for cursor keys -- CSI (`ESC [ A`/
+  `ESC [ B`) and SS3 (`ESC O A`/`ESC O B`) -- and confirming they move
+  the FOLDER INDEX cursor exactly like `'p'`/`'n'`
+  (`pine/mailcmd.c:203/219` bind `KEY_UP`/`KEY_DOWN` to the same
+  branches as those keys).
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite 31/31 (was 30/30) with the new test added, run
+  standalone first. `python3 test/run_smoketests.py --coverage`:
+  `ttyin.c` 37.8% (186/492) -> 41.9% (206/492); whole-suite total
+  49.2% (4248/8641) -> 49.5% (4277/8641).
+- **Size delta**: none -- `bin/pine` text unchanged at 277941 bytes,
+  as expected for a preprocessor-only source deletion plus a test-only
+  addition.
+- This closes out the "Investigation targets: low-smoketest-coverage
+  files" TODO item -- all five flagged files (`folder.c`, `mailcmd.c`,
+  `reply.c`, `signals.c`, `ttyin.c`) are done. Net across all five:
+  three real dead-code removals (`mcdate2ctime()`, `copy_envelope()`,
+  the `jump_to()` fallout, and this file's dead `#else` branch --
+  `bin/pine` text -904 bytes total), five new smoketest files, and
+  whole-suite coverage 42.5% -> 49.5%.

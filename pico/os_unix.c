@@ -784,7 +784,7 @@ gethomedir(int *l)
 
 /*
  * errstr - return system error string corresponding to given errno
- *          Note: strerror() is not provided on all systems, so it's 
+ *          Note: strerror() is not provided on all systems, so it's
  *          done here once and for all.
  */
 char *
@@ -792,6 +792,35 @@ errstr(int err)
 {
     return strerror(err);
 }
+
+
+#if	(defined(bsd) || defined(nxt) || defined(dyn)) && !defined(LINUX)
+#include	<sys/param.h>
+extern char *getwd();
+
+/*
+ * getcwd - getcwd() compat shim: this platform's libc only has the older
+ *          getwd(), which takes no size argument and expects a buffer of
+ *          at least MAXPATHLEN. Reject paths too long for the caller's
+ *          buffer instead of overflowing it.
+ */
+char *
+getcwd(char *buf, int size)
+{
+    char pathname[MAXPATHLEN];
+
+    if(getwd(pathname) == NULL)
+      return(NULL);
+
+    if((int)strlen(pathname) >= size){
+	errno = ERANGE;
+	return(NULL);
+    }
+
+    strcpy(buf, pathname);
+    return(buf);
+}
+#endif
 
 
 

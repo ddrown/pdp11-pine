@@ -67,15 +67,17 @@ LOCLIBES=    ../pico/libpico.a ../c-client/c-client.a
 # BSD gets defined in param.h so don't redefine here.
 CFLAGS= $(OPTIMIZE) $(PROFILE) $(DEBUG)
 
-obj=    addrbook.o addrutil.o adrbklib.o args.o context.o filter.o \
-	folder.o help.o helptext.o imap.o init.o mailcmd.o mailindx.o \
-	mailview.o newmail.o other.o pine.o print.o reply.o screen.o \
-	send.o signals.o status.o strings.o ttyin.o ttyout.o os.o
+obj=    addrutil.o args.o context.o filter.o \
+	folder.o help.o helptext.o init.o mailcmd.o mailindx.o \
+	mailview.o newmail.o pine.o reply.o screen.o \
+	send.o signals.o status.o strings.o ttyin.o ttyout.o os.o log.o \
+	mailbox.o
 
-cfiles= addrbook.c addrutil.c adrbklib.c args.c context.c filter.c \
-	folder.c help.c helptext.c imap.c init.c mailcmd.c mailindx.c \
-	mailview.c newmail.c other.c pine.c print.c reply.c screen.c \
-	send.c signals.c status.c strings.c ttyin.c ttyout.c os.c
+cfiles= addrutil.c args.c context.c filter.c \
+	folder.c help.c helptext.c init.c mailcmd.c mailindx.c \
+	mailview.c newmail.c pine.c reply.c screen.c \
+	send.c signals.c status.c strings.c ttyin.c ttyout.c os.c log.c \
+	mailbox.c
 
 pine:  $(obj) $(LOCLIBES)
 	echo "char datestamp[]="\"`date`\"";" > date.c
@@ -94,33 +96,30 @@ clean:
 HEADERS= headers.h pine.h os.h helptext.h context.h \
 	  ../c-client/mail.h ../c-client/osdep.h
 
-addrbook.o:	addrbook.c  $(HEADERS) adrbklib.h
-addrutil.o:	addrutil.c  $(HEADERS) adrbklib.h
-adrbklib.o: 	adrbklib.c  $(HEADERS) adrbklib.h
+addrutil.o:	addrutil.c  $(HEADERS)
 args.o:		args.c      $(HEADERS)
 context.o:	context.c   $(HEADERS) ../c-client/misc.h
 filter.o:	filter.c    $(HEADERS) ../pico/pico.h
 folder.o:	folder.c    $(HEADERS)
 help.o:		help.c      $(HEADERS)
 helptext.o:	helptext.c
-imap.o:	        imap.c      $(HEADERS)
 init.o:		init.c      $(HEADERS)
 mailcmd.o:	mailcmd.c   $(HEADERS)
 mailindx.o:	mailindx.c  $(HEADERS)
 mailview.o:	mailview.c  $(HEADERS)
 newmail.o:	newmail.c   $(HEADERS)
 os.o:		os.c 	    $(HEADERS)
-other.o:	other.c     $(HEADERS)
 pine.o:		pine.c      $(HEADERS)
-print.o:	print.c     $(HEADERS)
 reply.o:	reply.c     $(HEADERS)
 screen.o:	screen.c    $(HEADERS)
-send.o:	        send.c      $(HEADERS) ../c-client/smtp.h ../pico/pico.h
+send.o:	        send.c      $(HEADERS) ../pico/pico.h
 signals.o:	signals.c   $(HEADERS)
 status.o:	status.c    $(HEADERS)
 strings.o:	strings.c   $(HEADERS)
 ttyin.o:	ttyin.c     $(HEADERS)
 ttyout.o:	ttyout.c    $(HEADERS)
+log.o:	log.c    $(HEADERS)
+mailbox.o:	mailbox.c    $(HEADERS)
 
 os.h:	osdep/os-bsd.h
 	$(RM) os.h

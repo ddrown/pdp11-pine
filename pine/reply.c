@@ -75,7 +75,6 @@ lots of things that could be done better that will evolve over time.
 
 
 char          *generate_reply_to(ENVELOPE *);
-ENVELOPE      *copy_envelope(ENVELOPE *);
 BODY          *copy_body(BODY *, BODY *);
 int            fetch_contents(MAILSTREAM *, long, BODY *, int, int);
 void           format_text_header(ENVELOPE *, gf_io_t, char *);
@@ -975,46 +974,6 @@ copy_parameters(old_p)
 }
     
     
-
-/*----------------------------------------------------------------------
-    Make a complete copy of an envelope and all it's fields
-
-Args:    e -- the envelope to copy
-
-Result:  returns the new envelope, or NULL, if the given envelope was NULL
-
-  ----*/
-
-ENVELOPE *    
-copy_envelope(e)
-     register ENVELOPE *e;
-{
-    register ENVELOPE *e2;
-
-    if(e == NULL)
-      return(NULL);
-
-    e2              = mail_newenvelope();
-    e2->remail      = (e->remail      == NULL ? NULL : cpystr(e->remail));
-    e2->return_path = (e->return_path == NULL ? NULL :
-                                              rfc822_cpy_adr(e->return_path));
-    e2->date        = (e->date        == NULL ? NULL : cpystr(e->date));
-    e2->from        = (e->from        == NULL ? NULL :
-                                              rfc822_cpy_adr(e->from));
-    e2->sender      = (e->sender      == NULL ? NULL :
-                                              rfc822_cpy_adr(e->sender));
-    e2->reply_to    = (e->reply_to    == NULL ? NULL :
-                                              rfc822_cpy_adr(e->reply_to));
-    e2->subject     = (e->subject     == NULL ? NULL : cpystr(e->subject));
-    e2->to          = (e->to          == NULL ? NULL : rfc822_cpy_adr(e->to));
-    e2->cc          = (e->cc          == NULL ? NULL : rfc822_cpy_adr(e->cc));
-    e2->bcc         = (e->bcc         == NULL ? NULL : rfc822_cpy_adr(e->bcc));
-    e2->in_reply_to = (e->in_reply_to == NULL ? NULL : cpystr(e->in_reply_to));
-    e2->message_id  = (e->message_id  == NULL ? NULL : cpystr(e->message_id));
-    return(e2);
-}
-
-
 
 
 
