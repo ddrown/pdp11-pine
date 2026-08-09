@@ -41,20 +41,3 @@ DONE elsewhere or referenced in passing below.
       process run rather than across separate invocations (addresses
       aren't stable between runs).
 
-### Strip stray form-feed (`^L`) page-break characters from older source files
-
-- [ ] Several of the original UW files (`imap/ANSI/c-client/mail.c`,
-      `bezerk.c`, and likely others of the same vintage) have literal
-      form-feed characters as printer page-break separators before
-      function comment blocks. Not a size issue (they're inside comments/
-      whitespace, stripped or irrelevant to the compiled output either
-      way) -- this is pure tooling-friction cleanup: they've repeatedly
-      broken the `Edit` tool's exact-string matching during past cuts
-      (most recently the `mail_search`/`bezerk_search` removal, see
-      `TODO-pdp11-done.md`), forcing a fallback to `sed` with explicit
-      line ranges every time. Worth a mechanical sweep at some point:
-      `grep -rl $'\f'` across `pine/` and `imap/ANSI/c-client/` to find
-      every affected file, then strip the character (careful to keep
-      the surrounding blank-line spacing consistent with the rest of
-      each file's convention).
-

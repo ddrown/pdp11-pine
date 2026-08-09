@@ -38,7 +38,7 @@ static char rcsid[] = "$Id: context.c,v 4.25 1993/12/01 02:56:46 mikes Exp $";
 
 #include "../c-client/misc.h"
 #include "headers.h"
-
+
 char *current_context = NIL;	/* current context for FIND */
 
 /* Mailbox found
@@ -61,7 +61,7 @@ char *string;
 {
   context_fqn_to_an (context_bboard,current_context,string);
 }
-
+
 /* Convert fully-qualified name to ambiguous name and send to function
  * Accepts: find return function
  *	    current context
@@ -255,7 +255,7 @@ context_apply(char *b, char *c, char *n)
       strcpy(b, n);			/* don't apply bogus context */
 }
 
-
+
 /* Context Manager check if name is ambiguous
  * Accepts: candidate string
  * Returns: T if ambiguous, NIL if fully-qualified
@@ -277,7 +277,7 @@ context_isambig(char *s)
      */
     return (short) (c == '.' || isalnum (c));
 }
-
+
 /* Context Manager find list of all mailboxes
  * Accepts: context
  *	    mail stream

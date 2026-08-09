@@ -43,7 +43,7 @@
  * HUSKY FEVER!!!].
  *
  */
-
+
 #include <stdio.h>
 #include <ctype.h>
 #include <netdb.h>
@@ -62,7 +62,7 @@ extern int errno;		/* just in case */
 #include "dummy.h"
 #include <time.h>
 #include <sys/uio.h>
-
+
 /* Berkeley mail routines */
 
 
@@ -132,7 +132,7 @@ int bezerk_isvalid (char *name,char *tmp)
   }
   return ret;			/* return what we should */
 }
-
+
 /* Berkeley manipulate driver parameters
  * Accepts: function code
  *	    function-dependent value
@@ -144,7 +144,7 @@ void *bezerk_parameters (long function,void *value)
   fatal ("Invalid bezerk_parameters function");
   return NIL;
 }
-
+
 /* Berkeley mail find list of mailboxes
  * Accepts: mail stream
  *	    pattern to search
@@ -202,7 +202,7 @@ long bezerk_delete (MAILSTREAM *stream,char *mailbox)
 {
   return bezerk_rename (stream,mailbox,NIL);
 }
-
+
 /* Berkeley mail rename mailbox
  * Accepts: MAIL stream
  *	    old mailbox name
@@ -248,7 +248,7 @@ long bezerk_rename (MAILSTREAM *stream,char *old,char *new)
   unlink (lock);		/* and delete it */
   return ret;			/* return success */
 }
-
+
 /* Berkeley mail open
  * Accepts: Stream to open
  * Returns: Stream on success, NIL on failure
@@ -297,7 +297,7 @@ MAILSTREAM *bezerk_open (MAILSTREAM *stream)
   LOCAL->cachesize = 0;
   LOCAL->buf = (char *) fs_get ((LOCAL->buflen = CHUNK) + 1);
   stream->sequence++;		/* bump sequence number */
-
+
   LOCAL->dirty = NIL;		/* no update yet */
 				/* make lock for read/write access */
   if (!stream->readonly) while (retry) {
@@ -336,7 +336,7 @@ MAILSTREAM *bezerk_open (MAILSTREAM *stream)
       retry = 0;		/* no more need to try */
     }
   }
-
+
 				/* parse mailbox */
   stream->nmsgs = stream->recent = 0;
 				/* will we be able to get write access? */
@@ -361,7 +361,7 @@ MAILSTREAM *bezerk_open (MAILSTREAM *stream)
   if (!(stream->nmsgs || stream->silent)) mm_log ("Mailbox is empty",NIL);
   return stream;		/* return stream alive to caller */
 }
-
+
 /* Berkeley mail close
  * Accepts: MAIL stream
  */
@@ -408,7 +408,7 @@ void bezerk_fetchflags (MAILSTREAM *stream,char *sequence)
 {
   return;			/* no-op for local mail */
 }
-
+
 /* Berkeley mail fetch structure
  * Accepts: MAIL stream
  *	    message # to fetch
@@ -455,7 +455,7 @@ ENVELOPE *bezerk_fetchstructure (MAILSTREAM *stream,long msgno,BODY **body)
   if (body) *body = *b;		/* return the body */
   return *env;			/* return the envelope */
 }
-
+
 /* Berkeley mail snarf message, only for Tenex driver
  * Accepts: MAIL stream
  *	    message # to snarf
@@ -479,7 +479,7 @@ char *bezerk_snarf (MAILSTREAM *stream,long msgno,long *size)
   LOCAL->buf[*size] = '\0';	/* tie off string */
   return LOCAL->buf;
 }
-
+
 /* Berkeley mail fetch message header
  * Accepts: MAIL stream
  *	    message # to fetch
@@ -514,7 +514,7 @@ char *bezerk_fetchtext (MAILSTREAM *stream,long msgno)
   strcrlfcpy (&LOCAL->buf,&LOCAL->buflen,m->body,m->bodysize);
   return LOCAL->buf;
 }
-
+
 /* Berkeley fetch message body as a structure
  * Accepts: Mail stream
  *	    message # to fetch
@@ -567,7 +567,7 @@ char *bezerk_fetchbody (MAILSTREAM *stream,long m,char *s,unsigned long *len)
   return rfc822_contents (&LOCAL->buf,&LOCAL->buflen,len,base + offset,
 			  b->size.ibytes,b->encoding);
 }
-
+
 /* Berkeley mail set flag
  * Accepts: MAIL stream
  *	    sequence
@@ -620,7 +620,7 @@ void bezerk_clearflag (MAILSTREAM *stream,char *sequence,char *flag)
       LOCAL->dirty = T;		/* note stream is now dirty */
     }
 }
-
+
 /* Berkeley mail ping mailbox
  * Accepts: MAIL stream
  * Returns: T if stream alive, else NIL
@@ -653,7 +653,7 @@ long bezerk_ping (MAILSTREAM *stream)
   }
   return LOCAL ? T : NIL;	/* return if still alive */
 }
-
+
 /* Berkeley mail check mailbox
  * Accepts: MAIL stream
  * No-op for readonly files, since read/writer can expunge it from under us!
@@ -673,7 +673,7 @@ void bezerk_check (MAILSTREAM *stream)
   }
   if (LOCAL && LOCAL->ld) mm_log ("Check completed",NIL);
 }
-
+
 /* Berkeley mail expunge mailbox
  * Accepts: MAIL stream
  */
@@ -725,7 +725,7 @@ void bezerk_expunge (MAILSTREAM *stream)
   else r = "Expunge ignored on readonly mailbox";
   if (LOCAL && !stream->silent) mm_log (r,NIL);
 }
-
+
 /* Berkeley mail copy message(s)
  * Accepts: MAIL stream
  *	    sequence
@@ -764,7 +764,7 @@ long bezerk_move (MAILSTREAM *stream,char *sequence,char *mailbox)
     }
   return T;
 }
-
+
 /* Berkeley mail append message from stringstruct
  * Accepts: MAIL stream
  *	    destination mailbox
@@ -816,7 +816,7 @@ long bezerk_append (MAILSTREAM *stream,char *mailbox,STRING *message)
   mm_nocritical (stream);	/* release critical */
   return ok;			/* return success */
 }
-
+
 /* Berkeley mail append character
  * Accepts: file descriptor
  *	    output buffer
@@ -834,7 +834,7 @@ long bezerk_append_putc (int fd,char *s,int *i,char c)
   }
   return T;
 }
-
+
 /* Berkeley garbage collect stream
  * Accepts: Mail stream
  *	    garbage collection flags
@@ -844,7 +844,7 @@ void bezerk_gc (MAILSTREAM *stream,long gcflags)
 {
   /* nothing here for now */
 }
-
+
 /* Internal routines */
 
 
@@ -874,7 +874,7 @@ void bezerk_abort (MAILSTREAM *stream)
     stream->open = NIL;		/* mark as no longer open */
   }
 }
-
+
 /* Berkeley mail generate file string
  * Accepts: temporary buffer to write into
  *	    mailbox name string
@@ -927,7 +927,7 @@ char *bezerk_file (char *dst,char *name)
   }
   return dst;
 }
-
+
 /* Berkeley open and lock mailbox
  * Accepts: file name to open/lock
  *	    file open mode
@@ -988,7 +988,7 @@ int bezerk_lock (char *file,int flags,int mode,char *lock,int op)
   }
   return fd;
 }
-
+
 /* Berkeley unlock and close mailbox
  * Accepts: file descriptor
  *	    (optional) mailbox stream to check atime/mtime
@@ -1015,7 +1015,7 @@ void bezerk_unlock (int fd,MAILSTREAM *stream,char *lock)
 				/* flush the lock file if any */
   if (lock && *lock) unlink (lock);
 }
-
+
 /* Berkeley mail parse and lock mailbox
  * Accepts: MAIL stream
  *	    space to write lock file name
@@ -1064,7 +1064,7 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
     mail_unlock (stream);
     return -1;
   }
-
+
   else if (delta) {		/* get to that position in the file */
     lseek (fd,LOCAL->filesize,L_SET);
     s = s1 = LOCAL->buf;	/* initial read-in location */
@@ -1105,7 +1105,7 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
 	}
 	first = NIL;		/* don't do this again */
       }
-
+
 				/* found end of message or end of data? */
       while ((e = bezerk_eom (s,s1,i)) || !delta) {
 	nmsgs++;		/* yes, have a new message */
@@ -1151,7 +1151,7 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
   }
   else LOCAL->msgs = (FILECACHE **)
     fs_get ((LOCAL->cachesize = nmsgs + CACHEINCREMENT) *sizeof (FILECACHE *));
-
+
   if (LOCAL->buflen > CHUNK) {	/* maybe move where the buffer is in memory*/
     fs_give ((void **) &LOCAL->buf);
     LOCAL->buf = (char *) fs_get ((LOCAL->buflen = CHUNK) + 1);
@@ -1210,7 +1210,7 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
     }
 				/* set internal date */
     if (!mail_parse_date (elt,LOCAL->buf)) mm_log ("Unparsable date",WARN);
-
+
     is = 0;			/* initialize newline count */
     e = NIL;			/* no status stuff yet */
     do switch (*(t = s)) {	/* look at header lines */
@@ -1252,7 +1252,7 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
       }
       else is++;		/* otherwise random line */
       break;
-
+
     case '\n':			/* end of header */
       m->body = ++s;		/* start of body is here */
       j = m->body - m->header;	/* new header size */
@@ -1300,7 +1300,7 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
   if (recent) LOCAL->dirty = T;	/* mark dirty so O flags are set */
   return fd;			/* return the winnage */
 }
-
+
 /* Berkeley search for end of message
  * Accepts: start of message
  *	    start of new data
@@ -1343,7 +1343,7 @@ char *bezerk_eom (char *som,char *sod,long i)
   }
   return NIL;
 }
-
+
 /* Berkeley extend mailbox to reserve worst-case space for expansion
  * Accepts: MAIL stream
  *	    file descriptor
@@ -1394,7 +1394,7 @@ int bezerk_extend (MAILSTREAM *stream,int fd,char *error)
   fs_give ((void **) &s);	/* flush buffer of nulls */
   return ok;			/* return status */
 }
-
+
 /* Berkeley save mailbox
  * Accepts: MAIL stream
  *	    mailbox file descriptor
@@ -1445,7 +1445,7 @@ void bezerk_save (MAILSTREAM *stream,int fd)
   LOCAL->dirty = NIL;		/* stream no longer dirty */
   mm_nocritical (stream);	/* exit critical */
 }
-
+
 /* Berkeley copy messages
  * Accepts: MAIL stream
  *	    mailbox name
@@ -1500,7 +1500,7 @@ int bezerk_copy_messages (MAILSTREAM *stream,char *mailbox)
   mm_nocritical (stream);	/* release critical */
   return ok;			/* return whether or not succeeded */
 }
-
+
 /* Berkeley write message to mailbox
  * Accepts: I/O vector
  *	    I/O vector index
@@ -1549,7 +1549,7 @@ void bezerk_update_status (char *status,MESSAGECACHE *elt)
   if (elt->answered) *t++ = 'A';
   *t++ = '\n'; *t++ = '\n'; *t++ = '\0';
 }
-
+
 /* Parse flag list
  * Accepts: MAIL stream
  *	    flag list as a character string
@@ -1572,7 +1572,7 @@ short bezerk_getflags (MAILSTREAM *stream,char *flag)
     strncpy (LOCAL->buf,flag+i,(j = strlen (flag) - (2*i)));
     LOCAL->buf[j] = '\0';
     t = ucase (LOCAL->buf);	/* uppercase only from now on */
-
+
     while (*t) {		/* parse the flags */
       if (*t == '\\') {		/* system flag? */
 	switch (*++t) {		/* dispatch based on first character */

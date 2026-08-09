@@ -35,7 +35,7 @@
  * Unlike earlier efforts, this version requires no external TCP library.  It
  * also takes advantage of the Map panel in System 7 for the timezone.
  */
-
+
 #include <stdlib.h>
 #include <string.h>
 #include <types.h>

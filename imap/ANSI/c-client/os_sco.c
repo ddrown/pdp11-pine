@@ -32,7 +32,7 @@
  * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
- 
+
 /* TCP input buffer */
 
 #define BUFLEN 8192
@@ -75,7 +75,7 @@ extern char *crypt();
 static char *re;
 extern char *regcmp (char *str,char *z);
 extern char *regex (char *re,char *s);
-
+
 /* Write current time in RFC 822 format
  * Accepts: destination string
  */
@@ -99,7 +99,7 @@ void rfc822_date (char *date)
 	   t->tm_hour,t->tm_min,t->tm_sec,zone/60,abs (zone) % 60,
 	   tzname[dstflag]);
 }
-
+
 /* Get a block of free storage
  * Accepts: size of desired block
  * Returns: free storage block
@@ -146,7 +146,7 @@ void fatal (char *string)
   syslog (LOG_ALERT,"IMAP C-Client crash: %s",string);
   abort ();			/* die horribly */
 }
-
+
 /* Copy string with CRLF newlines
  * Accepts: destination string
  *	    pointer to size of destination string
@@ -212,7 +212,7 @@ unsigned long strcrlflen (STRING *s)
   SETPOS (s,pos);		/* restore old position */
   return i;
 }
-
+
 /* Server log in
  * Accepts: user name string
  *	    password string
@@ -238,7 +238,7 @@ long server_login (char *user,char *pass,char **home,int argc,char *argv[])
   if (home) *home = cpystr (pwd->pw_dir);
   return T;
 }
-
+
 /* Return my user name
  * Returns: my user name
  */
@@ -278,7 +278,7 @@ char *lockname (char *tmp,char *fname)
   else sprintf (tmp,"/tmp/.%hx.%lx",sbuf.st_dev,sbuf.st_ino);
   return tmp;			/* note name for later */
 }
-  
+
 /* TCP/IP open
  * Accepts: host name
  *	    contact port number
@@ -311,7 +311,7 @@ TCPSTREAM *tcp_open (char *host,int port)
       return NIL;
     }
   }
-
+
   else {			/* lookup host name, note that brain-dead Unix
 				   requires lowercase! */
     strcpy (hostname,host);	/* in case host is in write-protected memory */
@@ -346,7 +346,7 @@ TCPSTREAM *tcp_open (char *host,int port)
       return NIL;
     }
   }
-
+
 				/* copy port number in network format */
   if (!(sin.sin_port = htons (port))) fatal ("Bad port argument to tcp_open");
 				/* get a TCP stream */
@@ -375,7 +375,7 @@ TCPSTREAM *tcp_open (char *host,int port)
   stream->ictr = 0;		/* init input counter */
   return stream;		/* return success */
 }
-  
+
 /* TCP/IP authenticated open
  * Accepts: host name
  *	    service name
@@ -425,7 +425,7 @@ TCPSTREAM *tcp_aopen (char *host,char *service)
     execl (RSHPATH,RSH,hostname,"exec",service,0);
     _exit (1);			/* spazzed */
   }
-
+
 				/* create TCP/IP stream */
   stream = (TCPSTREAM *) fs_get (sizeof (TCPSTREAM));
 				/* copy official host name */
@@ -439,7 +439,7 @@ TCPSTREAM *tcp_aopen (char *host,char *service)
   stream->ictr = 0;		/* init input counter */
   return stream;		/* return success */
 }
-
+
 /* TCP/IP receive line
  * Accepts: TCP/IP stream
  * Returns: text line string or NIL if failure
@@ -487,7 +487,7 @@ char *tcp_getline (TCPSTREAM *stream)
   }
   return ret;
 }
-
+
 /* TCP/IP receive buffer
  * Accepts: TCP/IP stream
  *	    size in bytes
@@ -542,7 +542,7 @@ long tcp_getdata (TCPSTREAM *stream)
   }
   return T;
 }
-
+
 /* TCP/IP send string as record
  * Accepts: TCP/IP stream
  *	    string pointer
@@ -582,7 +582,7 @@ long tcp_sout (TCPSTREAM *stream,char *string,unsigned long size)
   }
   return T;			/* all done */
 }
-
+
 /* TCP/IP close
  * Accepts: TCP/IP stream
  */
@@ -665,7 +665,7 @@ unsigned long gethostid ()
 {
   return (unsigned long) 0xdeadface;
 }
-
+
 /* Emulator for BSD random() call
  * Returns: long random number
  */
@@ -685,7 +685,7 @@ int ftruncate (int fd, off_t length)
 {
   return chsize (fd, length);
 }
-
+
 /* Emulator for BSD scandir() call
  * Accepts: directory name
  *	    destination pointer of names array
@@ -728,7 +728,7 @@ int scandir (char *dirname, struct dirent ***namelist, int (*select) (), int (*c
   *namelist = names;		/* return directory */
   return nitems;		/* and size */
 }
-
+
 /* Emulator for BSD flock() call
  * Accepts: file descriptor
  *	    operation bitmask
@@ -772,7 +772,7 @@ int utimes (char *file, struct timeval tvp[2])
   tb.modtime = tvp[1].tv_sec;	/* updated time */
   return utime (file,&tb);
 }
-
+
 /* Emulator for BSD writev() call
  * Accepts: file name
  *	    I/O vector structure
@@ -804,7 +804,7 @@ int fsync (int fd)
   sync ();
   return (0);
 }
-
+
 /* Emulator for BSD setitimer() call
  * Accepts: which timer to set
  *	    new timer value

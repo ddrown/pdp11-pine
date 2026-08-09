@@ -49,7 +49,7 @@
 #include "osdep.h"
 #include "rfc822.h"
 #include "misc.h"
-
+
 /* RFC-822 static data */
 
 
@@ -98,7 +98,7 @@ const char *hspecials = " ()<>@,;:\\\"";
 const char *wspecials = " ()<>@,;:\\\"[]";
 				/* parse-token specials for parsing */
 const char *ptspecials = " ()<>@,;:\\\"[]/?=";
-
+
 /* RFC822 writing routines */
 
 
@@ -136,7 +136,7 @@ void rfc822_header (char *header,ENVELOPE *env,BODY *body)
   }
   strcat (header,"\015\012");	/* write terminating blank line */
 }
-
+
 /* Write RFC822 address from header line
  * Accepts: pointer to destination string pointer
  *	    pointer to header type
@@ -214,7 +214,7 @@ void rfc822_address_line (char **header,char *type,ENVELOPE *env,ADDRESS *adr)
     *header = s;		/* set return value */
   }
 }
-
+
 /* Write RFC822 text from header line
  * Accepts: pointer to destination string pointer
  *	    pointer to header type
@@ -259,7 +259,7 @@ void rfc822_write_address (char *dest,ADDRESS *adr)
     }
   }
 }
-
+
 /* Write RFC822 route-address to string
  * Accepts: pointer to destination string
  *	    address to interpret
@@ -303,7 +303,7 @@ void rfc822_cat (char *dest,char *src,const char *specials)
   }
   else strcat (dest,src);	/* otherwise it's the easy case */
 }
-
+
 /* Write body content header
  * Accepts: pointer to destination string pointer
  *	    pointer to body to interpret
@@ -355,7 +355,7 @@ char *rfc822_default_subtype (unsigned short type)
     return "UNKNOWN";
   }
 }
-
+
 /* RFC822 parsing routines */
 
 
@@ -398,7 +398,7 @@ void rfc822_parse_msg (ENVELOPE **en,BODY **bdy,char *s,unsigned long i,
       if (--i > 0) s++;		/* get next character */
       else *t++ = c = '\0';	/* end of header */
     }
-
+
 				/* find header item type */
     if (t = d = strchr (tmp,':')) {
       *d++ = '\0';		/* tie off header item, point at its data */
@@ -429,7 +429,7 @@ void rfc822_parse_msg (ENVELOPE **en,BODY **bdy,char *s,unsigned long i,
 	if (!env->in_reply_to && !strcmp (tmp+1,"N-REPLY-TO"))
 	  env->in_reply_to = cpystr (d);
 	break;
-
+
       case 'M':			/* possible Message-ID: or MIME-Version: */
 	if (!env->message_id && !strcmp (tmp+1,"ESSAGE-ID"))
 	  env->message_id = cpystr (d);
@@ -474,7 +474,7 @@ void rfc822_parse_msg (ENVELOPE **en,BODY **bdy,char *s,unsigned long i,
 				/* now parse the body */
   if (body) rfc822_parse_content (body,bs,host,tmp);
 }
-
+
 /* Parse a message body content
  * Accepts: pointer to body structure
  *	    pointer to body
@@ -505,7 +505,7 @@ void rfc822_parse_content (BODY *body,STRING *bs,char *h,char *t)
 				/* count number of lines */
     while (i--) if ((SNX (bs)) == '\n') body->size.lines++;
     break;
-
+
   case TYPEMESSAGE:		/* encapsulated message */
     body->contents.msg.env = NIL;
     body->contents.msg.body = NIL;
@@ -549,7 +549,7 @@ void rfc822_parse_content (BODY *body,STRING *bs,char *h,char *t)
     if (!*t) strcpy (t,"-");	/* yucky default */
     j = strlen (t);		/* length of cookie and header */
     c = '\012';			/* initially at beginning of line */
-
+
     while (i > j) {		/* examine data */
       m = GETPOS (bs);		/* note position */
       if (m) m--;		/* get position in front of character */
@@ -614,7 +614,7 @@ void rfc822_parse_content (BODY *body,STRING *bs,char *h,char *t)
       }				/* calculate size of any final part */
     }
     if (part) part->body.size.bytes = GETPOS (bs) - part->offset;
-
+
 				/* parse body parts */
     for (part = body->contents.part; part; part = part->next) {
       SETPOS (bs,part->offset);	/* move to that part of the body */
@@ -677,7 +677,7 @@ void rfc822_parse_content (BODY *body,STRING *bs,char *h,char *t)
     break;
   }
 }
-
+
 /* Parse RFC822 body content header
  * Accepts: body to write to
  *	    possible content name
@@ -728,7 +728,7 @@ void rfc822_parse_content_header (BODY *body,char *name,char *s)
 	  rfc822_skipws (&name);/* skip leading whitespace */
 	}
       }
-
+
 				/* parameter list? */
       while (name && (*name == ';') &&
 	     (name = rfc822_parse_word ((s = ++name),ptspecials))) {
@@ -778,7 +778,7 @@ void rfc822_parse_content_header (BODY *body,char *name,char *s)
     break;
   }
 }
-
+
 /* Parse RFC822 address list
  * Accepts: address list to write to
  *	    input string
@@ -830,7 +830,7 @@ void rfc822_parse_adrlist (ADDRESS **lst,char *string,char *host)
 	break;
       }
     }
-
+
 				/* handle end of group */
     if (string && *string == ';' && n >= 0) {
       n--;			/* out of this group */
@@ -857,7 +857,7 @@ void rfc822_parse_adrlist (ADDRESS **lst,char *string,char *host)
     last = adr;			/* set for subsequent linking */
   }
 }
-
+
 /* Parse RFC822 address
  * Accepts: pointer to string pointer
  *	    default host
@@ -912,7 +912,7 @@ ADDRESS *rfc822_parse_address (char **string,char *defaulthost)
   }
   return adr;			/* return the address */
 }
-
+
 /* Parse RFC822 route-address
  * Accepts: string pointer
  *	    pointer to string pointer to update
@@ -960,7 +960,7 @@ ADDRESS *rfc822_parse_routeaddr (char *string,char **ret,char *defaulthost)
   mm_log (tmp,PARSE);
   return adr;			/* return the address */
 }
-
+
 /* Parse RFC822 address-spec
  * Accepts: string pointer
  *	    pointer to string pointer to update
@@ -1002,7 +1002,7 @@ ADDRESS *rfc822_parse_addrspec (char *string,char **ret,char *defaulthost)
     else mm_log ("Missing or invalid host name after @",PARSE);
   }
   else end = t;			/* make person name default start after mbx */
-
+
 				/* default host if missing */
   if (!adr->host) adr->host = cpystr (defaulthost);
   if (end && !adr->personal) {	/* try person name in comments if missing */
@@ -1024,7 +1024,7 @@ ADDRESS *rfc822_parse_addrspec (char *string,char **ret,char *defaulthost)
   *ret = (end && *end) ? end : NIL;
   return adr;			/* return the address we got */
 }
-
+
 /* Parse RFC822 phrase
  * Accepts: string pointer
  * Returns: pointer to end of phrase
@@ -1044,7 +1044,7 @@ char *rfc822_parse_phrase (char *s)
 				/* recurse to see if any more */
   return (s = rfc822_parse_phrase (s)) ? s : curpos;
 }
-
+
 /* Parse RFC822 word
  * Accepts: string pointer
  * Returns: pointer to end of word
@@ -1099,7 +1099,7 @@ char *rfc822_parse_word (char *s,const char *delimiters)
     }
   }
 }
-
+
 /* Copy an RFC822 format string
  * Accepts: string
  * Returns: copy of string
@@ -1163,7 +1163,7 @@ ADDRESS *rfc822_cpy_adr (ADDRESS *adr)
   }
   return (ret);			/* return the MTP address list */
 }
-
+
 /* Skips RFC822 whitespace
  * Accepts: pointer to string pointer
  */
@@ -1206,7 +1206,7 @@ void rfc822_skipws (char **s)
     ++*s;			/* skip past whitespace character */
   }
 }
-
+
 /* Body contents utility and encoding/decoding routines */
 
 
@@ -1258,7 +1258,7 @@ long rfc822_output (char *t,ENVELOPE *env,BODY *body,soutr_t f,TCPSTREAM *s)
 				/* output header and body */
   return (*f) (s,t) && (body ? rfc822_output_body (body,f,s) : T);
 }
-
+
 /* Encode a body for 7BIT transmittal
  * Accepts: envelope
  *	    body
@@ -1309,7 +1309,7 @@ void rfc822_encode_body (ENVELOPE *env,BODY *body)
     break;
   }
 }
-
+
 /* Output RFC 822 body
  * Accepts: body
  *	    I/O routine
@@ -1354,7 +1354,7 @@ long rfc822_output_body (BODY *body,soutr_t f,TCPSTREAM *s)
   if (t && *t && !((*f) (s,t) && (*f) (s,"\015\012"))) return NIL;
   return LONGT;
 }
-
+
 /* Convert BASE64 contents to binary
  * Accepts: source
  *	    length of source
@@ -1412,7 +1412,7 @@ void *rfc822_base64 (unsigned char *src,unsigned long srcl,unsigned long *len)
   *len = d - (char *) ret;	/* calculate data length */
   return ret;			/* return the string */
 }
-
+
 /* Convert binary contents to BASE64
  * Accepts: source
  *	    length of source
@@ -1447,7 +1447,7 @@ unsigned char *rfc822_binary (void *src,unsigned long srcl,unsigned long *len)
   if ((d - ret) != *len) fatal ("rfc822_binary logic flaw");
   return ret;			/* return the resulting string */
 }
-
+
 /* Convert QUOTED-PRINTABLE contents to 8BIT
  * Accepts: source
  *	    length of source
@@ -1507,7 +1507,7 @@ unsigned char *rfc822_qprint (unsigned char *src,unsigned long srcl,
   *len = d - ret;		/* calculate length */
   return ret;			/* return the string */
 }
-
+
 /* Convert 8BIT contents to QUOTED-PRINTABLE
  * Accepts: source
  *	    length of source

@@ -32,7 +32,7 @@
  * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-
+
 /* Build parameters */
 
 
@@ -67,7 +67,7 @@ typedef struct phile_local {
 /* Convenient access to local data */
 
 #define LOCAL ((PHILELOCAL *) stream->local)
-
+
 /* Function prototypes */
 
 DRIVER *phile_valid (char *name);
@@ -103,7 +103,7 @@ long phile_copy (MAILSTREAM *stream,char *sequence,char *mailbox);
 long phile_move (MAILSTREAM *stream,char *sequence,char *mailbox);
 long phile_append (MAILSTREAM *stream,char *mailbox,STRING *message);
 void phile_gc (MAILSTREAM *stream,long gcflags);
-
+
 char *phile_file (char *dst,char *name);
 short phile_getflags (MAILSTREAM *stream,char *flag);
 char phile_search_all (MAILSTREAM *stream,long msgno,char *d,long n);
