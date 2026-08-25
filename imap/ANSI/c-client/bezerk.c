@@ -104,11 +104,14 @@ int bezerk_isvalid (char *name,char *tmp)
   int ret = NIL;
   char *s = tmp,*t;
   struct stat sbuf;
-  struct hostent *host_name;
   if (!lhostn) {		/* have local host yet? */
+    /* No gethostbyname()/DNS lookup here -- this project's PDP-11
+     * target has no TCP/IP (see README.md/CLAUDE.md), so a resolver
+     * call could never do anything useful, while its mere presence
+     * drags the entire BSD resolver library into every link (found
+     * via a real 2.11BSD `ld -M` load map; see TODO-pdp11-done.md). */
     gethostname(tmp,MAILTMPLEN);/* get local host name */
-    lhostn = cpystr ((host_name = gethostbyname (tmp)) ?
-		     host_name->h_name : tmp);
+    lhostn = cpystr (tmp);
   }
 				/* name is a caller-typed candidate mailbox
 				   name with no length cap upstream; tmp is

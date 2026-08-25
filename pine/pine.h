@@ -816,7 +816,6 @@ int   fget_pos(FILE *, fpos_t *);
 int   fset_pos(FILE *, fpos_t *);
 void  coredump(void);
 void  getdomainnames(char *, int, char *, int);
-char *canonical_name(char *);
 int   have_job_control(void);
 int   stop_process(void);
 char *error_description(int);

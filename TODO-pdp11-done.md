@@ -7811,3 +7811,71 @@ changed.
   dependency fix only prevents the problem recurring, not retroactively.
 - **Size delta**: none -- Makefile-only change, no compiled output
   from this repo's own build affected.
+
+### Drop `gethostbyname()`/DNS resolution -- pulls in the entire BSD resolver+socket library on a no-TCP/IP target
+
+With every undefined symbol resolved, `pine-ovl`'s real 2.11BSD `ld`
+run got far enough to do its base+overlay/data+bss size check, and
+still failed both halves of it (`text 48768` base + largest overlay
+`24576`, rounding to 49152+24576=73728 > the 65536-byte ceiling;
+`data 47518 + bss 21178 = 68696` > the 57344-byte ceiling) -- and by a
+lot more than pine+pico+c-client's own code could account for (the
+named modules alone only summed to ~52644 bytes of data+bss and
+~8142 bytes of base text). Getting a real load map (`ld -M`, per
+`ld.txt`) for the failed link named the actual cause: `/lib/libc.a`
+pulled in `gethnamadr.o`, `res_query.o`, `res_mkquery.o`,
+`res_comp.o`, `res_send.o`, `res_init.o`, `socket.o`, `connect.o`,
+`send.o`, `sendto.o`, `recv.o`, `htons.o`, `htonl.o`, and
+`inet_addr.o` -- the entire BSD resolver and a chunk of the sockets
+API, on a project whose whole premise (README.md/CLAUDE.md) is a
+target with **no TCP/IP**.
+
+- **What was found**: three call sites, across two files, call
+  `gethostbyname()` (a DNS/`/etc/hosts` lookup) to enrich a plain
+  `gethostname()` result into a fully-qualified domain name:
+  `pine/osdep/domnames`'s `getdomainnames()` (shared fragment,
+  assembled into both `os-lnx.c` and `os-bsd.c` -- feeds
+  `ps->hostname`/`ps->localdomain`, used throughout address-matching/
+  From-line/Message-ID logic), `pine/osdep/canonicl`'s
+  `canonical_name()` (assembled the same way, but a repo-wide grep
+  found *zero* callers anywhere -- pure dead code, unlike the other
+  two), and `imap/ANSI/c-client/bezerk.c`'s `bezerk_isvalid()` (caches
+  the result in `lhostn`, used for the mbox `From ` separator line and
+  as the default host when parsing headers with no explicit domain).
+  On a machine with no working TCP/IP stack, `gethostbyname()` can
+  never resolve anything (2.11BSD's UUCP-only target has no resolver
+  to query) -- every call site's existing `NULL`-fallback branch
+  (falling back to the plain `gethostname()` string) is unconditionally
+  what would execute in practice, so the DNS-lookup capability was
+  already 100% dead *behavior*, while its mere presence in the source
+  forced the entire resolver+socket library into every link.
+- **What changed**: `getdomainnames()` and `bezerk_isvalid()` were
+  simplified to use `gethostname()`'s result directly, dropping the
+  `gethostbyname()` call and its `struct hostent`/`host_name`
+  bookkeeping entirely (behaviorally identical to what those functions
+  already did whenever DNS lookup failed, which is unconditionally true
+  here). `canonical_name()` -- the zero-caller one -- was deleted
+  outright: its fragment file (`pine/osdep/canonicl`) stays on disk
+  (many other never-built platforms' `.ic` files in `pine/osdep/
+  makefile`'s own separate, more complete dependency list still
+  reference it, same "keep vestigial platform cruft, don't build it"
+  precedent as the other `os_*.c` files), but the `include(canonicl)`
+  line was removed from the two `.ic` files that actually get built
+  (`os-lnx.ic`, `os-bsd.ic`), plus its prototype in `pine.h` and its
+  one-line doc entry in the `header` fragment.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings;
+  full smoketest suite 31/31 (exercises `bezerk_isvalid()`'s `lhostn`
+  path indirectly via every folder-open/mbox-append/send test in the
+  suite). No PDP-11 cross-compiler available here to confirm the
+  resolver members actually drop out of the real link -- that's the
+  user's next real-hardware `size`/`ld -M` cycle to confirm.
+- **Size delta**: `bin/pine` `text` 276250 -> 275746 (-504 bytes),
+  `data` 10032 -> 10024 (-8 bytes); `bss` unchanged. Modest on this
+  ELF/gcc dev build since `-lc`'s resolver code was never linked in
+  here to begin with (glibc's static linking story differs a lot from
+  2.11BSD's a.out archives) -- the real win is entirely on the actual
+  2.11BSD target, where the load map showed 13 additional `libc.a`
+  members (`gethnamadr.o`/`res_*.o` x5/`socket.o`/`connect.o`/
+  `send.o`/`sendto.o`/`recv.o`/`htons.o`/`htonl.o`/`inet_addr.o`) no
+  longer need to be pulled in at all. `bin/pico` untouched (doesn't
+  link c-client, and none of these three functions are pico source).

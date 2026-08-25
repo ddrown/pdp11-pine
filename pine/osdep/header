@@ -81,7 +81,6 @@ required for an implementation:
      hostname            -- Figure out the system's host name, only
                               used internally in this file.
      getdomainnames      -- Figure out the system's domain name
-     canonical_name      -- Returns canonical form of host name
 
   Job Control
      have_job_control    -- Returns 1 if job control exists

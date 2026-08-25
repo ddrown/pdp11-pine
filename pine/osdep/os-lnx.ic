@@ -76,10 +76,6 @@ include(coredump)
 ; uses domnames.dos.
 include(domnames)
 
-; Canonical_name function.  All Unixes use canonicl and DOS
-; uses canonicl.dos.
-include(canonicl)
-
 ; This file includes two functions, have_job_control and stop_process.
 ; The Unix version is called jobcntrl and the slightly-different DOS
 ; version is jobcntrl.dos.
