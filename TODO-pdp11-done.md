@@ -7921,3 +7921,61 @@ current manual sorted-insert loop.
   behavioral or size change; the compiled code was already doing the
   right thing via the explicit cast, this just makes the declared
   types honest.
+
+### Drop floating point from `pico/browse.c`'s `prettysz()` -- the only `%f`/float use in the whole tree
+
+Continuing the `pine-ovl` link-size investigation (see the
+`gethostbyname()` entry above): with the resolver gone, a fresh
+`size` on the real 2.11BSD link attempt showed base text down to
+41984 (from 48768) but still just short of clearing a segment
+boundary (`rnd8k(41984)` still rounds to 6 segments same as before;
+needed to drop below 40960, i.e. ~1KB more, to gain a segment back for
+the text/overlay budget), and data+bss still ~9970 bytes over the 56K
+ceiling. The refreshed `ld -M` load map's `/lib/libc.a` section still
+carried a cluster of floating-point-conversion members: `atof.o`,
+`ldexp.o`, `fltpr.o`, `doprnt.o`'s float path, `gcvt.o`, `ecvt.o`,
+`modf.o`. A repo-wide grep for `atof`/`strtod` calls and for `%f`/`%e`/
+`%g` format specifiers found exactly one hit, in two `sprintf()` calls:
+`pico/browse.c`'s `prettysz()` (the file browser's human-readable
+byte-count formatter), using `"%1.1f KB"`/`"%1.1f MB"` for sizes in
+the 1-10KB and 1-10MB ranges. Nothing else in `pine/`, `pico/`, or
+`imap/ANSI/c-client/` touches floating point at all -- this one
+cosmetic display function is the sole reason the entire float-format
+machinery gets linked into the program.
+- **What changed**: rewrote `prettysz()` to always show a rounded
+  whole-number KB/MB (no decimal place), using plain integer division
+  with a rounding offset (`(l + 500) / 1000` for KB, `(l + 500000) /
+  1000000` for MB) instead of `(float)l/1000` + `"%1.1f"`. (An
+  intermediate version preserved the original one-decimal-place
+  display via `(l+50)/100`-style tenths math with zero float
+  involvement -- also fully correct and verified -- but the user
+  preferred the simpler whole-number display once floating point was
+  already off the table either way.)
+- **Verified**: a standalone comparison harness checked the
+  one-decimal-place intermediate version against the original
+  `(float)l/1000` + `%1.1f` implementation across 31 values spanning
+  every branch and boundary; the only mismatches were at exact `.x50`
+  inputs (1050, 9950, 9950000), where the *original* float version's
+  output is the less-correct one -- `0.05` isn't exactly representable
+  in IEEE 754 binary, so `%1.1f` on values like `1.05` can round down
+  to `"1.0"` instead of the mathematically-correct `"1.1"`, while
+  plain-integer decimal rounding doesn't have that artifact. The final
+  whole-number version was spot-checked separately for sane rounding
+  across representative values. `./build clean && ./build lnx`, exit
+  0, 0 warnings; full smoketest suite 31/31. No PDP-11 cross-compiler
+  available here to confirm `doprnt`'s float path actually drops out
+  of the real link -- that's the next real-hardware `ld -M`/`size`
+  cycle to confirm.
+- **Size delta**: `bin/pico` `text` 109103 -> 108932 (-171 bytes,
+  even on this ELF/gcc dev build where the float-format machinery was
+  never a large chunk of glibc's already-shared `libc.so` to begin
+  with). `bin/pine` `text` unaffected (exactly 275746 before and
+  after) -- `browse.c` is part of `libpico.a`, which `bin/pine` does
+  link, but `prettysz()`/its file-browser callers are pico-standalone
+  UI, unreachable from any code path `bin/pine` actually uses, so
+  `browse.o` (or the relevant part of it) was never pulled into
+  `bin/pine`'s link to begin with. The real win is on the 2.11BSD
+  target, where the load map showed the whole `atof.o`/`ldexp.o`/
+  `fltpr.o`/`gcvt.o`/`ecvt.o`/`modf.o` cluster (plus whatever of
+  `doprnt.o`'s own size is float-format-specific) should no longer
+  need to be pulled into *either* binary's link at all.

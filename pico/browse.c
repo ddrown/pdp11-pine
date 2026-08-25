@@ -1063,16 +1063,17 @@ char *prettysz(long l)
 {
     static char b[32];
 
+    /* No floating point here -- this was the only place in the tree
+     * using %f (or needing atof-class support), and its mere presence
+     * pulled doprnt's whole float-format path (ecvt/gcvt/fltpr/modf/
+     * atof/ldexp) into every link. Whole-number KB/MB (rounded, no
+     * decimal) needs only integer division. */
     if(l < 1000)
       sprintf(b, "%ld  B", l);			/* xxx B */
-    else if(l < 10000)
-      sprintf(b, "%1.1f KB", (float)l/1000);    /* x.x KB */
     else if(l < 1000000)
-      sprintf(b, "%ld KB", l/1000);		/* xxx KB */
-    else if(l < 10000000)
-      sprintf(b, "%1.1f MB", (float)l/1000000); /* x.x MB */
+      sprintf(b, "%ld KB", (l + 500) / 1000);		/* xxx KB */
     else
-      sprintf(b, "%ld MB", l/1000000);		/* xxx MB */
+      sprintf(b, "%ld MB", (l + 500000) / 1000000);	/* xxx MB */
     return(b);
 }
 
