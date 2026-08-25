@@ -41,7 +41,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-
+
 /* Coddle KCC's 6-character symbol limitation */
 
 #define rfc822_date r8date

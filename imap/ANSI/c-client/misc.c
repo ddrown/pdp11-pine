@@ -46,7 +46,7 @@
 #include "mail.h"
 #include "osdep.h"
 #include "misc.h"
-
+
 /* Convert string to all uppercase
  * Accepts: string pointer
  * Returns: string pointer
@@ -91,7 +91,7 @@ char *cpystr (char *string)
   }
   else return NIL;
 }
-
+
 /* Returns index of rightmost bit in word
  * Accepts: pointer to a 32 bit value
  * Returns: -1 if word is 0, else index of rightmost bit
@@ -127,7 +127,7 @@ unsigned long find_rightmost_bit (unsigned long *valptr)
   *valptr ^= clearbit;		/* clear the bit in the argument */
   return (bitno);		/* and return the bit number */
 }
-
+
 /* Return minimum of two integers
  * Accepts: integer 1
  *	    integer 2
@@ -150,7 +150,7 @@ long max (long i,long j)
 {
   return ((i > j) ? i : j);
 }
-
+
 /* Case independent search (fast on 32-bit machines)
  * Accepts: base string
  *	    length of base string
@@ -196,7 +196,7 @@ long search (char *s,long c,char *pat,long patc)
   } while (c > 0);		/* continue until end of string */
   return NIL;			/* string not found */
 }
-
+
 /* Case independent slow search within a word
  * Accepts: base string
  *	    number of tries left
@@ -222,7 +222,7 @@ long ssrc (char **base,long *tries,char *pat,long multiword)
   *base = s;			/* update base */
   return NIL;			/* string not found */
 }
-
+
 /* Wildcard pattern match
  * Accepts: base string
  *	    pattern string

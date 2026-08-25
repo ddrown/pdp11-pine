@@ -50,7 +50,7 @@
 
 extern char *strerror ();
 extern char *memmove ();
-
+
 /* Dummy definition overridden by TCP routines */
 
 #ifndef TCPSTREAM

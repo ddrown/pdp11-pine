@@ -88,7 +88,7 @@ struct iovec {
 #ifndef TCPSTREAM
 #define TCPSTREAM void
 #endif
-
+
 /* Function prototypes */
 
 void rfc822_date (char *date);

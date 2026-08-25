@@ -32,7 +32,7 @@
  * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
- 
+
 #include "mail.h"
 #include "osdep.h"
 #include <sys/time.h>
@@ -41,7 +41,7 @@
 #include "misc.h"
 #include <time.h>
 #include <stdio.h>
-
+
 /* Write current time in RFC 822 format
  * Accepts: destination string
  */
@@ -61,7 +61,7 @@ void rfc822_date (char *date)
 	   days[t->tm_wday],t->tm_mday,months[t->tm_mon],t->tm_year+1900,
 	   t->tm_hour,t->tm_min,t->tm_sec,zone/60,abs (zone) % 60);
 }
-
+
 /* Get a block of free storage
  * Accepts: size of desired block
  * Returns: free storage block
@@ -107,7 +107,7 @@ void fatal (char *string)
   syslog (LOG_ALERT,"IMAP C-Client crash: %s",string);
   abort ();			/* die horribly */
 }
-
+
 /* Copy string with CRLF newlines
  * Accepts: destination string
  *	    pointer to size of destination string
@@ -173,7 +173,7 @@ unsigned long strcrlflen (STRING *s)
   SETPOS (s,pos);		/* restore old position */
   return i;
 }
-
+
 /* Return my user name
  * Returns: my user name
  */

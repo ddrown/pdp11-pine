@@ -51,7 +51,7 @@ char *lhostn = NIL;		/* local host name */
 mailgets_t mailgets = NIL;	/* pointer to alternate gets function */
 				/* mail cache manipulation function */
 mailcache_t mailcache = mm_cache;
-
+
 /* Default limited get string
  * Accepts: readin function pointer
  *	    stream to use
@@ -86,7 +86,7 @@ char *mm_gets (readfn_t f,void *stream,unsigned long size)
   while (i -= j) (*f) (stream,j = min ((long) MAILTMPLEN,i),tmp);
   return s;
 }
-
+
 /* Default mail cache handler
  * Accepts: pointer to cache handle
  *	    message number
@@ -131,7 +131,7 @@ void *mm_cache (MAILSTREAM *stream,long msgno,long op)
   case CH_LELT:			/* return long elt */
     ret = stream->cache.c[i];	/* return void version */
     break;
-
+
   case CH_MAKEELT:		/* return short elt, make if necessary */
     if (!stream->cache.c[i]) {	/* have one already? */
       if (stream->scache) {	/* short cache? */
@@ -164,7 +164,7 @@ void *mm_cache (MAILSTREAM *stream,long msgno,long op)
   }
   return ret;
 }
-
+
 /* Dummy string driver for complete in-memory strings */
 
 STRINGDRIVER mail_string = {
@@ -210,7 +210,7 @@ void mail_string_setpos (STRING *s,unsigned long i)
   s->curpos = s->chunk + i;	/* set new position */
   s->cursize = s->chunksize - i;/* and new size */
 }
-
+
 /* Mail routines
  *
  *  mail_xxx routines are the interface between this module and the outside
@@ -235,7 +235,7 @@ void *mail_parameters (MAILSTREAM *stream,long function,void *value)
 {
   return stream->open ? bezerk_parameters (function,value) : NIL;
 }
-
+
 /* Mail find list of subscribed mailboxes
  * Accepts: mail stream
  *	    pattern to search
@@ -322,7 +322,7 @@ long mail_create (MAILSTREAM *stream,char *mailbox)
   }
   return stream->open ? bezerk_create (stream,mailbox) : NIL;
 }
-
+
 /* Mail delete mailbox
  * Accepts: mail stream
  *	    mailbox name to delete
@@ -354,7 +354,7 @@ long mail_rename (MAILSTREAM *stream,char *old,char *new)
   }
   return valid ? bezerk_rename (stream,old,new) : NIL;
 }
-
+
 /* Mail open
  * Accepts: candidate stream for recycling
  *	    mailbox name
@@ -402,7 +402,7 @@ MAILSTREAM *mail_open (MAILSTREAM *stream,char *name,long options)
     dummy_open_failure (name);
   return stream;		/* return the stream */
 }
-
+
 /* Mail close
  * Accepts: mail stream
  * Returns: NIL
@@ -421,7 +421,7 @@ MAILSTREAM *mail_close (MAILSTREAM *stream)
   }
   return NIL;
 }
-
+
 /* Mail make handle
  * Accepts: mail stream
  * Returns: handle
@@ -466,7 +466,7 @@ MAILSTREAM *mail_stream (MAILHANDLE *handle)
   MAILSTREAM *s = handle->stream;
   return (s->open && (handle->sequence == s->sequence)) ? s : NIL;
 }
-
+
 /* Mail fetch long cache element
  * Accepts: mail stream
  *	    message # to fetch
@@ -497,7 +497,7 @@ MESSAGECACHE *mail_elt (MAILSTREAM *stream,long msgno)
   (*mailcache) (stream,msgno,CH_SIZE);
   return (MESSAGECACHE *) (*mailcache) (stream,msgno,CH_MAKEELT);
 }
-
+
 /* Mail fetch fast information
  * Accepts: mail stream
  *	    sequence
@@ -540,7 +540,7 @@ ENVELOPE *mail_fetchstructure (MAILSTREAM *stream,long msgno,BODY **body)
   				/* do the driver's action */
   return stream->open ? bezerk_fetchstructure (stream,msgno,body) : NIL;
 }
-
+
 /* Mail fetch message header
  * Accepts: mail stream
  *	    message # to fetch
@@ -585,7 +585,7 @@ char *mail_fetchbody (MAILSTREAM *stream,long m,char *sec,unsigned long *len)
   				/* do the driver's action */
   return stream->open ? bezerk_fetchbody (stream,m,sec,len) : "";
 }
-
+
 /* Mail fetch From string for menu
  * Accepts: destination string
  *	    mail stream
@@ -635,7 +635,7 @@ void mail_fetchsubject (char *s,MAILSTREAM *stream,long msgno,long length)
   if (env && env->subject) strncpy (s,env->subject,length);
   else *s = ' ';		/* if no subject then just a space */
 }
-
+
 /* Mail set flag
  * Accepts: mail stream
  *	    sequence
@@ -672,7 +672,7 @@ long mail_ping (MAILSTREAM *stream)
   				/* do the driver's action */
   return stream->open ? bezerk_ping (stream) : NIL;
 }
-
+
 /* Mail check mailbox
  * Accepts: mail stream
  */
@@ -693,7 +693,7 @@ void mail_expunge (MAILSTREAM *stream)
   				/* do the driver's action */
   if (stream->open) bezerk_expunge (stream);
 }
-
+
 /* Mail copy message(s)
  * Accepts: mail stream
  *	    sequence
@@ -734,7 +734,7 @@ long mail_append (MAILSTREAM *stream,char *mailbox,STRING *message)
     bezerk_append (stream,mailbox,message) :
     dummy_append_failure (stream,mailbox);
 }
-
+
 /* Mail garbage collect stream
  * Accepts: mail stream
  *	    garbage collection flags
@@ -760,7 +760,7 @@ void mail_gc (MAILSTREAM *stream,long gcflags)
 				/* free text if any */
   if ((gcflags & GC_TEXTS) && (stream->text)) fs_give ((void **)&stream->text);
 }
-
+
 /* Mail output date from elt fields
  * Accepts: character string to write into
  *	    elt to get data data from
@@ -806,7 +806,7 @@ char *mail_cdate (char *string,MESSAGECACHE *elt)
 	   elt->day,elt->hours,elt->minutes,elt->seconds,elt->year + BASEYEAR);
   return string;
 }
-
+
 /* Mail parse date into elt fields
  * Accepts: elt to write into
  *	    date string to parse
@@ -863,7 +863,7 @@ long mail_parse_date (MESSAGECACHE *elt,char *s)
   if (y < 100) y += (y >= (BASEYEAR - 1900)) ? 1900 : 2000;
 				/* set values in elt */
   elt->day = d; elt->month = m; elt->year = y - BASEYEAR;
-
+
   if (*s) {			/* time specification present? */
 				/* parse time */
     d = strtol ((const char *) s,&s,10);
@@ -911,7 +911,7 @@ long mail_parse_date (MESSAGECACHE *elt,char *s)
       case 'K': elt->zhours = 10; break;
       case 'L': elt->zhours = 11; break;
       case 'M': elt->zhours = 12; break;
-
+
       case 'N': elt->zoccident = 1; elt->zhours = 1; break;
       case 'O': elt->zoccident = 1; elt->zhours = 2; break;
       case (('A'-'A')*1024)+(('D'-'A')*32)+'T'-'A':
@@ -952,7 +952,7 @@ long mail_parse_date (MESSAGECACHE *elt,char *s)
       case (('U'-'A')*1024)+(('T'-'A')*32):
       case (('G'-'A')*1024)+(('M'-'A')*32)+'T'-'A':
       case 'Z': elt->zhours = 0; break;
-
+
       case (('L'-'A')*1024) + (('C'-'A')*32)+'L'-'A':
 	/* I knew I was going to regret that idiotic `LCL' stuff someday!! */
 	tn = time (0);		/* time now... */
@@ -1008,7 +1008,7 @@ void mail_exists (MAILSTREAM *stream,long nmsgs)
   if (!stream->silent) mm_exists (stream,nmsgs);
   stream->nmsgs = nmsgs;	/* update stream status */
 }
-
+
 /* Mail n messages are recent
  * Accepts: mail stream
  *	    number of recent messages
@@ -1045,7 +1045,7 @@ void mail_expunged (MAILSTREAM *stream,long msgno)
 				/* notify main program of change */
   if (!stream->silent) mm_expunged (stream,msgno);
 }
-
+
 /* mail stream status routines */
 
 
@@ -1070,7 +1070,7 @@ void mail_unlock (MAILSTREAM *stream)
   else stream->lock = NIL;	/* unlock stream */
 }
 
-
+
 /* Mail parse sequence
  * Accepts: mail stream
  *	    sequence to parse
@@ -1114,7 +1114,7 @@ long mail_sequence (MAILSTREAM *stream,char *sequence)
   }
   return T;			/* successfully parsed sequence */
 }
-
+
 /* Mail data structure instantiation routines */
 
 
@@ -1157,7 +1157,7 @@ BODY *mail_newbody ()
 {
   return mail_initbody ((BODY *) fs_get (sizeof (BODY)));
 }
-
+
 /* Mail initialize body
  * Accepts: body
  * Returns: body
@@ -1205,7 +1205,7 @@ PART *mail_newbody_part ()
   part->next = NIL;		/* no next yet */
   return part;
 }
-
+
 /* Mail garbage collection routines */
 
 
@@ -1255,7 +1255,7 @@ void mail_free_body_data (BODY *body)
     break;
   }
 }
-
+
 /* Mail garbage collect body parameter
  * Accepts: pointer to body parameter pointer
  */
@@ -1286,7 +1286,7 @@ void mail_free_body_part (PART **part)
     fs_give ((void **) part);	/* return body part to free storage */
   }
 }
-
+
 /* Mail garbage collect message cache
  * Accepts: mail stream
  *
@@ -1330,7 +1330,7 @@ void mail_free_lelt (LONGCACHE **lelt)
   }
   else *lelt = NIL;		/* else simply drop pointer */
 }
-
+
 /* Mail garbage collect envelope
  * Accepts: pointer to envelope pointer
  */

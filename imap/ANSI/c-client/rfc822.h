@@ -40,7 +40,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-
+
 /* Coddle certain compilers' 6-character symbol limitation */
 
 #ifdef __COMPILER_KCC__
@@ -73,7 +73,7 @@
 #define rfc822_qprint rqprnt
 #define rfc822_8bit r8bit
 #endif
-
+
 /* Function prototypes */
 
 void rfc822_header (char *header,ENVELOPE *env,BODY *body);

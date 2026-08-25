@@ -52,7 +52,7 @@
 #define const			/* AIX dosen't like const */
 
 extern char *strerror ();
-
+
 /* Dummy definition overridden by TCP routines */
 
 #ifndef TCPSTREAM

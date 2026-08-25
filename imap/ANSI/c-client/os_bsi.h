@@ -42,7 +42,7 @@ extern int h_errno;
 #include <sys/types.h>
 #include <sys/dir.h>
 #include <sys/uio.h>		/* needed for writev() prototypes */
-
+
 /* Dummy definition overridden by TCP routines */
 
 #ifndef TCPSTREAM

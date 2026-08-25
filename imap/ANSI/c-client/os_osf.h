@@ -49,7 +49,7 @@
 #include <sys/uio.h>		/* needed for writev() prototypes */
 
 #define direct dirent
-
+
 /* Dummy definition overridden by TCP routines */
 
 #ifndef TCPSTREAM

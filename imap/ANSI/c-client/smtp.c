@@ -40,7 +40,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-
+
 #include <ctype.h>
 #include <stdio.h>
 #include "mail.h"
@@ -48,7 +48,7 @@
 #include "smtp.h"
 #include "rfc822.h"
 #include "misc.h"
-
+
 /* Mail Transfer Protocol open connection
  * Accepts: service host list
  *	    initial debugging flag
@@ -96,7 +96,7 @@ void smtp_close (SMTPSTREAM *stream)
     fs_give ((void **) &stream);/* flush the stream */
   }
 }
-
+
 /* Mail Transfer Protocol deliver mail
  * Accepts: stream
  *	    delivery option (MAIL, SEND, SAML, SOML)
@@ -139,7 +139,7 @@ long smtp_mail (SMTPSTREAM *stream,char *type,ENVELOPE *env,BODY *body)
   return rfc822_output (tmp,env,body,smtp_soutr,stream->tcpstream) &&
     (smtp_send (stream,".",NIL) == SMTPOK);
 }
-
+
 /* Mail Transfer Protocol turn on debugging telemetry
  * Accepts: stream
  */
@@ -158,7 +158,7 @@ void smtp_nodebug (SMTPSTREAM *stream)
 {
   stream->debug = NIL;		/* turn off protocol telemetry */
 }
-
+
 /* Internal routines */
 
 
@@ -207,7 +207,7 @@ long smtp_send (SMTPSTREAM *stream,char *command,char *args)
   return tcp_soutr (stream->tcpstream,tmp) ? smtp_reply (stream) :
     smtp_fake (stream,SMTPSOFTFATAL,"SMTP connection went away!");
 }
-
+
 /* Simple Mail Transfer Protocol get reply
  * Accepts: SMTP stream
  * Returns: reply code
@@ -242,7 +242,7 @@ long smtp_fake (SMTPSTREAM *stream,long code,char *text)
   sprintf (stream->reply,"%ld %s",code,text);
   return code;			/* return error code */
 }
-
+
 /* Simple Mail Transfer Protocol filter mail
  * Accepts: stream
  *	    string

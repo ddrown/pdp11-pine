@@ -40,7 +40,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-
+
 /* Coddle certain compilers' 6-character symbol limitation */
 
 #ifdef __COMPILER_KCC__

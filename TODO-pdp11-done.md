@@ -7544,3 +7544,57 @@ prior hardware bring-up session.
   (`random.c` is pico-only). A tiny, expected cost for a genuine
   safety fix, consistent with how this project has treated similar
   small size costs from other overflow fixes.
+
+### Strip stray form-feed (`^L`) page-break characters from older source files
+
+- [x] `grep -rl $'\f' pine/ imap/ANSI/c-client/` found 33 files with
+      literal form-feed characters used as printer page-break
+      separators, mostly before function comment blocks -- the
+      original UW c-client tree's convention, still present in every
+      one of its per-OS driver files (`os_mac.c`/`os_aix.c`/
+      `os_bsi.c`/`os_osf.c`/`os_a32.c`/`os_t20.c`/`os_sco.c` and
+      their `.h` counterparts) even though only `os_lnx.c`/`os_lnx.h`
+      (this dev target) and `os_bsd.c`/`os_bsd.h` (the `three`
+      checkout's real-hardware target, see that memory) are ever
+      actually compiled here -- plus the always-built `mail.c`/
+      `bezerk.c`/`rfc822.c`/`misc.c` and their headers, and
+      `pine/context.c`. Before stripping anything, checked *every*
+      occurrence's surrounding bytes (`cat -A` across all 33 files)
+      to confirm the character always sits alone on its own line
+      (optionally with trailing spaces/tabs from period keyboard/
+      terminal quirks, e.g. `os_lnx.c`'s `^L ` with a trailing space)
+      -- never embedded mid-text -- so a mechanical strip-and-blank
+      couldn't corrupt a comment or string literal.
+      One file was deliberately excluded: `Internal.DOC`. Its 7 form
+      feeds are genuine printed-page-break separators between major
+      documentation sections (e.g. right before a "I. Public
+      interface" heading) -- a legitimate use for a prose document,
+      unlike the "leftover from a line printer" convention in the
+      source files, and out of scope anyway since it isn't source
+      code. `imap/ANSI/c-client/osdep.h` also matched the original
+      sweep but needed no separate edit: it's `.gitignore`d (not a
+      tracked file at all) and hardlinked to whichever `os_*.h` the
+      last build symlinked it from (`ln os_lnx.h osdep.h` in
+      `makefile.lnx`), so stripping `os_lnx.h` fixed the shared inode
+      automatically.
+- **What changed**: replaced every line whose content was solely a
+  form-feed character (plus optional trailing whitespace) with a
+  genuinely empty line, in all 33 non-`Internal.DOC` files -- 303
+  lines total. Pure whitespace substitution: no line was added,
+  removed, or reordered, so surrounding blank-line spacing is
+  identical to before.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite 31/31. Spot-checked several diffs by hand
+  (`git diff imap/ANSI/c-client/bezerk.c`, etc.) to confirm every hunk
+  is a single blank-line-for-blank-line-with-`^L` swap, nothing more.
+  Final `grep -rl $'\f' pine/ imap/ANSI/c-client/` confirms only
+  `Internal.DOC` remains, as intended. No regression test -- pure
+  whitespace/comment change with no observable runtime behavior to
+  distinguish.
+- **Size delta**: none -- `bin/pine`/`bin/pico` byte-for-byte
+  unchanged (277941/109103 bytes text, same as going in). Purely a
+  tooling-friction fix: future `Edit`-tool-based cuts in these files
+  (this sweep's own motivation was the friction hit during the
+  `mail_search`/`bezerk_search` removal) no longer need the
+  `sed`-with-explicit-line-ranges fallback these stray `^L`s used to
+  force.
