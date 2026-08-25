@@ -7707,3 +7707,69 @@ symbols once compilation got far enough to actually link:
   build). The `os_bsd.c`/`os_bsd.h` changes don't affect `bin/pine`'s
   `lnx` size at all -- that OS layer isn't compiled into it.
 
+### Remove `struct variable`'s dead `description` field to fit pine-ovl's data+bss budget
+
+`pine-ovl` (see prior entry) got far enough to actually attempt the
+2.11BSD `ld` link, and the real diagnostic ("`ld: too big for type
+431`") turned out to be a red herring at first glance -- `431` isn't a
+computed size at all, it's `ld.c`'s `a_magic` constant for the `-i`
+(separate I&D) executable format, printed with `%o` (octal), and
+identical regardless of how `mkovmake` partitions text into base vs.
+overlay groups. Reading the real 2.11BSD `ld` source (`ld.c`, supplied
+by the user alongside `mkovmake`'s and `ld`'s own man pages,
+`mkovmake.txt`/`ld.txt`) pinned the actual check for `-i` builds:
+`round8k(base_text) + round8k(largest_overlay) > 64KB` **or**
+`data + bss > 56KB`. Computing both from the user's real `size` output
+across every pine/pico/c-client object (`size.txt`) showed the text
+side has huge headroom (32KB of 64KB used, base 8030 -> rounds to
+8192, largest of 10 `-Z` groups 24558 -> rounds to 24576), while
+data+bss for pine+pico+c-client's own code alone already totals 54954
+bytes against the 57344-byte (56KB) ceiling -- only 2390 bytes of
+headroom, before even counting whatever `-ltermlib`/`-lc` themselves
+add (almost certainly enough on their own to push it over, matching
+the real `ld: .../libtermlib.a(termcap.o): text overflow` seen with
+the archived-library `pine-ovl` attempt in the prior entry). Since
+data+bss is never overlaid (always fully resident, regardless of
+partitioning), this is a real "shrink the actual static footprint"
+problem, not another `mkovmake` tuning question.
+
+- **What was found**: `struct variable` (`pine.h`) has a `description`
+  field, and `init.c`'s `variables[]` table populated it for all 13
+  config variables with long human-readable help text (10 `#define
+  ..._TEXT` macros plus 3 inline strings, ~2.3KB total) -- text meant
+  for an interactive Setup/Config variable-editing screen. That screen
+  was already cut in an earlier PDP-11 size-reduction pass (no
+  `config_screen.c`-equivalent exists in this tree, and the top-level
+  "Setup" menu entry in `pine.c` has no visible handler), and a
+  repo-wide grep for `.description` usage confirmed the only hits left
+  are `BODY`/`ATTACHMENT`'s unrelated same-named field -- `struct
+  variable`'s `description` is never read anywhere. Pure dead weight,
+  100% safe to remove: no behavior depends on it.
+- **What changed**: removed the `description` field from `struct
+  variable` (`pine.h`) entirely, removed the 10 now-unused `..._TEXT`
+  macros and inline description strings from `init.c`, and shrank
+  every `variables[]` entry back down to just `{"name"}` (the terminator
+  to `{NULL}`). The bit-field/union zero-fill trick from the earlier
+  aggregate-initializer fix (see "Fix `init.c` `variables[]` bit-field
+  aggregate init" above) still applies unchanged -- now with only one
+  positional value per entry instead of two, if anything simpler to
+  reason about.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings;
+  full smoketest suite 31/31. Re-ran the same `gdb` spot-check as the
+  earlier `variables[]` fix (break at `init_vars()`, print several
+  entries) to confirm every remaining flag/name still matches the
+  original table exactly after the field removal -- `personal-name`,
+  `user-id`, `folder-collections`, and the `NULL` terminator all
+  checked.
+- **Size delta**: `bin/pine` `text` 278178 -> 276250 (-1928 bytes --
+  on this ELF/gcc dev build, string literals live in `.rodata`, which
+  `size` folds into `text`, not `data`, so this dev build doesn't
+  directly show the a.out-format `data`-segment savings the real
+  target will see), `data` 10160 -> 10032 (-128 bytes, the 13 removed
+  `char *description` pointers from the struct array itself); `bss`
+  unchanged. On the real 2.11BSD/a.out target, where string literals
+  have no separate read-only section and land directly in `.data`,
+  the expected savings are the full ~2.3KB of description text plus
+  the 13 pointer fields -- close to the entire 2390-byte data+bss
+  shortfall computed above, on its own. `bin/pico` untouched (doesn't
+  touch pico source at all).

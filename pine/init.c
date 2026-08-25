@@ -81,35 +81,6 @@ void process_init_cmds(struct pine *, char **);
 int  decode_sort(struct pine *, char *);
 
 
-/*------------------------------------
-Some definitions to keep the static variable array below 
-a bit more readable...
-  ----*/
-#define PERSONAL_NAME_TEXT   "personal-name specifies your full name as it should appear on outgoing mail.\n# If unset, Unix Pine will obtain your full name from the system passwd file."
-
-#define USER_DOMAIN_TEXT   "user-domain specifies the domain part of your return address on outgoing\n# email and is also used as the default domain for email composed to a\n# local user.  If unset, Unix Pine will obtain the domain from the system."
-
-
-#define	INBOX_TEXT	"inbox-path specifies the name/path/location of your INBOX.  Example:\n# inbox-path={carson.u.washington.edu}inbox (INBOX on a remote computer)\n# Normal Unix default is the local INBOX (usually /user/spool/mail/$USER)"
-
-#define	FOLDER_TEXT	"folder-collections specifies the single folder collection wherein saved\n# messages are stored (only the first value is used; this build supports\n# exactly one collection).\n# Collection syntax: optnl-label optnl-directory-path[]\n# Example:\n# folder-collections=Saved-Email    mail/[]"
-
-#define	DEFAULT_FCC_TEXT "default-fcc specifies where a copy of outgoing mail is saved.  If this is\n# not a path name, it will be in the the default collection for saves.\n# Unix Pine default is normally \"sent-mail\" in the default folder collection.\n# PC-Pine default is \"SENTMAIL\" (stored as SENTMAIL.MTX)\n# Example of remote case: {carson.u.washington.edu}sent-mail\n# To suppress saving of outgoing mail, set: default-fcc=\"\""
-
-#define	READ_MSG_TEXT "read-message-folder specifies where already-read messages will be stored.\n# If set, you will be asked when you quit Pine if you want read messages\n# to be moved to this folder and deleted from your INBOX."
-
-#define	SIG_FILE_TEXT "signature-file specifies the name or path of a file containing text that\n# will automatically be inserted in outgoing mail."
-
-#define	SAVE_MSG_TEXT	"saved-msg-name-rule= determines default folder name for Saves...\n# Choose one: default-folder, by-sender, by-from, by-recipient,\n# last-folder-used.  Normal default is \"default-folder\", which on Unix\n# means \"saved-messages\" and in PC-Pine means \"SAVEMAIL\""
-
-#define	SORT_TEXT	"sort-key= order in which messages will be presented...\n# Choose one: subject, from, arrival, date, size.\n# Normal default is \"arrival\""
-
-
-#define ONLY_DOMAIN_TEXT     "Used if \"user-domain\" not set.  Strips hostname from user\'s return address.\n# Not applicable for PC-Pine",
-
-
-
-
 /*----------------------------------------------------------------------
 These are the variables that control a number of pine functions.  They
 come out of the .pinerc and the /usr/local/lib/pine.conf files.  Some can
@@ -124,29 +95,37 @@ at the start of init_vars().  Perhaps someday there will be group values.
 The current value is the one that is actually in use.
   ----*/
 /*
- * name::desc -- the is_obsolete/is_used/been_written/is_user/is_global/
- * is_list flags formerly listed here per-entry are bit-fields (struct
- * variable, pine.h) that 2.11BSD's cc can't aggregate-initialize
- * ("No field initialization"); they're left at their implicit-zero
- * default here and set explicitly in init_init_vars() below instead.
+ * name -- struct variable (pine.h) also has a description field in the
+ * original UW source, for an interactive Setup/Config variable-editing
+ * screen; that screen was cut in an earlier PDP-11 size-reduction pass
+ * and nothing reads .description any more (confirmed via a repo-wide
+ * grep for "\.description\b" across pine's .c files -- the only hits
+ * are BODY/ATTACHMENT's unrelated same-named field), so the field and
+ * its ~2.3KB of static description text were removed entirely rather
+ * than carried as dead weight -- see TODO-pdp11-done.md for the
+ * write-up.
+ *
+ * The is_obsolete/is_used/been_written/is_user/is_global/is_list flags
+ * formerly listed here per-entry are bit-fields (struct variable,
+ * pine.h) that 2.11BSD's cc can't aggregate-initialize ("No field
+ * initialization"); they're left at their implicit-zero default here
+ * and set explicitly in init_init_vars() below instead.
  */
 static struct variable variables[] = {
-{"personal-name",              PERSONAL_NAME_TEXT},
-{"user-id",                    /* Don't allow on UNIX machines for some security */
-  "Your login/e-mail user name"},
-{"user-domain",                USER_DOMAIN_TEXT},
-{"inbox-path",                 INBOX_TEXT},
-{"folder-collections",         FOLDER_TEXT},
-{"default-fcc",                DEFAULT_FCC_TEXT},
-{"mail-directory",             "mail-directory is where postponed & interrupted msgs are held temporarily."},
-{"read-message-folder",        READ_MSG_TEXT},
-{"signature-file",             SIG_FILE_TEXT},
-{"initial-keystroke-list",
- "Pine executes these keys upon startup (e.g. to view msg 13: i,j,1,3,CR,v)"},
-{"saved-msg-name-rule",        SAVE_MSG_TEXT},
-{"sort-key",                   SORT_TEXT},
-{"use-only-domain-name",       ONLY_DOMAIN_TEXT},
-{NULL,                         NULL}
+{"personal-name"},
+{"user-id"},			/* don't allow on UNIX machines, for some security */
+{"user-domain"},
+{"inbox-path"},
+{"folder-collections"},
+{"default-fcc"},
+{"mail-directory"},
+{"read-message-folder"},
+{"signature-file"},
+{"initial-keystroke-list"},
+{"saved-msg-name-rule"},
+{"sort-key"},
+{"use-only-domain-name"},
+{NULL}
 };
 
 
