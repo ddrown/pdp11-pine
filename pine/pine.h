@@ -355,6 +355,17 @@ typedef long MsgNo;
 
 struct variable {
     char *name;
+    char *description;
+    /* is_obsolete..is_list below are unsigned:1 bit-fields -- kept
+     * after name/description (rather than the closer-to-original
+     * order) so that variables[]'s static initializer (init.c) can
+     * supply just {name, description} positionally and let these,
+     * plus the value unions below, zero-fill implicitly. 2.11BSD's cc
+     * can't initialize a bit-field member via an aggregate
+     * initializer at all ("No field initialization"), unlike the
+     * bezerkproto fix in bezerk.c which had only one bit-field to
+     * work around, these flags are set explicitly at runtime for
+     * every entry in init_init_vars() (init.c) instead. */
     unsigned  is_obsolete:1;	/* variable read in, not written unless set */
     unsigned  is_used:1;	/* Some variables are disabled */
     unsigned  been_written:1;
@@ -362,7 +373,6 @@ struct variable {
   /*unsigned  is_group:1; */
     unsigned  is_global:1;
     unsigned  is_list:1;	/* flag indicating variable is a list */
-    char     *description;
     union {
 	char *p;		/* pointer to single string value */
 	char **l;		/* pointer to list of string values */

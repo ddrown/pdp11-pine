@@ -123,42 +123,55 @@ configuration file.  There are often defaults for the global values, set
 at the start of init_vars().  Perhaps someday there will be group values.
 The current value is the one that is actually in use.
   ----*/
-/* name::is_obsolete::is_used::been_written::is_user::is_global::is_list::desc*/
+/*
+ * name::desc -- the is_obsolete/is_used/been_written/is_user/is_global/
+ * is_list flags formerly listed here per-entry are bit-fields (struct
+ * variable, pine.h) that 2.11BSD's cc can't aggregate-initialize
+ * ("No field initialization"); they're left at their implicit-zero
+ * default here and set explicitly in init_init_vars() below instead.
+ */
 static struct variable variables[] = {
-{"personal-name",              0, 1, 0, 1, 0, 0,
-  PERSONAL_NAME_TEXT},
-{"user-id",                    0, 0, 0, 1, 0, 0,	/* Don't allow on UNIX machines for some security */
+{"personal-name",              PERSONAL_NAME_TEXT},
+{"user-id",                    /* Don't allow on UNIX machines for some security */
   "Your login/e-mail user name"},
-{"user-domain",                0, 1, 0, 1, 1, 0,
-  USER_DOMAIN_TEXT},
-{"inbox-path",                 0, 1, 0, 1, 1, 0,
-  INBOX_TEXT},
-{"folder-collections",         0, 1, 0, 1, 1, 1,
-  FOLDER_TEXT},
-{"default-fcc",                0, 1, 0, 1, 1, 0,
-  DEFAULT_FCC_TEXT},
-{"mail-directory",             0, 1, 0, 1, 1, 0,
-  "mail-directory is where postponed & interrupted msgs are held temporarily."},
-{"read-message-folder",        0, 1, 0, 1, 1, 0,
-  READ_MSG_TEXT},
-{"signature-file",             0, 1, 0, 1, 1, 0,
-  SIG_FILE_TEXT},
-{"initial-keystroke-list",     0, 1, 0, 1, 1, 1,
+{"user-domain",                USER_DOMAIN_TEXT},
+{"inbox-path",                 INBOX_TEXT},
+{"folder-collections",         FOLDER_TEXT},
+{"default-fcc",                DEFAULT_FCC_TEXT},
+{"mail-directory",             "mail-directory is where postponed & interrupted msgs are held temporarily."},
+{"read-message-folder",        READ_MSG_TEXT},
+{"signature-file",             SIG_FILE_TEXT},
+{"initial-keystroke-list",
  "Pine executes these keys upon startup (e.g. to view msg 13: i,j,1,3,CR,v)"},
-{"saved-msg-name-rule",        0, 1, 0, 1, 1, 0,
-  SAVE_MSG_TEXT},
-{"sort-key",                   0, 1, 0, 1, 1, 0,
-  SORT_TEXT},
-{"use-only-domain-name",       0, 1, 0, 1, 1, 0,
-  ONLY_DOMAIN_TEXT},
-{NULL,                         0, 0, 0, 0, 0, 0,
-   NULL}
+{"saved-msg-name-rule",        SAVE_MSG_TEXT},
+{"sort-key",                   SORT_TEXT},
+{"use-only-domain-name",       ONLY_DOMAIN_TEXT},
+{NULL,                         NULL}
 };
 
 
 int
 init_init_vars(struct pine *ps)
 {
+    int i;
+
+    /* is_user/is_used default on for every real entry (all but the
+     * NULL terminator); user-id is the one exception -- disabled,
+     * not settable on Unix (security risk, see its table entry). */
+    for(i = 0; i <= V_USE_ONLY_DOMAIN_NAME; i++)
+      variables[i].is_user = variables[i].is_used = 1;
+    variables[V_USER_ID].is_used = 0;
+
+    /* is_global on for every entry from user-domain on -- matches the
+     * table order above exactly (personal-name/user-id are the only
+     * two before it, and neither is global). */
+    for(i = V_USER_DOMAIN; i <= V_USE_ONLY_DOMAIN_NAME; i++)
+      variables[i].is_global = 1;
+
+    /* the only two list-valued variables */
+    variables[V_FOLDER_SPEC].is_list = 1;
+    variables[V_INIT_CMD_LIST].is_list = 1;
+
     ps->vars = variables;
     return(0);
 }

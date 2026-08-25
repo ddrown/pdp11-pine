@@ -7467,26 +7467,75 @@ prior hardware bring-up session.
   functions and in their `GF_RESET` handlers -- it never approaches a
   value `int` can't represent, so truncation from `long` to `int`
   changes nothing observable.
-- **Verified**: the `mail.c`/`mail.h` and `bezerk.c`/`pine.c` fixes
-  reproduce the reported `cc` diagnostics exactly against the line
-  numbers in the real 2.11BSD build output (no PDP-11 cross-compiler
-  available here to re-run `cc` directly, so this is inference from
-  the diagnostic text plus direct reading of the relevant grammar
-  limitation, not a re-run against real hardware `cc`); the `pine.h`
-  pragma fix and the `filter.c` fixes likewise each match real 2.11BSD
-  `cc` output pasted in by the user (`pine.h:628-692`; `filter.c:247-
-  874`), same inference method. `./build clean && ./build lnx`, exit
-  0, 0 warnings, before and after each fix. Full smoketest suite 31/31
-  throughout.
+- **`init.c:127-155`: "No field initialization" / "warning: union
+  initialization non-portable" / "Too many structure initializers" /
+  "illegal combination of pointer and integer, op =" on every entry of
+  the `variables[]` config-variable table** -- same root cause as the
+  `bezerkproto` fix above, on a bigger scale: `struct variable`
+  (`pine.h`) declares `char *name`, then six `unsigned:1` bit-fields
+  (`is_obsolete`/`is_used`/`been_written`/`is_user`/`is_global`/
+  `is_list`), then `char *description`, then four value unions. Every
+  one of `variables[]`'s ~14 entries positionally initialized the
+  bit-fields with literal 0/1 values (`{"personal-name", 0, 1, 0, 1, 0,
+  0, PERSONAL_NAME_TEXT}`, etc.) -- 2.11BSD's `cc` can't initialize a
+  bit-field via an aggregate initializer at all, and once it chokes on
+  the first one it appears to give up matching the rest of that
+  entry's positional list against remaining struct members entirely,
+  producing the pile of "Too many structure initializers"/"illegal
+  combination of pointer and integer" follow-on errors on the same and
+  next lines (the `description` string landing nowhere valid, a
+  trailing union left to non-portable implicit zero-fill). Fixed at
+  the root by reordering `struct variable` (`pine.h`) to put
+  `description` right after `name`, ahead of the bit-fields (a pure
+  declaration reorder -- every other reference to these members in the
+  tree is by field name, confirmed via `grep -rn "struct variable"`
+  across `pine/`, no positional access anywhere else), so each
+  `variables[]` entry's initializer is now just `{name, description}`
+  and every bit-field plus every value union zero-fills implicitly
+  with no explicit bit-field initializer text ever appearing in the
+  source (the actual trigger for "No field initialization", not
+  implicit zero-fill, which 2.11BSD's `cc` accepts fine -- same
+  distinction the `bezerkproto` fix relied on). The six flags, which
+  previously varied per entry and can't be given back via the
+  initializer, are now set explicitly once in `init_init_vars()`: a
+  loop sets `is_user`/`is_used` for every real entry (`user-id`
+  excepted -- `is_used` stays 0, intentionally disabled on Unix per
+  its pre-existing comment), a second loop sets `is_global` for the
+  contiguous `V_USER_DOMAIN`..`V_USE_ONLY_DOMAIN_NAME` range, and
+  `is_list` is set explicitly on the two list-valued variables
+  (`V_FOLDER_SPEC`, `V_INIT_CMD_LIST`) -- all three patterns transcribed
+  directly from the original per-entry table so they're easy to audit
+  against it line-for-line.
+- **Verified**: the `mail.c`/`mail.h`, `bezerk.c`/`pine.c`, and
+  `init.c`/`pine.h` fixes reproduce the reported `cc` diagnostics
+  exactly against the line numbers in the real 2.11BSD build output
+  (no PDP-11 cross-compiler available here to re-run `cc` directly, so
+  this is inference from the diagnostic text plus direct reading of
+  the relevant grammar limitation, not a re-run against real hardware
+  `cc`); the `pine.h` pragma fix and the `filter.c` fixes likewise
+  each match real 2.11BSD `cc` output pasted in by the user
+  (`pine.h:628-692`; `filter.c:247-874`; `init.c:128-130`), same
+  inference method. `./build clean && ./build lnx`, exit 0, 0 warnings,
+  before and after each fix. Full smoketest suite 31/31 throughout.
+  For the `init.c` fix specifically, also verified under `gdb` (break
+  at `init_vars()`, print every `variables[]` entry) that every flag
+  the runtime code now sets matches the original static table exactly,
+  entry by entry (`is_used`/`is_user`/`is_global`/`is_list` spot-checked
+  on `personal-name`, `user-id`, `user-domain`, `folder-collections`,
+  `initial-keystroke-list`, `use-only-domain-name`, and the `NULL`
+  terminator) -- this one changes actual runtime data, not just syntax,
+  so build-clean and smoketest-green alone weren't enough confidence.
 - **Size delta**: `bin/pine` `data` 10520 -> 10168 (-352 bytes, the
   `bezerkproto` initializer moving out of the initialized-data segment
   into BSS), `bss` 18856 -> 19208 (+352 bytes, symmetric move into
-  BSS); `text`/overall size unchanged. The `pine.h` pragma fix and the
-  `filter.c` `if`/`else`-and-cast rewrites produced no further size
-  change at all (`bin/pine` `text`/`data`/`bss` identical
-  before/after both). `bin/pico` untouched throughout (no c-client
-  link, and neither `pine.h`'s pragma sites nor `filter.c` are linked
-  into pico).
+  BSS); `text`/overall size unchanged by those two. The `pine.h`
+  pragma fix and the `filter.c` `if`/`else`-and-cast rewrites produced
+  no further size change at all. The `init.c`/`pine.h` fix costs `text`
+  277941 -> 278133 (+192 bytes, `init_init_vars()`'s new loops/
+  assignments); `data`/`bss` unchanged (the struct reorder doesn't
+  change its total size, just member order, and the array itself was
+  already living in the same segment). `bin/pico` untouched throughout
+  (no c-client link, and none of these fixes touch pico-only code).
 
 ### Fix `pico/random.c`'s `sprintf` into a too-small `buffer[80]`, flagged by `-Wformat-overflow=` under `ASAN=1`
 
