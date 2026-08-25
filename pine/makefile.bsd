@@ -144,6 +144,7 @@ pine-ovl:	$(obj) $(PICOOFILES) $(CCLIENTOFILES)
 	$(CC) -c $(CFLAGS) -o date.o date.c
 	$(MKOVMAKE) $(MKOVFLAGS) -o pine -f mkov \
 		$(obj) date.o $(PICOOFILES) $(CCLIENTOFILES) $(LIBES)
+	$(RM) pine
 	$(MAKE) -f mkov
 
 # this is not part of pine
