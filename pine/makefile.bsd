@@ -89,19 +89,61 @@ pine:  $(obj) $(LOCLIBES)
 # problem as pico -- see pico/makefile.bsd's pico-ovl for the
 # background: mkovmake wants every .o file loose, not archived into a
 # library, so it can see cross-file calls and decide what goes in the
-# resident base vs. the swapped-in overlays). pine's own object files
-# are already loose (no libpine.a), so unlike pico-ovl this doesn't
-# need to unpack anything new -- $(LOCLIBES) (libpico.a, c-client.a)
-# stay archived here, same as pico-ovl keeps -ltermcap archived.
+# resident base vs. the swapped-in overlays).
+#
+# Tried keeping $(LOCLIBES) (libpico.a, c-client.a) archived first,
+# mirroring how pico-ovl leaves -ltermcap archived -- that doesn't
+# work here: per ld(1)'s overlay rules, anything pulled from a library
+# placed after the concluding -Y lands in the same base-text budget as
+# everything before the first -Z (base rounded to 8Kb + largest
+# overlay rounded to 8Kb must be <= 64Kb total), with *no* overlay
+# opportunity for it at all. That's fine for pico-ovl's tiny
+# -ltermcap, but not for two libraries as large as our own pico/
+# c-client code -- real hardware confirmed it ("ld:
+# /usr/lib/libtermlib.a(termcap.o): text overflow", the base budget
+# finally breaking once termcap.o's pulled-in text landed on top of
+# whatever libpico.a/c-client.a needed). So their member .o's are
+# listed loose here instead, same treatment as pine's own $(obj), so
+# mkovmake's optimizer can place them in overlays too rather than
+# forcing all of it into base. This assumes ../pico and ../c-client
+# have already been built (via their own makefile.bsd's `all' target)
+# so those loose .o's exist; the lists below must be kept in sync with
+# pico/makefile.bsd's $(OFILES) and ../c-client/makefile.bsd's
+# c-client.a member list.
+#
+# An earlier attempt at this (loose objects, unhinted -O2, no -Z) hit
+# a different real failure ("ld: too big for type 431") from letting
+# mkovmake freely pick its own base across all ~50 combined modules --
+# consistent with an oversized auto-guessed base blowing the same
+# base+overlay <= 64Kb ceiling. -O2 takes an optional basesize argument
+# to cap that guess instead of letting it pick freely; ld(1)'s own
+# worked example uses an 8Kb base against a 56Kb overlay, hence the
+# starting point below. This is very likely NOT the right number --
+# it's a first data point to bracket from, not a considered choice.
+# Try both directions (basesize up if 8k undershoots and mkovmake
+# can't fit enough in base to satisfy required cross-references,
+# ovsize/basesize tuned down if 8k overshoots) and see what mkovmake
+# actually reports.
 #
 MKOVMAKE=	mkovmake
-MKOVFLAGS=	-O2
+MKOVFLAGS=	-O2 8k
 
-pine-ovl:	$(obj) $(LOCLIBES)
+PICOOFILES=	../pico/basic.o ../pico/bind.o ../pico/browse.o \
+		../pico/buffer.o ../pico/composer.o ../pico/compose_stub.o \
+		../pico/display.o ../pico/file.o ../pico/fileio.o \
+		../pico/line.o ../pico/osdep.o ../pico/pico.o \
+		../pico/random.o ../pico/region.o ../pico/search.o \
+		../pico/tcap.o ../pico/window.o ../pico/word.o
+
+CCLIENTOFILES=	../c-client/mail.o ../c-client/bezerk.o \
+		../c-client/dummy.o ../c-client/rfc822.o \
+		../c-client/misc.o ../c-client/osdep.o
+
+pine-ovl:	$(obj) $(PICOOFILES) $(CCLIENTOFILES)
 	echo "char datestamp[]="\"`date`\"";" > date.c
 	$(CC) -c $(CFLAGS) -o date.o date.c
 	$(MKOVMAKE) $(MKOVFLAGS) -o pine -f mkov \
-		$(obj) date.o $(LOCLIBES) $(LIBES)
+		$(obj) date.o $(PICOOFILES) $(CCLIENTOFILES) $(LIBES)
 	$(MAKE) -f mkov
 
 # this is not part of pine

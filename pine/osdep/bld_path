@@ -18,10 +18,27 @@ build_path(pathbuf, pathbuf_size, first_part, second_part)
     char *pathbuf, *first_part, *second_part;
     size_t pathbuf_size;
 {
+    size_t len;
+
+    /* No snprintf() here -- this fragment is also assembled into
+     * os-bsd.c (see pine/makefile.bsd), and 2.11BSD's libc predates
+     * snprintf's standardization (same finding as pico/random.c's
+     * fix, TODO-pdp11-done.md). Truncating concatenation done by hand
+     * instead, since first_part/second_part can be arbitrarily long
+     * (e.g. attacker-influenced MIME attachment filenames) and must
+     * never overflow the caller-fixed-size pathbuf. */
     if(first_part == NULL)
       strncpy(pathbuf, second_part, pathbuf_size - 1);
-    else
-      snprintf(pathbuf, pathbuf_size, "%s/%s", first_part, second_part);
+    else{
+	strncpy(pathbuf, first_part, pathbuf_size - 1);
+	pathbuf[pathbuf_size - 1] = '\0';
+	len = strlen(pathbuf);
+	if(len < pathbuf_size - 1){
+	    pathbuf[len++] = '/';
+	    pathbuf[len] = '\0';
+	    strncpy(pathbuf + len, second_part, pathbuf_size - 1 - len);
+	}
+    }
 
     pathbuf[pathbuf_size - 1] = '\0';
 }

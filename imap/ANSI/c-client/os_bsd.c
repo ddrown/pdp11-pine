@@ -201,6 +201,27 @@ char *myhomedir (void)
 }
 
 
+/* Copy memory block
+ * Accepts: destination pointer
+ *	    source pointer
+ *	    length
+ * Returns: destination pointer
+ *
+ * 2.11BSD's libc has no memmove() (bezerk.c calls it directly,
+ * unconditionally); same compat gap os_sco.c/os_aix.c already work
+ * around for their own platforms.
+ */
+
+void *memmove (void *s, const void *ct, size_t n)
+{
+  char *dp = s;
+  const char *sp = ct;
+  if (dp < sp) while (n--) *dp++ = *sp++;
+  else if (dp > sp) { dp += n; sp += n; while (n--) *--dp = *--sp; }
+  return s;
+}
+
+
 /* Build status lock file name
  * Accepts: scratch buffer
  *	    file name

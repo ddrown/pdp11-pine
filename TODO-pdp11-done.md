@@ -7647,3 +7647,63 @@ prior hardware bring-up session.
   `mail_search`/`bezerk_search` removal) no longer need the
   `sed`-with-explicit-line-ranges fallback these stray `^L`s used to
   force.
+
+### Fix undefined `snprintf`/`clock`/`memmove` found linking pine on 2.11BSD hardware
+
+While bringing up `pine-ovl` (the overlay build needed because pine,
+like pico, is over the PDP-11's 64KB text-segment limit -- see
+`pine/makefile.bsd`), the real 2.11BSD `ld` reported three undefined
+symbols once compilation got far enough to actually link:
+
+- **`_snprintf`** -- `pine/osdep/bld_path` (a shared fragment,
+  assembled into both `os-lnx.c` and `os-bsd.c`, see
+  `pine/makefile.bsd`'s `osdep/os-bsd.c:` dependency list) calls
+  `snprintf()` unconditionally in `build_path()`. Same gap already
+  found and documented for `pico/random.c`: 2.11BSD's libc predates
+  `snprintf`'s standardization. `build_path()`'s own header comment
+  stresses that its truncation-safety matters (`first_part`/
+  `second_part` can be attacker-influenced MIME filenames), so this
+  couldn't just be dropped -- rewrote it as an explicit truncating
+  strncpy-based concatenation instead of reaching for a general
+  `vsnprintf`-style compat shim, keeping the fix's surface area small
+  for a security-relevant function. Verified behaviorally identical to
+  the original `snprintf` version with a standalone comparison harness
+  across 13 edge cases (empty parts, `first_part == NULL`, buffer
+  exactly the string length, buffer one/two/three bytes, both parts
+  individually overflowing the buffer) -- all byte-for-byte matches.
+- **`_clock`** -- `imap/ANSI/c-client/os_bsd.h` had `#define gethostid
+  clock`, carried over verbatim from `os_lnx.h` (identical line,
+  identical stale comment: `/* non in the Linux C library?? */`) when
+  `os_bsd.h` was created from it. `clock()` works fine on Linux (glibc
+  has it) but doesn't exist on 2.11BSD either, so the substitution
+  just traded one missing function for another. 4.3BSD-derived systems
+  (2.11BSD's lineage) have a real `gethostid()`/`sethostid()` pair
+  (added in 4.2BSD for NFS), so the fix was simply to delete the
+  leftover `#define` and let the real libc function resolve normally
+  -- no compat shim needed unless the real hardware link proves
+  otherwise.
+- **`_memmove`** -- `bezerk.c` calls `memmove()` directly at two sites
+  (`LOCAL->buf` refill, header compaction), unconditionally on every
+  platform. Other per-OS c-client files already carry their own
+  `memmove()` for platforms lacking it (`os_sco.c`, `os_aix.c`), so
+  `os_bsd.c` needed the same: added a small self-contained
+  forward/backward byte-copy implementation (handles overlap in both
+  directions, unlike `memcpy`), matching the shape already established
+  by `os_sco.c`'s version.
+- **Verified**: matches the exact three undefined symbols the user
+  pasted from the real 2.11BSD `ld` output, name for name. No PDP-11
+  cross-compiler available here to re-link and confirm resolution
+  directly. `./build clean && ./build lnx`, exit 0, 0 warnings (the
+  `bld_path` rewrite is shared with the `lnx` build too, so this is a
+  real regression check, not just inference); full smoketest suite
+  31/31. The `gethostid`/`memmove` fixes are BSD-only (`os_bsd.c`/
+  `os_bsd.h` aren't part of the `lnx` build) and unverifiable without
+  the real target.
+- **Size delta**: `bin/pine` `text` 278133 -> 278178 (+45 bytes, the
+  larger `build_path()`), `data` 10168 -> 10160 (-8 bytes, no longer
+  needing whatever `snprintf`'s format-string handling cost in the
+  initialized-data segment); `bss` unchanged. `bin/pico` untouched
+  (doesn't link c-client, and `bld_path` isn't part of pico's own
+  build). The `os_bsd.c`/`os_bsd.h` changes don't affect `bin/pine`'s
+  `lnx` size at all -- that OS layer isn't compiled into it.
+

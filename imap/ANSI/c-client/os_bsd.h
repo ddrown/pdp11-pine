@@ -48,8 +48,6 @@
 
 
 
-#define gethostid clock		/* non in the Linux C library?? */
-
 /* Dummy definition overridden by TCP routines */
 
 #ifndef TCPSTREAM
