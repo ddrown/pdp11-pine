@@ -41,3 +41,68 @@ DONE elsewhere or referenced in passing below.
       process run rather than across separate invocations (addresses
       aren't stable between runs).
 
+### Close the remaining `pine-ovl` text/overlay and data+bss overage on real 2.11BSD hardware
+
+- [ ] `pine-ovl` (`pine/makefile.bsd`, see `TODO-pdp11-done.md`'s
+      several entries on it) links against real 2.11BSD `ld`, which
+      rejects the result if `round8k(base_text) + round8k(largest
+      overlay) > 64KB` *or* `data + bss > 56KB` (see `ld.c`'s size
+      check, reached via `-i`). Last real-hardware numbers (after the
+      `gethostbyname()`/resolver removal and the `prettysz()`
+      float-removal, both in `TODO-pdp11-done.md`): `text 41984`
+      (base) against a largest overlay of `24576` -- `round8k(41984)`
+      is `49152` (needs to drop under `40960`, i.e. base needs ~1024
+      more bytes off, to reclaim a segment and clear this check);
+      `data 46746 + bss 20542 = 67288`, over the 57344-byte ceiling by
+      `9944` bytes. Leads found so far, not yet acted on:
+    - `pico/edef.h:85`'s `char s[SLEN];` (`SLEN` = 8192, `pico/edef.h`)
+      is a non-`static` global scratch buffer shared across many pico
+      `.c` files -- confirmed (via `ld.c:1153`'s `bsize = add(bsize,
+      csize, "bss")`) that its 8192 bytes only show up in the *final
+      linked* binary's bss, invisible when `size`-ing any individual
+      `.o`, which is why it took real-hardware `nm -n pine | grep '
+      [bBcC] '`-style digging (worked around `nm`'s own out-of-memory
+      failure on the full symbol table by running `nm *.o | grep ' C
+      '` per object file instead) to find at all. Accounts for 8192 of
+      the 9944-byte data+bss shortfall by itself. **Not a bug** --
+      already went through a dedicated overflow audit in an earlier
+      session (see `TODO-pdp11-done.md`'s "pico/edef.h's 16KB global
+      scratch buffer" references) and `static` would be actively
+      wrong here (would give every including file its own separate
+      8KB copy instead of one shared one). Worth auditing whether
+      `SLEN` is generous headroom vs. a tight fit -- would need finding
+      the actual largest thing ever copied into `s` across every
+      caller before touching the constant, same rigor as any other
+      buffer-size change per this repo's verification discipline.
+    - String literal volume in `pine`'s bigger `.c` files is real,
+      live, user-facing text (error messages/prompts/status lines),
+      not dead code like the `struct variable` `description` field
+      was -- e.g. `mailcmd.c` alone has ~178 string literals totaling
+      ~4254 bytes (measured by extracting every double-quoted literal
+      from the source), which is why 2.11BSD's `data`-segment numbers
+      for these files look so much bigger than the same files' `.data`
+      on this repo's ELF/gcc `lnx` dev build (a.out has no separate
+      read-only/`.rodata` section -- every string literal lives in
+      writable `.data`). Cutting this further means real tradeoffs:
+      shortening/consolidating message text (UX cost) or hunting for
+      literally-duplicated strings across files to dedupe -- not yet
+      attempted.
+    - A leftover ~942 bytes of the data+bss shortfall (`9944` total
+      minus `s`'s `8192`) is still unaccounted for -- `nm *.o | grep '
+      C '` was run across the pulled `libc.a`/`libtermlib.a` members
+      (`lib-nm.txt`) and found only tiny (2-4 byte) commons (`_errno`,
+      `_ospeed`/`_BC`/`_UP`/`_PC`, `_freemem`, `__sigintr`); the same
+      check hasn't yet been run across `pine`'s/`pico`'s/`c-client`'s
+      *own* object files, which is the next place to look for it.
+    - Replacing `doprnt`/`*printf` with a custom minimal formatter
+      (no float support, only whatever specifiers this codebase
+      actually uses) was scoped and set aside for now (see
+      `TODO-pdp11-done.md`'s `prettysz()` entry) -- real measured
+      numbers show the float-specific helpers alone
+      (`atof`/`ecvt`/`fltpr`/`gcvt`/`ldexp`/`modf`, excluding `doprnt`
+      itself) total 1534 bytes text, which would be enough on its own
+      to clear the text/overlay budget (currently short by ~1024), but
+      doing it means replacing the shared formatting engine behind
+      every `sprintf`/`printf`/`fprintf` call in the whole tree --
+      real, invasive, high-effort work, deliberately not started.
+

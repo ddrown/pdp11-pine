@@ -71,6 +71,17 @@ int                display_attachment(long, struct attachment *);
 void               save_attachment(int, long, struct attachment *);
 void		   display_text_att(long, struct attachment *);
 
+/* messages repeated verbatim at multiple call sites below -- shared
+ * storage instead of a separate copy of the same string at each site */
+static char *no_msg_in_fldr           = "\007No message in folder";
+static char *cancelled_msg            = "\007Cancelled";
+static char *err_reading_fldr_name    = "\007Error reading folder name";
+static char *err_expand_unknown_user  = "\007Error expanding file name: \"%s\" unknown user";
+static char *closing_fldr_keeping_all = "Closing folder \"%s\". Keeping all %s message%s";
+static char *deleted_flag             = "\\DELETED";
+static char *illegal_char_in_fn_msg   = "\007%s in file name";
+static char *cant_open_use_compose    = "\007Can't open \"%s\", use Compose";
+
 
  
 /*----------------------------------------------------------------------
@@ -190,7 +201,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
 		  break;
 		/* ^C */
 		case 'x':
-		  q_status_message(0, 0, 2, "\007Attachment cancelled");
+		  q_status_message(0, 0, 2, cancelled_msg);
 		  break;
 	      }
             }
@@ -204,7 +215,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
         case 'p':
         case ctrl('P'):		    
           if(ps_global->max_msgno == 0) {
-              q_status_message(0, 1, 3, "\007No message in folder");
+              q_status_message(0, 1, 3, no_msg_in_fldr);
           }else  if(current_sorted_msgno > 1 ){
               current_sorted_msgno--;
               ps_global->current_sorted_msgno = current_sorted_msgno;
@@ -243,7 +254,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
         case 'd':
         case KEY_DEL:
           if(ps_global->max_msgno <= 0L) {
-              q_status_message(0, 1, 3,"\007No message in folder");
+              q_status_message(0, 1, 3,no_msg_in_fldr);
               break;
           }
 
@@ -276,7 +287,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
 
 	  if(!mc->deleted) {
               sprintf(sequence, "%ld", ps_global->sort[current_sorted_msgno]);
-              mail_setflag(ps_global->mail_stream, sequence, "\\DELETED");
+              mail_setflag(ps_global->mail_stream, sequence, deleted_flag);
               update_titlebar_status(mc);
               ps_global->status_changed = 1;
               clear_index_cache_ent(current_sorted_msgno);
@@ -307,7 +318,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
         case PF10:
         case 'u':
           if(ps_global->max_msgno == 0) {
-              q_status_message(0, 1, 3, "\007No message in folder");
+              q_status_message(0, 1, 3, no_msg_in_fldr);
               break;
           }
           if(READONLY_FOLDER){
@@ -333,7 +344,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
                            "\007Can't undelete a message that isn't deleted");
           }else {
               sprintf(sequence, "%ld", ps_global->sort[current_sorted_msgno]);
-              mail_clearflag(ps_global->mail_stream, sequence, "\\DELETED");
+              mail_clearflag(ps_global->mail_stream, sequence, deleted_flag);
               update_titlebar_status(mc);
               ps_global->status_changed = 1;
               clear_index_cache_ent(current_sorted_msgno);
@@ -353,7 +364,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
         case PF11:
         case 'r':
           if(ps_global->max_msgno == 0) {
-              q_status_message(0, 0, 2, "\007No message in folder");
+              q_status_message(0, 0, 2, no_msg_in_fldr);
               break;
           }
           e  = mail_fetchstructure(ps_global->mail_stream,
@@ -489,7 +500,7 @@ do_jump:
         case 's':
 do_save:
           if(ps_global->max_msgno == 0) {
-              q_status_message(0, 0, 2, "\007No message in folder");
+              q_status_message(0, 0, 2, no_msg_in_fldr);
               break;
           }
           e  = mail_fetchstructure(ps_global->mail_stream,
@@ -515,7 +526,7 @@ do_save:
             ps_global->mangled_footer = 1;
           if(!mc->deleted && !READONLY_FOLDER){
               sprintf(sequence, "%ld", ps_global->sort[current_sorted_msgno]);
-              mail_setflag(ps_global->mail_stream, sequence, "\\DELETED");
+              mail_setflag(ps_global->mail_stream, sequence, deleted_flag);
               update_titlebar_status(mc);
               ps_global->status_changed = 1;
               clear_index_cache_ent(current_sorted_msgno);
@@ -529,7 +540,7 @@ do_save:
         case 'e':
 do_export:
           if(ps_global->max_msgno == 0) {
-              q_status_message(0, 0, 2, "\007No message in folder");
+              q_status_message(0, 0, 2, no_msg_in_fldr);
               break;
           }
           export_message(question_line, current_sorted_msgno);
@@ -650,7 +661,7 @@ do_sortindex:
 	      if(ps_global->max_msgno > 0)
 		q_status_message1(0, 0, 1, "No more %s messages", "new");
 	      else
-		q_status_message(0, 1, 3, "\007No message in folder");
+		q_status_message(0, 1, 3, no_msg_in_fldr);
 	  }
 
           break;
@@ -660,7 +671,7 @@ do_sortindex:
         default:
         bogus:
           q_status_message2(0, 0, 2,
-	      "\007Command \"%s\" not defined for this screen. Use %s for help",
+	      "\007\"%s\" undefined here (%s for help)",
                           (void *)pretty_command(orig_command), "?");
           break;
       }
@@ -771,11 +782,11 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
                               prompt, ekey, help, 0);
 
 	if(rc == -1){
-	    q_status_message(1, 1, 3, "\007Error reading folder name");
+	    q_status_message(1, 1, 3, err_reading_fldr_name);
 	    return(0);
 	}
 	else if(rc == 1){
-	    q_status_message(0, 0, 2, "\007Save message cancelled");
+	    q_status_message(0, 0, 2, cancelled_msg);
 	    return(0);
 	}
 	else if(rc == 2) {
@@ -802,8 +813,7 @@ save_msg(screen_line, message, screen_mangled, index_sorted_msgno)
     }
 
     if(rc == 1 || (!*new_folder && !*folder) || (rc == 2 && !*new_folder)) {
-        q_status_message(0, 0, 2 ,
-			 "\007No folder named; save message cancelled");
+        q_status_message(0, 0, 2 , cancelled_msg);
         return(0);
     }
 
@@ -871,7 +881,7 @@ save(folder, context, message, index_sorted_msgno)
      */
     if((so = so_get(src, NULL, WRITE_ACCESS)) == NULL){
 	q_status_message(1, 2, 4, 
-			 "\007Problem creating space for message text.");
+			 "\007Out of memory");
 	return(0);
     }
 
@@ -915,7 +925,7 @@ save(folder, context, message, index_sorted_msgno)
 		save_folder);
 
         if(want_to(tmp_20k_buf, 'y', 'n', NO_HELP, 0) != 'y'){
-            q_status_message(0, 1, 3, "\007Save message cancelled");
+            q_status_message(0, 1, 3, cancelled_msg);
 	    break;
         }
 
@@ -986,7 +996,7 @@ export_message(q_line, sorted_msgno)
         removing_trailing_white_space(filename);
         removing_leading_white_space(filename);
         if(rc == 1 || filename[0] == '\0') {
-            q_status_message(0, 0, 2, "\007Export message cancelled");
+            q_status_message(0, 0, 2, cancelled_msg);
             return(0);
         }
 
@@ -997,7 +1007,7 @@ export_message(q_line, sorted_msgno)
         /*-- check out and expand file name. give possible error messages --*/
         strcpy(full_filename, filename);
         if((ill = filter_filename(filename)) != NULL) {
-            q_status_message1(1, 1, 3, "\007%s in file name", ill);
+            q_status_message1(1, 1, 3, illegal_char_in_fn_msg, ill);
             display_message('x');
             sleep(3);
             continue;
@@ -1008,7 +1018,7 @@ export_message(q_line, sorted_msgno)
                 if(p != NULL)
                   *p = '\0';
                 q_status_message1(1, 1, 3,
-                    "\007Error expanding file name: \"%s\" unknown user",
+                    err_expand_unknown_user,
     	            full_filename);
                 display_message('x');
                 sleep(3);
@@ -1031,7 +1041,7 @@ export_message(q_line, sorted_msgno)
                 filename);
         wt = want_to(prompt, 'y', 'n', NO_HELP, 0);
         if(wt == 'n') {
-            q_status_message(0, 0, 2, "\007Export message cancelled");
+            q_status_message(0, 0, 2, cancelled_msg);
             return(0);
         }
         new_file = 0;
@@ -1129,16 +1139,16 @@ jump_to(int qline)
             for(j = jump_num_string; isdigit(*j) || *j == '-'; j++);
 	    if(*j != '\0') {
 	        q_status_message(0, 2, 2,
-                           "\007Invalid number entered. Use only digits 0-9");
+                           "\007Invalid number");
             } else {
                 jump_num = atol(jump_num_string);
                 if(jump_num < 1L) {
 	            q_status_message1(1, 2, 2,
-                              "\007Message number (%s) must be greater than 0",
+                              "\007%s: must be > 0",
                                       long2string(jump_num));
                 } else if(jump_num > ps_global->max_msgno) {
                     q_status_message1(1, 2, 2,
-	   "\007Message number must be no more than %s, the number of messages",
+	   "\007Max is %s",
 		    long2string(ps_global->max_msgno));
                 } else {
                     return(jump_num);
@@ -1246,11 +1256,11 @@ broach_folder(qline, allow_list, context)
                               ekey, help, 0);
 
 	if(rc == -1){
-	    q_status_message(1, 1, 3, "\007Error reading folder name");
+	    q_status_message(1, 1, 3, err_reading_fldr_name);
 	    return(NULL);
 	}
 	else if(rc == 1){
-	    q_status_message(0, 0, 2, "\007Open Folder cancelled");
+	    q_status_message(0, 0, 2, cancelled_msg);
 	    return(NULL);
 	}
 	else if(rc == 2){
@@ -1279,7 +1289,7 @@ broach_folder(qline, allow_list, context)
     removing_leading_white_space(new_folder);
 
     if(*new_folder == '\0'  && last_folder == NULL) {
-        q_status_message(0, 0, 2, "\007Open folder cancelled");
+        q_status_message(0, 0, 2, cancelled_msg);
         return(NULL);
     }
 
@@ -1342,14 +1352,14 @@ do_broach_folder(new_folder, new_context)
 
     if(strcmp(new_folder, POSTPONED_MAIL) == 0) {
         q_status_message1(1, 2, 4,
-     "\007Can't open \"%s\". To continue postponed mail, give compose command",
+     cant_open_use_compose,
                           POSTPONED_MAIL);
         return(0);
     }
 
     if(strcmp(new_folder, INTERRUPTED_MAIL) == 0) {
-        q_status_message1(1, 2, 4, 
-    "\007To continue interrupted mail, give compose command. (Can't open %s.)",
+        q_status_message1(1, 2, 4,
+    cant_open_use_compose,
                           INTERRUPTED_MAIL);
         return(0);
     }
@@ -1648,7 +1658,7 @@ expunge_and_close(stream, folder)
 		    /* saved, set deleted flag in inbox */
 		    if(save(VAR_READ_MESSAGE_FOLDER, save_context, mc, i)) {
 		      sprintf(sequence, "%ld", i);
-		      mail_setflag(stream, sequence, "\\DELETED");
+		      mail_setflag(stream, sequence, deleted_flag);
 		      saved_msgs++;
 		    }
 		    /* failure */
@@ -1699,14 +1709,14 @@ expunge_and_close(stream, folder)
                     mail_expunge(stream);
                 } else {
                     q_status_message3(0, 2, 3,
-                             "Closing folder \"%s\". Keeping all %s message%s",
+                             closing_fldr_keeping_all,
                                    pretty_fn(folder), comatose(stream->nmsgs),
                                       plural(stream->nmsgs));
                     display_message('q'); /* So they see the message */
                 }
             } else {
                 q_status_message3(0, 2, 3,
-                            "Closing folder \"%s\". Keeping all %s message%s",
+                            closing_fldr_keeping_all,
                              pretty_fn(folder), comatose(stream->nmsgs),
                                   plural(stream->nmsgs));
                 display_message('q'); /* So they see the message */	
@@ -1818,7 +1828,7 @@ search_headers(command_line, sorted_msg, max_msg)
     }
 
     if(rc == 1 || (new_string[0] == '\0' && search_string[0] == '\0')) {
-        q_status_message(0, 0, 2, "\007Search cancelled");
+        q_status_message(0, 0, 2, cancelled_msg);
         return(0);
     }
 
@@ -1958,7 +1968,7 @@ attachments(qline, sorted_msgno)
         }
 
         if(r == 1 || section[0] == '\0') {
-            q_status_message(0, 0, 2, "\007Attachment cancelled");
+            q_status_message(0, 0, 2, cancelled_msg);
             return(NULL);
         }
         removing_trailing_white_space(section);
@@ -1969,7 +1979,7 @@ attachments(qline, sorted_msgno)
 
         if(a->description == NULL) {
             q_status_message1(1, 2, 4,
-             "\007No such attachment number \"%s\". Must be in displayed list",
+             "\007No such attachment \"%s\"",
                               section);
             display_message('x');
             sleep(3);
@@ -2116,7 +2126,7 @@ save_attachment(qline, msgno, a)
         }
 
         if(r == 1 || filename[0] == '\0') {
-            q_status_message(0, 0, 2, "\007Save attachment cancelled");
+            q_status_message(0, 0, 2, cancelled_msg);
             return;
         }
 
@@ -2128,7 +2138,7 @@ save_attachment(qline, msgno, a)
         removing_trailing_white_space(full_filename);
         removing_leading_white_space(full_filename);
         if((ill = filter_filename(filename)) != NULL) {
-            q_status_message1(0, 1, 3, "\007%s in file name", ill);
+            q_status_message1(0, 1, 3, illegal_char_in_fn_msg, ill);
             display_message('x');
             sleep(3);
             continue;
@@ -2139,7 +2149,7 @@ save_attachment(qline, msgno, a)
                 if(p != NULL)
                   *p = '\0';
                 q_status_message1(1, 1, 3,
-                    "\007Error expanding file name: \"%s\" unknown user",
+                    err_expand_unknown_user,
                     full_filename);
                 display_message('x');
                 sleep(3);
@@ -2160,7 +2170,7 @@ save_attachment(qline, msgno, a)
         sprintf(prompt_buf, "File \"%.150s\" already exists. Overwrite it",
                 full_filename);
         if(want_to(prompt_buf, 'n', 'n', NO_HELP, 0) == 'n') {
-            q_status_message(0, 1, 3, "\007Save of attachment cancelled");
+            q_status_message(0, 1, 3, cancelled_msg);
             return;
         }
 

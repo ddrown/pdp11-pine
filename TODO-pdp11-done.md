@@ -7979,3 +7979,91 @@ machinery gets linked into the program.
   `fltpr.o`/`gcvt.o`/`ecvt.o`/`modf.o` cluster (plus whatever of
   `doprnt.o`'s own size is float-format-specific) should no longer
   need to be pulled into *either* binary's link at all.
+
+### Shrink `mailcmd.c`'s string literal footprint (`pine-ovl` data+bss)
+
+Continuing the `pine-ovl` data+bss investigation: with the `description`
+field gone and `s`/`SLEN` explained (see the two entries above/below),
+the next-biggest lever left is string literal volume itself -- 2.11BSD's
+`a.out` format has no separate read-only/`.rodata` section, so every
+string literal lives in writable `.data`, unlike this repo's ELF/gcc
+`lnx` dev build where they land in a read-only section merged into
+`text` reporting (and get automatically deduplicated by gcc when
+identical, which an old single-pass `cc` doesn't do). `mailcmd.c` alone
+measured at ~4254 bytes of string literals earlier in this
+investigation, the single biggest contributor of any one file. Per the
+user's explicit direction ("I'd rather a cryptic error message than a
+binary that doesn't run"), went through it and cut two ways:
+
+- **Deduplication (zero behavior change)**: many `\007`-prefixed status
+  messages were byte-for-byte identical at multiple call sites --
+  `"\007No message in folder"` (7 call sites), `"\\DELETED"` (4, the
+  IMAP flag name passed to `mail_setflag()`/`mail_clearflag()`),
+  `"\007Error reading folder name"` (2), `"\007Error expanding file
+  name: \"%s\" unknown user"` (2), `"Closing folder \"%s\". Keeping all
+  %s message%s"` (2, both branches of an if/else that print the exact
+  same message either way), `"\007%s in file name"` (2), and a cluster
+  of six near-identical "cancelled" messages (`"\007Attachment
+  cancelled"`, `"\007Save message cancelled"`, `"\007Export message
+  cancelled"`, `"\007Open Folder cancelled"`/`"\007Open folder
+  cancelled"` (differed only in capitalization), `"\007Save attachment
+  cancelled"`/`"\007Save of attachment cancelled"`, `"\007Search
+  cancelled"`, and `"\007No folder named; save message cancelled"` --
+  12 call sites total) consolidated into one shared `"\007Cancelled"`,
+  per the user's suggestion to combine same-meaning cancel messages
+  rather than just shortening each independently. Each group became a
+  single file-scope `static char *` holding the one copy of the text,
+  referenced by pointer at every call site instead of repeating the
+  literal -- C doesn't merge identical string constants across
+  translation units on its own (and demonstrably doesn't merge them
+  even *within* one file on an old single-pass compiler), so this is a
+  real storage reduction, not a stylistic one, and changes *zero*
+  user-visible text.
+- **Shortening (real wording changes, deliberately terser)**: the
+  longest remaining unique messages were cut down, e.g. `"\007Command
+  \"%s\" not defined for this screen. Use %s for help"` ->
+  `"\007\"%s\" undefined here (%s for help)"`; `"\007Problem creating
+  space for message text."` -> `"\007Out of memory"`; `"\007Invalid
+  number entered. Use only digits 0-9"` -> `"\007Invalid number"`;
+  `"\007Message number (%s) must be greater than 0"` -> `"\007%s: must
+  be > 0"`; `"\007Message number must be no more than %s, the number of
+  messages"` -> `"\007Max is %s"`; `"\007No such attachment number
+  \"%s\". Must be in displayed list"` -> `"\007No such attachment
+  \"%s\""`; and the postponed/interrupted-mail pair (`"\007Can't open
+  \"%s\". To continue postponed mail, give compose command"` /
+  `"\007To continue interrupted mail, give compose command. (Can't open
+  %s.)"`) collapsed into one shared `"\007Can't open \"%s\", use
+  Compose"` -- the folder name argument (`POSTPONED_MAIL`/
+  `INTERRUPTED_MAIL`, `pine/os.h`) already distinguishes which case it
+  is, so this was both a shortening and a dedup. Every format-string
+  argument count/order was double-checked against its call site during
+  each edit (the classic risk with this kind of change). Left prompts
+  the user has to read and act on alone (e.g. `"File (in home
+  directory) to save message text in"`) untouched -- the user's
+  "cryptic is fine" direction was specifically about error/status
+  feedback, not input prompts, and one of those exact prompt strings is
+  also asserted on verbatim by `test_export_message_from_overflow.py`.
+- **Verified**: checked every touched message against
+  `test/cases/*.py`'s `session.expect(...)` calls *before* editing --
+  found and preserved the one real dependency (`"Error opening
+  destination"`, `test_save_attachment_overflow.py`, left completely
+  untouched) and confirmed none of the consolidated/shortened messages
+  are asserted on anywhere else. `./build clean && ./build lnx`, exit
+  0, 0 warnings; full smoketest suite 31/31. No PDP-11 cross-compiler
+  available here to measure the real byte savings directly (and this
+  dev build's own size numbers are a poor proxy for this specific
+  change -- see below) -- that's the next real-hardware `size` cycle to
+  confirm.
+- **Size delta**: `bin/pine` `text` 275746 -> 275386 (-360 bytes) on
+  this ELF/gcc dev build -- a real but *understated* proxy, since gcc
+  already auto-merges identical string constants (the 7-way and 12-way
+  duplicates were mostly free there already) and puts survivors in a
+  read-only section reported under `text`, not `data`. Hand-totaling
+  the actual source-text bytes removed/consolidated (old literal sizes
+  minus the one shared copy plus one 2-byte pointer variable per
+  group, plus the pure-shortening deltas) estimates roughly 840 bytes
+  of real savings on the 2.11BSD target's `.data` segment, where none
+  of this deduplication happens for free and every string literal
+  costs full writable-segment space -- an estimate, not a measurement;
+  real confirmation needs the next real-hardware `size` run. `bin/pico`
+  untouched (`mailcmd.c` is pine-only).
