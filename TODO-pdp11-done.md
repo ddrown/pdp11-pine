@@ -8067,3 +8067,62 @@ binary that doesn't run"), went through it and cut two ways:
   costs full writable-segment space -- an estimate, not a measurement;
   real confirmation needs the next real-hardware `size` run. `bin/pico`
   untouched (`mailcmd.c` is pine-only).
+
+  Confirmed on real hardware after this fix: `bin/pine` `data` 46746 ->
+  45872 (-874 bytes, within 34 bytes of the ~840-byte hand estimate
+  above); `bss`/`text`/overlays unchanged, as expected (string cuts
+  only affect `.data`, not code size or overlay placement).
+
+### Shrink `mailview.c`'s string literal footprint (`pine-ovl` data+bss)
+
+Same investigation, next file down. Two kinds of win, one of them
+bigger than a typical dedup:
+
+- **Collapsed a repeated 4-way ternary into a helper function**: five
+  separate call sites (`scrolltool()`'s page-up/page-down/line-up/
+  line-down handlers) each spelled out the identical `style ==
+  MessageText ? "Already at start of message" : style == HelpText ?
+  "Already at start of help" : style == ComposerHelpText ? "Already at
+  start of help" : "Already at start of text"` chain (or the "end of"
+  equivalent) -- notably with the `"...of help"` string written out
+  *twice* per chain, since `HelpText` and `ComposerHelpText` share the
+  same word. That's ~20 duplicated string literals across 5 call
+  sites. Added a small `style_word(TextType)` helper returning just
+  `"message"`/`"help"`/`"text"`, and replaced each site with
+  `q_status_message1(0, 0, 1, "Already at start of %s",
+  style_word(style))` (or the "end" equivalent) -- two format strings
+  plus one shared helper instead of ~20 literals *and* the repeated
+  ternary logic itself (a real code-size win too, not just data,
+  unlike the mailcmd.c dedup pass which only touched already-shared
+  function-call arguments).
+- **Deduplicated + shortened remaining candidates**: `"Error writing
+  message: %s"` (2 call sites), `"us-ascii"`/`"richtext"` (MIME subtype
+  comparisons, 2 sites each) -- all safe to share via a `static char *`
+  since they're function-call arguments (confirmed this doesn't extend
+  to the file's `KEYMENU_S` tables, e.g. `"PrevPage"`/`"NextPage"`/
+  `"OTHER CMDS"` appearing 3-4 times each: those are static aggregate
+  initializers, which C requires to be constant expressions -- a
+  `static char *` variable's value isn't one, so the mailcmd.c-style
+  trick doesn't apply there and was correctly left alone). Also
+  shortened the file's own copy of the "not defined for this screen"
+  message (mailcmd.c already had the identical pattern, fixed
+  separately since they're different translation units) to match
+  mailcmd.c's shorter wording, and condensed the three-line "text is in
+  a different character set than your display" notice and the
+  attachment placeholder text (`"Not Shown. Use the \"V\" command to
+  view or save this part"` etc.) to shorter equivalents.
+- **Verified**: checked every touched/candidate message against
+  `test/cases/*.py` first, found no dependencies (the "Already at
+  first/last folder" tests that came up in a keyword search are a
+  different message, from `folder.c`, unrelated). `./build clean &&
+  ./build lnx`, exit 0, 0 warnings; full smoketest suite 31/31.
+- **Size delta**: `bin/pine` `text` 275386 -> 274882 (-504 bytes) on
+  the `lnx` dev build -- bigger than the pure-dedup mailcmd.c pass
+  relative to its size, consistent with this file's win including
+  real duplicated *code* (the ternary chains), not just data, which
+  shows up in `text` on any platform including this ELF/gcc one, not
+  only as an under-counted proxy the way string-only savings did.
+  `data`/`bss` unchanged on this dev build (same gcc-already-dedupes-
+  strings caveat as before -- the real `.data` savings need the next
+  real-hardware measurement). `bin/pico` untouched (`mailview.c` is
+  pine-only).
