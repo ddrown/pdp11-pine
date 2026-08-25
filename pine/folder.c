@@ -125,7 +125,7 @@ char      *add_new_folder(int, CONTEXT_S *);
 char      *rename_folder(int, int, CONTEXT_S *);
 int        delete_folder(int, CONTEXT_S *, int *);
 int        search_folders(FSTATE_S *, int);
-int        compare_names(QSType *, QSType *);
+int        compare_names(char **, char **);
 void       create_folder_display(FSTATE_S *, int);
 CONTEXT_S *new_context(char *);
 void      *new_folder_list(void);
@@ -1386,9 +1386,9 @@ search_folders(fd, ask_line)
   ----------------------------------------------------------------------*/
 int
 compare_names(x, y)
-     QSType *x, *y;
+     char **x, **y;
 {
-    char *a = *(char **)x, *b = *(char **)y;
+    char *a = *x, *b = *y;
     int r;
 #define	STRCMP	strcmp
 #define	CMPI(X,Y)	((X)[0] - (Y)[0])

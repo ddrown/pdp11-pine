@@ -7879,3 +7879,45 @@ target with **no TCP/IP**.
   `send.o`/`sendto.o`/`recv.o`/`htons.o`/`htonl.o`/`inet_addr.o`) no
   longer need to be pulled in at all. `bin/pico` untouched (doesn't
   link c-client, and none of these three functions are pico source).
+
+### Fix `folder.c:2144`'s "mixed pointer assignment" warning on `compare_names()`
+
+Found while explaining a real 2.11BSD `cc` warning the user asked
+about (not a build blocker -- a warning, not an error -- but worth
+fixing at the root while looking at it). `compare_names()` is declared
+and defined with `QSType *x, *y` parameters (`QSType` is this
+codebase's generic qsort-callback pointer type, `int *` on most
+platforms -- see `pico/os_unix.h`) and immediately casts them to
+`char **` internally (`char *a = *(char **)x, *b = *(char **)y;`) to
+get at the actual strings it compares. That generic-callback signature
+only makes sense if the function is ever passed to `qsort()` as a
+comparator; a repo-wide grep found it never is (unlike
+`mailindx.c`'s `compare_subjects`/`compare_from`/etc. or
+`pico/browse.c`'s `qsort()` call, which genuinely use `QSType` this
+way) -- `compare_names()`'s only call site, `folder_insert()`'s manual
+sorted-insertion loop, calls it directly with real `char **`
+arguments (`&sortname`, `&fsortname`). Passing `char **` where the
+prototype says `QSType *` (`int *`) is exactly what 2.11BSD's `cc`
+flags as "mixed pointer assignment" -- a real type mismatch, though a
+survivable one on most architectures since pointer representations are
+usually compatible, which is presumably why this was only ever a
+warning and not caught as a hard error. Likely a leftover from when
+this function was a genuine `qsort()` comparator in full upstream
+pine, before this project's cuts changed folder-list insertion to the
+current manual sorted-insert loop.
+- **What changed**: `compare_names()`'s prototype (`folder.c:128`) and
+  definition (`folder.c:1388-1389`) now declare `char **x, **y`
+  directly, matching both its actual body logic and its one real call
+  site; the now-redundant `*(char **)x`/`*(char **)y` casts inside the
+  function became plain `*x`/`*y`.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings;
+  full smoketest suite 31/31 (folder-list-touching tests exercise
+  `folder_insert()`/`compare_names()` indirectly). No PDP-11
+  cross-compiler available here to confirm the warning is gone on real
+  hardware, but the type mismatch this warning describes is now
+  genuinely eliminated, not just silenced.
+- **Size delta**: none -- `bin/pine`/`bin/pico` byte-for-byte
+  unchanged (275746/109103 bytes text). Pure type-correctness fix, no
+  behavioral or size change; the compiled code was already doing the
+  right thing via the explicit cast, this just makes the declared
+  types honest.
