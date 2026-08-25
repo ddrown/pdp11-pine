@@ -84,6 +84,26 @@ pine:  $(obj) $(LOCLIBES)
 	$(CC) -c $(CFLAGS) -o date.o date.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -o pine $(obj) date.o $(LOCLIBES) $(LIBES)
 
+#
+# pine is well over the PDP-11's 64KB text-segment limit too (same
+# problem as pico -- see pico/makefile.bsd's pico-ovl for the
+# background: mkovmake wants every .o file loose, not archived into a
+# library, so it can see cross-file calls and decide what goes in the
+# resident base vs. the swapped-in overlays). pine's own object files
+# are already loose (no libpine.a), so unlike pico-ovl this doesn't
+# need to unpack anything new -- $(LOCLIBES) (libpico.a, c-client.a)
+# stay archived here, same as pico-ovl keeps -ltermcap archived.
+#
+MKOVMAKE=	mkovmake
+MKOVFLAGS=	-O2
+
+pine-ovl:	$(obj) $(LOCLIBES)
+	echo "char datestamp[]="\"`date`\"";" > date.c
+	$(CC) -c $(CFLAGS) -o date.o date.c
+	$(MKOVMAKE) $(MKOVFLAGS) -o pine -f mkov \
+		$(obj) date.o $(LOCLIBES) $(LIBES)
+	$(MAKE) -f mkov
+
 # this is not part of pine
 pine-use:	pine-use.c
 	$(CC) -o pine-use pine-use.c
