@@ -624,10 +624,14 @@ typedef enum {InLine, QStatus} DetachErrStyle;
  * as a single ANSI prototype without splitting the typedef in two and
  * updating every declaration site referencing it.
  */
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-prototypes"
+#endif
 typedef int (*gf_io_t)();	/* type of get and put char function     */
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
 struct filter_s;	/* forward decl so filter_t's parameter list binds to
 			 * the same tag as the typedef below, instead of an
 			 * unrelated type scoped to this prototype alone */
