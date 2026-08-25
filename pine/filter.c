@@ -242,9 +242,18 @@ so_readc(c, so)
     unsigned char *c;
     STORE_S       *so;
 {
-    if(so->src == CharStar)
-      return((so->txtp - (unsigned char *)so->txt) < so->used ? 
-		*c = *(so->txtp)++, 1 : 0);
+    if(so->src == CharStar){
+	/* NB: not written as a single "cond ? a = b, 1 : 0" return --
+	 * 2.11BSD's cc rejects a comma expression in a conditional
+	 * operator's true-branch ("Illegal conditional"/"Lvalue
+	 * required"). */
+	if((so->txtp - (unsigned char *)so->txt) < so->used){
+	    *c = *(so->txtp)++;
+	    return(1);
+	}
+	else
+	  return(0);
+    }
     else{		/* must be FileStar or TmpFileStar */
 	if(!so->txt && !so_reaquire(so))
 	  return(0);
@@ -305,16 +314,31 @@ long     pos;
 int      orig;
 {
     if(so->src == CharStar){
+	/* NB: not written as "cond ? a = b, 0 : -1" returns -- 2.11BSD's
+	 * cc rejects a comma expression in a conditional operator's
+	 * true-branch ("Illegal conditional"/"Lvalue required"). */
 	switch(orig){
 	    case 0 :				/* SEEK_SET */
-	      return(pos < so->used ? 
-		so->txtp = (unsigned char *)so->txt + pos, 0 : -1);
+	      if(pos < so->used){
+		  so->txtp = (unsigned char *)so->txt + pos;
+		  return(0);
+	      }
+	      else
+		return(-1);
 	    case 1 :				/* SEEK_CUR */
-	      return(pos < (so->used - (so->txtp-(unsigned char *)so->txt)) ? 
-		so->txtp += pos, 0 : -1);
+	      if(pos < (so->used - (so->txtp-(unsigned char *)so->txt))){
+		  so->txtp += pos;
+		  return(0);
+	      }
+	      else
+		return(-1);
 	    case 2 :				/* SEEK_END */
-	      return(pos < so->used ? 
-		so->txtp = (unsigned char *)so->txt+(so->used-pos), 0 : -1);
+	      if(pos < so->used){
+		  so->txtp = (unsigned char *)so->txt+(so->used-pos);
+		  return(0);
+	      }
+	      else
+		return(-1);
 	    default :
 	      return(-1);
 	}
@@ -540,7 +564,15 @@ int
 gf_sreadc(c)
 unsigned char *c;
 {
-    return((gf_in.n) ? *c = *(gf_in.txtp)++, gf_in.n-- : 0);
+    /* NB: not "cond ? a = b, n-- : 0" -- 2.11BSD's cc rejects a comma
+     * expression in a conditional operator's true-branch ("Illegal
+     * conditional"/"Lvalue required"). */
+    if(gf_in.n){
+	*c = *(gf_in.txtp)++;
+	return(gf_in.n--);
+    }
+    else
+      return(0);
 }
 
 
@@ -550,7 +582,15 @@ int
 gf_swritec(c)
     int c;
 {
-    return((gf_out.n) ? *(gf_out.txtp)++ = c, gf_out.n-- : 0);
+    /* NB: not "cond ? a = b, n-- : 0" -- 2.11BSD's cc rejects a comma
+     * expression in a conditional operator's true-branch ("Illegal
+     * conditional"/"Lvalue required"). */
+    if(gf_out.n){
+	*(gf_out.txtp)++ = c;
+	return(gf_out.n--);
+    }
+    else
+      return(0);
 }
 
 
@@ -781,7 +821,10 @@ gf_binary_b64(f, c, flg)
     int       c, flg;
 {
     if(flg == GF_DATA){
-	switch(f->n++ % 3){
+	/* NB: cast to (int) -- f->n is long, and 2.11BSD's cc rejects a
+	 * non-int switch selector ("Illegal type of operand"). Safe: the
+	 * value is always a small quantum position, never near LONG_MAX. */
+	switch((int)(f->n++ % 3)){
 	  case 0:
 	    (*f->next->f)(f->next, b64v[c >> 2], GF_DATA);
 					/* byte 1: high 6 bits (1) */
@@ -809,7 +852,7 @@ gf_binary_b64(f, c, flg)
 	}
     }
     else if(flg == GF_EOD){		/* no more data */
-	switch (f->n % 3) {		/* handle trailing bytes */
+	switch ((int)(f->n % 3)) {	/* handle trailing bytes */
 	  case 0:			/* no trailing bytes */
 	    break;
 
@@ -856,7 +899,11 @@ gf_b64_binary(f, c, flg)
 	else if (c == '+') c = 62;
 	else if (c == '/') c = 63;
 	else if (c == '=') {		/* padding */
-	    switch ((f->n)++) {		/* check quantum position */
+	    /* NB: cast to (int) -- f->n is long, and 2.11BSD's cc
+	     * rejects a non-int switch selector ("Illegal type of
+	     * operand"). Safe: value is always a small quantum position
+	     * (0-3), reset well below LONG_MAX. */
+	    switch ((int)((f->n)++)) {	/* check quantum position */
 	      case 2:
 		f->f1++;		/* expect an equal as next char */
 		break;
@@ -871,7 +918,10 @@ gf_b64_binary(f, c, flg)
 	}
 	else return;			/* junk character */
 
-	switch ((f->n)++) {		/* install based on quantum position */
+	/* NB: cast to (int) -- f->n is long, and 2.11BSD's cc rejects a
+	 * non-int switch selector ("Illegal type of operand"). Safe:
+	 * value is always a small quantum position (0-3). */
+	switch ((int)((f->n)++)) {	/* install based on quantum position */
 	  case 0:
 	    f->t = c << 2;		/* byte 1: high 6 bits */
 	    break;

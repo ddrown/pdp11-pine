@@ -7436,25 +7436,57 @@ prior hardware bring-up session.
   (which never defines `__GNUC__`) has the pragma lines removed by the
   preprocessor before they ever reach pragma parsing, while gcc/clang
   (both define `__GNUC__`) see them exactly as before.
+- **`filter.c:247,311,314,317,543,553`: "Illegal conditional"/"Lvalue
+  required" on six `cond ? assignment, value : value` returns** --
+  `so_readc()`, `so_seek()` (all three `switch` cases), `gf_sreadc()`,
+  and `gf_swritec()` each packed an assignment plus a return value into
+  a comma expression sitting in a conditional operator's true-branch,
+  e.g. `return((so->txtp - ...) < so->used ? *c = *(so->txtp)++, 1 :
+  0);`. Per the ANSI C grammar a conditional operator's middle operand
+  is a full `expression` (comma-expressions included), so this is
+  legal C -- but 2.11BSD's pcc-derived `cc` doesn't handle a comma
+  expression there, misparsing the `:` and bailing with "Illegal
+  conditional"/"Lvalue required" at the line the comma appears on.
+  Fixed by rewriting all six as plain `if`/`else` with the assignment
+  and `return` as separate statements -- functionally identical, just
+  not relying on a compiler feature this target's `cc` doesn't
+  support.
+- **`filter.c:784,812,859,874`: "Illegal type of operand" on four
+  `switch` statements selecting on `FILTER_S.n`** -- `gf_binary_b64()`
+  and `gf_b64_binary()` (the BASE64 encode/decode filters) each
+  `switch` on an expression involving `f->n`, which is declared `long`
+  in `FILTER_S` (`pine.h`). 2.11BSD's `cc` only accepts an `int`-typed
+  switch selector -- a real, known restriction of this compiler
+  generation's `switch` code generator (it predates C's later
+  broadening of `switch` to any integer type), not a style nit. Fixed
+  by casting each selector expression to `(int)` at the `switch`
+  (`switch((int)(f->n++ % 3))`, `switch((int)(f->n % 3))`,
+  `switch((int)((f->n)++))` x2). Safe in all four cases: `f->n` here is
+  always a small BASE64 quantum position (0-3, or the equivalent mod-3
+  phase), explicitly reset to `0L` at multiple points in both
+  functions and in their `GF_RESET` handlers -- it never approaches a
+  value `int` can't represent, so truncation from `long` to `int`
+  changes nothing observable.
 - **Verified**: the `mail.c`/`mail.h` and `bezerk.c`/`pine.c` fixes
   reproduce the reported `cc` diagnostics exactly against the line
   numbers in the real 2.11BSD build output (no PDP-11 cross-compiler
   available here to re-run `cc` directly, so this is inference from
   the diagnostic text plus direct reading of the relevant grammar
   limitation, not a re-run against real hardware `cc`); the `pine.h`
-  pragma fix likewise matches the real 2.11BSD `cc` output pasted in
-  by the user (`pine.h:628-692`, the exact cascade described above).
-  `./build clean && ./build lnx`, exit 0, 0 warnings, before and after
-  each fix. Full smoketest suite 31/31 throughout.
+  pragma fix and the `filter.c` fixes likewise each match real 2.11BSD
+  `cc` output pasted in by the user (`pine.h:628-692`; `filter.c:247-
+  874`), same inference method. `./build clean && ./build lnx`, exit
+  0, 0 warnings, before and after each fix. Full smoketest suite 31/31
+  throughout.
 - **Size delta**: `bin/pine` `data` 10520 -> 10168 (-352 bytes, the
   `bezerkproto` initializer moving out of the initialized-data segment
   into BSS), `bss` 18856 -> 19208 (+352 bytes, symmetric move into
-  BSS); `text`/overall size unchanged. The `pine.h`/pragma fix is
-  preprocessor-only on the `lnx` gcc build (`__GNUC__` is always
-  defined there, so the pragmas still fire exactly as before) and
-  produced no size change at all. `bin/pico` untouched throughout (no
-  c-client link, and none of the nine pragma call sites are in
-  pico-only code).
+  BSS); `text`/overall size unchanged. The `pine.h` pragma fix and the
+  `filter.c` `if`/`else`-and-cast rewrites produced no further size
+  change at all (`bin/pine` `text`/`data`/`bss` identical
+  before/after both). `bin/pico` untouched throughout (no c-client
+  link, and neither `pine.h`'s pragma sites nor `filter.c` are linked
+  into pico).
 
 ### Fix `pico/random.c`'s `sprintf` into a too-small `buffer[80]`, flagged by `-Wformat-overflow=` under `ASAN=1`
 
