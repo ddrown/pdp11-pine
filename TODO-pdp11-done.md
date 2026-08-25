@@ -7773,3 +7773,41 @@ problem, not another `mkovmake` tuning question.
   the 13 pointer fields -- close to the entire 2390-byte data+bss
   shortfall computed above, on its own. `bin/pico` untouched (doesn't
   touch pico source at all).
+
+### Fix missing `osdep.h` dependency on `rfc822.o` in c-client's `makefile.bsd`
+
+While chasing the same `_clock` undefined-symbol chain as the prior
+entry, one reference persisted on real hardware even after `os_bsd.h`/
+`os_bsd.c` were fixed and c-client fully rebuilt: `rfc822.c:1275`
+calls `gethostid()` directly (building a MIME boundary/uniqueness
+string), and `imap/ANSI/c-client/makefile.bsd`'s dependency line for
+it was missing `osdep.h`:
+```
+rfc822.o: mail.h rfc822.h misc.h
+```
+compare with every sibling object file's rule, which all correctly
+list it (`mail.o: mail.h misc.h osdep.h`, `bezerk.o: ... osdep.h`,
+`dummy.o: ... osdep.h`, `misc.o: ... osdep.h`) -- a real gap in the
+original UW makefile, not something introduced this session. Without
+that dependency edge, `make` has no way to know `rfc822.o` needs
+recompiling when `osdep.h` changes, so it kept using the stale object
+(compiled back when `osdep.h` still carried the leftover `#define
+gethostid clock`, see prior entry) across every subsequent rebuild,
+even a full `make -f makefile.bsd` run, since `rfc822.c` itself never
+changed.
+- **What changed**: added `osdep.h` to `rfc822.o`'s dependency line.
+- **Verified**: matches the exact symptom reported from the real
+  hardware build -- `nm -A *.o | grep clock` (after rebuilding
+  everything else) singled out `rfc822.o`/`send.o` as the only two
+  objects still referencing `_clock`, and `rfc822.c` was confirmed as
+  the one other (besides `send.c`, already covered by the prior
+  entry) direct caller of `gethostid()` in the whole tree. `./build
+  clean && ./build lnx`, exit 0, 0 warnings (this Makefile isn't used
+  by the `lnx` build at all, so this is a syntax/sanity check only,
+  not a regression check); full smoketest suite 31/31. No PDP-11
+  cross-compiler available here to confirm the rebuilt `rfc822.o`
+  actually resolves clean -- the user still needs one manual `rm -f
+  rfc822.o` on the target to clear the already-stale object, since the
+  dependency fix only prevents the problem recurring, not retroactively.
+- **Size delta**: none -- Makefile-only change, no compiled output
+  from this repo's own build affected.

@@ -69,7 +69,7 @@ dummy.o: mail.h dummy.h misc.h osdep.h
 
 nntp.o: mail.h nntp.h smtp.h rfc822.h misc.h osdep.h
 
-rfc822.o: mail.h rfc822.h misc.h
+rfc822.o: mail.h rfc822.h misc.h osdep.h
 
 misc.o: mail.h misc.h osdep.h
 
