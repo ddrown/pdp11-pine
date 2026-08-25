@@ -246,10 +246,14 @@ context_apply(char *b, char *c, char *n)
     if(context_digest(c, tmp, NULL, NULL) == NULL){
       /* tmp is context_digest()'s own "[]"->"%s" template, not
        * external input -- always exactly one %s. */
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
       sprintf(b, tmp, n);		/* everythings ok,  */
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
     }
     else
       strcpy(b, n);			/* don't apply bogus context */

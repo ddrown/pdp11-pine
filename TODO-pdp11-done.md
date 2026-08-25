@@ -7408,18 +7408,53 @@ prior hardware bring-up session.
   "c-client\|bezerk" pico/makefile.lnx pico/makefile.bsd` -- no
   matches), so this is entirely pine's concern and `main()` is a safe,
   single, unconditional place to set it.
-- **Verified**: both fixes reproduce the reported `cc` diagnostics
-  exactly against the line numbers in the real 2.11BSD build output
-  (no PDP-11 cross-compiler available here to re-run `cc` directly,
-  so this is inference from the diagnostic text plus direct reading of
-  the relevant grammar limitation, not a re-run against real hardware
-  `cc`). `./build clean && ./build lnx`, exit 0, 0 warnings, both
-  before and after. Full smoketest suite 31/31 throughout.
+- **`pine.h:627-630`: "Illegal #" / "GCC undefined; func. pragma" /
+  "diagnostic undefined; func. pragma" on `#pragma GCC diagnostic
+  push`/`ignored`/`pop` around the `gf_io_t` typedef, cascading into
+  "gf_io_t redeclared" and further "Declaration syntax" errors at every
+  later `gf_io_t`-using prototype in the file (`gf_pipe()`,
+  `gf_set_so_readc()`, etc.)** -- these pragmas (added in `d76a936`,
+  "enable Tier 2 warning flags", to silence gcc's
+  `-Wstrict-prototypes`/`-Wformat-nonliteral` on the deliberately
+  loose/varargs-style `gf_io_t` and `sprintf`-wrapper call sites) are a
+  GCC-specific extension. 2.11BSD's pcc-derived `cc` doesn't recognize
+  `#pragma GCC ...` at all -- it fails to parse the pragma's own text
+  ("Illegal #"/"Expression syntax"), which on this compiler doesn't
+  just warn and skip the line, it corrupts parsing of whatever
+  declaration follows: here, the `gf_io_t` typedef itself never
+  registers, so every subsequent use of `gf_io_t` as a parameter type
+  errors out as an unknown/redeclared identifier. Same root cause
+  and same fix applied at all nine other call sites across the tree
+  using this GCC-only pragma pair to silence `-Wformat-nonliteral`
+  around deliberately non-literal `sprintf()` format strings
+  (`pine.c` x2, `status.c` x5, `context.c`, `screen.c`, `ttyout.c` x4)
+  -- found via `grep -rn "pragma GCC"` once the first instance in
+  `pine.h` was identified as the culprit, fixed proactively rather
+  than waiting for each to surface one build error at a time as `make`
+  reached each file. Fixed by wrapping each `push`/`ignored` pair and
+  its matching `pop` in `#ifdef __GNUC__`/`#endif`, so 2.11BSD's `cc`
+  (which never defines `__GNUC__`) has the pragma lines removed by the
+  preprocessor before they ever reach pragma parsing, while gcc/clang
+  (both define `__GNUC__`) see them exactly as before.
+- **Verified**: the `mail.c`/`mail.h` and `bezerk.c`/`pine.c` fixes
+  reproduce the reported `cc` diagnostics exactly against the line
+  numbers in the real 2.11BSD build output (no PDP-11 cross-compiler
+  available here to re-run `cc` directly, so this is inference from
+  the diagnostic text plus direct reading of the relevant grammar
+  limitation, not a re-run against real hardware `cc`); the `pine.h`
+  pragma fix likewise matches the real 2.11BSD `cc` output pasted in
+  by the user (`pine.h:628-692`, the exact cascade described above).
+  `./build clean && ./build lnx`, exit 0, 0 warnings, before and after
+  each fix. Full smoketest suite 31/31 throughout.
 - **Size delta**: `bin/pine` `data` 10520 -> 10168 (-352 bytes, the
   `bezerkproto` initializer moving out of the initialized-data segment
   into BSS), `bss` 18856 -> 19208 (+352 bytes, symmetric move into
-  BSS); `text`/overall size unchanged. `bin/pico` untouched (no
-  c-client link).
+  BSS); `text`/overall size unchanged. The `pine.h`/pragma fix is
+  preprocessor-only on the `lnx` gcc build (`__GNUC__` is always
+  defined there, so the pragmas still fire exactly as before) and
+  produced no size change at all. `bin/pico` untouched throughout (no
+  c-client link, and none of the nine pragma call sites are in
+  pico-only code).
 
 ### Fix `pico/random.c`'s `sprintf` into a too-small `buffer[80]`, flagged by `-Wformat-overflow=` under `ASAN=1`
 

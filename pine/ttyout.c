@@ -1028,10 +1028,14 @@ PutLine1(x,y, line, arg1)
 	/* every PutLineN() call site passes a compile-time literal for
 	 * line -- this whole family is a fixed-arity printf wrapper
 	 * (see the VARARGS comments above each). */
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
 	sprintf(temp_format, line, arg1);
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
 	PutLine0(x, y, temp_format);
 }
 
@@ -1056,10 +1060,14 @@ PutLine2(x,y, line, arg1, arg2)
      char        *line;
      void        *arg1, *arg2;
 {
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
     sprintf(temp_format, line, arg1, arg2);
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
     PutLine0(x, y, temp_format);
 }
 
@@ -1081,10 +1089,14 @@ PutLine4(x, y, line, arg1, arg2, arg3, arg4)
      char *line;
      void *arg1, *arg2, *arg3, *arg4;
 {
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
     sprintf(temp_format, line, arg1, arg2, arg3, arg4);
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
     PutLine0(x, y, temp_format);
 }
 
@@ -1107,10 +1119,14 @@ PutLine5(x, y, line, arg1, arg2, arg3, arg4, arg5)
      char *line;
      void *arg1, *arg2, *arg3, *arg4, *arg5;
 {
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
     sprintf(temp_format, line, arg1, arg2, arg3, arg4, arg5);
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
     PutLine0(x, y, temp_format);
 }
 

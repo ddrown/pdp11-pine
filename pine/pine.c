@@ -810,11 +810,15 @@ do_menu(quick_draw)
 	  continue;
         /* mkeys[].descrip is a compile-time literal table, not
          * external input -- always exactly one %s. */
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
         sprintf(buf, mkeys[dline-3].descrip,
                 pretty_command(mkeys[dline-3].key));
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
         buf[ps_global->ttyo->screen_cols] = '\0';
 	if(dline-3 == current_default_menu_item)
 	  StartInverse();
@@ -1243,10 +1247,14 @@ panic1(message, arg)
         panic("Pine paniced. (Reason for panic is too long to tell)");
     } else {
         /* every panic1() call site passes a compile-time literal. */
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
         sprintf(buf, message, arg);
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
         panic(buf);
     }
 }

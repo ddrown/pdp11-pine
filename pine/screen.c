@@ -714,8 +714,10 @@ format_titlebar()
 	 * fmt below is always one of the compile-time literals assigned
 	 * to it a few lines down, never external input.
 	 */
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
 	if(is_context && (ct_len = strlen(as.context_name))){
 	    char *fmt;
 	    int  extra;
@@ -753,7 +755,9 @@ format_titlebar()
 		      as.folder_name + fold_len - (avail - (8 + ss_len)),
 		      ss_string);
 	}
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
     }
     
     /* write title, location and, optionally, the folder name */
