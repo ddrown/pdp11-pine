@@ -116,6 +116,7 @@ static char *subject_field       = "SUBJECT";
 static char *boundary_attr       = "BOUNDARY";
 /* not static -- also used from mailcmd.c, see the extern there */
 char         *out_of_mem_msg     = "\007Out of memory";
+extern char *cancelled_msg;	/* mailcmd.c owns this copy */
 static char *cant_create_tmp_msg = "\007Can't create composer temp file";
 static char *fcc_doesnt_exist_fmt = "\"%.40s\" doesn't exist. Create";
 static char *fcc_rejected_msg    = "\007Fcc of message rejected";
@@ -184,7 +185,7 @@ compose_mail(given_to)
 	      file_path[0] = '\0';
 	}
 	if(ret == 'x') {
-            q_status_message(1, 3, 4, "\007Message cancelled");
+            q_status_message(1, 3, 4, cancelled_msg);
 	    return;
 	}
 

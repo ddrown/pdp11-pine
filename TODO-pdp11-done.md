@@ -8773,3 +8773,58 @@ are smaller, still untouched).
   larger, per the same gcc-already-dedupes-strings caveat as every
   string-cutting entry in this file. `bin/pico` untouched (`pine.c` is
   pine-only).
+
+### Shrink `reply.c`'s string literal footprint, plus a second cross-file share
+
+Continuing the string-cutting pass: `reply.c` measured at ~1595 bytes
+across 98 string literals, next after `pine.c`.
+
+- **Deduplication**: `". Text not included"` (4 sites, all
+  `get_body_part_text()` arguments -- safe, not aggregate
+  initializers) and `"\007Error including all message parts"` (2
+  sites, both `q_status_message()` arguments) each collapsed to one
+  shared `static` string. `"\007Error allocating message text"` (2
+  sites) likewise. `"1"` (6 sites, a literal part-number string arg to
+  `get_body_part_text()`) was left alone -- 1 byte per site, not worth
+  the pointer-variable overhead. Punctuation/formatting fragments used
+  while building reply/quote text (`"@"`, `", "`, `"Re: "`, `"> "`,
+  etc.) were also left alone for the same reason.
+- **Cross-file sharing**: `"\007Message cancelled"` turned up 3x in
+  this file and, via a fresh sweep for exact duplicates against every
+  already-processed file (`mailcmd.c`/`mailview.c`/`send.c`/
+  `folder.c`/`pine.c`), 1x more in `send.c` -- 4 copies total of
+  what's functionally the same message `mailcmd.c` already
+  consolidated its own instances of as `cancelled_msg = "\007Cancelled"`
+  (a user suggestion from earlier in this pass: "one 'cancelled'
+  message"). Unified wording to match and made `mailcmd.c`'s
+  `cancelled_msg` the shared owner (dropped `static`); `reply.c` and
+  `send.c` each get an `extern char *cancelled_msg;` instead of their
+  own copies. This is the same *kind* of change as the cross-file
+  shares that were suspected (then exonerated) in the "ld: too big for
+  type 431" investigation above -- now confirmed safe to keep doing:
+  that regression's real cause was the `$(CCLIENTOFILES)` makefile bug
+  in the entry above, not cross-file data sharing, which `mkovmake`'s
+  own tie definition (text-symbol-only) was never sensitive to in the
+  first place.
+  - The fresh cross-file sweep's other hits (`"headers.h"`, `"as is"`,
+    `"pine-bugs@cac.washington.edu"`, etc.) were false positives from
+    a naive text-based grep matching quoted substrings inside the
+    shared copyright-header *comment* block and `#include` directives
+    that are boilerplate at the top of every `.c` file in this tree --
+    zero bytes in any compiled object, not a real duplication
+    opportunity.
+- **Verified**: checked every touched/candidate string against
+  `test/cases/*.py` first; none of this file's changes touch a tested
+  string. `./build clean && ./build lnx`, exit 0, 0 warnings; full
+  smoketest suite 31/31.
+- **Size delta**: `bin/pine` `text` 274338 -> 274370 (+32), `data`
+  10216 -> 10248 (+32) on the `lnx` dev build -- a net *increase* here,
+  expected per the standing gcc-already-dedupes-strings caveat (gcc's
+  own identical-string-constant merging on this ELF/gcc dev build
+  already absorbed most of what these edits target, so the added
+  pointer-variable overhead shows as a small net loss locally). The
+  real win is on the 2.11BSD target, whose `a.out` toolchain has no
+  such automatic merging -- every one of the now-4 `cancelled_msg`
+  call sites and the 8 other collapsed sites keeps only one copy of
+  its string in `.data` instead of one per call site. `bin/pico`
+  untouched (`reply.c` is pine-only).

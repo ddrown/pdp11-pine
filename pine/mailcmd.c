@@ -74,7 +74,8 @@ void		   display_text_att(long, struct attachment *);
 /* messages repeated verbatim at multiple call sites below -- shared
  * storage instead of a separate copy of the same string at each site */
 static char *no_msg_in_fldr           = "\007No message in folder";
-static char *cancelled_msg            = "\007Cancelled";
+/* not static -- also used from reply.c/send.c, see the externs there */
+char         *cancelled_msg = "\007Cancelled";
 static char *err_reading_fldr_name    = "\007Error reading folder name";
 static char *err_expand_unknown_user  = "\007Error expanding file name: \"%s\" unknown user";
 static char *closing_fldr_keeping_all = "Closing folder \"%s\". Keeping all %s message%s";

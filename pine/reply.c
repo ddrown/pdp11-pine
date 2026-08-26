@@ -82,6 +82,13 @@ int            get_body_part_text(BODY *,long,char *,gf_io_t,char *,char *);
 char          *reply_delimiter(ENVELOPE *);
 char          *forward_delimiter(void);
 
+/* messages repeated verbatim at multiple call sites below -- shared
+ * storage instead of a separate copy of each at every site */
+extern char *cancelled_msg;	/* mailcmd.c owns this copy */
+static char *err_alloc_msg_text = "\007Error allocating message text";
+static char *err_incl_all_parts = "\007Error including all message parts";
+static char *text_not_incl      = ". Text not included";
+
 
 /*----------------------------------------------------------------------
         Fill in an outgoing message for reply and pass off to send
@@ -133,7 +140,7 @@ reply(pine_state, msgno, env, body)
      */
     ret = want_to("Include original message in Reply", 'n', 'x', NO_HELP,0);
     if(ret == 'x') {
-        q_status_message(1, 2, 4,"\007Message cancelled");
+        q_status_message(1, 2, 4, cancelled_msg);
 	goto done_early;
     }
     include_text = ret == 'y';
@@ -150,7 +157,7 @@ reply(pine_state, msgno, env, body)
         outgoing->to = rfc822_cpy_adr(env->from);
     }
     if(ret == 'x') {
-        q_status_message(1, 2, 4,"\007Message cancelled");
+        q_status_message(1, 2, 4, cancelled_msg);
 	goto done_early;
     }
 
@@ -181,7 +188,7 @@ reply(pine_state, msgno, env, body)
         }
     }
     if(ret == 'x') {
-        q_status_message(1, 2, 4,"\007Message cancelled");
+        q_status_message(1, 2, 4, cancelled_msg);
 	goto done_early;
     }
     for(a = a_tail = outgoing->cc; a != NULL; ){
@@ -254,7 +261,7 @@ reply(pine_state, msgno, env, body)
      * create storage object to be used for message text
      */
     if((msgtext = (void *)so_get(CharStar, NULL, EDIT_ACCESS)) == NULL){
-        q_status_message(1, 2, 4,"\007Error allocating message text");
+        q_status_message(1, 2, 4, err_alloc_msg_text);
 	fs_give((void **)&sig);
         goto done_early;
     }
@@ -282,7 +289,7 @@ reply(pine_state, msgno, env, body)
 	    so_puts((STORE_S *)msgtext, reply_delimiter(env));
 
 	    get_body_part_text(orig_body, msgno, "1", pc,
-				prefix, ". Text not included");
+				prefix, text_not_incl);
         } else if(orig_body->type == TYPEMULTIPART) {
 
             /*------ Message is Multipart ------*/
@@ -298,10 +305,9 @@ reply(pine_state, msgno, env, body)
 
 		get_body_part_text(&orig_body->contents.part->body,
 				   msgno, "1", pc, prefix,
-				   ". Text not included");
-                if(fetch_contents(pine_state->mail_stream, msgno, body, 0, 2)) 
-                  q_status_message(1, 2, 4,
-                                  "\007Error including all message parts");
+				   text_not_incl);
+                if(fetch_contents(pine_state->mail_stream, msgno, body, 0, 2))
+                  q_status_message(1, 2, 4, err_incl_all_parts);
             } else {
                 /*--- No text part, create a blank one ---*/
                 part                     = mail_newbody_part();
@@ -309,9 +315,8 @@ reply(pine_state, msgno, env, body)
                 body->contents.part      = part;
                 part->body.contents.binary = msgtext;
 /* BUG: ? matter that we're not setting body.size.bytes */
-                if(fetch_contents(pine_state->mail_stream, msgno, body, 1, 2)) 
-                  q_status_message(1, 2, 4,
-                                   "\007Error including all message parts");
+                if(fetch_contents(pine_state->mail_stream, msgno, body, 1, 2))
+                  q_status_message(1, 2, 4, err_incl_all_parts);
             }
         } else {
             /*---- Single non-text message of some sort ----*/
@@ -539,7 +544,7 @@ forward(pine_state, msgno, env, body)
      * a storage object of the type it understands...
      */
     if((msgtext = (void *)so_get(CharStar, NULL, EDIT_ACCESS)) == NULL){
-	q_status_message(1, 2, 4,"\007Error allocating message text");
+	q_status_message(1, 2, 4, err_alloc_msg_text);
 	goto clean_early;
     }
 
@@ -559,7 +564,7 @@ forward(pine_state, msgno, env, body)
 	    so_puts((STORE_S *)msgtext, NEWLINE);
 	    format_text_header(env, pc, "");
 	    get_body_part_text(orig_body, msgno, "1", pc,
-				    "", ". Text not included");
+				    "", text_not_incl);
 /* BUG: ? matter that we're not setting body.size.bytes */
         } else if(orig_body->type == TYPEMULTIPART) {
             /*---- Message is multipart ----*/
@@ -577,7 +582,7 @@ forward(pine_state, msgno, env, body)
 		so_puts((STORE_S *)msgtext, NEWLINE);
 		format_text_header(env, pc, "");
 		get_body_part_text(&orig_body->contents.part->body,
-				   msgno, "1", pc, "", ". Text not included");
+				   msgno, "1", pc, "", text_not_incl);
 /* BUG: ? matter that we're not setting body.size.bytes */
                 if(fetch_contents(stream, msgno, body, 0, 2))
                   goto bomb;
