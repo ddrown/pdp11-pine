@@ -9073,3 +9073,43 @@ the file depends on; not touched.
   the `lnx` dev build -- modest, since this file had little real
   duplication to begin with. `bin/pico` untouched (`screen.c` is
   pine-only).
+
+### Shrink `newmail.c`'s string literal footprint, drop the `carray[]` synonym whimsy
+
+Continuing the string-cutting pass: `newmail.c` measured at ~580
+bytes across 36 string literals, next after `screen.c`.
+
+- **Feature-vs-size tradeoff, asked rather than assumed**:
+  `new_mail_mess()` had a `static char *carray[] = {"regarding",
+  "concerning", "about", "as to", "as regards", "as respects", "in
+  re", "re", "respecting", "in point of", "with regard to",
+  "subject:"}` -- 12 synonyms, randomly picked (`carray[(unsigned)
+  random()%12]`) to vary the wording of the new-mail notification's
+  subject clause purely for cosmetic variety (e.g. "...concerning
+  Lunch Plans" vs "...as regards Lunch Plans"). This was the single
+  biggest chunk of the file's string data (~100+ bytes of literal
+  text, plus the 12-pointer array itself) but a genuine behavior
+  change to remove, not just a shortening -- out of scope for this
+  pass's normal "check tests, shorten in place" pattern, so the user
+  was asked directly rather than the call being made unilaterally.
+  Chosen: collapse to the single shortest entry, `"re"`, and drop the
+  `random()` call and the array entirely (`sprintf(subject, " %s
+  %.183s", carray[(unsigned)random()%12], e->subject)` -> `sprintf
+  (subject, " re %.183s", e->subject)`). The `subject[1] =
+  toupper(subject[1])` capitalization logic right after (for when this
+  clause opens the whole message) is index-based, not
+  content-specific, so it still works correctly against `"re"`'s `'r'`
+  as it did against every other entry.
+- **Shortened**: `"\007MAIL FOLDER \"%s\" CLOSED DUE TO ACCESS
+  ERROR"` -> `"\007FOLDER \"%s\" CLOSED: ACCESS ERROR"` (kept the
+  all-caps urgency styling, just trimmed the wording).
+- **Verified**: `grep -rln` against every candidate string across
+  `test/cases/*.py` first (zero hits, including for the `carray[]`
+  entries). `./build clean && ./build lnx`, exit 0, 0 warnings; full
+  smoketest suite 31/31.
+- **Size delta**: `bin/pine` `text` 273506 -> 273322 (-184 bytes),
+  `data` 10280 -> 10184 (-96 bytes) on the `lnx` dev build -- a real
+  win on *both* segments here (unlike most entries in this pass),
+  since removing `carray[]` and the `random()` call cut actual code
+  and a pointer array, not just literal text gcc might already
+  dedupe. `bin/pico` untouched (`newmail.c` is pine-only).

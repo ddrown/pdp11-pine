@@ -294,19 +294,6 @@ new_mail_mess(stream, folder, number, max_num)
 {
     ENVELOPE *e;
     char      subject[200], from[MAX_ADDRESS+20], intro[50 + MAXFOLDER];
-    static char   *carray[] = { "regarding",
-				"concerning",
-				"about",
-				"as to",
-				"as regards",
-				"as respects",
-				"in re",
-				"re",
-				"respecting",
-				"in point of",
-				"with regard to",
-				"subject:"
-    };
 
     e = mail_fetchstructure(stream, max_num, NULL);
 
@@ -349,8 +336,7 @@ new_mail_mess(stream, folder, number, max_num)
         if(e != NULL && e->subject == NULL)
           strcpy(subject, " with no subject");
         else
-          sprintf(subject, " %s %.183s", carray[(unsigned)random()%12],
-		                         e->subject);
+          sprintf(subject, " re %.183s", e->subject);
         if(from[0] == '\0')
           subject[1] = toupper(subject[1]);
 
@@ -507,7 +493,7 @@ streams_died(void)
     }
     if(rv == 1) 
       q_status_message1(1, 3, 6,
-                        "\007MAIL FOLDER \"%s\" CLOSED DUE TO ACCESS ERROR",
+                        "\007FOLDER \"%s\" CLOSED: ACCESS ERROR",
                         pretty_fn(inbox? ps_global->inbox_name :
                                          ps_global->cur_folder));
     return(rv);
