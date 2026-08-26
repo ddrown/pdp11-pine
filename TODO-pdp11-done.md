@@ -9610,3 +9610,70 @@ call chain is enough to run the stack pointer into unmapped space.
 - **Next step**: real-hardware retest of an actual Send through to
   completion -- if this is the real fix, `call_mailer()` should now
   get past the Fcc/folder-search step without crashing.
+
+**Update -- the stack-exhaustion fix worked (no more SIGILL in
+`context_digest()`), but the `static` conversion's own footprint
+pushed a *later* `fs_get()` in the same `call_mailer()` flow over the
+edge instead.** Real-hardware retest reached "Sending mail....." and
+got a fresh crash: `"Out of free storage (1024 bytes)"`, this time
+`abort()`-triggered as designed, with `adb` confirming the site --
+`fs_get(02000)` (1024 decimal = `MSIZE_INIT`) from `so_get()`, called
+from `call_mailer()` building the Fcc storage object (`fcc_so =
+so_get(FCC_SOURCE, ...)`, `send.c`). The stack fix's six `static`
+buffers cost `data`+`bss` ~4608 bytes (real hardware `size` output
+confirmed this exactly: `bss` `11436` -> `16044`, and `(16044-11436-
+4096)/2 = 256`, giving this target's real `MAXPATH` value for the
+first time), eating directly into the *same* shared 64KB budget the
+heap needs -- fixing the stack problem by consuming space the heap
+then didn't have.
+
+### Right-sizing the newly-static context.c buffers from MAILTMPLEN (1024) to MAXPATH (256), plus two real pre-existing overflow bugs found in the process
+
+All four of the newly-`static` `context.c` buffers (`context_fqn_to_an()`'s
+`tmp`/`context`, `context_digest()`'s `tmp`, `context_find_all()`'s
+`tmp`) were sized `MAILTMPLEN` out of generic convention, but they all
+hold folder/context *paths* -- the exact domain `MAXPATH` ("longest
+pathname we ever expect") already exists for, and which
+`find_folders_in_context()`'s own `rcontext`/`view` buffers (never
+touched, already correctly `MAXPATH`-sized) were already using.
+Re-sized all four `MAILTMPLEN` -> `MAXPATH`, recovering roughly
+`4 * (1024 - 256) = 3072` bytes of the `data`+`bss` this session's
+stack fix had just spent -- while keeping them `static` (still off
+the stack, still fixing the original SIGILL). Also re-sized
+`context_apply()`'s own (already-stack, not part of the deep chain,
+left as a regular local) `MAILTMPLEN` buffer to `MAXPATH` for
+contract consistency with `context_digest()`'s `scontext` parameter,
+and trimmed `context_find_all()`'s `"...outside context: %.900s"`
+truncation width down to `%.200s` to fit its own now-smaller buffer.
+
+**Found while re-sizing, not part of the original stack-exhaustion
+hunt**: `context_digest()`'s `rcontext` bounds check already compared
+against `MAILTMPLEN`, even though the caller-supplied buffer it
+writes into (e.g. `find_folders_in_context()`'s own `rcontext
+[MAXPATH]`) was always sized `MAXPATH` -- since `MAILTMPLEN` (1024) is
+*larger* than this target's real `MAXPATH` (256), that check let
+writes overflow the caller's actual buffer by up to 768 bytes. This
+bug predates this whole session; it was just never exercised by input
+long enough to hit it. Fixed both `rcontext` bounds checks (the
+context-parsing loop and the trailing-context loop) to compare against
+`MAXPATH` instead. Also found the `view` parameter's write loop
+(`if(viewp) *viewp++ = *p;`) had **no bounds check of any kind** --
+completely unguarded, not just checked against the wrong constant.
+Added one (`if(viewp - view >= MAXPATH - 1) return("Context too
+long");`), matching the pattern already used for `rcontext`.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  Full smoketest suite 31/31. Real-`MAXPATH` size delta not
+  meaningfully measurable on the `lnx` dev build -- this dev machine's
+  own `MAXPATH` (`MAXPATHLEN`, Linux's `PATH_MAX` = 4096) is *larger*
+  than `MAILTMPLEN`, so switching to it here makes these buffers
+  bigger, not smaller, the opposite of the real target's effect;
+  `bss` delta only makes sense measured on real hardware.
+- **Size delta**: not meaningful on `lnx` (see above); real 2.11BSD
+  delta expected to recover ~3072 of the ~4608 bytes the stack fix
+  spent, net cost roughly +1536 bytes of `data`+`bss` versus before
+  either fix, in exchange for fixing both the stack-exhaustion crash
+  and two real overflow bugs.
+- **Next step**: real-hardware retest -- confirm `size pine` shows
+  the expected `bss` reduction from this entry, and confirm the
+  "Out of free storage (1024 bytes)" crash at `call_mailer()`'s Fcc
+  `so_get()` is gone.

@@ -74,23 +74,29 @@ context_fqn_to_an(find_return f, char *context_string, char *fqn)
   /* static, not stack -- this runs as a c-client find-callback, deep
    * in an already-deep call chain (mail_find_all() -> dummy driver ->
    * mm_mailbox()/mm_bboard() -> here -> context_digest(), itself with
-   * its own MAILTMPLEN local), invoked synchronously once per found
-   * mailbox with no re-entrancy (context_mailbox()/context_bboard(),
-   * the callbacks below, don't call back into any of this). Two
-   * 1024-byte stack locals here on top of that chain's other large
-   * buffers (find_folders_in_context()'s rcontext/view,
-   * context_find_all()'s own tmp) blew the stack on real 2.11BSD
-   * hardware -- confirmed via adb: SIGILL inside context_digest()'s
-   * own prologue, faulting address landing right at the live stack
-   * pointer. See TODO-pdp11-done.md. */
-  static char tmp[MAILTMPLEN];
+   * its own local), invoked synchronously once per found mailbox with
+   * no re-entrancy (context_mailbox()/context_bboard(), the callbacks
+   * below, don't call back into any of this). Two large stack locals
+   * here on top of that chain's other large buffers
+   * (find_folders_in_context()'s rcontext/view, context_find_all()'s
+   * own tmp) blew the stack on real 2.11BSD hardware -- confirmed via
+   * adb: SIGILL inside context_digest()'s own prologue, faulting
+   * address landing right at the live stack pointer. Sized MAXPATH,
+   * not MAILTMPLEN -- these hold folder/context *paths* (fqn is a
+   * filesystem-derived mailbox path, already bounded by the same
+   * real-world path-length limit MAXPATH represents), and MAILTMPLEN
+   * (1024 vs. this target's real MAXPATH of 256) turned out to leave
+   * so little heap headroom that the very next fs_get() down the same
+   * call path (call_mailer()'s Fcc storage) started failing instead.
+   * See TODO-pdp11-done.md. */
+  static char tmp[MAXPATH];
   char *ret = fqn;
   char *delimiter,*prefix,*suffix;
   int pfxlen = 0;
   int sfxlen = 0;
   int fqnlen = strlen (fqn);
   int anlen;
-  static char context[MAILTMPLEN];
+  static char context[MAXPATH];
 
   if (context_string && *context_string && /* have a valid context? */
       context_digest(context_string, context, NULL, NULL) == NULL){
@@ -156,10 +162,13 @@ char *
 context_digest(char *context, char *scontext, char *rcontext, char *view)
 {
     /* static, not stack -- see context_fqn_to_an()'s comment; this
-     * function's own MAILTMPLEN local (used only as the rcontext
-     * fallback when the caller doesn't supply one) stacks on top of
-     * that same deep, non-reentrant call chain. */
-    static char tmp[MAILTMPLEN];
+     * function's own local (used only as the rcontext fallback when
+     * the caller doesn't supply one) stacks on top of that same deep,
+     * non-reentrant call chain. Sized MAXPATH to match every real
+     * caller's own rcontext buffer (find_folders_in_context()'s is
+     * MAXPATH-sized) -- see the bounds-check fix below and
+     * context_fqn_to_an()'s comment for why. */
+    static char tmp[MAXPATH];
     char *p, *viewp = view;
     int   i = 0;
 
@@ -176,12 +185,19 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
     for(; *p ; p++){			/* get thru context */
 	if(rcontext){
 	    /*
-	     * rcontext defaults to this function's own local tmp[MAILTMPLEN]
+	     * rcontext defaults to this function's own local tmp[MAXPATH]
 	     * (above) when the caller doesn't supply its own -- context
 	     * comes from a .pinerc folder-collection string with no length
 	     * cap upstream, so bound the copy rather than overflow tmp.
+	     * Bounded against MAXPATH, not MAILTMPLEN: every real caller
+	     * (e.g. find_folders_in_context()) passes a MAXPATH-sized
+	     * buffer, and MAILTMPLEN (1024) is larger than that on this
+	     * target's real MAXPATH (256) -- checking against the wrong,
+	     * larger constant let this write overflow the caller's actual
+	     * buffer by up to 768 bytes, a pre-existing bug independent of
+	     * anything else fixed alongside it -- see TODO-pdp11-done.md.
 	     */
-	    if(i >= MAILTMPLEN - 1)
+	    if(i >= MAXPATH - 1)
 	      return("Context too long");
 	    rcontext[i++] = *p;		/* copy if requested */
 	}
@@ -206,8 +222,16 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
 	      break;
 	}
 
-	if(viewp)
-	  *viewp++ = *p;
+	if(viewp){
+	    /* view was completely unbounded here before this fix --
+	     * every real caller (find_folders_in_context()) passes a
+	     * MAXPATH-sized buffer, same reasoning as rcontext above,
+	     * but with no length check at all rather than just the
+	     * wrong constant -- see TODO-pdp11-done.md. */
+	    if(viewp - view >= MAXPATH - 1)
+	      return("Context too long");
+	    *viewp++ = *p;
+	}
     }
 
     if(*p != ']')
@@ -215,7 +239,7 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
 
     for(; *p ; p++){			/* trailing context ? */
 	if(rcontext){
-	    if(i >= MAILTMPLEN - 1)
+	    if(i >= MAXPATH - 1)
 	      return("Context too long");
 	    rcontext[i++] = *p;
 	}
@@ -258,7 +282,12 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
 void
 context_apply(char *b, char *c, char *n)
 {
-    char tmp[MAILTMPLEN];
+    /* MAXPATH, not MAILTMPLEN -- matches context_digest()'s scontext
+     * contract, see context_fqn_to_an()'s comment. Not part of the
+     * deep find_folders_in_context()/mail_find_all() chain (this
+     * function fully returns before that starts), so left as a
+     * regular stack local rather than static. */
+    char tmp[MAXPATH];
 
     if(context_digest(c, tmp, NULL, NULL) == NULL){
       /* tmp is context_digest()'s own "[]"->"%s" template, not
@@ -313,7 +342,10 @@ context_find_all(char *context, MAILSTREAM *stream, char *pat)
    * chain into context_fqn_to_an()/context_digest(), each with their
    * own large locals -- see context_fqn_to_an()'s comment), so this
    * buffer stacks on top of all of it for the full search duration. */
-  static char tmp[MAILTMPLEN];
+  /* MAXPATH, not MAILTMPLEN -- see context_fqn_to_an()'s comment;
+   * the %.900s below is trimmed to fit the smaller buffer alongside
+   * its fixed 34-byte prefix. */
+  static char tmp[MAXPATH];
 				/* must be within context */
   if (!context_isambig (pat)) {
     /*
@@ -321,10 +353,10 @@ context_find_all(char *context, MAILSTREAM *stream, char *pat)
      * -- bound both the log message and the copy below rather than
      * overflow tmp.
      */
-    sprintf (tmp,"Find of mailbox outside context: %.900s",pat);
+    sprintf (tmp,"Find of mailbox outside context: %.200s",pat);
     mm_log (tmp,(long) NIL);
-    strncpy(tmp, pat, MAILTMPLEN-1);	/* allow find for now */
-    tmp[MAILTMPLEN-1] = '\0';
+    strncpy(tmp, pat, MAXPATH-1);	/* allow find for now */
+    tmp[MAXPATH-1] = '\0';
   }
   else{
     current_context = context;	/* note current context */
