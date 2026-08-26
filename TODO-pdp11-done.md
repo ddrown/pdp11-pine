@@ -8479,3 +8479,40 @@ biggest file. Same two-part treatment as before:
   gcc's deduplication happens and every one of the ~15 consolidated
   call sites plus the two cross-file shares was previously a full
   separate copy. `bin/pico` untouched (`send.c` is pine-only).
+
+### Add an explicit `.c.o:` rule to `pine/makefile.bsd` -- default suffix rule mis-locates cross-directory output
+
+Noticed while reviewing real hardware build output: a compile like
+`cc -g -DDEBUG -c ../c-client/mail.c` (no `-o`) run from `pine/`
+leaves the resulting object as bare `mail.o` in `pine/` itself, not at
+`../c-client/mail.o` -- `cc -c path/to/file.c` conventionally strips
+the source's directory prefix from its default output name. This
+makefile had no explicit `.c.o:` rule at all, relying entirely on
+`make`'s builtin default suffix rule (`$(CC) $(CFLAGS) -c $<`, no
+`-o`), which is exactly what produces this. It matters specifically
+for `pine-ovl`'s `$(CCLIENTOFILES)` prerequisites (e.g.
+`../c-client/mail.o`), which do have a directory prefix -- if `make`
+ever decides one of them looks stale (e.g. from timestamp skew after
+a file transfer to the target, the same class of issue that bit the
+`os_bsd.h`/`osdep.h` hardlink case in an earlier entry) and falls back
+to the default suffix rule to rebuild it, the result lands in the
+wrong place entirely.
+- **What changed**: added an explicit `.c.o:` rule
+  (`$(CC) $(CFLAGS) -c -o $@ $<`) to `pine/makefile.bsd`. `$@`/`$<`
+  are original Make substitutions (target/first-prerequisite), not a
+  GNU-ism -- fully supported by 2.11BSD's `make`. This is a no-op for
+  same-directory compiles (pine's own `$(obj)`, which already had no
+  prefix to strip) and fixes it for prefixed ones; an explicit rule
+  always takes precedence over a builtin default in any standard
+  `make`.
+- **Verified**: `make -f makefile.bsd -n` dry-run (on this dev
+  machine's GNU make, which also uses the explicit rule over its own
+  builtin once one is defined, confirming the rule text itself takes
+  effect) for both cases -- same-directory (`args.o`) produces the
+  identical command as before; the cross-directory case
+  (`../c-client/mail.o`) now correctly compiles to `-o
+  ../c-client/mail.o ../c-client/mail.c` instead of mis-locating the
+  output. This makefile isn't used by the `lnx` build at all, so no
+  `./build lnx`/smoketest regression check applies here.
+- **Size delta**: none -- Makefile-only change, no compiled output
+  from this repo's own build affected.

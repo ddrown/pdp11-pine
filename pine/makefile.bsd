@@ -79,6 +79,19 @@ LOCLIBES=    ../c-client/c-client.a
 # BSD gets defined in param.h so don't redefine here.
 CFLAGS= $(OPTIMIZE) $(PROFILE) $(DEBUG)
 
+# Explicit .c.o rule, not just the default one -- pine-ovl's
+# $(CCLIENTOFILES) prerequisites (e.g. ../c-client/mail.o) have a
+# directory prefix, and if make's builtin suffix rule (`$(CC)
+# $(CFLAGS) -c $<`, no -o) ever fires for one of them -- e.g. because
+# timestamps make it look stale -- `cc -c ../c-client/mail.c` drops
+# the result as bare `mail.o` in *this* directory instead of at
+# ../c-client/mail.o, since cc strips the source's directory prefix
+# from its default output name. Adding -o $@ here is a no-op for
+# same-directory files (pine's own $(obj)) and fixes it for prefixed
+# ones. $@/$< are original Make substitutions, not a GNU-ism.
+.c.o:
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 obj=    addrutil.o args.o context.o filter.o \
 	folder.o help.o helptext.o init.o mailcmd.o mailindx.o \
 	mailview.o newmail.o pine.o reply.o screen.o \
