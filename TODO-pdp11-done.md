@@ -9001,3 +9001,48 @@ parsing) measured at ~849 bytes across 23 string literals, next after
   the `lnx` dev build. Real 2.11BSD `.data` savings are larger, per
   the standing gcc-already-dedupes-strings caveat. `bin/pico`
   untouched (`args.c` is pine-only).
+
+### Shrink `signals.c`'s string literal footprint
+
+Continuing the string-cutting pass: `signals.c` measured at ~750
+bytes across 16 string literals, next after `args.c`. No intra-file
+duplicates and no real cross-file matches this time.
+
+- **Left untouched, applying the by-now-established prompt/
+  diagnostic-convention exceptions**: `panic("Received abort
+  signal")` (feeds the "Bug in Pine detected: \"%s\"" diagnostic
+  format left alone in the `pine.c` entry); `"\007Pine emergency exit.
+  REALLY ABORT PINE RIGHT NOW"` (a `want_to()` confirmation prompt for
+  an irreversible action -- and `test_signal_handlers.py` checks this
+  exact substring); `"Type ^L (control-L) to repaint the screen and
+  continue with Pine"` (tells the user what key to press --
+  `test_signal_handlers.py` checks `"repaint the screen"`); and the
+  two `"Pine finished. Received %s signal"` hangup/terminate messages
+  (`test_signal_handlers.py` checks this exact format string with
+  `%s` filled in as `"hang up"`/`"terminate"`).
+- **Shortened, preserving tested substrings**: the two "another pine
+  has this open" messages keep their tested `"Session now Read-Only"`
+  suffix verbatim (`test_signal_handlers.py` checks that substring)
+  but shortened the lead-in (`"Another pine access to Inbox.  Session
+  now Read-Only."` -> `"Inbox open elsewhere.  Session now
+  Read-Only."`, same treatment for the folder variant); the suspend
+  notice keeps its tested `"Pine suspended"` lead-in
+  (`"\nPine suspended. Give the \"fg\" command to come back.\n"` ->
+  `"\nPine suspended; \"fg\" to resume.\n"`). Also shortened (no test
+  dependency): the IMAP-suspend-timeout warning and the
+  connection-broken status message (see the `do_suspend()` dead-code
+  question logged as a new open item in `TODO-pdp11.md` -- these two
+  strings may be unreachable on this fork, not confirmed, left as
+  code either way); the signal-reset error; and the abort/coredump
+  banner.
+- **Verified**: `grep -rln` against every candidate string across
+  `test/cases/*.py` first (this is the file where that check actually
+  mattered -- `test_signal_handlers.py` exercises real
+  SIGHUP/SIGTERM/SIGUSR2/SIGQUIT/SIGTSTP delivery and checks several
+  of these exact strings). `./build clean && ./build lnx`, exit 0, 0
+  warnings; full smoketest suite 31/31 including
+  `test_signal_handlers.py`.
+- **Size delta**: `bin/pine` `text` 273642 -> 273546 (-96 bytes) on
+  the `lnx` dev build. Real 2.11BSD `.data` savings are larger, per
+  the standing gcc-already-dedupes-strings caveat. `bin/pico`
+  untouched (`signals.c` is pine-only).

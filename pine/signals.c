@@ -132,7 +132,7 @@ void
 end_signals()
 {
     if(signal(SIGILL,  SIG_DFL) == SIG_ERR) {
-        fprintf(stderr, "Error resetting signals: %s\n",
+        fprintf(stderr, "Signal reset error: %s\n",
                 error_description(errno));
         exit(-1);
     }
@@ -189,7 +189,7 @@ quit_signal(int signo)
         } while(messages_queued() > 0);
         return;
     }
-    fprintf(stderr, "\n\nPine aborting and dumping core\n\n");
+    fprintf(stderr, "\n\nPine aborting, core dumped\n\n");
     coredump();
 }
 
@@ -264,7 +264,7 @@ usr2_signal(int signo)
        && (c = *ps_global->inbox_stream->mailbox) != '{' && c != '*'){
 	ps_global->inbox_stream->readonly = 1; 
 	mail_ping(ps_global->inbox_stream);
-	q_status_message(0,2,2,"Another pine access to Inbox.  Session now Read-Only.");
+	q_status_message(0,2,2,"Inbox open elsewhere.  Session now Read-Only.");
     }
 
     if(ps_global->mail_stream != NULL &&
@@ -273,7 +273,7 @@ usr2_signal(int signo)
        (c = *ps_global->mail_stream->mailbox) != '{' && c != '*'){
 	ps_global->mail_stream->readonly = 1; 
 	mail_ping(ps_global->mail_stream);
-	q_status_message(0,2,2,"Another pine access to folder.  Session now Read-Only.");
+	q_status_message(0,2,2,"Folder open elsewhere.  Session now Read-Only.");
     }
 }
 
@@ -330,9 +330,9 @@ do_suspend(pine)
     then = time(0);
     end_tty_driver(pine);
     end_screen();
-    printf("\nPine suspended. Give the \"fg\" command to come back.\n");
+    printf("\nPine suspended; \"fg\" to resume.\n");
     if(curf[0] == '{')
-      printf("Warning: Your IMAP connection will be closed if Pine\nis suspended for more than 30 minutes\n\n");
+      printf("Warning: IMAP connection closes after 30 min suspended\n\n");
 
     stop_process();
     now = time(0);
@@ -342,7 +342,7 @@ do_suspend(pine)
     if(curf[0] == '{' &&
        (char *)mail_ping(ps_global->mail_stream) == NULL) {
         q_status_message(1, 3, 6,
-                         "\007Suspended for too long, IMAP connection broken");
+                         "\007Suspend timeout, IMAP connection broken");
     }
 }
 

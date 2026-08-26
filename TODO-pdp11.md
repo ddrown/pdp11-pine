@@ -10,6 +10,28 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
+### `do_suspend()`'s IMAP-connection-timeout warning may be dead code on this fork
+
+- [ ] Found while string-cutting `signals.c` (see `TODO-pdp11-done.md`).
+      `do_suspend()` (`signals.c`) guards two blocks -- a "your IMAP
+      connection will be closed" warning printed before suspending,
+      and a "connection broken" status message checked after resuming
+      -- behind `if(curf[0] == '{')`, i.e. only when the current
+      folder's name looks like a remote IMAP mailbox spec
+      (`{host}INBOX`-style). This target's `c-client` only links the
+      local `bezerk`/`mbox`/`phile`/`dummy`/`sm_unix` drivers (no
+      `imap2`, see `TODO-pdp11-done.md`'s driver-exclusion note), which
+      suggests `cur_folder` can likely never actually start with `{`
+      on this fork -- making both blocks dead code. Not confirmed:
+      would need to trace whether the folder-opening path (`mailcmd.c`
+      around `strcpy(ps_global->cur_folder, new_folder)`) rejects a
+      `{`-prefixed name before ever reaching this assignment, or lets
+      it through and only fails later at `mail_open()`. Left alone for
+      now (just shortened the two message strings in place) -- a real
+      "confirm unreachable, then delete" investigation, not a string
+      edit, and out of scope for the string-cutting pass that found
+      it.
+
 ### `Ctrl-\` (SIGQUIT) triggers a broken space-printing redraw loop
 
 - [ ] Found while diagnosing the `read_with_timeout()` `select()`
