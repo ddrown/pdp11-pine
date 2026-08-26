@@ -9238,3 +9238,95 @@ deliberately decided against.
   trace via `adb pine core` + `$c` to identify the actual `CHUNK+1`
   allocation site precisely instead of guessing from the byte count
   alone.
+
+### `set_mime_types()`'s unconditional 8193-byte scratch buffer (found via a real adb stack trace)
+
+The `panic()`/`abort()` fix above paid off immediately: the user
+raised `coredumpsize`, reproduced the compose-then-Send-or-Cancel
+crash again, and pulled a real call stack with `adb pine core` + `$c`:
+
+```
+0175114: ~abort() from ~panic+0104
+0175132: _panic(0175174) from ~mm_fatal+016
+0175150: ~mm_fatal(0175174) from ~fatal+014
+0175166: ~fatal(0175174) from ~fs_get+070
+0175306: ~fs_get(020001) from ~set_mime_types+0112
+0175364: _set_mime_types(0134270) from ~create_message_body+040
+0175402: _create_message_body(0176756) from ~strings2outgoing+0270
+0175422: _strings2outgoing(...) from ~pine_send+01730
+0176140: _pine_send(...) from ~compose_mail+02314
+```
+
+`020001` octal = `8193` decimal (`CHUNK + 1`) -- but this isn't
+`bezerk.c` at all, it's `send.c`'s `set_mime_types()`, called from
+`create_message_body()` -> `strings2outgoing()`, right after the
+composer subprocess returns (same "runs before Send/Cancel branch"
+shape as the `reload_body_text()` bug above, explaining why both
+choices failed identically again).
+
+- **Root cause**: `set_mime_types()` scans the entire outgoing body in
+  `RBUFSZ`-sized chunks (`#define RBUFSZ (8193)`, matching `bezerk.c`'s
+  `CHUNK`-sized buffers) via `so_readc()`, to decide 7BIT/8BIT/BINARY
+  encoding and PLAIN/US-ASCII subtype -- an unconditional 8193-byte
+  `fs_get()`, same class of oversized fixed buffer as the
+  `CHUNK`-vs-`MAILTMPLEN` `bezerk_open()` bug fixed earlier this
+  session.
+- **Fix**: shrank `RBUFSZ` to `MAILTMPLEN + 1` (1025 bytes, matching
+  the `bezerk_open()` precedent) -- an 8x reduction. Confirmed this
+  is purely a chunking-granularity change, not a correctness one: the
+  function processes `buf` one byte at a time via a persistent `p`
+  cursor and accumulates cross-chunk line length via `line_so_far`,
+  so a smaller buffer just means more, smaller refills.
+- **Independent bug found auditing the same buffer**: tracing the
+  refill logic to confirm the above turned up a real, separate defect
+  -- on a mid-line refill, the code re-pointed `p` at the new chunk's
+  start (`p = buf;`) but left `bol` (marks the current line's start)
+  at its old, now-stale offset into the same reused buffer, so the
+  next `line_so_far + (p - bol)` computation would measure a bogus
+  (generally too-small) distance instead of the true in-progress line
+  length. At the old `RBUFSZ` (8193) this needed a single unbroken
+  8KB+ line to ever trigger -- essentially unreachable. At the new,
+  much smaller `RBUFSZ` this looked like it would become easily
+  reachable by any ordinary long line, so fixed it in the same change:
+  `p = bol = buf;` on refill, matching this project's standing
+  practice of fixing real bugs found while auditing a buffer even
+  when they're outside the nominal task.
+- **Verified, and a claim retracted**: built a script-driven A/B test
+  (send a message with a long line via the interactive composer, then
+  via a seeded postponed-mail file, checking for the
+  `Content-Transfer-Encoding: 8BIT` header an RFC821-over-1000-byte
+  line should force) and initially believed it confirmed the `bol` bug
+  reproducibly. It didn't, and re-checking caught this before it went
+  into the log: **pico's own line editor hard-wraps any line -- typed
+  interactively or loaded from a file -- to roughly 255 characters**,
+  confirmed by inspecting the actual bytes `sendmail_stub`'s capture
+  showed being sent (a 3000-byte unbroken line came back chopped into
+  ~255-byte physical lines with real embedded newlines, identically
+  whether typed live or preloaded via `postponed_mail=`, ruling out a
+  pty-input-queue artifact). Since `create_message_body()` /
+  `set_mime_types()` is only ever reached *after* `run_composer_
+  subprocess()` returns (`dump_body_text()`/`reload_body_text()`
+  round-trip every body -- new compose, reply, forward, or resumed
+  postpone alike -- through that same subprocess), no line reaching
+  `set_mime_types()` can exceed pico's own cap in this codebase as it
+  stands, which stays far below even the new, shrunk `RBUFSZ` --
+  meaning the exact scenario needed to observe the `bol` bug's effect
+  never occurs through any composer-driven path. The two test variants
+  "failing" identically with and without the fix wasn't confirmation
+  of the bug; it was both runs failing for the same unrelated reason
+  (no line ever got remotely close to the 1000-byte RFC821 threshold).
+  Deleted the misleading test rather than keep something that doesn't
+  actually exercise what its own docstring claims. The `bol = buf`
+  fix itself is still correct and kept -- cheap, safe, and a real
+  latent-correctness improvement if this ever changes (a higher pico
+  line cap, or a future caller that doesn't route through the
+  composer) -- just not something this test harness can currently
+  demonstrate mattering. `./build clean && ./build lnx`, exit 0, 0
+  warnings; full smoketest suite 31/31 (unaffected either way, as
+  expected given the above).
+- **Size delta**: `bin/pine` `text`/`data` unchanged on the `lnx` dev
+  build (the `RBUFSZ` shrink only affects a local stack/heap
+  allocation size at runtime, not the compiled binary's own
+  footprint; the `bol` fix is a same-size pointer-assignment
+  substitution).
+- **Next step**: real-hardware retest of compose -> Send/Cancel.

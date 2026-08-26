@@ -1521,7 +1521,18 @@ void
 set_mime_types(body)
     BODY *body;
 {
-#define RBUFSZ	(8193)
+    /* just a chunked-read scratch buffer -- so_readc() below reads
+     * one byte at a time regardless of this size, and every stat this
+     * function tracks (max_line/eight_bit_chars/len/can_be_ascii)
+     * already accumulates correctly across a refill (see line_so_far
+     * below), so this only trades refill frequency for memory, not
+     * correctness. Was an unconditional CHUNK+1 (8193, matching
+     * bezerk.c's CHUNK-sized buffers) -- same class of oversized
+     * fixed buffer as the CHUNK-vs-MAILTMPLEN bezerk_open() bug fixed
+     * earlier (TODO-pdp11-done.md), found this time via a real
+     * "Out of free storage (8193 bytes)" crash and an adb stack trace
+     * pinning it to this fs_get() call. */
+#define RBUFSZ	(MAILTMPLEN + 1)
     unsigned char   *buf, *p, *bol;
     register size_t  n;
     long             max_line = 0L,
@@ -1567,7 +1578,17 @@ set_mime_types(body)
 	    for (n = 0; n < RBUFSZ-1 && so_readc(&buf[n], so) != 0; n++)
 	      ;
 	    len += n;
-	    p = buf;
+	    /* bol must move to the new chunk too, not just p -- left
+	     * behind, it would keep pointing at whatever offset the
+	     * last newline was found at in the *previous* chunk, which
+	     * this refill has just overwritten with unrelated bytes.
+	     * The next line_so_far + (p - bol) computation would then
+	     * measure a bogus (and typically much too small) distance
+	     * instead of the true in-progress line length. Practically
+	     * unreachable at the old RBUFSZ (8193 -- needed a single
+	     * unbroken 8KB+ line), but easily reachable at the smaller
+	     * size below (an ordinary long line/URL/quoted block). */
+	    p = bol = buf;
 	}else {
 	    p++;
 	}
