@@ -71,14 +71,26 @@ char *string;
 void
 context_fqn_to_an(find_return f, char *context_string, char *fqn)
 {
-  char tmp[MAILTMPLEN];
+  /* static, not stack -- this runs as a c-client find-callback, deep
+   * in an already-deep call chain (mail_find_all() -> dummy driver ->
+   * mm_mailbox()/mm_bboard() -> here -> context_digest(), itself with
+   * its own MAILTMPLEN local), invoked synchronously once per found
+   * mailbox with no re-entrancy (context_mailbox()/context_bboard(),
+   * the callbacks below, don't call back into any of this). Two
+   * 1024-byte stack locals here on top of that chain's other large
+   * buffers (find_folders_in_context()'s rcontext/view,
+   * context_find_all()'s own tmp) blew the stack on real 2.11BSD
+   * hardware -- confirmed via adb: SIGILL inside context_digest()'s
+   * own prologue, faulting address landing right at the live stack
+   * pointer. See TODO-pdp11-done.md. */
+  static char tmp[MAILTMPLEN];
   char *ret = fqn;
   char *delimiter,*prefix,*suffix;
   int pfxlen = 0;
   int sfxlen = 0;
   int fqnlen = strlen (fqn);
   int anlen;
-  char context[MAILTMPLEN];
+  static char context[MAILTMPLEN];
 
   if (context_string && *context_string && /* have a valid context? */
       context_digest(context_string, context, NULL, NULL) == NULL){
@@ -143,7 +155,12 @@ context_fqn_to_an(find_return f, char *context_string, char *fqn)
 char *
 context_digest(char *context, char *scontext, char *rcontext, char *view)
 {
-    char *p, *viewp = view, tmp[MAILTMPLEN];
+    /* static, not stack -- see context_fqn_to_an()'s comment; this
+     * function's own MAILTMPLEN local (used only as the rcontext
+     * fallback when the caller doesn't supply one) stacks on top of
+     * that same deep, non-reentrant call chain. */
+    static char tmp[MAILTMPLEN];
+    char *p, *viewp = view;
     int   i = 0;
 
     if((p = context) == NULL || *p == '\0'){
@@ -291,7 +308,12 @@ context_isambig(char *s)
 void
 context_find_all(char *context, MAILSTREAM *stream, char *pat)
 {
-  char tmp[MAILTMPLEN];
+  /* static, not stack -- this frame stays live throughout the whole
+   * mail_find_all() search below (its own deep, non-reentrant call
+   * chain into context_fqn_to_an()/context_digest(), each with their
+   * own large locals -- see context_fqn_to_an()'s comment), so this
+   * buffer stacks on top of all of it for the full search duration. */
+  static char tmp[MAILTMPLEN];
 				/* must be within context */
   if (!context_isambig (pat)) {
     /*

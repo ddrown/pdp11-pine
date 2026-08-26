@@ -9533,3 +9533,80 @@ was fixed anyway -- cheap, and removes any doubt.
   next move is auditing `context_append()`/`bezerk_append()`/
   `find_folders_in_context()`'s own buffer handling directly, the same
   way every other overflow in this project's audit was found.
+
+**Update -- the prototype fix wasn't the cause either; found the real
+one via live adb.** Real-hardware retest hit the identical
+`find_folders_in_context()` -> ... -> `context_digest()` crash again,
+unchanged. Rather than another slow upload/build/reproduce cycle, drove
+the user's already-open `adb` session directly via `tmux send-keys`
+against the existing core file:
+
+```
+adb> 0174564/s
+0174564:        mail/[]
+adb> 0162004/s
+0162004:
+adb> $r
+ps  0170004
+pc  0121010    ~context_digest+016
+sp  0157750
+r5  0161770
+...
+~context_digest+016:        clr  0175762(r5)
+```
+
+Two things this revealed: (1) the actual context string being
+processed is `mail/[]` -- 7 bytes, trivially short, ruling out any
+"string longer than some buffer" theory; (2) the fault is `clr
+0175762(r5)` at `context_digest+016` -- 14 bytes into the function,
+still in its own prologue (allocating/touching its local `tmp
+[MAILTMPLEN]`), and the target address (`r5 + -1038` = decimal 57322)
+lands **2 bytes above the live stack pointer** (`sp` = 57320 decimal).
+That's not a data-content bug at all -- it's the stack itself running
+out of room, right as `context_digest()` tries to touch its own local
+buffer.
+
+### Stack exhaustion: four functions in one call chain each carry a 1024+-byte local buffer
+
+The crash's full call chain (`main` -> ... -> `call_mailer` ->
+`find_folders_in_context` -> `context_find_all` -> `mail_find_all` ->
+(c-client's dummy driver) -> `mm_mailbox` -> `context_fqn_to_an` ->
+`context_digest`) is 12 frames deep, and four of those frames each
+declare one or two `MAILTMPLEN`/`MAXPATH`-sized (both effectively
+~1024 bytes on the real target) local arrays:
+`find_folders_in_context()` (`rcontext`, `view`), `context_find_all()`
+(`tmp`), `context_fqn_to_an()` (`tmp`, `context`), and
+`context_digest()` (`tmp`) -- roughly 6KB of stack from just these
+four frames, stacked on top of everything main()/compose_mail()/
+pine_send()/call_mailer() already had live. On a target where the
+whole combined data+bss+heap+stack budget is 64KB (and `data`+`bss`
+alone already claim the majority of it), 6KB in one deep, one-shot
+call chain is enough to run the stack pointer into unmapped space.
+
+- **Fix**: converted all six of these local arrays from stack
+  (automatic) to `static` storage. Verified non-reentrancy first --
+  the only thing downstream of `context_digest()` in this chain is
+  `context_mailbox()`/`context_bboard()` (`mailbox.c`), which just
+  call `new_folder()`/`folder_insert()` and never call back into any
+  of `find_folders_in_context()`/`context_find_all()`/
+  `context_fqn_to_an()`/`context_digest()` -- so none of these
+  functions can be re-entered while an outer call is still on the
+  stack, making `static` safe (no data race possible either, this
+  program is single-threaded). `context_digest()`'s `tmp` is also
+  called from `context_apply()`'s own separate, non-nested call site --
+  safe for the same reason: calls are sequential, never concurrent.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings.
+  `bss` grew +12320 bytes on the `lnx` dev build (moving six buffers
+  off the stack into `.bss`) -- much larger than the real target will
+  see, since this dev machine's `MAXPATH`/`MAXPATHLEN` is ~4096
+  (Linux's `PATH_MAX`) vs. the real 2.11BSD target's much smaller
+  value; the real `data`+`bss` growth will be well under half this.
+  Full smoketest suite 31/31, including `test_send_body_header_
+  overflow_via_sendmail.py`, which drives a real `call_mailer()` send
+  through this exact machinery.
+- **Size delta**: `bin/pine` `bss` 19208 -> 31528 (+12320) on the
+  `lnx` dev build; real 2.11BSD delta will be substantially smaller
+  given the `MAXPATH` difference above. `data`/`text` unchanged.
+- **Next step**: real-hardware retest of an actual Send through to
+  completion -- if this is the real fix, `call_mailer()` should now
+  get past the Fcc/folder-search step without crashing.

@@ -1794,8 +1794,16 @@ find_folders_in_context(context, search_string)
     CONTEXT_S *context;
     char      *search_string;
 {
-    char  rcontext[MAXPATH], view[MAXPATH],
-         *search_context, *rv;
+    /* static, not stack -- this frame stays live for the whole
+     * context_find_all()->mail_find_all() search below, itself a
+     * deep, non-reentrant call chain with several more large locals
+     * of its own (context_find_all()'s tmp, context_fqn_to_an()'s
+     * tmp/context, context_digest()'s tmp -- see the comment on the
+     * first of those in context.c). Two MAXPATH buffers here, stacked
+     * on top of the rest, blew the stack on real 2.11BSD hardware
+     * (confirmed via adb -- see TODO-pdp11-done.md). */
+    static char rcontext[MAXPATH], view[MAXPATH];
+    char *search_context, *rv;
 
     if((context->use&CNTXT_NOFIND) == 0 || (context->use&CNTXT_PARTFIND))
       return;				/* find already done! */
