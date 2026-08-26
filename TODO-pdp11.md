@@ -10,6 +10,22 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
+### `Ctrl-\` (SIGQUIT) triggers a broken space-printing redraw loop
+
+- [ ] Found while diagnosing the `read_with_timeout()` `select()`
+      aliasing bug (`ttyin.c`, see `TODO-pdp11-done.md`) on real
+      hardware: `Raw()` (`ttyin.c`) disables `Ctrl-C` at the tty-driver
+      level by setting `_raw_tchars.t_intrc = -1` (so pine can handle
+      it itself as a plain character), but never does the equivalent
+      `_raw_tchars.t_quitc = -1` for `Ctrl-\` -- so `Ctrl-\` still
+      raises a real `SIGQUIT`, which lands in whatever `signals.c`
+      does for it and produces a loop that repeatedly prints spaces
+      over the screen instead of a sane default (pine exiting
+      cleanly, or ignoring it like `Ctrl-C`). Not yet investigated --
+      lower priority than the keyboard-input blocker it was found
+      alongside, since `Ctrl-\` isn't a key pine's own UI ever asks
+      the user to press.
+
 ### Track down a small memory leak found while re-verifying the third fuzzing lead's fix
 
 - [ ] The third fuzzing lead (heap corruption in `rfc822_parse_adrlist()`

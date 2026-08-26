@@ -311,7 +311,19 @@ read_with_timeout(int time_out)
          tmo.tv_usec = 0; 
 
 
-         res = select(STDIN_FD+1, &readfds, 0, &readfds, &tmo);
+         /* NB: exceptfds (4th arg) is NULL, not &readfds -- this code
+          * only ever cared about read-readiness. Aliasing it to
+          * readfds (as this line used to) means select() would write
+          * its read-ready and except-ready results into the *same*
+          * memory, so whichever it wrote last could clobber the
+          * other -- on a target this select()-based path (not
+          * USE_POLL, so never exercised by this project's lnx dev
+          * builds) is otherwise untested, this silently corrupted the
+          * "fd 0 is readable" result often enough to make select()
+          * report nothing ready even after a real keystroke, so the
+          * caller kept returning NO_OP instead of ever reaching the
+          * real read() -- see TODO-pdp11-done.md. */
+         res = select(STDIN_FD+1, &readfds, 0, 0, &tmo);
 
 #endif
 

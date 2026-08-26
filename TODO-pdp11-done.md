@@ -8295,3 +8295,56 @@ of room to open at all.
   dev build (274722/10120/19208) -- this changes a runtime allocation
   size argument, not code or static data size. `bin/pico` untouched
   (doesn't link c-client).
+
+### Fix `read_with_timeout()`'s `select()` aliasing readfds/exceptfds -- keyboard input never worked
+
+With `bezerk_open()` fixed (previous entry), `pine-ovl` ran far enough
+on real hardware to boot to the Main Menu and open INBOX -- but then
+didn't respond to *any* keyboard input at all, not even after pressing
+Enter (ruling out "stuck in cooked/line-buffered mode waiting for a
+newline", which would still process the first buffered key once Enter
+flushed the line). `pine/ttyin.c`'s `read_with_timeout()` had:
+```c
+res = select(STDIN_FD+1, &readfds, 0, &readfds, &tmo);
+```
+passing the *same* `&readfds` pointer as both the read-set (2nd arg)
+and the except-set (4th arg). `select()` writes its result back into
+each set it's given, to say which descriptors actually became ready;
+aliasing two different output roles into the same memory means
+whichever set gets written last can silently clobber the other. Since
+the code only ever checks `select()`'s numeric return value (`res ==
+0` / `res < 0`) and never re-examines the bitmask contents, a
+clobbered "fd 0 is readable" result could make `select()` report
+nothing ready even right after a real keystroke -- so the caller kept
+taking the `res == 0` (timeout) branch and returning
+`NO_OP_COMMAND`/`NO_OP_IDLE` forever, never reaching the actual
+`read()` that would have consumed the pending byte. This exact code
+path is guarded by `#ifndef USE_POLL`, and `os-lnx.h` (unlike
+`os-bsd.h`) defines `USE_POLL` -- meaning this `select()` branch has
+never been compiled, let alone exercised, by any `lnx` dev build this
+whole project has ever run. (Separately, the user also found `Ctrl-\`
+triggers a real SIGQUIT -- unlike `Ctrl-C`'s `t_intrc`, `Raw()` never
+sets `_raw_tchars.t_quitc = -1` to disable it the same way -- landing
+in whatever `signals.c` does for SIGQUIT and producing a
+space-printing redraw loop; left uninvestigated for now since it's a
+separate, lower-priority issue from the "no keyboard input at all"
+blocker.)
+- **What changed**: `ttyin.c`'s `read_with_timeout()`: changed the
+  `select()` call's except-set argument from `&readfds` (aliased) to
+  `0` (`NULL`) -- the code never actually needed exception
+  notifications, only read-readiness, so there's no reason to pass
+  anything there at all.
+- **Verified**: this specific branch is unreachable on the `lnx` dev
+  build (`USE_POLL` excludes it via `#ifdef`/`#else`), so `./build
+  clean && ./build lnx`, exit 0, 0 warnings and the full smoketest
+  suite 31/31 confirm no regression to the `USE_POLL` path or the rest
+  of the file, not this fix's actual behavior. Additionally compiled
+  the corrected `select()` call in isolation (a minimal standalone
+  file reproducing the exact types/arguments, `gcc -Wall`) to confirm
+  it's syntactically sound C, since `<sgtty.h>` isn't available on
+  this dev machine to compile the real BSD branch at all. The real
+  verification is the user's next real-hardware run.
+- **Size delta**: none measurable here (`lnx` never compiles this
+  branch); expected to be a no-op or negligible on the real 2.11BSD
+  target too (same argument count, one pointer expression replaced by
+  a literal `0`).
