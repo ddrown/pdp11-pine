@@ -8964,3 +8964,40 @@ string literals, next after `mailindx.c`.
   the `lnx` dev build. Real 2.11BSD `.data` savings are larger, per
   the standing gcc-already-dedupes-strings caveat. `bin/pico`
   untouched (`filter.c` is pine-only).
+
+### Shrink `args.c`'s string literal footprint
+
+Continuing the string-cutting pass: `args.c` (command-line argument
+parsing) measured at ~849 bytes across 23 string literals, next after
+`filter.c`.
+
+- **Left untouched**: the `args_help()` usage/`-h` screen (roughly
+  half this file's string bytes) -- real documentation the user reads
+  to learn how to invoke this stripped-down build's command-line
+  flags, the same category as the `pine.c` main-menu text left alone
+  in an earlier entry, and (unlike that case) not even test-covered,
+  just judged not worth the clarity risk for the size.
+- **Shortened**: the four `argv`-parsing error messages instead --
+  `"Error: missing argument for flag \"%c\"\n"` -> `"Missing arg for
+  -%c\n"`; `"Error: Non numeric argument for flag \"%c\"\n"` ->
+  `"Non-numeric arg for -%c\n"`; `"Error: unknown flag \"%c\"\n"` ->
+  `"unknown flag -%c\n"`; `"Error in -I argument \"%s\": %s\n"` ->
+  `"Bad -I arg \"%s\": %s\n"`.
+- **Near-miss, caught by the smoketest suite**: shortening the
+  "unknown flag" message to `"Unknown flag -%c\n"` (capitalized, matching
+  this entry's other three messages) broke `test_conf_dump.py`, which
+  does a direct `assert "unknown flag" in result.stderr` -- a
+  case-sensitive substring check bypassing `session.expect()` entirely,
+  so the pre-edit `grep -rn "expect("` sweep this pass has relied on
+  to find test dependencies never saw it. Fixed by keeping that one
+  message lowercase (`"unknown flag -%c\n"`) rather than touching the
+  test. **Methodology note for future entries in this pass**: the test
+  dependency check needs to also grep for direct `assert ... in
+  result.std(out|err)` patterns, not just `session.expect(`.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings;
+  full smoketest suite caught the regression above (30/31) and
+  confirmed the fix (31/31).
+- **Size delta**: `bin/pine` `text` 273706 -> 273642 (-64 bytes) on
+  the `lnx` dev build. Real 2.11BSD `.data` savings are larger, per
+  the standing gcc-already-dedupes-strings caveat. `bin/pico`
+  untouched (`args.c` is pine-only).
