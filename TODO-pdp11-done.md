@@ -9412,3 +9412,124 @@ instead.
   verification is the pending real-hardware retest of an actual Send.
 - **Size delta**: none (one string literal, same length, no compiled
   object from this repo's own `lnx` build affected).
+
+**Update -- the memory crash is confirmed fixed; a new, different crash
+appeared past it.** Real-hardware retest got all the way through
+composing, Sending (correct `SENDMAIL` path now used), through to
+`call_mailer()`'s Fcc/folder-management code -- then hit `"Illegal
+instruction (core dumped)"` twice, via `tmux capture-pane` on the
+user's PDP-11 session (rather than a pasted transcript, since the
+crash and its `adb` session were already sitting in a live window):
+
+```
+adb> $c
+0150764: _bezerk_file(...) from ~bezerk_append+0210
+0173122: _bezerk_append(...) from ~mail_append+052
+0173144: _mail_append(...) from ~context_append+0252
+0175170: _context_append(...) from ~call_mailer+01450
+...
+```
+and, on a second attempt:
+```
+adb> $c
+0161770: _context_digest(...) from ~context_fqn_to_an+0110
+0166034: _context_fqn_to_an(...) from ~mm_mailbox+026
+0166056: _mm_mailbox(...) from ~dummy_find_all+0330
+...
+0175174: _find_folders_in_context(...) from ~call_mailer+0236
+...
+```
+
+Neither trace passes through `fs_get()`/`fatal()`/`panic()`/`abort()`
+at all -- this is a *raw* `SIGILL`, not our controlled crash path.
+That's itself a strong signal: `init_signals()` installs
+`auger_in_signal()` (which calls `panic()` -> `abort()`, printing "Bug
+in Pine detected" first) for `SIGILL` specifically, so a *clean* SIGILL
+should have gone through that handler and died with "IOT trap", not
+"Illegal instruction", with no "Bug in Pine detected" message at all.
+Getting the raw default action instead suggests the stack was already
+corrupted badly enough that the kernel couldn't safely dispatch to the
+handler -- pointing at real memory corruption, not another allocation
+failure.
+
+### Two project-owned functions callable with no prototype in scope at their call site
+
+Both crash traces run through `call_mailer()` (`send.c`)'s Fcc/folder
+code. Recognized a pattern here from a diagnostic seen (and dismissed
+as clang-only IDE noise, since `./build lnx`'s actual `gcc` invocation
+showed 0 warnings throughout this whole session) repeatedly while
+editing `send.c` earlier: *"Call to undeclared function
+'free_folders_in_context'; ISO C99 and later do not support implicit
+function declarations"*. Re-examined it property this time --
+`free_folders_in_context()` (called from `send.c:1061`, inside
+`call_mailer()`, right before the code path that leads into both crash
+traces) has a prototype declared *only* locally inside `folder.c`
+(line 134), never exposed in any shared header, unlike its sibling
+`find_folders_in_context()` (properly declared in `pine.h:730`) --
+so `send.c`'s call site compiles it as an old-style implicit/K&R
+declaration with no visible signature.
+
+Re-ran the search properly (matching `./build lnx`'s actual
+`-DLNX -g -ansi -I/usr/include/bsd` flags via `clang
+-Wimplicit-function-declaration`, since a naive per-file `clang
+-fsyntax-only` without the real include path produced a pile of false
+positives for `strcmp`/`strlen`/etc.) across every `pine/*.c` file and
+found one more of the same shape: `save_attachment()` (`mailcmd.c`,
+called from `mailview.c:1417`), prototype declared only locally in
+`mailcmd.c` (line 71), invisible to `mailview.c`. This one carries
+materially higher real risk than `free_folders_in_context()`'s (whose
+one argument is a same-representation pointer, and whose return value
+is discarded at its one implicit call site, both low-risk shapes):
+`save_attachment(int, long, struct attachment *)` takes a `long` as
+its *second* argument -- on the PDP-11's 16-bit `int`/32-bit `long`
+split, a `long` argument passed through a call site with no visible
+prototype is a textbook stack-argument-width mismatch hazard, capable
+of misaligning every argument after it (here, the `struct attachment
+*`) and the stack itself. A third instance, `folder_total()` (`void
+*` argument, `int` return matching the implicit default, called from
+`mailbox.c:94`), carries much lower risk by the same reasoning, but
+was fixed anyway -- cheap, and removes any doubt.
+
+- **Fix**: added proper prototypes for all three to `pine.h`, matching
+  their real definitions exactly, right alongside their sibling
+  functions' existing entries (`free_folders_in_context`/
+  `find_folders_in_context`, `save_attachment` in the `mailcmd.c`
+  block, `folder_total` in the `folder.c` block).
+- **Deliberately not chased further**: the same properly-scoped sweep
+  also found `vfork`/`truncate`/`random` (`send.c`) and `tputs`/
+  `tgetnum` (`ttyout.c`, `gethostname`/`kill`/`srandom` (`os.c`/
+  `pine.c`) implicitly declared -- but these are all *external
+  library* functions with one single, stable, globally-consistent ABI
+  (the real implementation is already compiled into libc/libtermcap,
+  unaffected by whether this translation unit's own compile happens to
+  see the right header), a fundamentally different risk shape than a
+  same-codebase function whose prototype-checked definition and
+  prototype-blind call site could silently diverge. Left as pre-
+  existing, lower-risk gaps rather than turned into the broader
+  "convert every K&R-ish declaration in the tree" pass `CLAUDE.md`
+  explicitly says not to do opportunistically.
+- **Verified**: re-ran the `clang -Wimplicit-function-declaration`
+  sweep after the fix -- `folder_total`/`save_attachment` no longer
+  flagged. `./build clean && ./build lnx`, exit 0, 0 warnings, byte-
+  identical `text`/`data` (pure declaration additions, no codegen
+  change on this dev build's ABI, where these mismatches are
+  harmless). Full smoketest suite 31/31, including
+  `test_save_attachment_overflow.py`, which directly exercises
+  `save_attachment()`.
+- **Honesty check**: this fix is well-motivated and clearly correct to
+  make regardless, but **not proven** to be the actual cause of the
+  illegal-instruction crash -- the PDP-11's real calling-convention
+  behavior for an implicit- vs. prototyped-declaration call to the
+  same function isn't something verifiable from this dev machine, and
+  the crash could instead (or additionally) be a genuine buffer
+  overflow somewhere in the `context_append()`/`bezerk_append()`/
+  `find_folders_in_context()` machinery both traces pass through --
+  exactly the class of bug this project's own standing audit already
+  watches for. Framed to the user as "worth trying first, cheap, and
+  correct either way" rather than a confirmed fix.
+- **Size delta**: none (header-only prototype additions).
+- **Next step**: real-hardware retest of an actual Send through to
+  completion. If the same illegal-instruction crash persists, the
+  next move is auditing `context_append()`/`bezerk_append()`/
+  `find_folders_in_context()`'s own buffer handling directly, the same
+  way every other overflow in this project's audit was found.

@@ -728,11 +728,13 @@ int         folder_complete(CONTEXT_S *, char *);
 void        init_folders(void);
 void       *find_folders(char *, char *);
 void        find_folders_in_context(CONTEXT_S *, char *);
+void        free_folders_in_context(CONTEXT_S *);
 FOLDER_S   *folder_entry(int, void *);
 FOLDER_S   *new_folder(char *);
 int         folder_insert(int, FOLDER_S *, void *);
 int         folder_index(char *, void *);
 char       *folder_is_nick(char *, void *);
+int         folder_total(void *);
 
 /*-- help.c --*/
 void helper(char *text[], char *title, int);
@@ -757,6 +759,7 @@ int   do_broach_folder(char *, CONTEXT_S *);
 void  expunge_and_close(MAILSTREAM *, char *);
 int   export_message(int, long);
 long  search_headers(int, long, long);
+void  save_attachment(int, long, struct attachment *);
 
 /*--- mailindx.c ---*/
 void  mail_index_screen(struct pine *);
