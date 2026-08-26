@@ -9113,3 +9113,64 @@ bytes across 36 string literals, next after `screen.c`.
   since removing `carray[]` and the `random()` call cut actual code
   and a pointer array, not just literal text gcc might already
   dedupe. `bin/pico` untouched (`newmail.c` is pine-only).
+
+### `reload_body_text()` allocates the new composer body before freeing the old one
+
+Real-hardware crash report: composing a message works, but choosing
+either Send or Cancel immediately fails with `Bug in Pine detected:
+"Out of free storage (8192 bytes)". Exiting pine.` -- the same
+`fatal()`-via-`fs_get()` diagnostic pattern (kept permanently in
+`os_bsd.c`, see this file's `bezerk_open()` entry) that found the
+`CHUNK`-vs-`MAILTMPLEN` bug earlier this session, this time pointing
+at `MSIZE_INIT` (8192, `filter.c`) instead of `CHUNK`.
+
+- **Root cause**: `send.c`'s `pine_send()` writes the composer body to
+  a temp file, forks/execs the `pico` composer subprocess, then --
+  *unconditionally, before checking whether the user chose Send,
+  Cancel, or Postpone* -- calls `reload_body_text()` to read the
+  (possibly edited) temp file back into a fresh in-memory `STORE_S`.
+  That function allocated the new `CharStar` storage (`so_get()` ->
+  `fs_get(MSIZE_INIT)`, unconditionally 8192 bytes) *before* freeing
+  the pre-edit body's old storage (also a `CharStar` object, itself at
+  least `MSIZE_INIT` bytes), so for one moment both the ~8KB+ old
+  buffer and the ~8KB+ new buffer had to be live simultaneously. On
+  this target's tight combined data+heap+stack budget (the whole
+  point of this project's size-cutting work), that transient doubled
+  requirement was enough to exhaust available memory -- explaining why
+  *both* Send and Cancel failed identically: this code runs before the
+  branch between them is ever reached.
+- **Fix**: reordered `reload_body_text()` (`send.c`) to free the old
+  `STORE_S` (`so_give(&oldso)`) *before* calling `so_get()` for the
+  new one, removing the transient doubled-memory window entirely.
+  Checked for a dangling-pointer risk from freeing `oldso` before
+  confirming the new allocation succeeds: `so_get()`'s `== NULL` check
+  right after can't actually fire on this codebase -- `fs_get()`
+  (`os_bsd.c`) never returns NULL on failure, it calls `fatal()` and
+  the process exits immediately -- so there's no path where `bod`'s
+  storage pointer would be left dangling and then dereferenced.
+- **Verified**: traced the call graph precisely (`pine_send()` ->
+  `reload_body_text()` -> `so_get(CharStar,...)` -> `fs_get()`) to
+  confirm this is the exact site the crash's reported byte count
+  (`8192` = `MSIZE_INIT`, `filter.c`) points at, and that it's reached
+  on every composer exit regardless of Send/Cancel/Postpone, matching
+  the report. Attempted a `ulimit -d`-constrained repro on the `lnx`
+  dev build (a small wrapper spawning `pine` under a shrunk data-
+  segment limit, composing and cancelling a message) to reproduce the
+  crash directly and confirm the fix moves the failure threshold --
+  this did **not** work: glibc's dynamic-linking/malloc-arena startup
+  overhead on this dev build dominates the same narrow `ulimit -d`
+  range this bug would need to isolate, so the observed failure
+  threshold (successful at 240KB, EOF-crash at 235KB, identical before
+  and after the fix) is a generic startup-memory cliff, not this
+  bug -- a real limitation of trying to model 2.11BSD's small,
+  `brk`-based allocator with glibc's much heavier one, not a
+  disproof of the fix. `./build clean && ./build lnx`, exit 0, 0
+  warnings; full smoketest suite 31/31 (including
+  `test_compose_cancel.py`, which exercises this exact `reload_body_
+  text()` path and would already have failed if the reordering were
+  wrong). No regression test added -- the fix changes allocation
+  *timing* under memory pressure, not any output the `lnx` harness can
+  observe at its effectively-unconstrained heap; the real confirmation
+  is the pending real-hardware retest.
+- **Size delta**: none -- pure reordering, no bytes added or removed.
+  `bin/pine` `text`/`data` unchanged on the `lnx` dev build.

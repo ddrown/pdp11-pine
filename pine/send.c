@@ -476,6 +476,18 @@ reload_body_text(BODY *bod, char *path)
     if((fp = fopen(path, "r")) == NULL)
       return(-1);
 
+    /* Free the pre-edit body storage before allocating the fresh one
+     * below -- both are CharStar objects starting at MSIZE_INIT (8192,
+     * filter.c) bytes, and on this target's tight combined heap,
+     * needing both live at once (the old allocate-first order) can
+     * exhaust it where freeing first would not. so_get()'s "== NULL"
+     * check just below can't actually fire on this codebase (fs_get()
+     * calls fatal()/exit() instead of returning NULL on failure, see
+     * os_bsd.c), so there's no dangling-oldso risk from freeing here
+     * first. */
+    oldso = compose_body_store(bod);
+    so_give(&oldso);
+
     if((newso = so_get(CharStar, NULL, EDIT_ACCESS)) == NULL){
 	fclose(fp);
 	return(-1);
@@ -485,9 +497,6 @@ reload_body_text(BODY *bod, char *path)
       so_writec(c, newso);
 
     fclose(fp);
-
-    oldso = compose_body_store(bod);
-    so_give(&oldso);
 
     if(bod->type == TYPETEXT)
       bod->contents.binary = (void *)newso;
