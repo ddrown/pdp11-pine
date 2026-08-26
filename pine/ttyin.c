@@ -62,7 +62,6 @@ static char rcsid[] = "$Id: ttyin.c,v 4.26 1993/11/18 01:43:50 mikes Exp $";
  ====*/
 
 #include "headers.h"
-#include <syslog.h>	/* TEMPORARY -- for the read_with_timeout() trace below */
 
 void   line_paint(int, int *);
 
@@ -278,8 +277,6 @@ read_with_timeout(int time_out)
 #endif
      unsigned char  c;
 
-     syslog(LOG_ALERT, "TRACE read_with_timeout enter time_out=%d", time_out);
-
      fflush(stdout);
 
      if(winch_occured) {
@@ -331,8 +328,6 @@ read_with_timeout(int time_out)
 
 #endif
 
-         syslog(LOG_ALERT, "TRACE select res=%d errno=%d", res, errno);
-
          if(res < 0) {
              if(errno == EINTR) {
                  ready_for_winch = 0;
@@ -348,8 +343,6 @@ read_with_timeout(int time_out)
      }
 
      res = read(STDIN_FD, &c, 1);
-
-     syslog(LOG_ALERT, "TRACE read res=%d errno=%d c=%d", res, errno, (int)c);
 
      ready_for_winch = 0;
 
@@ -411,9 +404,6 @@ read_char(time_out)
 {
     register int  rx, ch, num_keys;
     static int firsttime = 1;
-
-    syslog(LOG_ALERT, "TRACE read_char enter time_out=%d initial_cmds=%d",
-	   time_out, ps_global->initial_cmds ? 1 : 0);
 
     /* commands in config file */
     if(ps_global->initial_cmds && *ps_global->initial_cmds) {

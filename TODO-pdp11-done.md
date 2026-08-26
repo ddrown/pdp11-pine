@@ -8407,12 +8407,18 @@ necessary but not sufficient).
   is still unreachable on the `lnx` dev build (`USE_POLL` excludes it)
   and glibc's own `fd_set` representation differs from the target's
   anyway. `./build clean && ./build lnx`, exit 0, 0 warnings; full
-  smoketest suite 31/31. The temporary `syslog()` trace calls used to
-  find this are left in for the next real-hardware round (to confirm
-  `select()` now returns promptly on a keystroke instead of running
-  out its timeout) -- unlike the `fs_get()` size-reporting diagnostic
-  kept permanently in an earlier entry, these are noisy on every
-  keystroke and should be removed once the fix is confirmed working.
-- **Size delta**: not yet measured on real hardware (still carries the
-  temporary trace calls). `lnx` dev build unaffected as before (branch
-  not compiled there).
+  smoketest suite 31/31.
+
+  Confirmed on real hardware: keyboard input works. Removed the
+  temporary `syslog()` trace calls (and the `<syslog.h>` include added
+  for them) from `read_char()`/`read_with_timeout()` afterward --
+  unlike the `fs_get()` size-reporting diagnostic kept permanently in
+  an earlier entry, these fired on every single keystroke and had no
+  ongoing diagnostic value once the bug was found.
+- **Size delta**: `bin/pine` `text`/`data`/`bss` back to
+  274722/10120/19208 on the `lnx` dev build after removing the trace
+  calls (matching the pre-instrumentation baseline exactly, as
+  expected -- the `select()`-based branch these traces lived in was
+  never compiled there in the first place). Real 2.11BSD target size
+  impact not separately measured (this fix's actual value is
+  behavioral -- keyboard input finally works -- not a size change).
