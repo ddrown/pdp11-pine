@@ -82,6 +82,8 @@ static char *deleted_flag             = "\\DELETED";
 static char *illegal_char_in_fn_msg   = "\007%s in file name";
 static char *cant_open_use_compose    = "\007Can't open \"%s\", use Compose";
 extern char *out_of_mem_msg;	/* send.c owns this copy */
+/* not static -- also used from folder.c/mailview.c, see the externs there */
+char         *word_not_found_msg = "\007Word not found";
 
 
  
@@ -1847,7 +1849,7 @@ search_headers(command_line, sorted_msg, max_msg)
           goto found;
     }
 
-    q_status_message(0, 1, 3, "\007Word not found");
+    q_status_message(0, 1, 3, word_not_found_msg);
     return(-1);
 
   found:

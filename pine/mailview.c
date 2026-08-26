@@ -83,6 +83,7 @@ static char *err_writing_msg = "Error writing message: %s";
 static char *us_ascii        = "us-ascii";
 static char *richtext        = "richtext";
 extern char *charset_attr;	/* send.c owns this copy -- also "charset" */
+extern char *word_not_found_msg;	/* mailcmd.c owns this copy */
 
 /* "message"/"help"/"text" word for the "Already at start/end of ..."
  * status messages below -- was a 4-way ternary (with the "help" string
@@ -1369,7 +1370,7 @@ whereis:
             }else if(found_on == -1) {
                 q_status_message(0, 0, 2, "\007Search cancelled");
             }else {
-                q_status_message(0, 1, 3, "\007Word not found");
+                q_status_message(0, 1, 3, word_not_found_msg);
             }
             break; 
 

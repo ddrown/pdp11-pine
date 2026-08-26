@@ -8516,3 +8516,52 @@ wrong place entirely.
   `./build lnx`/smoketest regression check applies here.
 - **Size delta**: none -- Makefile-only change, no compiled output
   from this repo's own build affected.
+
+### Shrink `folder.c`'s string literal footprint, plus a triple cross-file share
+
+Continuing the string-cutting pass: `folder.c` measured at ~1992 bytes
+across 109 string literals, next after `mailcmd.c`/`mailview.c`/
+`send.c`.
+
+- **Deduplication**: `"[Select]"` and `"Expand"` (2 sites each) --
+  checked first that `"[Select]"`'s two sites are both runtime
+  `folder_keys[SELECT_KEY].label = ...` assignments (not a static
+  aggregate initializer), same as the `bezerkproto.open = T;`
+  precedent, so sharing via a variable is safe; this file's `KEYMENU_S`
+  table entries (`"OTHER CMDS"`, `"WhereIs"`, etc., also repeated
+  2-3x) are aggregate initializers and were correctly left alone, same
+  as the `mailview.c` entry's finding. `"\007Bad context, %s : %s"`
+  (2 sites, exact format-string duplicate) shared the same way.
+  Consolidated three near-duplicate "collection is empty" messages
+  (`"\007Empty folder collection.  Nothing to select!"`,
+  `"...  No folder to delete!"`, `"...  No folders to search!"`) into
+  one shared `"\007No folders to %s"` format string with a `"select"`/
+  `"delete"`/`"search"` argument, the same pattern as the
+  `mailview.c` entry's "Already at start/end of %s" consolidation.
+- **Shortening**: the file's own copy of the "not defined for this
+  screen" message (already fixed the same way in `mailcmd.c`/
+  `mailview.c`, a different translation unit each time) and
+  `"\007Can't rename folder nicknames at this time!"` ->
+  `"\007Can't rename nicknames"`. No test dependency found for either.
+- **Cross-file sharing**: checked `folder.c`'s new candidate strings
+  against `mailcmd.c`/`mailview.c`/`send.c` and found a genuine triple
+  duplicate: `"\007Word not found"`, byte-for-byte identical in all
+  three of `folder.c`, `mailview.c`, and `mailcmd.c` (all plain
+  `q_status_message()` arguments). Made `mailcmd.c` the single owner
+  (dropped `static`, external linkage) and added an `extern char
+  *word_not_found_msg;` declaration in the other two instead of a
+  second and third copy. (Also spotted `"To Fldrs"` matching between
+  `folder.c` and `mailcmd.c` in an earlier grep -- turned out to be a
+  false positive, a source comment in `folder.c` mentioning the
+  feature by name, not an actual second string literal to share.)
+- **Verified**: checked every touched/candidate message against
+  `test/cases/*.py` first; none of this file's changes touch a tested
+  string. `./build clean && ./build lnx`, exit 0, 0 warnings; full
+  smoketest suite 31/31.
+- **Size delta**: `bin/pine` `text` 274762 -> 274650 (-112 bytes) on
+  the `lnx` dev build (across this entry's two commits: the
+  within-file dedup/shortening pass and the `word_not_found_msg`
+  cross-file share) -- the real `.data` win on the 2.11BSD target is
+  larger, per the same gcc-already-dedupes-strings caveat as every
+  string-cutting entry in this file. `bin/pico` untouched (`folder.c`
+  is pine-only).

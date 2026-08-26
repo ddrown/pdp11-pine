@@ -135,6 +135,19 @@ void       free_folders_in_context(CONTEXT_S *);
 FOLDER_S  *new_folder(char *);
 void       folder_delete(int, void *);
 
+/* strings repeated verbatim at multiple call sites below -- shared
+ * storage instead of a separate copy of each at every site. NB:
+ * "[Select]" is only ever used in a runtime struct-member assignment
+ * (folder_keys[SELECT_KEY].label = ...), never a static aggregate
+ * initializer, so sharing it this way is safe -- unlike the
+ * literal KEYMENU_S table entries below (e.g. "OTHER CMDS",
+ * "WhereIs"), which can't use a variable here since C requires a
+ * constant expression to initialize a static aggregate. */
+static char *select_label   = "[Select]";
+static char *expand_label   = "Expand";
+static char *bad_context_fmt = "\007Bad context, %s : %s";
+static char *no_folders_to_fmt = "\007No folders to %s";
+extern char *word_not_found_msg;	/* mailcmd.c owns this copy */
 
 static int sort_folder_entry = 0;
 
@@ -295,7 +308,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 	      folder_keys[MAIN_KEY].label = "Main Menu";
 	      folder_keys[SELECT_KEY].name = "V";
 	      folder_keys[SELECT_KEY].label = 
-		   (fs.context->use & CNTXT_PSEUDO) ? "[Select]":"[ViewFldr]";
+		   (fs.context->use & CNTXT_PSEUDO) ? select_label:"[ViewFldr]";
 	      clrbitn(WHEREIS_KEY, bitmap); /* the one in the 1st menu */
 	    }
 	    else {
@@ -303,7 +316,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 	      folder_keys[MAIN_KEY].name = "E";
 	      folder_keys[MAIN_KEY].label = "ExitSelect";
 	      folder_keys[SELECT_KEY].name = "S";
-	      folder_keys[SELECT_KEY].label = "[Select]";
+	      folder_keys[SELECT_KEY].label = select_label;
 	      clrbitn(OTHER_KEY, bitmap);
 	      clrbitn(DELETE_KEY, bitmap);
 	      clrbitn(ADD_KEY, bitmap);
@@ -536,8 +549,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 	       || (do_what == FolderMaint && ch == 's'))
 	      goto bleep;
 	    if(!folder_total(fs.context->folders)){
-		q_status_message(0,2,3, 
-		      	 "\007Empty folder collection.  Nothing to select!");
+		q_status_message1(0,2,3, no_folders_to_fmt, "select");
 	    } else if(!ALL_FOUND(fs.context) 
 		      || (fs.context->use & CNTXT_PSEUDO)){
 		if(fs.context->use & CNTXT_PSEUDO){
@@ -700,7 +712,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 	    if(!ALL_FOUND(fs.context) || (fs.context->use & CNTXT_PSEUDO)){
 		q_status_message1(0,1,3,
 			    "\007No folder selected to delete.  %s list.",
-			    (ALL_FOUND(fs.context)) ? "Empty" : "Expand");
+			    (ALL_FOUND(fs.context)) ? "Empty" : expand_label);
 		break;
 	    }
 
@@ -733,7 +745,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
                 break;
             }
 	    else if(rc == 0) {
-	        q_status_message(0, 0, 2, "\007Word not found");
+	        q_status_message(0, 0, 2, word_not_found_msg);
                 break;
             }
 	    else if(rc == 2){
@@ -792,7 +804,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 	  default: 
           bleep:
               q_status_message1(0, 0, 2,
-	      "\007Command \"%s\" not defined for this screen. Use ? for help",
+	      "\007\"%s\" undefined here (? for help)",
                                 (void *)pretty_command(orig_ch));
 	       break;
 	} /* End of switch */
@@ -1108,7 +1120,7 @@ rename_folder(q_line, index, cntxt)
     if(!ALL_FOUND(cntxt) || (cntxt->use & CNTXT_PSEUDO)){
 	q_status_message1(0,1,3, 
 			 "\007No folder selected to rename.  %s list.",
-			  (ALL_FOUND(cntxt)) ? "Empty" : "Expand");
+			  (ALL_FOUND(cntxt)) ? "Empty" : expand_label);
 	return(NULL);
     }
     else if((new_f = folder_entry(index, cntxt->folders))
@@ -1120,7 +1132,7 @@ rename_folder(q_line, index, cntxt)
     }
     else if(new_f->nickname){ 
 	q_status_message(0,2,3, 
-			 "\007Can't rename folder nicknames at this time!");
+			 "\007Can't rename nicknames");
 	return(NULL);
     }
 
@@ -1234,8 +1246,7 @@ delete_folder(index, cntxt, mangled_header)
     int         ret, close_opened = 0;
 
     if(!folder_total(cntxt->folders)){
-	q_status_message(0,2,4,
-			 "\007Empty folder collection.  No folder to delete!");
+	q_status_message1(0,2,4, no_folders_to_fmt, "delete");
 	return(0);
     }
 
@@ -1322,8 +1333,7 @@ search_folders(fd, ask_line)
     help              = NO_HELP;
     nsearch_string[0] = '\0';
     if(!folder_total(fd->context->folders)){
-	q_status_message(0,2,4,
-			"\007Empty folder collection.  No folders to search!");
+	q_status_message1(0,2,4, no_folders_to_fmt, "search");
 	return(0);
     }
 
@@ -1743,7 +1753,7 @@ new_context(cntxt_string)
     }
 
     if(p = context_digest(cntxt_string, NULL, rcontext, NULL)){
-	q_status_message2(0,3,4,"\007Bad context, %s : %s", p, cntxt_string);
+	q_status_message2(0,3,4,bad_context_fmt, p, cntxt_string);
 	if(nickname)
 	  fs_give((void **)&nickname);
 
@@ -1789,7 +1799,7 @@ find_folders_in_context(context, search_string)
       return;				/* find already done! */
 
     if(rv = context_digest(context->context, NULL, rcontext, view)){
-	q_status_message2(0,2,2,"\007Bad context, %s : %s", rv,
+	q_status_message2(0,2,2,bad_context_fmt, rv,
 			  context->context);
 	return;
     }
