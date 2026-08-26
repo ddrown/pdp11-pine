@@ -8638,3 +8638,60 @@ themselves (e.g. `mailview.c`'s `style_word()` helper) shifting
 sharing. Next step if resumed: bisect real-hardware relinks across
 the commits between the last known-good partition (8 groups, largest
 ~24320-24576) and this one.
+
+**Root cause found.** Suspect (1) above was it. The user ran the real
+2.11BSD `make -f mkov` step twice, once with the `.c.o:` rule fix
+(`pine/makefile.bsd`) present and once with it manually backed out:
+
+- Without the fix: `text 37824`, overlays
+  `23488,24320,24320,23680,23488,18176,23808,13568` (8 groups, largest
+  `24320`) -- link succeeds.
+- With the fix: `text 38016`, overlays
+  `32064,31040,32640,31616,25664,25600` (6 groups, largest `32640`) --
+  `ld: too big for type 431`.
+
+`../c-client`'s own `makefile.bsd` builds with `CFLAGS = -g -O`
+(real optimization); `pine/makefile.bsd`'s `CFLAGS = -g -DDEBUG` has
+no `-O` at all. `pine-ovl`'s design has always assumed
+`$(CCLIENTOFILES)` (`mail.o`/`bezerk.o`/`dummy.o`/`rfc822.o`/
+`misc.o`/`osdep.o`) are prebuilt separately via c-client's own
+optimized `all` target and only referenced loose here (see the
+existing comment above `MKOVMAKE=`). Before the `.c.o: -o $@` fix,
+the *mislocation bug was accidentally protective*: whenever make
+decided one of these `../c-client/*.o` prerequisites looked stale, the
+builtin (no `-o`) suffix rule fired `cc -c ../c-client/mail.c`, which
+dropped a bogus `mail.o` into `pine/`'s cwd and left the real
+`../c-client/mail.o` -- still c-client's smaller, `-O`-optimized build
+-- untouched. Once the `-o $@` fix let that implicit rule resolve to
+the *correct* output path, `pine-ovl` started silently **rebuilding
+c-client's sources with pine's own unoptimized `-DDEBUG` flags**
+whenever timestamps made them look stale (e.g. after uploading fresh
+`.c` files to the target), inflating their text size and blowing the
+`pine-ovl` link's budget -- exactly the ~3968-byte/6-vs-8-group
+regression measured above. (Confirmed: `imap/ANSI/c-client/makefile.bsd`
+has zero `#ifdef DEBUG`/`#ifndef DEBUG` anywhere, so `-DDEBUG` itself
+is a no-op for c-client's code -- the size delta is purely
+optimized-vs-unoptimized codegen.)
+
+- **Fix**: added an explicit no-recipe rule in `pine/makefile.bsd`,
+  `$(CCLIENTOFILES): ;`, right after the `CCLIENTOFILES=` definition.
+  An explicit rule (even an empty one) takes precedence over make's
+  implicit suffix-rule search, so `../c-client/mail.c` (etc.) is never
+  considered as a way to (re)build these targets -- make just uses
+  whatever `.o` is already there, exactly matching the documented
+  "already built separately" assumption. This does not affect pine's
+  own `$(obj)`, which still gets the `.c.o: -o $@` fix's correct
+  same-directory recompilation.
+- **Verified**: `make -f makefile.bsd -n pine-ovl` after `touch
+  ../c-client/mail.c` (to force a stale-looking timestamp) -- before
+  this fix, the dry run showed `cc ... -o ../c-client/mail.o
+  ../c-client/mail.c`; after, that line is gone entirely, only pine's
+  own `os.o`/`date.o` recompiles are listed. This makefile isn't part
+  of the `lnx` dev build, so no `./build lnx`/smoketest cycle applies;
+  real-hardware `pine-ovl` relink re-test (expecting the restored
+  8-group/`24320`-largest partition) still pending.
+- **Size delta**: N/A on the `lnx` dev build (BSD-makefile-only fix).
+  On real 2.11BSD hardware this should restore the previously-working
+  partition without giving back any of the string-cutting savings --
+  unlike the cross-file-share revert above, which cost bytes for
+  nothing.

@@ -170,6 +170,20 @@ CCLIENTOFILES=	../c-client/mail.o ../c-client/bezerk.o \
 		../c-client/dummy.o ../c-client/rfc822.o \
 		../c-client/misc.o ../c-client/osdep.o
 
+# $(CCLIENTOFILES) are prebuilt separately, via ../c-client's own
+# makefile.bsd `all' target, which compiles with real optimization
+# (CFLAGS = -g -O there vs. -g -DDEBUG, no -O, here). Give them an
+# explicit no-recipe rule so make's own .c.o: rule above -- which
+# uses *this* makefile's unoptimized CFLAGS -- never fires for them
+# via the implicit same-basename-.c suffix match. Without this, once
+# the .c.o: -o $@ fix (see above) let that implicit rule actually
+# resolve to the correct ../c-client/*.o output path instead of
+# mislocating it, `pine-ovl` started silently rebuilding these with
+# the wrong (larger, unoptimized) flags whenever timestamps made them
+# look stale, blowing the text/overlay budget on real hardware ("ld:
+# too big for type 431") -- see TODO-pdp11-done.md.
+$(CCLIENTOFILES): ;
+
 pine-ovl:	$(obj) $(CCLIENTOFILES)
 	echo "char datestamp[]="\"`date`\"";" > date.c
 	$(CC) -c $(CFLAGS) -o date.o date.c
