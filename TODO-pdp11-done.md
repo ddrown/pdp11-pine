@@ -8828,3 +8828,51 @@ across 98 string literals, next after `pine.c`.
   call sites and the 8 other collapsed sites keeps only one copy of
   its string in `.data` instead of one per call site. `bin/pico`
   untouched (`reply.c` is pine-only).
+
+### Shrink `init.c`'s string literal footprint
+
+Continuing the string-cutting pass: `init.c` measured at ~1495 bytes
+across 66 string literals, next after `reply.c`. Unlike the previous
+several files, intra-file duplication here was minimal (`"user-domain"`
+x3, `"variable"`/`"reverse"` x2 -- all tiny and not worth a shared
+variable), and a cross-file sweep against every already-processed
+file turned up nothing real (`"cc"`/`"HOME"` matches were incidental,
+unrelated 2-4 byte tokens). All the size here is one-shot startup/
+config diagnostic text printed via `printf`/`fprintf(stderr, ...)`
+before the main screen exists (mail-directory setup, `TERM`/sort-key/
+keystroke-list validation, login-name lookup) -- same category as the
+`pine.c` startup errors shortened in an earlier entry, and confirmed
+via `grep -rn "expect("` to have zero `test/cases/*.py` dependencies.
+- **Shortened**: the `init_mail_dir()` cluster (3 cases, originally
+  5 separate `printf()` calls) -- `"The \"mail\" subdirectory already
+  exists, but it is not writable by pine\n"` + `"so pine cannot run.
+  Please correct the permissions and restart pine.\n"` merged into one
+  `"\007\"mail\" dir exists but isn't writable; fix permissions\n"`;
+  `"Pine requires a directory called \"mail\" and usualy creates
+  it.\n"` + `"You already have a regular file called \"mail\" which is
+  in the way.\n"` + `"Please move or remove \"mail\" and start pine
+  again.\n"` merged into one `"\007\"mail\" is a file, not a
+  directory; move or remove it\n"`; `"Creating subdirectory \"%s\"
+  where pine will store\nits mail folders.\n"` -> `"Creating mail
+  directory \"%s\"\n"`; `"\007Error creating subdirectory \"%s\" :
+  %s\n"` -> `"\007Can't create \"%s\": %s\n"`. Also: the
+  `initial-keystroke-list` char/function-key-mixing warning (2
+  `fprintf()` calls merged into 1); the login-name lookup failure
+  (`"Who are you? (Unable to look up login name)\n"` ->
+  `"\007Can't look up login name\n"`); the folders-directory-too-long
+  error (2 `printf()` calls merged into 1, now including the offending
+  path in the same message); the two sort-key validation messages; and
+  the `BOTCH` internal-error `panic1()` string (only reachable via a
+  programmer error in this codebase, never end-user-visible in
+  practice, so shortened aggressively).
+- **Verified**: `grep -rn "expect("` against every candidate string
+  first (zero hits). `./build clean && ./build lnx`, exit 0, 0
+  warnings; full smoketest suite 31/31.
+- **Size delta**: `bin/pine` `text` 274370 -> 273906 (-464 bytes) on
+  the `lnx` dev build -- larger than most single-file entries in this
+  pass since several messages here were merged from multiple `printf`/
+  `fprintf` calls into one (removing a real function-call site, not
+  just shortening a literal). The real `.data` win on the 2.11BSD
+  target is separately larger still, per the standing
+  gcc-already-dedupes-strings caveat. `bin/pico` untouched (`init.c`
+  is pine-only).
