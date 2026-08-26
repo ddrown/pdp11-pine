@@ -8156,3 +8156,76 @@ project's `c-client.a` (see its `makefile.bsd`).
   full smoketest suite 31/31.
 - **Size delta**: `bin/pine` `text` 274882 -> 274722 (-160 bytes).
   `bin/pico` untouched (doesn't link c-client).
+
+### Stop linking pico's editor internals into `pine-ovl` at all
+
+The single biggest finding of this whole investigation. Continuing the
+base-file audit (previous entry): `pico/bind.c` turned out to hold
+pico's ~60-line interactive help text (`helptext[]`, real hardware
+`data` 2984 bytes) plus real, still-used editor code
+(`wscrollw()`/`arraylen()`, called from `browse.c`/`search.c`/`file.c`
+for their own help screens) -- not dead by itself. But asking *why*
+`pine-ovl` needs any of `bind.c` at all, given `send.c`'s
+`run_composer_subprocess()` already `fork()`s and `execl()`s a
+*separate* `pico -P <handoff> <result>` child process for composing
+(see `pico/compose_stub.c`'s own header comment, and the
+`TODO-pdp11.md`/`-done.md` history of that redesign) rather than
+calling into pico's editor in-process, led somewhere much bigger:
+confirmed via `nm` that **zero** symbols defined anywhere across all
+18 of pico's editor object files (`basic.o` through `word.o`) are
+referenced by any undefined symbol in any of pine's own 24 object
+files, and confirmed by directly relinking `bin/pine` on the `lnx` dev
+build with `../pico/libpico.a` dropped from the link line entirely --
+zero link errors, and the resulting binary is byte-for-byte identical
+(`text`/`data`/`bss` all exactly the same) to the version linked with
+it. Sanity-checked the relinked binary through a smoketest-style
+session too (opens a folder, views a message, returns to Main Menu)
+to make sure "links fine" wasn't hiding a real runtime gap.
+
+The reason this was ever a problem despite selective archive linking
+already pulling zero members "for free": `pine-ovl`'s overlay build
+needs c-client.a's members *loose* (not archived) so `mkovmake` can
+place them into overlays (see the earlier `pine-ovl` entries in this
+file) -- and an earlier version of that same fix force-included
+*pico's* members loose too, for the same reason. Loose object files on
+a link command line are always linked in, unlike an archived library's
+selective member-pulling, so that inadvertently forced ~59396 bytes of
+text and ~14022 bytes of data+bss (pico's entire editor, per the
+per-file `size` breakdown from `size.txt`/`size-lib.txt` earlier in
+this investigation) into every `pine-ovl` link, none of which pine's
+own code has needed since the fork/exec redesign.
+- **What changed**: `pine/makefile.bsd`: removed the `PICOOFILES`
+  variable and every reference to it from the `pine-ovl` target
+  entirely (no replacement, loose or archived -- pico isn't part of
+  this link at all any more). Also dropped `../pico/libpico.a` from
+  `$(LOCLIBES)` (the plain, non-overlay `pine:` target) for clarity --
+  it was already contributing exactly 0 bytes there too (selective
+  archive linking), so this is a documentation fix, not a size fix,
+  for that specific target.
+- **Verified**: the `nm`/relink test described above (byte-identical
+  binary, zero link errors, smoketest-style sanity pass) is the real
+  verification here, done *before* touching the makefile, precisely
+  because this is a bigger and more consequential change than a normal
+  cut -- it touches the core link configuration of the build the user
+  is actively testing on real hardware. After the makefile edit:
+  `./build clean && ./build lnx`, exit 0, 0 warnings (the `lnx` build
+  uses `makefile.lnx`, untouched by this fix, and still harmlessly
+  links `libpico.a` there the same zero-cost way); full smoketest
+  suite 31/31. `make -f makefile.bsd -n pine-ovl` and `-n pine` dry-run
+  checked to confirm the generated `mkovmake`/`cc` command lines no
+  longer mention any pico object file. No PDP-11 cross-compiler
+  available here to confirm the real 2.11BSD `mkovmake`/`ld` run
+  actually clears both budgets now -- that's the next real-hardware
+  cycle, and given the scale of code removed (more than either
+  remaining budget shortfall on its own), it's the most likely single
+  fix to resolve both the text/overlay and data+bss overages at once.
+- **Size delta**: not measurable on `bin/pine`'s own `lnx` build
+  (`makefile.lnx` is untouched, and the `lnx` `pine-ovl`-equivalent
+  doesn't exist as a separate target there) -- this fix is specific to
+  `pine/makefile.bsd`'s real-hardware overlay link. Expected real
+  savings: ~59396 bytes of text and ~14022 bytes of data+bss removed
+  from every future `pine-ovl` link, based on the per-file sizes
+  already measured earlier in this investigation for exactly these 17
+  pico object files. `bin/pico` itself is completely unaffected (it's
+  a different binary, built by `pico/makefile.bsd`, which still needs
+  all of its own code).
