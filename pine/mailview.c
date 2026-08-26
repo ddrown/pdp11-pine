@@ -82,6 +82,7 @@ static int match_charset(char *);
 static char *err_writing_msg = "Error writing message: %s";
 static char *us_ascii        = "us-ascii";
 static char *richtext        = "richtext";
+extern char *charset_attr;	/* send.c owns this copy -- also "charset" */
 
 /* "message"/"help"/"text" word for the "Already at start/end of ..."
  * status messages below -- was a 4-way ternary (with the "help" string
@@ -380,7 +381,7 @@ type_desc(type, subtype, params, full)
 
     switch(type) {
       case TYPETEXT:
-        while(params != NULL && strucmp(params->attribute,"charset") != 0)
+        while(params != NULL && strucmp(params->attribute,charset_attr) != 0)
           params = params->next;
         if(params != NULL) {
             if(strucmp(params->value, us_ascii) == 0){
@@ -746,7 +747,7 @@ decode_text(att, msgno, pc, style, display_bound)
     }
 
     for(param = att->body->parameter; 
-		param != NULL && strucmp(param->attribute,"charset") != 0;
+		param != NULL && strucmp(param->attribute,charset_attr) != 0;
 		param = param->next)
 	;
 

@@ -8422,3 +8422,60 @@ necessary but not sufficient).
   never compiled there in the first place). Real 2.11BSD target size
   impact not separately measured (this fix's actual value is
   behavioral -- keyboard input finally works -- not a size change).
+
+### Shrink `send.c`'s string literal footprint, plus two cross-file shares
+
+Continuing the string-cutting pass now that pine boots and runs on
+real hardware (`mailcmd.c`/`mailview.c` covered in earlier entries):
+`send.c` measured at ~2496 bytes across 141 string literals, the next
+biggest file. Same two-part treatment as before:
+
+- **Deduplication**: `"charset"` (4 sites), `"mailer-daemon"` (3),
+  `"SUBJECT"`/`"BOUNDARY"` (2 each, all `write_field()`/`read_field()`/
+  `cpystr()`/`strucmp()`/`strcmp()` arguments, confirmed none are in a
+  static aggregate initializer this time), `"\015\012"` (the RFC822
+  CRLF literal, 8 sites -- distinct from this codebase's `NEWLINE`
+  macro, which is bare `"\n"`, so not interchangeable with it),
+  `"\007Can't create composer temp file"` (2), `"\007Fcc of message
+  rejected"` (2, kept the word "rejected" verbatim --
+  `test_fcc_tilde_overflow.py`/`test_fcc_netmbx_overflow.py` assert on
+  it), and `"Folder \"%.40s\" doesn't exist.  Create"` (2, shortened to
+  `"\"%.40s\" doesn't exist. Create"` -- kept "doesn't exist" verbatim,
+  same two tests assert on it) all consolidated into shared statics.
+  `"\007Problem creating space for message text."` (2 sites) and a
+  third near-duplicate `"\007Problem creating space for Fcc."` (1 site,
+  different tail wording) were unified to the same shortened `"\007Out
+  of memory"` wording already used in `mailcmd.c`, both deduping
+  within the file and enabling the cross-file share below. The two
+  `sprintf(tmp_20k_buf, fcc_doesnt_exist_fmt, fcc)` call sites needed
+  the same `#ifdef __GNUC__` `-Wformat-nonliteral` pragma guard already
+  established elsewhere in this codebase (`d76a936`), since the format
+  string is a fixed constant but not a literal at the call site.
+- **Cross-file sharing**: checked `mailcmd.c`/`mailview.c` (the two
+  files already gone through this pass) for exact matches against
+  `send.c`'s new shared strings, and found two: `"\007Out of memory"`
+  (now also used once in `mailcmd.c`, from an earlier pass shortening
+  a different original message to the same wording) and `"charset"`
+  (also used twice more in `mailview.c`, as plain `strucmp()`
+  arguments). A `static char *` can't be shared across translation
+  units, so made `send.c` the single owner of each (dropped `static`,
+  giving them external linkage) and added an `extern char *...;`
+  declaration at each other call site instead of a second copy of the
+  string.
+- **Verified**: checked every touched/candidate message against
+  `test/cases/*.py` first (same process as the `mailcmd.c`/`mailview.c`
+  entries); preserved the two real dependencies found ("rejected",
+  "doesn't exist"). `./build clean && ./build lnx`, exit 0, 0 warnings;
+  full smoketest suite 31/31.
+- **Size delta**: `bin/pine` `text` 274722 -> 274762 (+40 bytes) on
+  this `lnx` dev build -- a net *increase* despite removing far more
+  string bytes than that, because (as established in the `mailcmd.c`
+  entry) gcc already auto-merges identical string constants for free
+  here, so most of the within-file dedup work was already "free" on
+  this platform; the two new `extern`-shared globals also cost a
+  little visible symbol-table/relocation overhead here that a purely
+  `static` variable wouldn't. The real win, as with the earlier string
+  passes, is on the 2.11BSD target's `.data` segment, where none of
+  gcc's deduplication happens and every one of the ~15 consolidated
+  call sites plus the two cross-file shares was previously a full
+  separate copy. `bin/pico` untouched (`send.c` is pine-only).

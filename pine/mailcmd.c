@@ -81,6 +81,7 @@ static char *closing_fldr_keeping_all = "Closing folder \"%s\". Keeping all %s m
 static char *deleted_flag             = "\\DELETED";
 static char *illegal_char_in_fn_msg   = "\007%s in file name";
 static char *cant_open_use_compose    = "\007Can't open \"%s\", use Compose";
+extern char *out_of_mem_msg;	/* send.c owns this copy */
 
 
  
@@ -880,8 +881,7 @@ save(folder, context, message, index_sorted_msgno)
      * storage object...
      */
     if((so = so_get(src, NULL, WRITE_ACCESS)) == NULL){
-	q_status_message(1, 2, 4, 
-			 "\007Out of memory");
+	q_status_message(1, 2, 4, out_of_mem_msg);
 	return(0);
     }
 
