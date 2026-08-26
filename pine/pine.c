@@ -1220,7 +1220,14 @@ panic(message)
     fprintf(stderr, "\n\nBug in Pine detected: \"%s\".\nExiting pine.\n",
             message);
 
-    exit(-1);
+    /* end_signals() above already restored SIGABRT/SIGIOT to SIG_DFL,
+     * so abort() here gets its normal default action (core dump) with
+     * a clean tty -- matching this function's own header comment
+     * ("If debugging is active a core dump will be generated"), which
+     * was never actually wired up: this used to be a plain exit(-1),
+     * so no signal was ever raised and no core file was ever produced,
+     * even for a genuine SIGSEGV/SIGBUS/etc via auger_in_signal(). */
+    abort();
     fatal("ffo"); /* BUG -- hack to get fatal out of library in right order*/
 }
 

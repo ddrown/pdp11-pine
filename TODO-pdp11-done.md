@@ -9174,3 +9174,67 @@ at `MSIZE_INIT` (8192, `filter.c`) instead of `CHUNK`.
   is the pending real-hardware retest.
 - **Size delta**: none -- pure reordering, no bytes added or removed.
   `bin/pine` `text`/`data` unchanged on the `lnx` dev build.
+
+**Update -- the reload_body_text() reorder above wasn't the whole
+story.** Real-hardware retest still failed, but the reported size
+moved from `8192` (`MSIZE_INIT`, `filter.c`) to `8193` (`CHUNK + 1`,
+`bezerk.c`'s two unconditional-looking allocations at lines 486/1169)
+-- the reorder fixed the first bottleneck and immediately exposed a
+second one. Rather than keep guessing at call sites from a byte count
+alone, went after better tooling: see the next entry.
+
+### `panic()` never actually produced a core dump, despite its own doc comment saying it would
+
+`panic()` (`pine.c`) -- reached by every `fatal()`/`mm_fatal()` call,
+including `fs_get()`'s out-of-storage path above -- calls
+`end_signals()` (resetting every caught signal, including
+`SIGABRT`/`SIGIOT`, back to `SIG_DFL`) and then just `exit(-1)`. `exit()`
+never produces a core file. `signals.c`'s own top-of-file comment
+describes the intended design explicitly: *"trap the signal, reset
+the tty modes... and then call abort to get a useful core dump"* --
+and `panic()`'s own header comment says *"If debugging is active a
+core dump will be generated"* -- but neither `panic()` nor
+`auger_in_signal()` (the real `SIGSEGV`/`SIGBUS`/`SIGILL`/etc handler,
+which itself just calls `panic()`) ever actually raised a signal or
+called `abort()`. This meant *no* crash in this codebase, real signal
+or `fs_get()`-detected allocation failure alike, could ever produce a
+core file, contradicting both comments' documented intent -- likely
+lost somewhere during this fork's cutting, not something ever
+deliberately decided against.
+
+- **Fix**: `panic()`'s final `exit(-1)` changed to `abort()`. Since
+  `end_signals()` runs immediately before this point and already
+  restored `SIGABRT`/`SIGIOT` to `SIG_DFL`, `abort()` gets the normal
+  default action (core dump) with a clean, already-restored tty state
+  -- exactly what both comments describe.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings
+  (including no implicit-declaration warning for `abort()` despite no
+  explicit `#include <stdlib.h>` in `pine.c` -- picked up transitively
+  via `headers.h`, same as the already-present `exit()` call). Full
+  smoketest suite 31/31. Confirmed the underlying mechanism actually
+  works in this environment with a minimal standalone `abort()`
+  reproduction (`signal(SIGABRT, SIG_DFL); abort();`) -- the kernel
+  reported "Aborted (core dumped)", confirming a real core dump was
+  generated; no `core` file appeared in the working directory only
+  because this dev machine's `/proc/sys/kernel/core_pattern` routes
+  dumps through `systemd-coredump` instead of a plain file -- a local
+  dev-machine config detail with no bearing on the real 2.11BSD
+  target, which writes a plain `core` file to the current directory
+  per classic Unix/`adb` convention. Reproducing the *specific*
+  `fs_get()` 8192/8193-byte failures directly on the `lnx` dev build
+  (to confirm `abort()` fires from that exact path) was attempted via
+  `ulimit -v`/`ulimit -d` constraints and abandoned as impractical --
+  see the `reload_body_text()` entry above and its own repro-attempt
+  note; the gap between "just barely runs" and "dynamic linker can't
+  even map libc" is too narrow on this glibc-linked build to isolate
+  pine's own small allocations from process-startup overhead.
+- **Size delta**: negligible (`exit(-1)` -> `abort()` is a same-size
+  call substitution). Not separately measured.
+- **Next step**: real-hardware retest, with `limit coredumpsize
+  unlimited` set first (the target account's default was seen at `0
+  kbytes` in an earlier investigation this session, which would
+  silently suppress the dump even with this fix in place) -- then
+  reproduce the compose/Send-or-Cancel crash again and pull a stack
+  trace via `adb pine core` + `$c` to identify the actual `CHUNK+1`
+  allocation site precisely instead of guessing from the byte count
+  alone.
