@@ -147,7 +147,7 @@ static char *select_label   = "[Select]";
 static char *expand_label   = "Expand";
 static char *bad_context_fmt = "\007Bad context, %s : %s";
 static char *no_folders_to_fmt = "\007No folders to %s";
-static char *word_not_found_msg = "\007Word not found";
+extern char *word_not_found_msg;	/* mailcmd.c owns this copy */
 
 static int sort_folder_entry = 0;
 

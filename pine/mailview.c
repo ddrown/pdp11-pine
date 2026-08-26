@@ -82,8 +82,8 @@ static int match_charset(char *);
 static char *err_writing_msg = "Error writing message: %s";
 static char *us_ascii        = "us-ascii";
 static char *richtext        = "richtext";
-static char *charset_attr    = "charset";
-static char *word_not_found_msg = "\007Word not found";
+extern char *charset_attr;	/* send.c owns this copy -- also "charset" */
+extern char *word_not_found_msg;	/* mailcmd.c owns this copy */
 
 /* "message"/"help"/"text" word for the "Already at start/end of ..."
  * status messages below -- was a 4-way ternary (with the "help" string

@@ -8616,3 +8616,25 @@ previous partition.
   cross-file-share savings, as expected. Whether this is worth trading
   back for a working overlay link depends on the pending real-hardware
   result.
+
+**Update -- reverted back to restoring the shares.** Real-hardware
+relink after this revert produced the exact same failure and the
+*identical* overlay partition (base `38016`, overlays
+`32064,31040,32640,31616,25664,25600`) as before the revert -- only
+`data` moved (the expected +64 bytes from the four independent
+copies), which had zero bearing on the partition. This confirms the
+"ties are text-only" correction: removing `extern` *data* references
+could not have changed -- and did not change -- `mkovmake`'s grouping
+at all. The three cross-file shares are exonerated and were restored
+(back to the state described in the entries above); the real cause of
+the "ld: too big for type 431" regression is still unidentified.
+Remaining suspects, neither yet tested: (1) the `.c.o:` rule fix
+elsewhere in this file's history causing previously
+stale/mislocated `../c-client/*.o` files to be rebuilt at accurate
+sizes for the first time in that same relink, or (2) ordinary
+text-size/call-graph drift from the string-consolidation edits
+themselves (e.g. `mailview.c`'s `style_word()` helper) shifting
+`mkovmake -O2`'s greedy grouping, independent of any cross-file
+sharing. Next step if resumed: bisect real-hardware relinks across
+the commits between the last known-good partition (8 groups, largest
+~24320-24576) and this one.

@@ -81,8 +81,9 @@ static char *closing_fldr_keeping_all = "Closing folder \"%s\". Keeping all %s m
 static char *deleted_flag             = "\\DELETED";
 static char *illegal_char_in_fn_msg   = "\007%s in file name";
 static char *cant_open_use_compose    = "\007Can't open \"%s\", use Compose";
-static char *out_of_mem_msg           = "\007Out of memory";
-static char *word_not_found_msg       = "\007Word not found";
+extern char *out_of_mem_msg;	/* send.c owns this copy */
+/* not static -- also used from folder.c/mailview.c, see the externs there */
+char         *word_not_found_msg = "\007Word not found";
 
 
  
