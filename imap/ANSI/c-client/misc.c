@@ -92,42 +92,6 @@ char *cpystr (char *string)
   else return NIL;
 }
 
-/* Returns index of rightmost bit in word
- * Accepts: pointer to a 32 bit value
- * Returns: -1 if word is 0, else index of rightmost bit
- *
- * Bit is cleared in the word
- */
-
-unsigned long find_rightmost_bit (unsigned long *valptr)
-{
-  register long value= *valptr;
-  register long clearbit;	/* bit to clear */
-  register long bitno;		/* bit number to return */
-  if (value == 0) return (-1);	/* no bits are set */
-  if (value & 0xFFFF) {		/* low order halfword has a bit? */
-    bitno = 0;			/* yes, start with bit 0 */
-    clearbit = 1;		/* which has value 1 */
-  } else {			/* high order halfword has the bit */
-    bitno = 16;			/* start with bit 16 */
-    clearbit = 0x10000;		/* which has value 10000h */
-    value >>= 16;		/* and slide the halfword down */
-  }
-  if (!(value & 0xFF)) {	/* low quarterword has a bit? */
-    bitno += 8;			/* no, start 8 bits higher */
-    clearbit <<= 8;		/* bit to clear is 2^8 higher */
-    value >>= 8;		/* and slide the quarterword down */
-  }
-  while (T) {			/* search for bit in quarterword */
-    if (value & 1) break;	/* found it? */
-    value >>= 1;		/* now, slide the bit down */
-    bitno += 1;			/* count one more bit */
-    clearbit <<= 1;		/* bit to clear is 1 bit higher */
-  }
-  *valptr ^= clearbit;		/* clear the bit in the argument */
-  return (bitno);		/* and return the bit number */
-}
-
 /* Return minimum of two integers
  * Accepts: integer 1
  *	    integer 2

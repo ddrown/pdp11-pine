@@ -41,13 +41,6 @@
  *
  */
 
-/* Coddle certain compilers' 6-character symbol limitation */
-
-#ifdef __COMPILER_KCC__
-#define find_rightmost_bit frtbit
-#endif
-
-
 /* Some C compilers have these as macros */
 
 #undef min
@@ -58,7 +51,6 @@
 char *ucase (char *string);
 char *lcase (char *string);
 char *cpystr (char *string);
-unsigned long find_rightmost_bit (unsigned long *valptr);
 long min (long i,long j);
 long max (long i,long j);
 long search (char *s,long c,char *pat,long patc);

@@ -8126,3 +8126,33 @@ bigger than a typical dedup:
   strings caveat as before -- the real `.data` savings need the next
   real-hardware measurement). `bin/pico` untouched (`mailview.c` is
   pine-only).
+
+### Remove dead `find_rightmost_bit()` from `c-client/misc.c`
+
+Pivoting the `pine-ovl` text/overlay investigation: with data+bss
+steadily shrinking via string cuts but the base-text budget stuck
+(short by a fixed 8192 bytes across several rounds, since string
+edits don't move code size), audited the 11 specific files mkovmake
+puts in the resident base (`pine/args.c`, `pine/help.c`, `pine/log.c`,
+`pico/bind.c`, `pico/compose_stub.c`, `pico/fileio.c`, `pico/region.c`,
+`pico/window.c`, `c-client/dummy.c`, `c-client/misc.c`,
+`c-client/osdep.c`) for actual code (not string) bloat -- only code in
+these specific files affects the base-text number at all.
+`c-client/misc.c` was the biggest real-hardware contributor (1316
+bytes). `find_rightmost_bit()` (aliased to `frtbit` for one ancient
+compiler's 6-character symbol limit) turned out to have zero callers
+anywhere in the tree -- confirmed the two functions it could plausibly
+be confused with (`search()`/`ssrc()`, used by `rfc822.c`'s MIME
+boundary detection, and `pmatch()`, used by `dummy.c`'s wildcard
+mailbox matching) are both genuinely reachable, but `find_rightmost_bit`
+itself is not, including from `phile.c` (the only other file that
+might have called it) since `phile.c` isn't even a member of this
+project's `c-client.a` (see its `makefile.bsd`).
+- **What changed**: deleted `find_rightmost_bit()`'s definition (35
+  lines, a non-trivial bit-scan loop) from `misc.c`, its prototype from
+  `misc.h`, and the now-pointless `#ifdef __COMPILER_KCC__` macro alias
+  above it.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings;
+  full smoketest suite 31/31.
+- **Size delta**: `bin/pine` `text` 274882 -> 274722 (-160 bytes).
+  `bin/pico` untouched (doesn't link c-client).
