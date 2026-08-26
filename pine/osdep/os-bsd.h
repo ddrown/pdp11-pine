@@ -266,7 +266,7 @@ int fgetpos(); int fsetpos();
 
 
 /*----- The usual sendmail configuration for sending mail on Unix ------*/
-#define SENDMAIL	"/usr/lib/sendmail"
+#define SENDMAIL	"/usr/sbin/sendmail"
 #define SENDMAILFLAGS	"-oi -oem -t"	/* ignore dots in incoming mail,
 					   mail back errors, and
 					   get recipients from To, cc,

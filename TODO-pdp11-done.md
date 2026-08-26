@@ -9384,3 +9384,31 @@ likely dominant consumer squeezing out that smaller, later request.
   change only, not a compiled-binary size change).
 - **Next step**: real-hardware retest of compose -> Send/Cancel, a
   third time.
+
+**Update -- the memory crash is fixed.** Real-hardware retest got past
+compose/Send/Cancel cleanly this time (no more `fs_get()` failures) --
+confirming the `reload_body_text()` reorder, the `RBUFSZ` shrink, and
+the `MSIZE_INIT`/`MSIZE_INC` shrink together actually resolved the
+original crash report. Next issue hit was unrelated: `call_sendmail()`
+couldn't find `sendmail` at the hardcoded path.
+
+### `SENDMAIL` pointed at the wrong path for this target's actual layout
+
+`pine/osdep/os-bsd.h` (the fragment `pine/os.h` symlinks to for the
+real 2.11BSD `makefile.bsd` build) hardcoded `SENDMAIL
+"/usr/lib/sendmail"`, matching every other `os-*.h` variant in the
+tree (all identical, presumably copied from a common template). On
+this target, `sendmail` actually lives at `/usr/sbin/sendmail`
+instead.
+
+- **Fix**: `SENDMAIL` in `osdep/os-bsd.h` changed to
+  `"/usr/sbin/sendmail"`.
+- **Verified**: `osdep/os-bsd.h` isn't part of the `lnx` dev build at
+  all (only reached via `pine/os.h`'s symlink for the real-hardware
+  `makefile.bsd` target -- the `lnx` build uses `osdep/os-lnx.h`'s own
+  separate `SENDMAIL`, left untouched and still correct for this dev
+  machine, which has both `/usr/lib/sendmail` and `/usr/sbin/sendmail`
+  as valid symlinks), so no `./build lnx`/smoketest cycle applies;
+  verification is the pending real-hardware retest of an actual Send.
+- **Size delta**: none (one string literal, same length, no compiled
+  object from this repo's own `lnx` build affected).
