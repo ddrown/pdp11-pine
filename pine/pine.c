@@ -244,8 +244,7 @@ main(int argc, char *argv[])
 
     /*--- input side ---*/
     if(init_tty_driver(pine_state)){
-        fprintf(stderr, "Can't access terminal or input is not a terminal. Redirection of\n");
-        fprintf(stderr, "standard input is not allowed. For example \"pine < file\" doesn't work.\n\007");
+        fprintf(stderr, "\007Can't use terminal: stdin isn't a tty (e.g. \"pine < file\")\n");
         exit(-1);
     }
 
@@ -254,15 +253,15 @@ main(int argc, char *argv[])
     rv = config_screen(&(pine_state->ttyo));
     if(rv) {
         switch(rv) {
-          case -1: printf("Terminal type (envronment variable TERM) not set.\n");
+          case -1: printf("TERM not set.\n");
             break;
-          case -2: printf("Terminal type \"%s\", is unknown.\n", getenv("TERM"));
+          case -2: printf("Unknown TERM \"%s\".\n", getenv("TERM"));
             break;
           case -3:
-            printf("Can't open termcap file; check TERMCAP variable and/or system manager.\n");
+            printf("Can't open termcap file (check TERMCAP)\n");
             break;
           case -4:
-            printf("Your terminal, of type \"%s\", is lacking functions needed to run pine.\n", getenv("TERM"));
+            printf("Terminal \"%s\" lacks needed functions.\n", getenv("TERM"));
             break;
         }
         printf("\r");
@@ -338,7 +337,7 @@ main(int argc, char *argv[])
             
                 clear_index_cache();
                 end_scroll_text();
-                printf("\n\nUnable to open %s \"%s\". Pine finished\n\n",
+                printf("\n\nCan't open %s \"%s\"\n\n",
                        "folder",
                        folder_to_open);
                 exit(-1);
@@ -352,7 +351,7 @@ main(int argc, char *argv[])
 
         build_path(int_mail, sizeof(int_mail), pine_state->folders_dir, INTERRUPTED_MAIL);
         if(can_access(int_mail, ACCESS_EXISTS) == 0) {
-            q_status_message(1, 4, 5, "\007Use compose command to continue composing last message. It was interrupted.");
+            q_status_message(1, 4, 5, "\007Composing interrupted -- resume with Compose");
         }
 
 	pine_state->in_init_seq = pine_state->save_in_init_seq;
@@ -687,7 +686,7 @@ main_menu_screen(pine_state)
 	  default:
           bleep:
             q_status_message2(0, 0, 2,
-	      "\007Command \"%s\" not defined for this screen. Use %s for help",
+	      "\007\"%s\" undefined here (%s for help)",
                               (void *)pretty_command(orig_ch), "?");
 	 } /* the switch */
     } /* the BIG while loop! */
@@ -1244,7 +1243,7 @@ panic1(message, arg)
 {
     char buf[1001];
     if(strlen(message) > 1000) {
-        panic("Pine paniced. (Reason for panic is too long to tell)");
+        panic("Pine panic (message too long)");
     } else {
         /* every panic1() call site passes a compile-time literal. */
 #ifdef __GNUC__

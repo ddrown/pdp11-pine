@@ -8699,3 +8699,77 @@ optimized-vs-unoptimized codegen.)
   partition while keeping every byte of the string-cutting savings --
   unlike the cross-file-share revert above, which cost bytes for
   nothing.
+
+### Shrink `pine.c`'s string literal footprint
+
+Continuing the string-cutting pass: `pine.c` measured at ~2146 bytes
+across 91 string literals, next after `mailcmd.c`/`mailview.c`/
+`send.c`/`folder.c` (the generated `helptext.c` was skipped -- edit
+`pine.hlp` instead -- and `reply.c`/`init.c`/`mailindx.c`/`filter.c`
+are smaller, still untouched).
+
+- **Deduplication**: none of real substance -- `pine.c`'s intra-file
+  duplicate literals are all tiny (`"TERM"`/`"HOME"` `getenv()` keys,
+  `"?"` help-key strings, `KEYMENU_S` table entries like `"OTHER
+  CMDS"`/`"Help"` -- the last correctly left alone, aggregate
+  initializers per the established rule). Most of this file's byte
+  volume is long, mostly-unique strings instead.
+- **Cross-file find**: `pine.c`'s main-command-loop default case still
+  had the *original*, long "not defined for this screen" message
+  (`"\007Command \"%s\" not defined for this screen. Use %s for
+  help"`) that `mailcmd.c`/`mailview.c`/`folder.c` already shortened
+  in an earlier entry -- missed then because this file hadn't been
+  measured yet. Brought in line: `"\007\"%s\" undefined here (%s for
+  help)"`.
+- **Shortening**: this file's error/status text falls into two very
+  different categories, treated differently:
+    - **Left untouched**: the six main-menu `mkeys[]` command
+      descriptions (`"   %s     HELP               -  Get help using
+      Pine"` etc.) -- these are core, constantly-user-read UI text
+      (not error/status messages), live in a `static struct menu_key
+      mkeys[] = {...}` aggregate initializer (can't share via a
+      variable anyway), and a dozen-plus `test/cases/*.py` files
+      pattern-match this exact wording to confirm the main menu
+      painted (`test_folder_list_screen.py`, `test_signal_handlers.py`,
+      etc.) -- bad risk/reward, skipped entirely. Also left untouched:
+      the `"Copyright 1989-1993.  PINE is a trademark..."` notice (a
+      real legal/trademark notice, not incidental text -- the
+      surrounding source comment says as much) and the `"\n\nBug in
+      Pine detected: \"%s\".\nExiting pine.\n"` crash-format string
+      (not test-asserted, but this exact phrase is the standing
+      diagnostic convention this whole project's crash-investigation
+      workflow keys off of -- shortening it would cost more in lost
+      convention than it'd save in bytes).
+    - **Shortened**: the composer/postponed-mail startup notice
+      (`"\007Use compose command to continue composing last message.
+      It was interrupted."` -> `"\007Composing interrupted -- resume
+      with Compose"`); the five pre-curses terminal/TERM startup
+      errors in `main()` (`"Can't access terminal..."`/`"standard
+      input is not allowed..."` -- two `fprintf()` calls -- merged into
+      one `"\007Can't use terminal: stdin isn't a tty (e.g. \"pine <
+      file\")\n"`; `"Terminal type (envronment variable TERM) not
+      set.\n"` -> `"TERM not set.\n"`; `"Terminal type \"%s\", is
+      unknown.\n"` -> `"Unknown TERM \"%s\".\n"`; `"Can't open termcap
+      file; check TERMCAP variable and/or system manager.\n"` ->
+      `"Can't open termcap file (check TERMCAP)\n"`; `"Your terminal,
+      of type \"%s\", is lacking functions needed to run pine.\n"` ->
+      `"Terminal \"%s\" lacks needed functions.\n"`); the
+      folder-open-failure message (`"\n\nUnable to open %s \"%s\".
+      Pine finished\n\n"` -> `"\n\nCan't open %s \"%s\"\n\n"`); and the
+      `panic1()` message-too-long fallback (`"Pine paniced. (Reason
+      for panic is too long to tell)"` -> `"Pine panic (message too
+      long)"`, an extremely rare edge case -- only reachable when a
+      panic message exceeds 1000 characters). All of these are
+      one-shot diagnostic/status text, not something the user reads to
+      know what to type next, matching this project's established
+      "cryptic error over a binary that doesn't run" latitude.
+- **Verified**: checked every touched/candidate string against
+  `test/cases/*.py` first (`grep -rn "expect("` for the terminal/panic
+  strings turned up nothing; the main-menu lines' widespread test
+  matches are exactly why those were left alone). `./build clean &&
+  ./build lnx`, exit 0, 0 warnings; full smoketest suite 31/31.
+- **Size delta**: `bin/pine` `text` 274650 -> 274338 (-312 bytes) on
+  the `lnx` dev build -- the real `.data` win on the 2.11BSD target is
+  larger, per the same gcc-already-dedupes-strings caveat as every
+  string-cutting entry in this file. `bin/pico` untouched (`pine.c` is
+  pine-only).
