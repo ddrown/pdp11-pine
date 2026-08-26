@@ -9330,3 +9330,57 @@ choices failed identically again).
   footprint; the `bol` fix is a same-size pointer-assignment
   substitution).
 - **Next step**: real-hardware retest of compose -> Send/Cancel.
+
+**Update -- RBUFSZ shrink wasn't enough either.** Real-hardware retest
+still failed, this time `"Out of free storage (1025 bytes)"` -- a
+second `adb pine core` + `$c` trace confirmed the *same* call site
+(`fs_get(02001)` = 1025 decimal, from `~set_mime_types+0112`), just
+now failing even at the new, already-shrunk `RBUFSZ`. Since `fs_get()`
+and `fs_resize()` have distinguishable failure messages (`fs_resize()`
+-> plain `"Can't resize free storage"`, no size; `fs_get()` ->
+`"Out of free storage (%lu bytes)"`), this confirmed it's a *fresh*
+1025-byte request failing, not a resize -- so something else is
+saturating the heap by this point in the call chain, not `RBUFSZ`
+itself being too big.
+
+### `filter.c`'s `MSIZE_INIT`/`MSIZE_INC` (backing every `CharStar` storage object) were still 8192/4096
+
+Rather than another slow upload-build-reproduce-adb round trip to
+chase one buffer at a time, audited the rest of the same call path
+for other oversized fixed allocations before asking for another
+retest. `reload_body_text()` (fixed above) calls `so_get(CharStar,
+...)`, which is backed by `filter.c`'s `so_get()` -- still allocating
+an unconditional `MSIZE_INIT` (8192) bytes for `so->txt` regardless of
+how much text the composer body actually holds. That buffer (`newso`)
+is still alive and assigned to `bod->contents.binary` by the time
+`set_mime_types()` runs its own `fs_get(RBUFSZ)` a few calls later, so
+the two have to coexist -- and `MSIZE_INIT` alone (8192) is already
+over 8x the *entire* new `RBUFSZ` (1025), making it by far the more
+likely dominant consumer squeezing out that smaller, later request.
+
+- **Fix**: `MSIZE_INIT` 8192 -> `MAILTMPLEN` (1024), `MSIZE_INC` 4096
+  -> `MAILTMPLEN` (1024) -- matching the established "small buffer +
+  demand-driven growth" pattern from `bezerk_open()`/`RBUFSZ`. This is
+  the shared constant behind *every* `CharStar` object in the tree
+  (new-compose body, reply/forward body -- `reply.c`'s several
+  `so_get(CharStar,...)` calls found in an earlier entry -- fcc
+  storage in `send.c`), so unlike `RBUFSZ` (one call site) this is a
+  systemic reduction across the whole compose/send/reply path at
+  once.
+- **Verified safe**: checked `so_writec()`/`so_puts()`'s growth logic
+  in `filter.c` -- both resize via `fs_resize()` (which does a
+  straight `realloc()`) on demand, and `so_puts()`'s growth is a loop
+  (`while(so->size <= needed) so->size += MSIZE_INC;`) that already
+  correctly handles needing more than one `MSIZE_INC` step in a single
+  call, so a smaller increment only changes resize *frequency*, not
+  correctness. Grepped for any other code assuming a CharStar object's
+  `so->size` starts at some minimum -- none found; every other
+  reference is part of the same growth/write logic.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings;
+  full smoketest suite 31/31, including the tests most likely to
+  stress the growth path (`test_resume_postponed_huge_address.py`,
+  `test_send_body_header_overflow*.py`).
+- **Size delta**: none on the `lnx` dev build (runtime allocation size
+  change only, not a compiled-binary size change).
+- **Next step**: real-hardware retest of compose -> Send/Cancel, a
+  third time.

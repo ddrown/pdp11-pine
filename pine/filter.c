@@ -106,8 +106,19 @@ int	so_reaquire(STORE_S *);
  * the caller knowing if the storage is core or in a file 
  * or whatever.
  */
-#define	MSIZE_INIT	8192
-#define	MSIZE_INC	4096
+/* Was an unconditional CHUNK-sized 8192/4096 (matching bezerk.c's
+ * CHUNK-sized buffers) -- same class of oversized fixed buffer as the
+ * CHUNK-vs-MAILTMPLEN bezerk_open() bug and send.c's RBUFSZ, both
+ * fixed earlier (TODO-pdp11-done.md). so_writec()/so_puts() already
+ * grow a CharStar object's storage on demand (the latter in a loop,
+ * so multiple MSIZE_INC steps in one call are handled correctly), so
+ * a smaller start size only changes resize frequency, not
+ * correctness. This is the shared constant behind every CharStar
+ * object in the tree (composer body, reply/forward body, fcc
+ * storage, ...), so it's a much bigger lever than any one call site's
+ * own buffer. */
+#define	MSIZE_INIT	MAILTMPLEN
+#define	MSIZE_INC	MAILTMPLEN
 
 
 /*
