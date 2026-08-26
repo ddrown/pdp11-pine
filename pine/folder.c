@@ -148,6 +148,8 @@ static char *expand_label   = "Expand";
 static char *bad_context_fmt = "\007Bad context, %s : %s";
 static char *no_folders_to_fmt = "\007No folders to %s";
 extern char *word_not_found_msg;	/* mailcmd.c owns this copy */
+extern char *already_first_page;	/* mailindx.c owns this copy */
+extern char *already_last_page;	/* mailindx.c owns this copy */
 
 static int sort_folder_entry = 0;
 
@@ -485,7 +487,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 					&(fs.context)))
 		      rc++;
 	    } else {
-                q_status_message(0,0,1,"\007Already on first page.");
+                q_status_message(0,0,1,already_first_page);
 	    }
 
             break;
@@ -498,7 +500,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
           case ctrl('V'): 
 	  case '+':
 	    if((rc = fs.top_row + fs.display_rows) > fs.last_row){
-                q_status_message(0,0,1,"\007Already on last page.");
+                q_status_message(0,0,1,already_last_page);
 	    }
 	    else{
 		while(rc <= fs.last_row

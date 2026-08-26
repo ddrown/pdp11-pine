@@ -8876,3 +8876,46 @@ via `grep -rn "expect("` to have zero `test/cases/*.py` dependencies.
   target is separately larger still, per the standing
   gcc-already-dedupes-strings caveat. `bin/pico` untouched (`init.c`
   is pine-only).
+
+### Shrink `mailindx.c`'s string literal footprint, plus a fourth cross-file share
+
+Continuing the string-cutting pass: `mailindx.c` (the folder index
+screen) measured at ~1112 bytes across 111 string literals, next
+after `init.c`.
+
+- **Noteworthy non-finding**: the cross-file sweep against every
+  already-processed file turned up a *huge* pile of exact matches
+  against `folder.c`/`mailview.c`/`pine.c` -- single-letter command
+  keys and labels (`"C"`/`"Compose"`, `"D"`/`"Delete"`,
+  `"GotoFldr"`, `"OTHER CMDS"`, etc.). These are not a real
+  opportunity, though: every one of them lives in a `static struct key
+  foo_keys[] = {{"?","Help",0}, ...}` compile-time aggregate
+  initializer (one per screen -- index/folder-list/view/main-menu each
+  define their own), and C requires constant expressions there, so
+  they can't be pulled into a shared `char *` variable without
+  restructuring these tables to populate at runtime instead -- a much
+  bigger, riskier refactor touching every screen's key-menu table, out
+  of scope for this opportunistic pass. Noted in `TODO-pdp11.md` as a
+  real but structural future opportunity, not attempted here.
+- **Real cross-file find**: `"\007Already on first page."` matched
+  `folder.c` byte-for-byte; `"\007Already on last page"` was one
+  trailing period away from matching `folder.c`'s copy. Unified
+  wording (dropped the trailing periods) and shared both as
+  `already_first_page`/`already_last_page`, owned by `mailindx.c`
+  (non-`static`), with `extern` declarations in `folder.c`.
+- **Shortening**: `"No folder is currently open"` ->
+  `"No folder open"`; `panic("Error calculating index position")` ->
+  `panic("Bad index position")` (an internal-error path, not routine
+  UI text); the `"[ No Message Text Available ]"` index-line
+  placeholder (shown when a message's envelope has literally no
+  displayable fields, a rare edge case, not routine content) ->
+  `"[No Text]"`; `"get_index_cache failed!"` ->
+  `"\007Index cache error"`. Left `"Sorting folder by %s"` alone
+  (routine, already concise status text).
+- **Verified**: `grep -rn "expect("` against every candidate string
+  first (zero hits). `./build clean && ./build lnx`, exit 0, 0
+  warnings; full smoketest suite 31/31.
+- **Size delta**: `bin/pine` `text` 273906 -> 273810 (-96 bytes) on
+  the `lnx` dev build. Real 2.11BSD `.data` savings are larger, per
+  the standing gcc-already-dedupes-strings caveat. `bin/pico`
+  untouched (`mailindx.c` is pine-only).

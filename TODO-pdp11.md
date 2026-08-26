@@ -26,6 +26,31 @@ DONE elsewhere or referenced in passing below.
       alongside, since `Ctrl-\` isn't a key pine's own UI ever asks
       the user to press.
 
+### KEYMENU_S/`struct key` tables duplicate command-key strings across every screen
+
+- [ ] Found while string-cutting `mailindx.c` (see `TODO-pdp11-done.md`).
+      Every screen (`mailindx.c`'s index, `folder.c`'s folder list,
+      `mailview.c`'s message view, `pine.c`'s main menu, etc.) declares
+      its own `static struct key foo_keys[] = {{"?","Help",0}, ...}`
+      table, and the same single-letter keys and command labels
+      (`"C"`/`"Compose"`, `"D"`/`"Delete"`, `"GotoFldr"`, `"OTHER
+      CMDS"`, `"Quit"`, ...) are repeated verbatim across most of
+      them, since the same command is reachable from multiple screens.
+      This is a real, fairly large chunk of duplicated `.data` (dozens
+      of short strings across half a dozen files) -- but every one of
+      these tables is a compile-time static aggregate initializer, and
+      C requires constant expressions there, so none of it can be
+      pulled into a shared `char *` variable the way this session's
+      other string-sharing wins were. Doing anything about it would
+      mean restructuring these tables to populate at runtime (e.g. an
+      init function assigning each `.label` field from a shared
+      constant, the same trick already used for `folder.c`'s
+      `select_label`/`expand_label`, but applied wholesale across
+      every key-menu table in the tree) -- a much bigger, more
+      invasive change than this pass's one-string-at-a-time edits, and
+      worth scoping as its own deliberate task rather than folding
+      into the opportunistic string-cutting pass.
+
 ### Track down a small memory leak found while re-verifying the third fuzzing lead's fix
 
 - [ ] The third fuzzing lead (heap corruption in `rfc822_parse_adrlist()`
