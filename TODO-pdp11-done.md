@@ -8229,3 +8229,69 @@ own code has needed since the fork/exec redesign.
   pico object files. `bin/pico` itself is completely unaffected (it's
   a different binary, built by `pico/makefile.bsd`, which still needs
   all of its own code).
+
+### Fix `bezerk_open()` wasting 8KB on every open, crashing on a new user's empty INBOX
+
+With `pine-ovl` finally linking clean (previous entry) and running on
+real hardware for the first time, it booted to the Main Menu but
+crashed opening INBOX: `Bug in Pine detected: "Out of free storage".
+Exiting pine.` The account's mailbox file didn't exist yet
+(`/usr/spool/mail/<user>` was absent -- a brand new user, the most
+ordinary case there is), so this wasn't a large-mailbox memory
+problem. No core dump was produced (this project's own signal
+handling likely intercepts `abort()` before the default core-dump
+action), so root-caused it by temporarily instrumenting `fs_get()`
+(`os_bsd.c`) to report the failed allocation's size in the crash
+message -- see below, since that turned out worth keeping permanently.
+It reported `Out of free storage (8193 bytes)`, which is exactly
+`CHUNK + 1` (`bezerk.h`'s `#define CHUNK 8192`) -- `bezerk_open()`
+allocates this full read-buffer size *unconditionally*, before it even
+knows whether the mailbox file exists.
+
+A real ulimit-hunting detour happened first (`limit datasize`/`limit
+-a` all reported "0 kbytes" for every resource) that turned out to be
+a red herring: raising `datasize` to `unlimited` made the crash happen
+*earlier* (at a smaller 2048-byte allocation, `pine`'s own
+`tmp_20k_buf`'s initial size), the opposite of what raising a limit
+should do -- strong evidence this ancient `tcsh`/kernel's handling of
+`limit datasize unlimited` is itself buggy (plausibly a 16-bit
+encoding issue turning "unlimited" into something small), not
+something to route around by tuning limits. Left alone; the real fix
+is not wasting memory in the first place.
+
+`bezerk_parse()`'s buffer growth is already fully dynamic
+(`fs_resize()` in its read loop, sized to exactly what's needed for
+real message data), and every *other* use of `LOCAL->buf` in the file
+is a short `sprintf()` (error messages, IMAP-ish date string
+construction) that fits comfortably in far less than `CHUNK` bytes --
+confirmed via a full `grep` of every `LOCAL->buf` reference in
+`bezerk.c`. The unconditional `CHUNK`-sized allocation at open time
+was pure headroom for a large-mailbox read that hadn't happened yet,
+and on a PDP-11 where data+bss+heap+stack all share one 64KB address
+space (separate I&D, per `ld.txt`), it was routinely enough to starve
+the empty-mailbox case -- the *common* case for any new install --
+of room to open at all.
+- **What changed**: `bezerk_open()`'s initial `LOCAL->buf` allocation
+  shrunk from `CHUNK` (8192) to `MAILTMPLEN` (1024, `mail.h`) bytes.
+  The one other unconditional `CHUNK`-sized allocation in the file
+  (`bezerk_parse()`, shrinking the buffer back down *after* a large
+  read) is unaffected by this and doesn't need the same fix -- it's
+  gated on `LOCAL->buflen > CHUNK`, which is never true unless a
+  large-mailbox read already grew it past that point.
+
+  Also kept (made permanent) the `fs_get()` diagnostic added to
+  root-cause this: `os_bsd.c`'s "Out of free storage" `fatal()` call
+  now reports the failed request size. Cheap (one `sprintf()`, failure
+  path only) and valuable on a target this memory-constrained for
+  diagnosing any future allocator exhaustion at a glance.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings
+  (`bezerk.c` is shared between `lnx` and `bsd` builds, so this is a
+  real regression check, not just inference); full smoketest suite
+  31/31. No PDP-11 cross-compiler available here to confirm INBOX
+  actually opens clean now -- that's the user's next real-hardware
+  run to confirm, and the `fs_get()` diagnostic will immediately show
+  whether some *other* allocation is now the next bottleneck if not.
+- **Size delta**: `bin/pine` `text`/`data`/`bss` unchanged on the `lnx`
+  dev build (274722/10120/19208) -- this changes a runtime allocation
+  size argument, not code or static data size. `bin/pico` untouched
+  (doesn't link c-client).

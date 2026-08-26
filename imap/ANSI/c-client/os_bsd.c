@@ -70,7 +70,18 @@ void rfc822_date (char *date)
 void *fs_get (size_t size)
 {
   void *block = malloc (size);
-  if (!block) fatal ("Out of free storage");
+  if (!block) {
+    /* Report the failed request size -- on a target this memory-
+     * constrained, knowing whether a future "out of free storage"
+     * crash is a small/reasonable allocation (real exhaustion) or a
+     * huge/garbage one (an integer underflow computing a bad size
+     * upstream) is worth the one sprintf() on this failure-only
+     * path. Found the CHUNK-vs-MAILTMPLEN bug in bezerk_open() this
+     * way -- see TODO-pdp11-done.md. */
+    char msg[64];
+    sprintf (msg, "Out of free storage (%lu bytes)", (unsigned long) size);
+    fatal (msg);
+  }
   return (block);
 }
 

@@ -298,7 +298,16 @@ MAILSTREAM *bezerk_open (MAILSTREAM *stream)
   LOCAL->filetime = 0;
   LOCAL->msgs = NIL;		/* no cache yet */
   LOCAL->cachesize = 0;
-  LOCAL->buf = (char *) fs_get ((LOCAL->buflen = CHUNK) + 1);
+  /* Start small (MAILTMPLEN, big enough for every sprintf()/date-parse
+   * use of LOCAL->buf in this file) rather than the full CHUNK (8192)
+   * -- this runs on every open, before we even know the mailbox file
+   * exists, and bezerk_parse()'s real-data-reading path already grows
+   * this buffer (fs_resize()) to whatever size it actually needs. On
+   * a PDP-11 with data+bss+heap+stack sharing one 64KB space, wasting
+   * 8KB here unconditionally starved the empty/nonexistent-INBOX case
+   * (the common one for a brand new user) of enough room to open at
+   * all -- see TODO-pdp11-done.md. */
+  LOCAL->buf = (char *) fs_get ((LOCAL->buflen = MAILTMPLEN) + 1);
   stream->sequence++;		/* bump sequence number */
 
   LOCAL->dirty = NIL;		/* no update yet */
