@@ -62,6 +62,7 @@ static char rcsid[] = "$Id: ttyin.c,v 4.26 1993/11/18 01:43:50 mikes Exp $";
  ====*/
 
 #include "headers.h"
+#include <syslog.h>	/* TEMPORARY -- for the read_with_timeout() trace below */
 
 void   line_paint(int, int *);
 
@@ -272,9 +273,12 @@ read_with_timeout(int time_out)
      int    res;
 #else
      struct timeval tmo;
-     int            readfds, res;
+     fd_set         readfds;
+     int            res;
 #endif
      unsigned char  c;
+
+     syslog(LOG_ALERT, "TRACE read_with_timeout enter time_out=%d", time_out);
 
      fflush(stdout);
 
@@ -303,29 +307,31 @@ read_with_timeout(int time_out)
 	pollfd.events = POLLIN;
 	res = poll (&pollfd, 1, time_out * 1000);
 #else
-         if(STDIN_FD == 0)
-           readfds    = 1;
-         else
-           readfds    = 1 << STDIN_FD; /* First bit for file desc 0 */
+         /* NB: readfds is a real fd_set, set up with FD_ZERO/FD_SET,
+          * not a hand-rolled "int" bitmask -- this file used to do
+          * `readfds = 1 << STDIN_FD`, treating readfds as a plain
+          * int. On this target fd_set is `struct { fd_mask
+          * fds_bits[1]; }` with fd_mask a 32-bit long, so a 16-bit
+          * int is the wrong size entirely: select() reading/writing
+          * a real fd_set through a pointer to a too-small int
+          * corrupts whatever stack memory follows it, and the
+          * "bitmask" it reads back is partly uninitialized garbage.
+          * That's why select() never correctly reported fd 0 as
+          * ready -- see TODO-pdp11-done.md. */
+         FD_ZERO(&readfds);
+         FD_SET(STDIN_FD, &readfds);
          tmo.tv_sec  = time_out;
-         tmo.tv_usec = 0; 
+         tmo.tv_usec = 0;
 
-
-         /* NB: exceptfds (4th arg) is NULL, not &readfds -- this code
-          * only ever cared about read-readiness. Aliasing it to
-          * readfds (as this line used to) means select() would write
-          * its read-ready and except-ready results into the *same*
-          * memory, so whichever it wrote last could clobber the
-          * other -- on a target this select()-based path (not
-          * USE_POLL, so never exercised by this project's lnx dev
-          * builds) is otherwise untested, this silently corrupted the
-          * "fd 0 is readable" result often enough to make select()
-          * report nothing ready even after a real keystroke, so the
-          * caller kept returning NO_OP instead of ever reaching the
-          * real read() -- see TODO-pdp11-done.md. */
+         /* exceptfds (4th arg) is NULL, not &readfds -- this code
+          * only ever cared about read-readiness; aliasing it to
+          * readfds would risk select() overwriting one result with
+          * the other. */
          res = select(STDIN_FD+1, &readfds, 0, 0, &tmo);
 
 #endif
+
+         syslog(LOG_ALERT, "TRACE select res=%d errno=%d", res, errno);
 
          if(res < 0) {
              if(errno == EINTR) {
@@ -342,6 +348,8 @@ read_with_timeout(int time_out)
      }
 
      res = read(STDIN_FD, &c, 1);
+
+     syslog(LOG_ALERT, "TRACE read res=%d errno=%d c=%d", res, errno, (int)c);
 
      ready_for_winch = 0;
 
@@ -403,6 +411,9 @@ read_char(time_out)
 {
     register int  rx, ch, num_keys;
     static int firsttime = 1;
+
+    syslog(LOG_ALERT, "TRACE read_char enter time_out=%d initial_cmds=%d",
+	   time_out, ps_global->initial_cmds ? 1 : 0);
 
     /* commands in config file */
     if(ps_global->initial_cmds && *ps_global->initial_cmds) {

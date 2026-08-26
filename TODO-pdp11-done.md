@@ -8348,3 +8348,71 @@ blocker.)
   branch); expected to be a no-op or negligible on the real 2.11BSD
   target too (same argument count, one pointer expression replaced by
   a literal `0`).
+
+### Fix `readfds` type -- a 16-bit `int` standing in for a 32-bit `fd_set`
+
+The `exceptfds` aliasing fix above didn't resolve the keyboard-input
+problem: real hardware still didn't respond to any keystroke. Traced
+it with temporary `syslog(LOG_ALERT, ...)` calls added to
+`read_char()`/`read_with_timeout()` (this file's own signal handling
+prevents `abort()`-style core dumps, so `syslog` tracing stood in for
+a debugger backtrace the same way it did for the `fs_get()` size
+diagnostic in an earlier entry). The trace showed `read_char`/
+`read_with_timeout` being entered correctly with sane `time_out`
+values, and a normal `select res=0` (clean timeout, no error) on the
+first 1-second-timeout call -- then a second call with `time_out=150`
+that never logged a `select res=...` at all, i.e. `select()` was
+genuinely sitting there rather than returning quickly once a key was
+pressed (confirmed by the user declining to literally wait out 150
+seconds -- correctly reasoning that a working `select()` should return
+long before its timeout elapses once data arrives, not depend on
+lasting the whole window).
+
+That pointed past the earlier aliasing bug to something more
+fundamental, confirmed by checking the target's actual header:
+```
+$ sed -n '54,56p' /usr/include/sys/select.h
+typedef struct fd_set {
+        fd_mask fds_bits[1];
+} fd_set;
+$ grep fd_mask /usr/include/sys/select.h
+typedef long    fd_mask;
+```
+`fd_set` here is a struct wrapping a 32-bit `long`. But
+`read_with_timeout()` declared `readfds` as a plain `int` (16 bits on
+this target) and hand-set it as a bitmask (`readfds = 1 << STDIN_FD`,
+the classic pre-`fd_set` BSD calling convention) before passing
+`&readfds` to `select()` as if it were a real `fd_set *`. `select()`
+reading/writing a 32-bit structure through a pointer to a 16-bit `int`
+corrupts whatever stack memory follows `readfds`, and the "bitmask" it
+reads back for input is half uninitialized garbage -- a real stack-
+corruption bug, not just a semantic one, and enough on its own to
+explain `select()` never correctly reporting fd 0 ready regardless of
+the `exceptfds` aliasing (both needed fixing; the aliasing fix was
+necessary but not sufficient).
+- **What changed**: `read_with_timeout()`: `readfds` is now declared
+  as a real `fd_set` (not `int`), initialized with the standard
+  `FD_ZERO(&readfds)` / `FD_SET(STDIN_FD, &readfds)` macros instead of
+  a hand-rolled bit shift, matching whatever the target's actual
+  `fd_set`/`fd_mask` representation is instead of assuming it's
+  `int`-sized.
+- **Verified**: `FD_ZERO`/`FD_SET` are standard companions to `select()`
+  on any BSD-derived system (this target's own `select.h` confirms
+  their layout), so this is the portable, correct way to set up a
+  descriptor set regardless of `fd_mask`'s actual size -- it can never
+  have this class of bug again on any platform. Compiled a standalone
+  test reproducing the target's exact `fd_set`/`fd_mask` layout (`long
+  fds_bits[1]`) with `gcc -Wall` to confirm the `FD_ZERO`/`FD_SET`
+  usage is correct C against that specific shape, since this branch
+  is still unreachable on the `lnx` dev build (`USE_POLL` excludes it)
+  and glibc's own `fd_set` representation differs from the target's
+  anyway. `./build clean && ./build lnx`, exit 0, 0 warnings; full
+  smoketest suite 31/31. The temporary `syslog()` trace calls used to
+  find this are left in for the next real-hardware round (to confirm
+  `select()` now returns promptly on a keystroke instead of running
+  out its timeout) -- unlike the `fs_get()` size-reporting diagnostic
+  kept permanently in an earlier entry, these are noisy on every
+  keystroke and should be removed once the fix is confirmed working.
+- **Size delta**: not yet measured on real hardware (still carries the
+  temporary trace calls). `lnx` dev build unaffected as before (branch
+  not compiled there).
