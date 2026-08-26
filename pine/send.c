@@ -109,13 +109,11 @@ static STORE_S *fcc_so = NULL;
 /* strings repeated verbatim at multiple call sites below -- shared
  * storage instead of a separate copy of each at every site */
 static char *crlf                = "\015\012";
-/* not static -- also used from mailview.c, see the extern there */
-char         *charset_attr       = "charset";
+static char *charset_attr       = "charset";
 static char *mailer_daemon       = "mailer-daemon";
 static char *subject_field       = "SUBJECT";
 static char *boundary_attr       = "BOUNDARY";
-/* not static -- also used from mailcmd.c, see the extern there */
-char         *out_of_mem_msg     = "\007Out of memory";
+static char *out_of_mem_msg     = "\007Out of memory";
 static char *cant_create_tmp_msg = "\007Can't create composer temp file";
 static char *fcc_doesnt_exist_fmt = "\"%.40s\" doesn't exist. Create";
 static char *fcc_rejected_msg    = "\007Fcc of message rejected";

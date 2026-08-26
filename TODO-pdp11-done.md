@@ -8565,3 +8565,54 @@ across 109 string literals, next after `mailcmd.c`/`mailview.c`/
   larger, per the same gcc-already-dedupes-strings caveat as every
   string-cutting entry in this file. `bin/pico` untouched (`folder.c`
   is pine-only).
+
+### Revert the three cross-file `extern` string shares
+
+The next real-hardware `pine-ovl` relink after the `word_not_found_msg`
+share (on top of the earlier `charset_attr`/`out_of_mem_msg` shares)
+and the `.c.o:` rule fix failed with `ld: too big for type 431`, and
+`mkovmake`'s reported partition got noticeably worse than the
+previously-working link: 6 overlay groups instead of 8, largest
+overlay 32640 bytes instead of ~24320-24576, base 38016 -> would need
+40960 rounded, `40960 + round8k(32640)=32768` = 73728, 8192 bytes over
+the 65536 ceiling -- the same magnitude overage as the original
+pre-pico-removal failure.
+
+The three cross-file shares (`charset_attr` in `send.c`/`mailview.c`,
+`out_of_mem_msg` in `send.c`/`mailcmd.c`, `word_not_found_msg` in
+`mailcmd.c`/`folder.c`/`mailview.c`) were reverted back to independent
+per-file `static` copies, as a diagnostic experiment to see if
+undoing them restores the previous overlay partition.
+
+**The suspected cause (extern data symbols creating `mkovmake` "ties"
+that pull modules together into worse groupings) is NOT confirmed.**
+`mkovmake.txt`'s own definition of a "tie" is specifically a match
+between an undefined symbol in one module and a global *text* symbol
+in another (for call-thunk purposes) -- data symbols don't need
+thunking, since `.data`/`.bss` live in the one always-resident,
+never-swapped segment on this `-i` (separate I&D) target, so an
+`extern char *foo;` reference shouldn't register as a tie at all under
+that definition. The real cause of the regression is still unknown;
+plausible alternatives include general sensitivity of `mkovmake -O2`'s
+greedy grouping heuristic to any change in individual module sizes
+(even a few bytes can shift which modules greedily pack together), or
+the `.c.o:` rule fix (see above) causing previously stale/mislocated
+`../c-client/*.o` files to be correctly rebuilt with accurate sizes
+for the first time in the same relink attempt, confounding the
+comparison. This revert is a diagnostic step, not a confirmed fix --
+next real-hardware relink will show whether it actually restores the
+previous partition.
+
+- **Changed**: `send.c`, `mailcmd.c`, `folder.c`, `mailview.c` --
+  each of the three shared strings goes back to being declared
+  `static` independently in every file that uses it (4 total `static`
+  declarations restored across the 4 files, replacing 1 owner + 3
+  `extern` declarations).
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings;
+  full smoketest suite 31/31. Real-hardware relink re-test still
+  pending as of this write-up.
+- **Size delta**: `bin/pine` `text` 274650 -> 274706 (+56), `data`
+  10216 -> 10248 (+32) on the `lnx` dev build -- reversing the earlier
+  cross-file-share savings, as expected. Whether this is worth trading
+  back for a working overlay link depends on the pending real-hardware
+  result.
