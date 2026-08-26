@@ -93,7 +93,20 @@ void *fs_get (size_t size)
 
 void fs_resize (void **block,size_t size)
 {
-  if (!(*block = realloc (*block,size))) fatal ("Can't resize free storage");
+  void *new_block = realloc (*block,size);
+  if (!new_block) {
+    /* Same rationale as fs_get()'s diagnostic above -- an adb stack
+     * trace through this exact call site (fs_resize -> so_puts/
+     * so_writec's CharStar growth) turned out unreliable to unwind
+     * past the character-filter callback layer (garbage-looking
+     * arguments, nonsensical caller names), so report the size here
+     * directly instead of relying on the debugger to recover it.
+     * See TODO-pdp11-done.md. */
+    char msg[64];
+    sprintf (msg, "Can't resize free storage (%lu bytes)", (unsigned long) size);
+    fatal (msg);
+  }
+  *block = new_block;
 }
 
 

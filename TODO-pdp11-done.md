@@ -9677,3 +9677,82 @@ long");`), matching the pattern already used for `rcontext`.
   the expected `bss` reduction from this entry, and confirm the
   "Out of free storage (1024 bytes)" crash at `call_mailer()`'s Fcc
   `so_get()` is gone.
+
+**Update -- confirmed fixed, and further diagnostics on a new,
+separate crash.** Real-hardware retest confirmed the MAXPATH resize
+worked (`bss` `16044` -> `12972`, matching the predicted 3072-byte
+recovery) and the "Out of free storage (1024 bytes)" crash at Fcc's
+`so_get()` is gone. Real Send progress reached much further -- but hit
+two *different*, harder-to-pin-down issues along the way: an
+apparently unresponsive hang (no crash message, `ps` showed genuine
+CPU-bound spinning, `STAT R`, unresponsive to `SIGILL`/`SIGSEGV`/
+`SIGQUIT` for 90+ seconds, only `SIGKILL` worked -- no core, so no
+direct diagnosis possible), and, on a later attempt, a real crash:
+`"Can't resize free storage"` (`fs_resize()`, not `fs_get()`).
+
+Added temporary `syslog(LOG_ALERT, ...)` tracing to `dummy_find_all()`
+(c-client's directory-scan loop, imap/ANSI/c-client/dummy.c) and
+`context_fqn_to_an()` to pin down where either failure mode was
+happening (same proven technique as the `ttyin.c`/`bezerk_open()`
+bugs earlier this session). The trace showed the *entire*
+`find_folders_in_context()` -> ... -> `context_fqn_to_an()` ->
+`context_digest()` chain completing cleanly this time (all directory
+entries processed, callback returns) -- ruling out this whole chain
+as the hang/crash site. The crash instead happens later, inside
+`call_sendmail()`'s real message-body formatting for the sendmail
+temp file (`append_message2()` -> `pine_rfc822_output_body()` ->
+`gf_pipe()` -> the character-filter chain), a code path this session
+had never reached before (every earlier attempt crashed upstream of
+it). Removed the temporary tracing once this was established.
+
+An `adb` stack trace on the "Can't resize free storage" crash's core
+file showed `fs_resize` called with what looked like garbage
+arguments (`fs_resize(010,0141300)`, i.e. a near-null block pointer
+and an implausible ~49KB size) from a caller (`folder_insert_index`)
+that makes no sense in the real call graph at that point (a
+folder-list function inside a text-encoding filter's frame). Directly
+inspecting the core file confirmed this is an `adb` symbol-resolution
+artifact, not real corruption: the real character-output path for a
+`TYPETEXT` body is `gf_local_nvtnl` -> `gf_terminal` -> `l_putc()`
+(`send.c`) -- `l_putc` is `static`, so `adb` falls back to the nearest
+*exported* symbol when it can't resolve the real target, which
+happened to be `folder_insert_index`. Directly examined `fcc_so`
+(the global Fcc `STORE_S`, `send.c`) and its `l_out_buf` batch buffer
+in the core file: `l_out_buf` was empty (not implicated) and
+`fcc_so->size` was still exactly `1024` (`MSIZE_INIT`, unchanged) --
+ruling out the initial "`fcc_so` growing" theory. `49856` also isn't
+a clean multiple of `MSIZE_INC` from any real starting size, further
+confirming the trace's `fs_resize` argument values themselves are
+unreliable past this point, not a real recoverable data point.
+
+### Extended fs_get()'s permanent size-reporting diagnostic to fs_resize()
+
+Given the `adb` trace's precise arguments proved unreliable for this
+call site, applied the same fix as `fs_get()`'s existing diagnostic
+(`os_bsd.c`, kept permanently per earlier explicit instruction): make
+`fs_resize()`'s failure message report the actual requested size
+directly, instead of relying on a debugger to recover it after the
+fact.
+- **Fix**: `fs_resize()` (`imap/ANSI/c-client/os_bsd.c`) now captures
+  `realloc()`'s result into a local, and on failure reports `"Can't
+  resize free storage (%lu bytes)"` before calling `fatal()`, matching
+  `fs_get()`'s message format exactly.
+- **Also fixed while re-reading `context_fqn_to_an()` for the tracing
+  above**: two more unbounded copies into the now-`MAXPATH`-sized
+  `tmp` buffer, both writing a filesystem-derived `fqn` (no length cap
+  upstream) with no bound of their own -- `sprintf(tmp, "Found mailbox
+  outside context: %s", fqn)` (only reachable on a mismatch between a
+  found mailbox and its context, an unusual/rare path) and the
+  immediately following `strcpy(tmp, fqn+pfxlen)`. Bounded the first
+  to `%.220s` and the second via `strncpy` with `anlen` capped to
+  `MAXPATH - 1`.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings;
+  full smoketest suite 31/31.
+- **Size delta**: negligible (a few instructions in `fs_resize()`, two
+  bounded-copy changes with no size-constant change). Not separately
+  measured.
+- **Next step**: real-hardware retest of the same Send. The `fs_
+  resize()` diagnostic will report the real failing size directly in
+  the crash message this time, with no `adb` archaeology needed --
+  and, separately, the still-unexplained hang (no core available from
+  that attempt) remains open if it recurs.

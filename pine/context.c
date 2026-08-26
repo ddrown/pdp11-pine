@@ -128,13 +128,24 @@ context_fqn_to_an(find_return f, char *context_string, char *fqn)
     if (((anlen = fqnlen - (pfxlen + sfxlen)) < 1) ||
 	(pfxlen && strncmp (prefix,fqn,pfxlen) != 0) ||
 	(sfxlen && strcmp (suffix,fqn + fqnlen - sfxlen) != 0)) {
-      sprintf (tmp,"Found mailbox outside context: %s",fqn);
+      /* fqn is a filesystem-derived mailbox path with no length cap
+       * upstream -- bound it to fit tmp[MAXPATH] alongside the fixed
+       * "Found mailbox outside context: " prefix (32 bytes), rather
+       * than overflow tmp the way the unbounded %s did before this
+       * fix (found while re-sizing tmp from MAILTMPLEN to MAXPATH --
+       * see TODO-pdp11-done.md). */
+      sprintf (tmp,"Found mailbox outside context: %.220s",fqn);
       mm_log (tmp,(long) NIL);
       pfxlen = 0;
       anlen  = fqnlen;
     }
 				/* copy the an */
-    strcpy (ret = tmp,fqn+pfxlen);
+    /* fqn+pfxlen has no length cap upstream either -- same reasoning
+     * as the sprintf() above, bound the copy to fit tmp[MAXPATH]. */
+    if(anlen >= MAXPATH)
+      anlen = MAXPATH - 1;
+    ret = tmp;
+    strncpy (ret, fqn+pfxlen, anlen);
     ret[anlen] = '\0';		/* tie off string */
   }
   (*f) (ret);			/* in case no context? */
