@@ -78,6 +78,10 @@ static char rcsid[] = "$Id: filter.c,v 4.20 1993/10/30 00:27:42 mikes Exp $";
 #include "headers.h"
 #include "../pico/pico.h"
 
+/* message repeated verbatim at two call sites below -- shared storage
+ * instead of a separate copy at each site */
+static char *bad_qp_hex = "Bad hex char in QP encoding";
+
 
 /* INTERNAL PROTOTYPES */
 int	gf_so_readc(unsigned char *);
@@ -149,12 +153,12 @@ so_get(source, name, rtype)
 	    if((so->txt = (void *)fopen(so->name, type)) == NULL){
 		fs_give((void **)&so->name);
 		fs_give((void **)&so); 		/* so freed & set to NULL */
-		q_status_message(1, 3, 5,"ERROR creating message file");
+		q_status_message(1, 3, 5,"Can't create msg file");
 	    }
 	}
 	else{
 	    if((so->txt = (void *)create_tmpfile()) == NULL){
-		q_status_message(1, 3, 5,"ERROR creating message temp file");
+		q_status_message(1, 3, 5,"Can't create temp file");
 		fs_give((void **)&so);		/* so freed & set to NULL */
 	    }
 	}
@@ -391,12 +395,12 @@ STORE_S *so;
 
     if(!so->txt && (so->src == FileStar || so->src == TmpFileStar)){
 	if((so->txt=(void *)fopen(so->name, type)) == NULL){
-	    q_status_message2(1, 3, 5, "ERROR reopening %s : %s", so->name,
+	    q_status_message2(1, 3, 5, "Can't reopen %s: %s", so->name,
 				error_description(errno));
 	    rv = 0;
 	}
 	else if(fset_pos((FILE *)so->txt, (fpos_t *)&(so->used))){
-	    q_status_message2(1, 3, 5, "ERROR positioning in %s : %s", 
+	    q_status_message2(1, 3, 5, "Seek error in %s: %s", 
 				so->name, error_description(errno));
 	    rv = 0;
 	}
@@ -672,7 +676,7 @@ gf_terminal(f, c, flg)
 {
     if(flg == GF_DATA)			/* generic terminal filter */
       if((*last_filter)(c) <= 0)
-        gf_error("Error writing out pipe");
+        gf_error("Pipe write error");
 }
 
 
@@ -842,7 +846,7 @@ gf_binary_b64(f, c, flg)
 	    break;
 
 	  default:
-	    gf_error("Internal error in base64 encoder");
+	    gf_error("Base64 encoder error");
 	    return;			/* bummer! */
 	}
 
@@ -888,7 +892,7 @@ gf_b64_binary(f, c, flg)
 	if(f->f1){			/*  */
 	    f->f1 = 0;
 	    if (c != '=') {
-		gf_error("Illegal '=' in base64 text");
+		gf_error("Bad '=' in base64");
 	        return;
 	    }
 	}
@@ -911,7 +915,7 @@ gf_b64_binary(f, c, flg)
 		f->n = 0L;		/* restart quantum */
 		break;
 	      default:			/* impossible quantum position */
-		gf_error("Internal base64 decoder error");
+		gf_error("Base64 decoder error");
 		return;
 	    }
 	    return;
@@ -1000,7 +1004,7 @@ gf_qp_8bit(f, c, flg)
 
 	    if(!isxdigit(c)){		/* must be hex! */
 		fs_give((void **)&(f->line));
-		gf_error("Non-hexadecimal character in QP encoding");
+		gf_error(bad_qp_hex);
 		return;
 	    }
 
@@ -1016,7 +1020,7 @@ gf_qp_8bit(f, c, flg)
 	    f->f1 = DFL;
 	    if(!isxdigit(c)){		/* must be hex! */
 		fs_give((void **)&(f->line));
-		gf_error("Non-hexadecimal character in QP encoding");
+		gf_error(bad_qp_hex);
 		return;
 	    }
 
@@ -1307,7 +1311,7 @@ gf_rich2plain(f, c, flg)
 		if(f->linep - f->line > 40){
 		    /* What? rfc1341 says 40 char tokens MAX! */
 		    fs_give((void **)&(f->line));
-		    gf_error("Richtext token over 40 characters");
+		    gf_error("Richtext token too long");
 		    return;
 		}
 		
@@ -1338,7 +1342,7 @@ gf_rich2plain(f, c, flg)
     else if(flg == GF_EOD){
 	if(f->f1 = (f->linep != f->line)){
 	    /* incomplete token!! */
-	    gf_error("Incomplete token in richtext");
+	    gf_error("Incomplete richtext token");
 	}
 
 	fs_give((void **)&(f->line));

@@ -8919,3 +8919,48 @@ after `init.c`.
   the `lnx` dev build. Real 2.11BSD `.data` savings are larger, per
   the standing gcc-already-dedupes-strings caveat. `bin/pico`
   untouched (`mailindx.c` is pine-only).
+
+### Shrink `filter.c`'s string literal footprint
+
+Continuing the string-cutting pass: `filter.c` (the MIME/richtext/
+QP/base64 stream-filter engine) measured at ~993 bytes across 49
+string literals, next after `mailindx.c`.
+
+- **False positives filtered out first**: several apparent duplicates
+  (`"Illegal type of operand"`, `"Illegal conditional"`, `"cond ? a =
+  b, n-- : 0"`) turned out to live inside *comments* documenting past
+  `pcc`/2.11BSD `cc` portability bugs fixed earlier in this project,
+  not real string literals -- the naive text-based grep this pass uses
+  doesn't distinguish code from comments. `b64v`, the base64 alphabet
+  table (`"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"`,
+  66 bytes, the single longest string in the file) is essential data,
+  not incidental text -- left untouched.
+- **Deduplication**: `"Non-hexadecimal character in QP encoding"` (2
+  sites, both `gf_error()` arguments) collapsed to one shared `static`
+  string, also shortened in the process (see below).
+- **Shortening**: all internal filter-engine error paths (`gf_error()`/
+  `q_status_message()` calls for malformed MIME/base64/richtext input
+  or storage-object I/O failures) -- `"Non-hexadecimal character in QP
+  encoding"` -> `"Bad hex char in QP encoding"`; `"ERROR creating
+  message file"` -> `"Can't create msg file"`; `"ERROR creating
+  message temp file"` -> `"Can't create temp file"`; `"ERROR reopening
+  %s : %s"` -> `"Can't reopen %s: %s"`; `"ERROR positioning in %s :
+  %s"` -> `"Seek error in %s: %s"`; `"Error writing out pipe"` ->
+  `"Pipe write error"`; `"Internal error in base64 encoder"` ->
+  `"Base64 encoder error"`; `"Illegal '=' in base64 text"` -> `"Bad
+  '=' in base64"`; `"Internal base64 decoder error"` -> `"Base64
+  decoder error"`; `"Richtext token over 40 characters"` -> `"Richtext
+  token too long"`; `"Incomplete token in richtext"` -> `"Incomplete
+  richtext token"`. None of these had a `\007` bell prefix originally
+  and none were added -- that would be a real (if minor) behavior
+  change (an audible terminal bell), not just shorter text, so left
+  as-is either way.
+- **Verified**: `grep -rn "expect("` against every candidate string
+  first (only one unrelated hit, matching decoded plaintext in
+  `test_base64_body.py`, not any of these error strings). `./build
+  clean && ./build lnx`, exit 0, 0 warnings; full smoketest suite
+  31/31.
+- **Size delta**: `bin/pine` `text` 273810 -> 273706 (-104 bytes) on
+  the `lnx` dev build. Real 2.11BSD `.data` savings are larger, per
+  the standing gcc-already-dedupes-strings caveat. `bin/pico`
+  untouched (`filter.c` is pine-only).
