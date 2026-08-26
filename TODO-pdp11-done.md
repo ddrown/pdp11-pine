@@ -9046,3 +9046,30 @@ duplicates and no real cross-file matches this time.
   the `lnx` dev build. Real 2.11BSD `.data` savings are larger, per
   the standing gcc-already-dedupes-strings caveat. `bin/pico`
   untouched (`signals.c` is pine-only).
+
+### Shrink `screen.c`'s string literal footprint
+
+Continuing the string-cutting pass: `screen.c` (the titlebar/status-
+line layout engine) measured at ~711 bytes across 48 string literals,
+next after `signals.c`. This file had little real opportunity --
+apparent duplicates (`"<folder>"` x3, `"DEL"` x3, `"Title"` x2)
+were all comment mentions or a single macro definition
+(`BAR_STATUS()`), not repeated code strings, and most of the rest of
+the file's bytes are tightly parameterized `sprintf()` format strings
+for the titlebar's location/percent/status display -- e.g. `"%s %s of
+%s %3d%% %s"` -- that a careful column-width computation elsewhere in
+the file depends on; not touched.
+- **Shortened**: the file's three internal `panic()` "can't happen"
+  assertions (unreachable except via a real programmer bug, not
+  routine UI) -- `"Update_titlebar_page with wrong style"` -> `"Bad
+  titlebar style"`; `"Can't happen in savebits()\n"` -> `"BOTCH:
+  savebits()\n"`; `"Can't happen in equalbits()\n"` -> `"BOTCH:
+  equalbits()\n"` (matching the `BOTCH:` internal-error convention
+  already established in the `init.c` entry).
+- **Verified**: `grep -rln` against every candidate string across
+  `test/cases/*.py` first (zero hits). `./build clean && ./build
+  lnx`, exit 0, 0 warnings; full smoketest suite 31/31.
+- **Size delta**: `bin/pine` `text` 273546 -> 273506 (-40 bytes) on
+  the `lnx` dev build -- modest, since this file had little real
+  duplication to begin with. `bin/pico` untouched (`screen.c` is
+  pine-only).

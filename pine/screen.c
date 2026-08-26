@@ -876,7 +876,7 @@ update_titlebar_page(new_page)
      int new_page;
 {
     if(as.style != PageNumber) 
-      panic("Update_titlebar_page with wrong style");
+      panic("Bad titlebar style");
 
     if(new_page == as.current_page)
       return;
@@ -965,7 +965,7 @@ savebits(to, from, which)
 	break;
 
       default:
-	panic("Can't happen in savebits()\n");
+	panic("BOTCH: savebits()\n");
 	break;
     }
 }
@@ -993,7 +993,7 @@ equalbits(bm1, bm2, which)
 	return (((bm1[x] & 0xf) == (bm2[x] & 0xf)) && (bm1[x+1] == bm2[x+1]));
 
       default:
-	panic("Can't happen in equalbits()\n");
+	panic("BOTCH: equalbits()\n");
 	return(0);
     }
 }
