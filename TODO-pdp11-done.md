@@ -8687,11 +8687,15 @@ optimized-vs-unoptimized codegen.)
   this fix, the dry run showed `cc ... -o ../c-client/mail.o
   ../c-client/mail.c`; after, that line is gone entirely, only pine's
   own `os.o`/`date.o` recompiles are listed. This makefile isn't part
-  of the `lnx` dev build, so no `./build lnx`/smoketest cycle applies;
-  real-hardware `pine-ovl` relink re-test (expecting the restored
-  8-group/`24320`-largest partition) still pending.
+  of the `lnx` dev build, so no `./build lnx`/smoketest cycle applies.
+  Confirmed on real 2.11BSD hardware: `make -f makefile.bsd pine-ovl`
+  linked clean, no `ld` error, partition back to `text 37824`, 8
+  overlay groups, largest `24320` (`overlays:
+  23488,24320,24320,23680,23488,18176,23808,13568`) -- exactly the
+  previously-working shape, with `data 30840` showing all the
+  string-cutting savings kept intact.
 - **Size delta**: N/A on the `lnx` dev build (BSD-makefile-only fix).
-  On real 2.11BSD hardware this should restore the previously-working
-  partition without giving back any of the string-cutting savings --
+  Confirmed on real hardware: restores the previously-working overlay
+  partition while keeping every byte of the string-cutting savings --
   unlike the cross-file-share revert above, which cost bytes for
   nothing.
