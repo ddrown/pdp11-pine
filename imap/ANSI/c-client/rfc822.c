@@ -1233,7 +1233,7 @@ char *rfc822_contents (char **dst,unsigned long *dstl,unsigned long *len,
       fs_give ((void **) dst);	/* fs_resize does an unnecessary copy */
       *dst = (char *) fs_get ((*dstl = srcl) + 1);
     }
-    memcpy (*dst,src,srcl);	/* copy that many bytes */
+    memcpy (*dst,src,(unsigned)srcl);	/* copy that many bytes */
     *(*dst + srcl) = '\0';	/* tie off destination */
   }
 				/* all other cases return strcrlfcpy version */

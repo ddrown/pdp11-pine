@@ -321,7 +321,7 @@ MAILSTREAM *bezerk_open (MAILSTREAM *stream)
       if (retry-- == KODRETRY) {/* no, first time through? */
 				/* yes, get other process' PID */
 	if (!fstat (fd,&sbuf) && (i = min (sbuf.st_size,MAILTMPLEN)) &&
-	    (read (fd,tmp,i) == i) && (i = atol (tmp))) {
+	    (read (fd,tmp,(unsigned)i) == i) && (i = atol (tmp))) {
 	  kill (i,SIGUSR2);	/* send the Kiss Of Death */
 	  sprintf (tmp,"Trying to get mailbox lock from process %ld",i);
 	  mm_log (tmp,WARN);
@@ -341,7 +341,7 @@ MAILSTREAM *bezerk_open (MAILSTREAM *stream)
       if (stream->silent) i = 0;/* silent streams won't accept KOD */
       else {			/* note our PID in the lock */
 	sprintf (tmp,"%d",getpid ());
-	write (fd,tmp,(i = strlen (tmp))+1);
+	write (fd,tmp,(unsigned)((i = strlen (tmp))+1));
       }
       ftruncate (fd,i);		/* make sure tied off */
       fsync (fd);		/* make sure it's available */
@@ -486,8 +486,8 @@ char *bezerk_snarf (MAILSTREAM *stream,long msgno,long *size)
     LOCAL->buf = (char *) fs_get((LOCAL->buflen = max (*size,(long) CHUNK))+1);
   }
 				/* copy the text */
-  if (m->headersize) memcpy (LOCAL->buf,m->header,m->headersize);
-  if (m->bodysize) memcpy (LOCAL->buf + m->headersize,m->body,m->bodysize);
+  if (m->headersize) memcpy (LOCAL->buf,m->header,(unsigned)m->headersize);
+  if (m->bodysize) memcpy (LOCAL->buf + m->headersize,m->body,(unsigned)m->bodysize);
   LOCAL->buf[*size] = '\0';	/* tie off string */
   return LOCAL->buf;
 }
@@ -1096,7 +1096,20 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
 	s1 = LOCAL->buf + is1;	/* new start of new data */
       }
       s1[i] = '\0';		/* tie off chunk */
-      if (read (fd,s1,i) < 0) {	/* read a chunk of new text */
+      /*
+       * Was read(fd,s1,i) -- i is long, but read() has no prototype in
+       * scope on this target (unistd.h declares it "ssize_t read();",
+       * an empty-parens K&R-style declaration with no argument
+       * checking), and the real syscall stub's count parameter is a
+       * single-word unsigned. Passing a long there pushed an extra
+       * word the callee never expected, silently corrupting the
+       * count it actually saw (observed on real hardware: a request
+       * for 559 bytes came back as 0 bytes read, no error) --
+       * explaining the "Mailbox format invalidated" false failure
+       * below on an otherwise perfectly valid mailbox. See
+       * TODO-pdp11-done.md.
+       */
+      if (read (fd,s1,(unsigned)i) < 0) {	/* read a chunk of new text */
 	sprintf (LOCAL->buf,"Error reading mail file: %s",strerror (errno));
 	mm_log (LOCAL->buf,ERROR);
 	bezerk_unlock (fd,stream,lock);
@@ -1129,7 +1142,15 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
 	}
 	else m = n = (FILECACHE *) fs_get (sizeof (FILECACHE) + j + 1);
 				/* copy message data */
-	memcpy (n->internal,s,j);
+	/*
+	 * Same argument-width bug as the read() call above: memcpy()
+	 * is also an unprototyped "char *memcpy();" here (string.h),
+	 * and j is long -- caused this to silently copy the wrong
+	 * number of bytes, leaving n->internal empty/garbage and
+	 * failing the per-message VALID() re-check below with "Bogus
+	 * entry in new cache list". See TODO-pdp11-done.md.
+	 */
+	memcpy (n->internal,s,(unsigned)j);
 	n->internal[j] = '\0';
 	n->header = NIL;	/* initially no link */
 	n->headersize = j;	/* stash away buffer length */
@@ -1143,7 +1164,7 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
 	s1 += i;		/* end of unparsed data */
 	if (s != LOCAL->buf){	/* message doesn't begin at buffer? */
 	  i = s1 - s;		/* length of message so far */
-	  memmove (LOCAL->buf,s,i);
+	  memmove (LOCAL->buf,s,(unsigned)i);
 	  s = LOCAL->buf;	/* message now starts at buffer origin */
 	  s1 = s + i;		/* calculate new end of unparsed data */
 	}
@@ -1382,12 +1403,12 @@ int bezerk_extend (MAILSTREAM *stream,int fd,char *error)
 				/* return now if file large enough */
   if (f <= LOCAL->filesize) return T;
   s = (char *) fs_get (f -= LOCAL->filesize);
-  memset (s,0,f);		/* get a block of nulls */
+  memset (s,0,(unsigned)f);	/* get a block of nulls */
 				/* get to end of file */
   lseek (fd,LOCAL->filesize,L_SET);
   do {
     retry = NIL;		/* no retry yet */
-    if (!(ok = (write (fd,s,f) >= 0))) {
+    if (!(ok = (write (fd,s,(unsigned)f) >= 0))) {
       i = errno;		/* note error before doing ftruncate */
 				/* restore prior file size */
       ftruncate (fd,LOCAL->filesize);

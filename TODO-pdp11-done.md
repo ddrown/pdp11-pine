@@ -9940,3 +9940,194 @@ bigger `.c` file in the tree was already done).
   `212480`.
 - **Size delta**: -56 bytes data, -256 bytes overlay text (real
   2.11BSD hardware, see above).
+
+### INBOX wouldn't open on real hardware: unprototyped read()/memcpy() silently corrupted `long`-typed argument widths
+
+Separate, real-mail bug report: opening a genuinely UUCP-delivered
+INBOX (as opposed to pine's own Fcc'd copies, all this session's prior
+testing) failed immediately with `"Mailbox format invalidated (consult
+an expert), aborted"`, even though the mailbox file itself, checked
+byte-for-byte via `dz-download.py`, was a perfectly well-formed mbox
+file that independently validated fine against `bezerk.h`'s `VALID()`
+macro in a standalone test compiled with the same real `cc`.
+
+- **Root cause (bug 1, `bezerk_parse()`'s `read()` call)**: this
+  target's `unistd.h` declares `read()`/`write()`/`lseek()` etc. as
+  empty-parens K&R-style declarations (e.g. `ssize_t read();`) --
+  *zero* argument-type checking or coercion. `bezerk_parse()`'s
+  chunked-read loop calls `read(fd,s1,i)` with `i` declared `long`
+  (needed elsewhere in the same function for byte offsets that can
+  exceed 32K). With no prototype forcing a narrower type, the compiler
+  pushes `i` as a full 32-bit `long` (two words on this 16-bit
+  target), but the real `read()` syscall stub's count parameter is a
+  single-word `unsigned` (confirmed: `size_t` is `typedef u_int
+  size_t` on this target's `sys/types.h`) -- the callee only consumes
+  ONE of the two pushed words. Added temporary syslog tracing
+  (`fd`/`requested`/`got`/`errno`) directly in `bezerk_parse()` and
+  confirmed on real hardware: `read(fd=4, buf, 559)` returned `got=0,
+  errno=0` (clean EOF, not an error) even though `lseek`/`tell`
+  confirmed the file position was genuinely 0 and `fstat` reported the
+  real 559-byte size -- i.e. the kernel received an effective count of
+  0, not 559. Casting the call to `read(fd,s1,(unsigned)i)` fixed it
+  immediately: same test, `got=559`, correct bytes (confirmed
+  character-by-character in the trace).
+- **Root cause (bug 2, `bezerk_parse()`'s `memcpy()` call)**: fixing
+  bug 1 got past mailbox validation but immediately hit a new crash,
+  `fatal("Bogus entry in new cache list")`. Same bug class: `string.h`
+  on this target declares `memcpy()` (and `memset`/`memmove`/`memcmp`/
+  `memccpy`/`memchr`) the same empty-parens way, and the per-message
+  cache-slicing loop calls `memcpy(n->internal,s,j)` with `j` (a
+  message length) declared `long`. Fixed the same way: `memcpy
+  (n->internal,s,(unsigned)j)`. Confirmed on real hardware: INBOX
+  opened successfully ("Folder \"INBOX\" opened with 2 messages") and
+  the folder index displayed both messages correctly.
+- **Broader pattern, partially audited**: this class of bug (a
+  `long`-typed size/count argument passed to a `read`/`write`/`mem*`/
+  `str*` function this target declares with empty-parens K&R
+  prototypes, silently losing/misreading a word of the argument) is
+  not limited to `bezerk.c`. Audited and fixed the same pattern
+  wherever a `long`/`unsigned long` variable (not an `int`, and not a
+  bare `sizeof(...)`, which is already single-word-safe by definition)
+  was passed as a size/count argument, in the files touched by this
+  investigation:
+    - `bezerk.c`: the `memmove(LOCAL->buf,s,i)` unparsed-data-shift
+      call, `memset(s,0,f)`/`write(fd,s,f)` in `bezerk_extend()`
+      (mailbox-growing, used by Fcc/append -- plausibly the real
+      explanation for the still-open "Out of free storage (1001
+      bytes)" Fcc-append crash, see `TODO-pdp11.md`), the KOD
+      (Kiss-Of-Death lock-busy) `read()`/`write()` calls in
+      `bezerk_open()`, and `bezerk_snarf()`'s two `memcpy()` calls
+      (Tenex-driver-only, likely unreachable on this fork, fixed
+      anyway for correctness).
+    - `mail.c`: `mail_fetchfrom()`/`mail_fetchsubject()`'s
+      `memset()`/`memcpy()`/`strncpy()` calls (`length` is `long`) --
+      these build the From/Subject columns for *every* line of the
+      folder index, so this was a near-certain next blocker once the
+      index actually started rendering.
+    - `rfc822.c`: `rfc822_contents()`'s `memcpy(*dst,src,srcl)`
+      (`srcl` is `unsigned long`) -- the BINARY-encoded MIME body
+      path (attachments).
+  **Not** exhaustively audited across the rest of `pine`/`pico`/
+  `c-client` -- this was fixed opportunistically for the call sites
+  this session's real-hardware testing actually reached, following
+  the same "fix what you hit, verify, move on" discipline as
+  everything else in this log. A dedicated tree-wide grep for
+  `long`/`unsigned long` arguments to unprototyped `mem*`/`str*`/
+  `read`/`write` calls is a good candidate for a future session --
+  see `TODO-pdp11.md`.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. Real hardware: INBOX (a genuine, externally-delivered mbox
+  file, not one of pine's own Fcc copies) now opens, the folder index
+  displays correctly, and messages can be opened and read -- all of
+  which failed outright before this fix. Temporary syslog tracing
+  removed from `bezerk_parse()` once both bugs were confirmed fixed.
+- **Size delta**: real hardware, `data` `29744` -> `29400` (-344
+  bytes, from removing the temporary tracing); `text`/overlays
+  likewise shrank slightly for the same reason. The `(unsigned)` casts
+  themselves are cost-free (a handful of instructions each).
+
+### Index-line cache (`mailindx.c`) unconditionally allocated for 100 messages on the very first index redraw
+
+Immediately after fixing the two bugs above, INBOX opened but drawing
+the folder index crashed: `"Bug in Pine detected: \"Out of free
+storage (8181 bytes)\""`. `adb`'s stack trace (`$c` on the core file)
+pointed at `i_cache_size()` (`mailindx.c`) via `get_index_cache()` <-
+`build_header_line()` <- `redraw_index_body()`.
+
+- **Root cause**: `i_cache_size()`'s cache-growth increment,
+  `#define IC_SIZE 100`, means the very first call (drawing line 1 of
+  a brand new INBOX with as few as 2 messages) immediately allocates
+  room for 100 cache lines: `fs_get((icache.num+1) * (screen_cols+1))`
+  = `fs_get(101 * 81)` = `fs_get(8181)` at an 80-column terminal --
+  regardless of how many messages the folder actually has. On a
+  target where `data`+`bss` alone already consume most of a single
+  64KB address space (leaving roughly 20KB for heap+stack combined,
+  per this file's `size pine` history), an unconditional 8KB-plus
+  up-front allocation for index caching is the same class of problem
+  as `MSIZE_INIT`/`pico/edef.h`'s `SLEN` scratch buffer -- oversized
+  "just in case" headroom this target can't spare. The cache already
+  grows on demand via `fs_resize()` in the `else` branch, so a smaller
+  increment only changes resize frequency for a large folder, not
+  correctness.
+- **Fix**: `IC_SIZE` 100 -> 20 (first allocation for an 80-column
+  terminal drops from 8181 bytes to 1701). Also fixed two `memset()`
+  calls in the same function (`memset(icache.cache,0,(icache.num+1)*
+  tmplen)` and the resize-tail one) to cast their `long`-typed size
+  expression to `(unsigned)` -- same unprototyped-`memset()` bug class
+  as the `bezerk.c`/`mail.c`/`rfc822.c` entry above; these two call
+  sites happened to be silently zeroing 0 bytes (a no-op, since the
+  high word of a value that fits in 16 bits is 0) rather than crashing,
+  so newly-grown cache slots weren't guaranteed zero-filled before
+  this fix.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. Real hardware: index now draws successfully for the
+  2-message INBOX from the entry above.
+- **Size delta**: not separately measured (bundled into the next
+  real-hardware `size pine` alongside other changes); the allocation
+  itself now starts at 1701 bytes instead of 8181 for a small folder,
+  growing by 1620-byte (20-line) increments instead of 8100-byte
+  (100-line) ones as a folder grows past that.
+- **Next issue found**: viewing a second message after the first
+  crashed with `"Out of free storage (1024 bytes)"` from
+  `pretty_addr_string()` (`reply.c`, called while formatting the
+  message's header for display) -- `adb`'s trace (`main ->
+  mail_view_screen -> format_message -> format_envelope ->
+  pretty_addr_string -> fs_get`) shows a plain allocation failure, not
+  an obviously-corrupted size (1024 is exactly `MAILTMPLEN`, this
+  function's minimum buffer size, and `pretty_addr_string()` already
+  frees each address's buffer before moving to the next). With
+  `data`+`bss` at 43492 bytes and a 64KB D-space ceiling, only ~22KB
+  remains for heap and stack combined -- this looks like genuine
+  cumulative memory pressure from c-client's normal per-message
+  envelope/body caching (kept alive for the stream's lifetime by
+  design) rather than a new corruption bug, but not yet confirmed --
+  see `TODO-pdp11.md`.
+
+### Shrink `context.c`'s and `ttyout.c`'s string literal footprint (`pine-ovl` data+bss)
+
+Resumed the string-cutting pass with the two next-biggest un-cut files
+by real (comment-stripped) literal byte count. Wrote a small
+comment-stripping script this time (the earlier naive "grep every
+quoted substring" measure, used throughout this pass, counts text
+inside `/* ... */` comments as if it were a real literal, which had
+been overstating several files' remaining potential -- e.g. `status.c`
+and part of `ttyout.c`'s and `context.c`'s totals turned out to be
+comment prose, not code).
+
+- **`context.c`**: `context_digest()` had three separate
+  `return("Context too long")` sites -- an old single-pass `cc`
+  doesn't dedupe identical literals even within one function (same
+  finding as the `mailcmd.c`/`strings.c` entries above), so each cost
+  the full 17 bytes. Introduced one `static char *too_long = "Context
+  too long";` and made all three sites `return(too_long);`.
+- **`ttyout.c`**: real content here is almost entirely termcap/
+  terminfo capability names (`"smcup"`, `"cuu1"`, `"sgr0"`, ...) --
+  mandatory, fixed-by-convention 2-5 byte identifiers passed to
+  `tgetstr()`/`tigetstr()`, not shortenable or dedupeable without
+  breaking terminal setup. The one real duplicate: the `#else`
+  (non-terminfo) branch of the terminal-setup function called
+  `getenv("TERM")` twice in three lines (once to check for NULL, again
+  to actually use the value) -- cached the first call's result in a
+  local `ttnm` instead of a second call, removing the second `"TERM"`
+  literal and a redundant environment lookup. (A third `"TERM"` exists
+  in the `#ifdef USE_TERMINFO` branch, but that and the `#else`
+  branch are mutually exclusive at compile time -- only one is ever
+  in the built binary, so it isn't a real duplicate.)
+- **Not touched, flagged for a possible future, separate pass**: every
+  `.c` file in this tree (not just these two) carries an identical-
+  shaped `static char rcsid[] = "$Id: <file>,v ... $";` under `#if
+  !defined(lint) && !defined(DOS)`, averaging ~50 bytes -- a real
+  string literal, referenced by nothing at runtime except the classic
+  RCS `ident`/`what(1)` utilities for identifying a binary's source
+  version in the field. Deliberately left alone here (removing it is
+  a tree-wide, ~25-file mechanical change, a different shape of task
+  than "cut this file's literals," and changes a long-standing
+  convention rather than fixing a bug or an oversized buffer) --
+  worth a dedicated pass if the ~1-1.5KB of accumulated savings across
+  the whole tree is wanted.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. Real hardware: `data` `29400` -> `29364` (-36 bytes, matching
+  hand estimates: -32 for the two removed `"Context too long"`
+  copies, -4 for the removed `"TERM"` copy); `text`/overlays
+  unchanged (string cuts only affect `.data`).
+- **Size delta**: -36 bytes data (real 2.11BSD hardware).

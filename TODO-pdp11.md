@@ -98,6 +98,74 @@ DONE elsewhere or referenced in passing below.
       reproducible or transient/load-dependent; if reproducible, trace
       what `context_append()`/`mail_append()`/the `bezerk` driver
       allocates around a 1001-byte request during a folder append.
+    - **Update**: a later session found and fixed a real bug in
+      exactly this vicinity -- `bezerk_extend()` (`bezerk.c`, the
+      mailbox-growing routine used by Fcc/append) called
+      `memset()`/`write()` with a `long`-typed size argument against
+      this target's unprototyped (empty-parens K&R) `memset()`/
+      `write()` declarations, the same bug class documented in
+      `TODO-pdp11-done.md`'s "INBOX wouldn't open" entry. That specific
+      call site is now fixed (cast to `(unsigned)`), but this Fcc-path
+      crash itself hasn't been re-tested since -- worth retrying a
+      Send with an Fcc now to see if it's actually gone.
+
+### "Out of free storage (1024 bytes)" viewing a second message, real hardware
+
+- [ ] Found immediately after fixing the INBOX-open crashes (see
+      `TODO-pdp11-done.md`): with a freshly-opened, real 2-message
+      INBOX, reading the first message works, but going back to the
+      index and opening the second hits `Bug in Pine detected: "Out of
+      free storage (1024 bytes)"` (`IOT trap`). `adb`'s trace: `main ->
+      mail_view_screen -> format_message -> format_envelope ->
+      pretty_addr_string -> fs_get`. 1024 is exactly `MAILTMPLEN`,
+      `pretty_addr_string()`'s (`reply.c`) minimum per-address buffer
+      size, and that function already frees each buffer
+      (`fs_give()`) before formatting the next address -- doesn't look
+      like an obviously-corrupted/garbage size the way the `bezerk.c`
+      bugs were. With real hardware `data`+`bss` at 43492 bytes inside
+      a 64KB D-space, only ~22KB remains for heap+stack combined,
+      which is tight enough that ordinary c-client per-message
+      envelope/body caching (kept alive for the stream's lifetime by
+      design, not a leak) could plausibly exhaust it after only two
+      small test messages. Not yet confirmed either way. Next steps:
+      reproduce again to see if it's message-count-dependent (does a
+      3rd/4th message make it worse, or does it reproduce on message 2
+      every time regardless of order); check whether anything from
+      viewing message 1 is *not* being freed when the user navigates
+      back to the index (a real per-view leak, vs. inherent
+      structure-cache growth); and consider whether this is better
+      framed as an instance of the already-tracked "Close the
+      remaining pine-ovl text/overlay and data+bss overage" item below
+      rather than a standalone bug.
+
+### Audit the rest of the tree for unprototyped read/write/mem*/str* calls fed a `long`-typed size
+
+- [ ] `TODO-pdp11-done.md`'s "INBOX wouldn't open" entry found a real,
+      confirmed bug class on this target: `unistd.h`/`string.h`
+      declare `read`/`write`/`lseek`/`memcpy`/`memmove`/`memset`/
+      `memcmp`/`memccpy`/`memchr`/`strcpy`/`strncpy`/`strcat`/
+      `strncat` etc. with empty-parens K&R-style prototypes (e.g.
+      `ssize_t read();`), which do *no* argument-type checking --
+      passing a `long`/`unsigned long`-typed size/count argument
+      (rather than `int` or a bare `sizeof(...)`, both of which are
+      already single-word-safe) silently pushes an extra word the
+      real single-word-`unsigned` implementation never consumes,
+      corrupting what the callee actually sees. Confirmed on real
+      hardware to cause a `read()` requesting 559 bytes to return 0,
+      and (separately) a `memcpy()` to copy the wrong number of bytes
+      entirely. Fixed every occurrence *this session's real-hardware
+      testing actually reached* (`bezerk.c`, `mail.c`, `rfc822.c`,
+      `mailindx.c` -- see `TODO-pdp11-done.md` for the exact list) by
+      casting the argument to `(unsigned)` at the call site, but this
+      was reactive, not a tree-wide audit. A dedicated pass -- grep
+      every `.c` file in `pine`/`pico`/`c-client` for calls to these
+      functions, check whether the size/count argument's *declared
+      type* is `long`/`unsigned long` (not the runtime value, which is
+      usually small enough to look harmless), and cast/fix each one --
+      would very likely turn up more of these, since this bug is
+      silent (no compiler warning, since there's no prototype to
+      conflict with) and was only found this time because it happened
+      to reach three different, very visible crashes in a row.
 
 ### Track down a small memory leak found while re-verifying the third fuzzing lead's fix
 

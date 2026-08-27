@@ -1036,9 +1036,17 @@ static struct index_cache {
 } icache = { NULL, 0L, 0 };
   
 /*
- * cache size growth increment
+ * cache size growth increment. Was 100 -- an unconditional first
+ * allocation of (100+1)*(screen_cols+1) bytes (8181 at 80 columns) as
+ * soon as the FIRST index line is drawn, regardless of how many
+ * messages the folder actually has (2, for a brand new PDP-11 user's
+ * INBOX). fs_resize() below already grows this on demand in IC_SIZE
+ * steps, so a smaller increment only changes resize frequency for a
+ * large folder, not correctness -- same tradeoff as MSIZE_INIT
+ * (filter.c) and other "start small, grow on demand" fixes in this
+ * tree. See TODO-pdp11-done.md.
  */
-#define	IC_SIZE		100
+#define	IC_SIZE		20
 
 /*
  * important values for cache building
@@ -1082,12 +1090,12 @@ i_cache_size(indx)
 
 	if(icache.cache == NULL){
 	    icache.cache = (void *)fs_get((icache.num+1)*tmplen);
-	    memset(icache.cache, 0, (icache.num+1)*tmplen);
+	    memset(icache.cache, 0, (unsigned)((icache.num+1)*tmplen));
 	}
 	else{
             fs_resize((void **)&(icache.cache), (size_t)(icache.num+1)*tmplen);
 	    tmpline = (char *)icache.cache + ((j+1) * tmplen);
-	    memset(tmpline, 0, (icache.num - j) * tmplen);
+	    memset(tmpline, 0, (unsigned)((icache.num - j) * tmplen));
 	}
     }
 
