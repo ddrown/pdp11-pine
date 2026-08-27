@@ -81,35 +81,6 @@ void process_init_cmds(struct pine *, char **);
 int  decode_sort(struct pine *, char *);
 
 
-/*------------------------------------
-Some definitions to keep the static variable array below 
-a bit more readable...
-  ----*/
-#define PERSONAL_NAME_TEXT   "personal-name specifies your full name as it should appear on outgoing mail.\n# If unset, Unix Pine will obtain your full name from the system passwd file."
-
-#define USER_DOMAIN_TEXT   "user-domain specifies the domain part of your return address on outgoing\n# email and is also used as the default domain for email composed to a\n# local user.  If unset, Unix Pine will obtain the domain from the system."
-
-
-#define	INBOX_TEXT	"inbox-path specifies the name/path/location of your INBOX.  Example:\n# inbox-path={carson.u.washington.edu}inbox (INBOX on a remote computer)\n# Normal Unix default is the local INBOX (usually /user/spool/mail/$USER)"
-
-#define	FOLDER_TEXT	"folder-collections specifies the single folder collection wherein saved\n# messages are stored (only the first value is used; this build supports\n# exactly one collection).\n# Collection syntax: optnl-label optnl-directory-path[]\n# Example:\n# folder-collections=Saved-Email    mail/[]"
-
-#define	DEFAULT_FCC_TEXT "default-fcc specifies where a copy of outgoing mail is saved.  If this is\n# not a path name, it will be in the the default collection for saves.\n# Unix Pine default is normally \"sent-mail\" in the default folder collection.\n# PC-Pine default is \"SENTMAIL\" (stored as SENTMAIL.MTX)\n# Example of remote case: {carson.u.washington.edu}sent-mail\n# To suppress saving of outgoing mail, set: default-fcc=\"\""
-
-#define	READ_MSG_TEXT "read-message-folder specifies where already-read messages will be stored.\n# If set, you will be asked when you quit Pine if you want read messages\n# to be moved to this folder and deleted from your INBOX."
-
-#define	SIG_FILE_TEXT "signature-file specifies the name or path of a file containing text that\n# will automatically be inserted in outgoing mail."
-
-#define	SAVE_MSG_TEXT	"saved-msg-name-rule= determines default folder name for Saves...\n# Choose one: default-folder, by-sender, by-from, by-recipient,\n# last-folder-used.  Normal default is \"default-folder\", which on Unix\n# means \"saved-messages\" and in PC-Pine means \"SAVEMAIL\""
-
-#define	SORT_TEXT	"sort-key= order in which messages will be presented...\n# Choose one: subject, from, arrival, date, size.\n# Normal default is \"arrival\""
-
-
-#define ONLY_DOMAIN_TEXT     "Used if \"user-domain\" not set.  Strips hostname from user\'s return address.\n# Not applicable for PC-Pine",
-
-
-
-
 /*----------------------------------------------------------------------
 These are the variables that control a number of pine functions.  They
 come out of the .pinerc and the /usr/local/lib/pine.conf files.  Some can
@@ -123,42 +94,63 @@ configuration file.  There are often defaults for the global values, set
 at the start of init_vars().  Perhaps someday there will be group values.
 The current value is the one that is actually in use.
   ----*/
-/* name::is_obsolete::is_used::been_written::is_user::is_global::is_list::desc*/
+/*
+ * name -- struct variable (pine.h) also has a description field in the
+ * original UW source, for an interactive Setup/Config variable-editing
+ * screen; that screen was cut in an earlier PDP-11 size-reduction pass
+ * and nothing reads .description any more (confirmed via a repo-wide
+ * grep for "\.description\b" across pine's .c files -- the only hits
+ * are BODY/ATTACHMENT's unrelated same-named field), so the field and
+ * its ~2.3KB of static description text were removed entirely rather
+ * than carried as dead weight -- see TODO-pdp11-done.md for the
+ * write-up.
+ *
+ * The is_obsolete/is_used/been_written/is_user/is_global/is_list flags
+ * formerly listed here per-entry are bit-fields (struct variable,
+ * pine.h) that 2.11BSD's cc can't aggregate-initialize ("No field
+ * initialization"); they're left at their implicit-zero default here
+ * and set explicitly in init_init_vars() below instead.
+ */
 static struct variable variables[] = {
-{"personal-name",              0, 1, 0, 1, 0, 0,
-  PERSONAL_NAME_TEXT},
-{"user-id",                    0, 0, 0, 1, 0, 0,	/* Don't allow on UNIX machines for some security */
-  "Your login/e-mail user name"},
-{"user-domain",                0, 1, 0, 1, 1, 0,
-  USER_DOMAIN_TEXT},
-{"inbox-path",                 0, 1, 0, 1, 1, 0,
-  INBOX_TEXT},
-{"folder-collections",         0, 1, 0, 1, 1, 1,
-  FOLDER_TEXT},
-{"default-fcc",                0, 1, 0, 1, 1, 0,
-  DEFAULT_FCC_TEXT},
-{"mail-directory",             0, 1, 0, 1, 1, 0,
-  "mail-directory is where postponed & interrupted msgs are held temporarily."},
-{"read-message-folder",        0, 1, 0, 1, 1, 0,
-  READ_MSG_TEXT},
-{"signature-file",             0, 1, 0, 1, 1, 0,
-  SIG_FILE_TEXT},
-{"initial-keystroke-list",     0, 1, 0, 1, 1, 1,
- "Pine executes these keys upon startup (e.g. to view msg 13: i,j,1,3,CR,v)"},
-{"saved-msg-name-rule",        0, 1, 0, 1, 1, 0,
-  SAVE_MSG_TEXT},
-{"sort-key",                   0, 1, 0, 1, 1, 0,
-  SORT_TEXT},
-{"use-only-domain-name",       0, 1, 0, 1, 1, 0,
-  ONLY_DOMAIN_TEXT},
-{NULL,                         0, 0, 0, 0, 0, 0,
-   NULL}
+{"personal-name"},
+{"user-id"},			/* don't allow on UNIX machines, for some security */
+{"user-domain"},
+{"inbox-path"},
+{"folder-collections"},
+{"default-fcc"},
+{"mail-directory"},
+{"read-message-folder"},
+{"signature-file"},
+{"initial-keystroke-list"},
+{"saved-msg-name-rule"},
+{"sort-key"},
+{"use-only-domain-name"},
+{NULL}
 };
 
 
 int
 init_init_vars(struct pine *ps)
 {
+    int i;
+
+    /* is_user/is_used default on for every real entry (all but the
+     * NULL terminator); user-id is the one exception -- disabled,
+     * not settable on Unix (security risk, see its table entry). */
+    for(i = 0; i <= V_USE_ONLY_DOMAIN_NAME; i++)
+      variables[i].is_user = variables[i].is_used = 1;
+    variables[V_USER_ID].is_used = 0;
+
+    /* is_global on for every entry from user-domain on -- matches the
+     * table order above exactly (personal-name/user-id are the only
+     * two before it, and neither is global). */
+    for(i = V_USER_DOMAIN; i <= V_USE_ONLY_DOMAIN_NAME; i++)
+      variables[i].is_global = 1;
+
+    /* the only two list-valued variables */
+    variables[V_FOLDER_SPEC].is_list = 1;
+    variables[V_INIT_CMD_LIST].is_list = 1;
+
     ps->vars = variables;
     return(0);
 }
@@ -220,11 +212,11 @@ init_vars(ps)
     if(decode_sort(ps, VAR_SORT_KEY) == -1) {
         if(!struncmp(VAR_SORT_KEY, "to", 2) ||
 		!struncmp(VAR_SORT_KEY, "cc", 2)) {
-	   fprintf(stderr, "Sort type \"%s\" is not implemented yet\n",
+	   fprintf(stderr, "\007Sort \"%s\" unimplemented\n",
 						    VAR_SORT_KEY);
 	   sleep(5);
 	}else {
-	   fprintf(stderr, "Sort type \"%s\" is invalid\n", VAR_SORT_KEY);
+	   fprintf(stderr, "\007Invalid sort \"%s\"\n", VAR_SORT_KEY);
 	   exit(-1);
 	}
     }
@@ -320,8 +312,7 @@ process_init_cmds(ps, list)
      * of function key commands in the initial-keystroke-list.
      */
     if(fkeys && not_fkeys) {
-      fprintf(stderr, "Can't mix characters and function keys in\n");
-      fprintf(stderr, "\"initial-keystroke-list\", skipping.\n\n");
+      fprintf(stderr, "\007initial-keystroke-list mixes char/function keys, skipping\n\n");
       sleep(5);
       i = 0;
     }
@@ -546,7 +537,7 @@ init_username(ps)
     if(get_system_login() != NULL) {
         ps->VAR_USER_ID = cpystr(get_system_login());
     } else {
-        fprintf(stderr, "Who are you? (Unable to look up login name)\n");
+        fprintf(stderr, "\007Can't look up login name\n");
         ps->VAR_USER_ID = cpystr("");
         rv = -1;
     }
@@ -562,9 +553,8 @@ init_username(ps)
 
 
     if(strlen(ps->home_dir) + strlen(ps->VAR_MAIL_DIRECTORY)+2 > MAXPATH) {
-        printf("Folders directory name is longer than %d\n", MAXPATH);
-        printf("Directory name: \"%s/%s\"\n",ps->home_dir,
-               ps->VAR_MAIL_DIRECTORY);
+        printf("\007Folders dir name too long (> %d): \"%s/%s\"\n", MAXPATH,
+               ps->home_dir, ps->VAR_MAIL_DIRECTORY);
         return(-1);
     }
     build_path(fld_dir, sizeof(fld_dir), ps->home_dir, ps->VAR_MAIL_DIRECTORY);
@@ -810,7 +800,7 @@ set_variable_list(var, lvalue)
     struct variable *v = &ps_global->vars[var];
 
     if(!v->is_user || !v->is_list)
-      panic1("BOTCH: Trying to set non-user or non-list variable %s", v->name);
+      panic1("BOTCH: bad var type %s", v->name);
 
     if(v->user_val.l){
 	for(i = 0; v->user_val.l[i] ; i++)
@@ -867,22 +857,19 @@ init_mail_dir(dir)
 
         
       case 1:
-        printf("The \"mail\" subdirectory already exists, but it is not writable by pine\n");
-    	printf("so pine cannot run. Please correct the permissions and restart pine.\n");
+        printf("\007\"mail\" dir exists but isn't writable; fix permissions\n");
     	return(-1);
 
       case 2:
-    	printf("Pine requires a directory called \"mail\" and usualy creates it.\n");
-    	printf("You already have a regular file called \"mail\" which is in the way.\n");
-    	printf("Please move or remove \"mail\" and start pine again.\n");
+    	printf("\007\"mail\" is a file, not a directory; move or remove it\n");
         return(-1);
-    	
-  
+
+
       case 3:
-        printf("Creating subdirectory \"%s\" where pine will store\nits mail folders.\n", dir);
+        printf("Creating mail directory \"%s\"\n", dir);
     	sleep(4);
         if(create_mail_dir(dir) < 0) {
-            printf("\007Error creating subdirectory \"%s\" : %s\n", dir, 
+            printf("\007Can't create \"%s\": %s\n", dir,
                    error_description(errno));
             return(-1);
         }

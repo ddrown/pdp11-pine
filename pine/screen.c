@@ -714,8 +714,10 @@ format_titlebar()
 	 * fmt below is always one of the compile-time literals assigned
 	 * to it a few lines down, never external input.
 	 */
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
 	if(is_context && (ct_len = strlen(as.context_name))){
 	    char *fmt;
 	    int  extra;
@@ -753,7 +755,9 @@ format_titlebar()
 		      as.folder_name + fold_len - (avail - (8 + ss_len)),
 		      ss_string);
 	}
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
     }
     
     /* write title, location and, optionally, the folder name */
@@ -872,7 +876,7 @@ update_titlebar_page(new_page)
      int new_page;
 {
     if(as.style != PageNumber) 
-      panic("Update_titlebar_page with wrong style");
+      panic("Bad titlebar style");
 
     if(new_page == as.current_page)
       return;
@@ -961,7 +965,7 @@ savebits(to, from, which)
 	break;
 
       default:
-	panic("Can't happen in savebits()\n");
+	panic("BOTCH: savebits()\n");
 	break;
     }
 }
@@ -989,7 +993,7 @@ equalbits(bm1, bm2, which)
 	return (((bm1[x] & 0xf) == (bm2[x] & 0xf)) && (bm1[x+1] == bm2[x+1]));
 
       default:
-	panic("Can't happen in equalbits()\n");
+	panic("BOTCH: equalbits()\n");
 	return(0);
     }
 }

@@ -32,7 +32,7 @@
  * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-
+
 /* Build parameters */
 
 #define CACHEINCREMENT 100	/* cache growth increments */
@@ -63,14 +63,20 @@
 
 /* Cache management function codes */
 
-#define CH_INIT (long) 10	/* initialize cache */
-#define CH_SIZE (long) 11	/* (re-)size the cache */
-#define CH_MAKELELT (long) 20	/* return long elt, make if needed */
-#define CH_LELT (long) 21	/* return long elt if exists */
-#define CH_MAKEELT (long) 30	/* return short elt, make if needed */
-#define CH_ELT (long) 31	/* return short elt if exists */
-#define CH_FREE (long) 40	/* free space used by elt */
-#define CH_EXPUNGE (long) 45	/* delete elt pointer from list */
+/* NB: no (long) cast on these, unlike the other constants in this file --
+ * they're used as switch/case labels in mm_cache() (mail.c), and 2.11BSD's
+ * cc rejects a cast expression in a case label ("Constant required").
+ * Safe because every use is either that switch or an argument to mm_cache()/
+ * mailcache_t, both fully prototyped with a "long op" parameter, so the
+ * int constant still widens to long correctly at the call site. */
+#define CH_INIT 10		/* initialize cache */
+#define CH_SIZE 11		/* (re-)size the cache */
+#define CH_MAKELELT 20		/* return long elt, make if needed */
+#define CH_LELT 21		/* return long elt if exists */
+#define CH_MAKEELT 30		/* return short elt, make if needed */
+#define CH_ELT 31		/* return short elt if exists */
+#define CH_FREE 40		/* free space used by elt */
+#define CH_EXPUNGE 45		/* delete elt pointer from list */
 
 
 /* Garbage collection flags */
@@ -78,7 +84,7 @@
 #define GC_ELT (long) 1		/* message cache elements */
 #define GC_ENV (long) 2		/* envelopes and bodies */
 #define GC_TEXTS (long) 4	/* cached texts */
-
+
 /* Message structures */
 
 
@@ -112,7 +118,7 @@ typedef struct mail_envelope {
   char *message_id;		/* message ID */
   char *newsgroups;		/* USENET newsgroups */
 } ENVELOPE;
-
+
 /* Primary body types */
 /* If you change any of these you must also change body_types in rfc822.c */
 
@@ -150,7 +156,7 @@ extern const char *body_encodings[];
 #define MESSAGE struct mail_body_message
 #define PARAMETER struct mail_body_parameter
 #define PART struct mail_body_part
-
+
 /* Message content (ONLY for parsed messages) */
 
 MESSAGE {
@@ -200,7 +206,7 @@ PART {
   unsigned long offset;		/* offset from body origin */
   PART *next;			/* next body part */
 };
-
+
 /* Entry in the message cache array */
 
 typedef struct message_cache {
@@ -248,7 +254,7 @@ typedef struct long_cache {
   ENVELOPE *env;		/* pointer to message envelope */
   BODY *body;			/* pointer to message body */
 } LONGCACHE;
-
+
 /* String structure */
 
 #define STRINGDRIVER struct string_driver
@@ -286,7 +292,7 @@ STRINGDRIVER {
 #define SNX(s) (--(s)->cursize ? *(s)->curpos++ : (*(s)->dtb->next) (s))
 #define GETPOS(s) ((s)->offset + ((s)->curpos - (s)->chunk))
 #define SETPOS(s,i) (*(s)->dtb->setpos) (s,i)
-
+
 /* Mail Access I/O stream */
 
 
@@ -330,7 +336,7 @@ typedef struct mail_stream_handle {
   MAILSTREAM *stream;		/* pointer to mail stream */
   unsigned short sequence;	/* sequence of what we expect stream to be */
 } MAILHANDLE;
-
+
 /* Parse results from mail_valid_net_parse */
 
 #define MAXSRV 20
@@ -342,7 +348,7 @@ typedef struct net_mailbox {
   unsigned int anoflag : 1;	/* anonymous */
   unsigned int bbdflag : 1;	/* bboard flag */
 } NETMBX;
-
+
 /* Other symbols */
 
 extern const char *months[];	/* month name strings */
@@ -358,7 +364,7 @@ extern MAILSTREAM *mailstd_proto;
 extern char *lhostn;
 extern mailgets_t mailgets;
 extern mailcache_t mailcache;
-
+
 /* Coddle certain compilers' 6-character symbol limitation */
 
 #ifdef __COMPILER_KCC__
@@ -401,7 +407,7 @@ extern mailcache_t mailcache;
 #define mail_fetchbody mlfbdy
 #define mail_fetchfrom mlffrm
 #define mail_fetchsubject mlfsub
-
+
 #define mail_lelt mllelt
 #define mail_elt mlelt
 #define mail_setflag mlsflg
@@ -437,7 +443,7 @@ extern mailcache_t mailcache;
 #define mail_free_envelope mlfren
 #define mail_free_address mlfrad
 #endif
-
+
 /* Function prototypes */
 
 void mm_exists (MAILSTREAM *stream,long number);
@@ -482,7 +488,7 @@ void mail_fetchfrom (char *s,MAILSTREAM *stream,long msgno,long length);
 void mail_fetchsubject (char *s,MAILSTREAM *stream,long msgno,long length);
 LONGCACHE *mail_lelt (MAILSTREAM *stream,long msgno);
 MESSAGECACHE *mail_elt (MAILSTREAM *stream,long msgno);
-
+
 void mail_setflag (MAILSTREAM *stream,char *sequence,char *flag);
 void mail_clearflag (MAILSTREAM *stream,char *sequence,char *flag);
 long mail_ping (MAILSTREAM *stream);

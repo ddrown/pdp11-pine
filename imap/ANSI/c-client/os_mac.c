@@ -35,7 +35,7 @@
  * Unlike earlier efforts, this version requires no external TCP library.  It
  * also takes advantage of the Map panel in System 7 for the timezone.
  */
-
+
 #define BUFLEN (size_t) 8192	/* TCP input buffer */
 
 
@@ -68,7 +68,7 @@ short resolveropen = 0;		/* TCP's resolver open */
 
 				/* *** temporary *** */
 MAILSTREAM *mailstd_proto = NIL;/* standard driver's prototype */
-
+
 /* Write current time in RFC 822 format
  * Accepts: destination string
  *
@@ -96,7 +96,7 @@ void rfc822_date (char *string)
   sprintf (string += strlen (string),"%+03ld%02ld",
 	   tz/60,tzm >= 0 ? tzm : -tzm);
 }
-
+
 /* Get a block of free storage
  * Accepts: size of desired block
  * Returns: free storage block
@@ -143,7 +143,7 @@ void fatal (char *string)
   if (resolveropen) CloseResolver ();
   abort ();			/* die horribly */
 }
-
+
 /* Copy string with CRLF newlines
  * Accepts: destination string
  *	    pointer to size of destination string
@@ -188,7 +188,7 @@ unsigned long strcrlflen (STRING *s)
   SETPOS (s,pos);		/* restore old position */
   return i;
 }
-
+
 /* TCP/IP open
  * Accepts: host name
  *	    contact port number
@@ -223,7 +223,7 @@ TCPSTREAM *tcp_open (char *host,long port)
       return NIL;
     }
   }
-
+
   else {			/* look up host name */
     if (!resolveropen && OpenResolver (NIL))
       fatal ("Can't init domain resolver");
@@ -276,7 +276,7 @@ TCPSTREAM *tcp_open (char *host,long port)
       }
     }
   }
-
+
 				/* create local TCP/IP stream */
   stream = (TCPSTREAM *) fs_get (sizeof (TCPSTREAM));
   stream->ictr = 0;		/* initialize input */
@@ -321,7 +321,7 @@ TCPSTREAM *tcp_open (char *host,long port)
     fs_give ((void **) &stream);/* and the local stream */
     return NIL;
   }
-
+
 				/* copy host names for later use */
   stream->host = cpystr (hst.cname);
 				/* tie off trailing dot */
@@ -346,7 +346,7 @@ pascal void tcp_dns_result (struct hostInfo *hostInfoPtr,char *userDataPtr)
 {
   /* dummy routine */
 }
-
+
 /* TCP/IP authenticated open
  * Accepts: host name
  *	    service name
@@ -357,7 +357,7 @@ TCPSTREAM *tcp_aopen (char *host,char *service)
 {
   return NIL;			/* no authenticated opens on Mac */
 }
-
+
 /* TCP/IP receive line
  * Accepts: TCP/IP stream
  * Returns: text line string or NIL if failure
@@ -405,7 +405,7 @@ char *tcp_getline (TCPSTREAM *stream)
   }
   return ret;
 }
-
+
 /* TCP/IP receive buffer
  * Accepts: TCP/IP stream
  *	    size in bytes
@@ -463,7 +463,7 @@ long tcp_getdata (TCPSTREAM *stream)
   }
   return T;
 }
-
+
 /* TCP/IP send string as record
  * Accepts: TCP/IP stream
  *	    string pointer
@@ -514,7 +514,7 @@ long tcp_sout (TCPSTREAM *stream,char *string,unsigned long size)
   }
   return T;			/* success */
 }
-
+
 /* TCP/IP close
  * Accepts: TCP/IP stream
  */
@@ -540,7 +540,7 @@ void tcp_close (TCPSTREAM *stream)
   fs_give ((void **) &stream->localhost);
   fs_give ((void **) &stream);	/* flush the stream */
 }
-
+
 /* TCP/IP return host for this stream
  * Accepts: TCP/IP stream
  * Returns: host name for this stream
@@ -561,7 +561,7 @@ char *tcp_localhost (TCPSTREAM *stream)
 {
   return stream->localhost;	/* return local host name */
 }
-
+
 /* These functions are only used by rfc822.c for calculating cookies.  So this
  * is good enough.  If anything better is needed fancier functions will be
  * needed.
@@ -593,7 +593,7 @@ long getpid ()
 {
   return 1;
 }
-
+
 /* Block until event satisfied
  * Called as: while (wait_condition && wait ());
  * Returns T if OK, NIL if user wants to abort
@@ -647,7 +647,7 @@ long wait ()
   }
   return T;			/* try wait test again */
 }
-
+
 /* Subscribe to mailbox
  * Accepts: mailbox name
  * Returns: T on success, NIL on failure

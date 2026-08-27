@@ -36,7 +36,7 @@
  * equaled by more `modern' operating systems.
  * Wasureru mon ka!!!!
  */
-
+
 /* TCP input buffer */
 
 #define BUFLEN 8192
@@ -58,7 +58,7 @@ TCPSTREAM {
 #include "osdep.h"
 #include <sys/time.h>
 #include "misc.h"
-
+
 /* Write current time in RFC 822 format
  * Accepts: destination string
  */
@@ -82,7 +82,7 @@ void rfc822_date (char *date)
 	   t->tm_hour,t->tm_min,t->tm_sec,
 	   (t->tm_isdst ? 1 : 0) + zone/60,abs (zone) % 60,zonename);
 }
-
+
 /* Get a block of free storage
  * Accepts: size of desired block
  * Returns: free storage block
@@ -127,7 +127,7 @@ void fatal (char *string)
   mm_fatal (string);		/* pass up the string */
   abort ();			/* die horribly */
 }
-
+
 /* Copy string with CRLF newlines
  * Accepts: destination string
  *	    pointer to size of destination string
@@ -159,7 +159,7 @@ unsigned long strcrlflen (STRING *s)
 {
   return SIZE (s);		/* this is easy on TOPS-20 */
 }
-
+
 /* Server log in
  * Accepts: user name string
  *	    password string
@@ -192,7 +192,7 @@ long server_login (char *user,char *pass,char **home,int argc,char *argv[])
   }
   return T;
 }
-
+
 /* TCP/IP open
  * Accepts: host name
  *	    contact port number
@@ -246,7 +246,7 @@ TCPSTREAM *tcp_open (char *host,int port)
   stream->jfn = jfn;		/* init JFN */
   return stream;
 }
-
+
 /* TCP/IP authenticated open
  * Accepts: host name
  *	    service name
@@ -257,7 +257,7 @@ TCPSTREAM *tcp_aopen (char *host,char *service)
 {
   return NIL;
 }
-
+
 /* TCP/IP receive line
  * Accepts: TCP/IP stream
  * Returns: text line string or NIL if failure
@@ -299,7 +299,7 @@ char *tcp_getline (TCPSTREAM *stream)
   }
   return ret;
 }
-
+
 /* TCP/IP receive buffer
  * Accepts: TCP/IP stream
  *	    size in bytes
@@ -352,7 +352,7 @@ long tcp_sout (TCPSTREAM *stream,char *string,unsigned long size)
   if (!jsys (SOUTR,argblk)) return NIL;
   return T;
 }
-
+
 /* TCP/IP close
  * Accepts: TCP/IP stream
  */
@@ -389,7 +389,7 @@ char *tcp_localhost (TCPSTREAM *stream)
 {
   return stream->localhost;	/* return local host name */
 }
-
+
 /* Subscribe to mailbox
  * Accepts: mailbox name
  * Returns: T on success, NIL on failure

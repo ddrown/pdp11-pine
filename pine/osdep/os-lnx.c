@@ -81,7 +81,6 @@ required for an implementation:
      hostname            -- Figure out the system's host name, only
                               used internally in this file.
      getdomainnames      -- Figure out the system's domain name
-     canonical_name      -- Returns canonical form of host name
 
   Job Control
      have_job_control    -- Returns 1 if job control exists
@@ -250,10 +249,27 @@ build_path(pathbuf, pathbuf_size, first_part, second_part)
     char *pathbuf, *first_part, *second_part;
     size_t pathbuf_size;
 {
+    size_t len;
+
+    /* No snprintf() here -- this fragment is also assembled into
+     * os-bsd.c (see pine/makefile.bsd), and 2.11BSD's libc predates
+     * snprintf's standardization (same finding as pico/random.c's
+     * fix, TODO-pdp11-done.md). Truncating concatenation done by hand
+     * instead, since first_part/second_part can be arbitrarily long
+     * (e.g. attacker-influenced MIME attachment filenames) and must
+     * never overflow the caller-fixed-size pathbuf. */
     if(first_part == NULL)
       strncpy(pathbuf, second_part, pathbuf_size - 1);
-    else
-      snprintf(pathbuf, pathbuf_size, "%s/%s", first_part, second_part);
+    else{
+	strncpy(pathbuf, first_part, pathbuf_size - 1);
+	pathbuf[pathbuf_size - 1] = '\0';
+	len = strlen(pathbuf);
+	if(len < pathbuf_size - 1){
+	    pathbuf[len++] = '/';
+	    pathbuf[len] = '\0';
+	    strncpy(pathbuf + len, second_part, pathbuf_size - 1 - len);
+	}
+    }
 
     pathbuf[pathbuf_size - 1] = '\0';
 }
@@ -694,19 +710,18 @@ getdomainnames(hostname, hsize, domainname, dsize)
     int   hsize, dsize;
 {
     char           *dn, hname[MAX_ADDRESS+1];
-    struct hostent *he;
 
+    /* No gethostbyname()/DNS lookup here -- this project's PDP-11
+     * target has no TCP/IP (see README.md/CLAUDE.md), so a resolver
+     * call could never do anything useful there, while its mere
+     * presence in the source drags the entire BSD resolver library
+     * (res_query/res_send/gethnamadr/socket/... several KB) into
+     * every link, found via a real 2.11BSD `ld -M` load map while
+     * chasing the pine-ovl link's text/data+bss overflow -- see
+     * TODO-pdp11-done.md. .pinerc's user-domain setting is the actual
+     * configured-domain mechanism regardless of what this returns. */
     gethostname(hname, MAX_ADDRESS);
-
-    he = gethostbyname(hname);
-
-    if(he == NULL && strlen(hname) == 0) {
-        strcpy(hostname, "");
-    } else if(he == NULL) {
-        strncpy(hostname, hname, hsize - 1);
-    } else {
-        strncpy(hostname, he->h_name, hsize-1);
-    }
+    strncpy(hostname, hname, hsize - 1);
     hostname[hsize-1] = '\0';
 
 
@@ -716,32 +731,6 @@ getdomainnames(hostname, hsize, domainname, dsize)
         strncpy(domainname, hostname, dsize-1);
     }
     domainname[dsize-1] = '\0';
-}
-
-
-
-/*----------------------------------------------------------------------
-       Return canonical form of host name ala c-client (UNIX version).
-
-   Args: host      -- The host name
-
- Result: Canonical form, or input argument (worst case)
- ----*/
-char *
-canonical_name(char *host)
-{
-    struct hostent *hent;
-    char hostname[MAILTMPLEN];
-    char tmp[MAILTMPLEN];
-    extern char *lcase(char *);
-                                /* domain literal is easy */
-    if (host[0] == '[' && host[(strlen (host))-1] == ']')
-      return host;
-
-    strcpy (hostname,host);       /* UNIX requires lowercase */
-                                /* lookup name, return canonical form */
-    return (hent = gethostbyname (lcase (strcpy (tmp,host)))) ?
-      hent->h_name : host;
 }
 
 

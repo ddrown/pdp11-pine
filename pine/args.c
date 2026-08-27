@@ -131,7 +131,7 @@ Loop: while(--ac > 0 && **++av == '-') {
 		      str = *++av;
 		   }else {
 		      fprintf(stderr,
-			"Error: missing argument for flag \"%c\"\n", c);
+			"Missing arg for -%c\n", c);
 		      ++usage;
 		      goto Loop;
 		   }
@@ -145,7 +145,7 @@ Loop: while(--ac > 0 && **++av == '-') {
 		     case 'n':
 		       if(!isdigit(str[0])){
 			   fprintf(stderr,
-			  "Error: Non numeric argument for flag \"%c\"\n", c);
+			  "Non-numeric arg for -%c\n", c);
 			   ++usage;
 			   break;
 		       }
@@ -158,7 +158,7 @@ Loop: while(--ac > 0 && **++av == '-') {
 		   goto Loop;
 
 		 default:
-		   fprintf(stderr, "Error: unknown flag \"%c\"\n", c);
+		   fprintf(stderr, "unknown flag -%c\n", c);
 		   ++usage;
 		   break;
 	       }
@@ -177,7 +177,7 @@ Loop: while(--ac > 0 && **++av == '-') {
 	vars[V_INIT_CMD_LIST].command_line_val.l =
 			parse_list(cmd_list, commas+1, &error);
 	if(error) {
-	    fprintf(stderr, "Error in -I argument \"%s\": %s\n", cmd_list,
+	    fprintf(stderr, "Bad -I arg \"%s\": %s\n", cmd_list,
 								    error);
 	    exit(-1);
 	}

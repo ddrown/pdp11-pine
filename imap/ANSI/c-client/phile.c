@@ -32,7 +32,7 @@
  * WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-
+
 #include <stdio.h>
 #include <ctype.h>
 #include <netdb.h>
@@ -50,7 +50,7 @@ extern int errno;		/* just in case */
 #include "misc.h"
 #include "dummy.h"
 #include <time.h>
-
+
 /* File routines */
 
 
@@ -94,7 +94,7 @@ DRIVER philedriver = {
 
 				/* prototype stream */
 MAILSTREAM phileproto = {&philedriver};
-
+
 /* File validate mailbox
  * Accepts: mailbox name
  * Returns: our driver if name is valid, NIL otherwise
@@ -128,7 +128,7 @@ int phile_isvalid (char *name,char *tmp)
 	  (*name != '{') && !((*name == '*') && (name[1] == '{')) &&
 	  !stat (phile_file (tmp,name),&sbuf) && !(sbuf.st_mode & S_IFDIR));
 }
-
+
 /* File manipulate driver parameters
  * Accepts: function code
  *	    function-dependent value
@@ -140,7 +140,7 @@ void *phile_parameters (long function,void *value)
   fatal ("Invalid phile_parameters function");
   return NIL;
 }
-
+
 /* File find list of mailboxes
  * Accepts: mail stream
  *	    pattern to search
@@ -183,7 +183,7 @@ void phile_find_all_bboards (MAILSTREAM *stream,char *pat)
 {
   if (stream) dummy_find_all_bboards (NIL,pat);
 }
-
+
 /* File subscribe to mailbox
  * Accepts: mail stream
  *	    mailbox to add to subscription list
@@ -236,7 +236,7 @@ long phile_unsubscribe_bboard (MAILSTREAM *stream,char *mailbox)
   sprintf (tmp,"*%s",mailbox);
   return sm_subscribe (tmp);
 }
-
+
 /* File create mailbox
  * Accepts: MAIL stream
  *	    mailbox name to create
@@ -272,7 +272,7 @@ long phile_rename (MAILSTREAM *stream,char *old,char *new)
 {
   /* Never valid for Phile */
 }
-
+
 /* File open
  * Accepts: Stream to open
  * Returns: Stream on success, NIL on failure
@@ -328,7 +328,7 @@ MAILSTREAM *phile_open (MAILSTREAM *stream)
 	   t->tm_hour,t->tm_min,t->tm_sec);
 				/* set up Date field */
   LOCAL->env->date = cpystr (tmp);
-
+
 				/* fill in From field from file owner */
   LOCAL->env->from = mail_newaddr ();
   if (pw = getpwuid (sbuf.st_uid)) strcpy (tmp,pw->pw_name);
@@ -376,7 +376,7 @@ MAILSTREAM *phile_open (MAILSTREAM *stream)
   mail_recent (stream,1);
   return stream;		/* return stream alive to caller */
 }
-
+
 /* File determine data type
  * Accepts: data to examine
  *	    size of data
@@ -413,7 +413,7 @@ int phile_type (unsigned char *s,unsigned long i,unsigned long *j)
   }
   return ret;			/* return type of data */
 }
-
+
 /* File close
  * Accepts: MAIL stream
  */
@@ -450,7 +450,7 @@ void phile_fetchflags (MAILSTREAM *stream,char *sequence)
 {
   return;			/* no-op for local mail */
 }
-
+
 /* File fetch structure
  * Accepts: MAIL stream
  *	    message # to fetch
@@ -517,7 +517,7 @@ char *phile_fetchbody (MAILSTREAM *stream,long m,char *s,unsigned long *len)
   elt->seen = T;		/* mark message as seen */
   return LOCAL->buf;
 }
-
+
 /* File set flag
  * Accepts: MAIL stream
  *	    sequence
@@ -564,7 +564,7 @@ void phile_clearflag (MAILSTREAM *stream,char *sequence,char *flag)
       if (f&fANSWERED) elt->answered = NIL;
     }
 }
-
+
 /* File search for messages
  * Accepts: MAIL stream
  *	    search criteria
@@ -614,7 +614,7 @@ void phile_search (MAILSTREAM *stream,char *criteria)
       case 'N':			/* possible NEW */
 	if (!strcmp (criteria+1,"EW")) f = phile_search_new;
 	break;
-
+
       case 'O':			/* possible OLD, ON */
 	if (!strcmp (criteria+1,"LD")) f = phile_search_old;
 	else if (!strcmp (criteria+1,"N"))
@@ -664,7 +664,7 @@ void phile_search (MAILSTREAM *stream,char *criteria)
       if (mail_elt (stream,i)->searched) mail_searched (stream,i);
   }
 }
-
+
 /* File ping mailbox
  * Accepts: MAIL stream
  * Returns: T if stream alive, else NIL
@@ -675,7 +675,7 @@ long phile_ping (MAILSTREAM *stream)
 {
   return T;
 }
-
+
 /* File check mailbox
  * Accepts: MAIL stream
  * No-op for readonly files, since read/writer can expunge it from under us!
@@ -685,7 +685,7 @@ void phile_check (MAILSTREAM *stream)
 {
   mm_log ("Check completed",NIL);
 }
-
+
 /* File expunge mailbox
  * Accepts: MAIL stream
  */
@@ -694,7 +694,7 @@ void phile_expunge (MAILSTREAM *stream)
 {
   mm_log ("Expunge ignored on readonly mailbox",NIL);
 }
-
+
 /* File copy message(s)
  * Accepts: MAIL stream
  *	    sequence
@@ -746,7 +746,7 @@ void phile_gc (MAILSTREAM *stream,long gcflags)
 {
   /* nothing here for now */
 }
-
+
 /* Internal routines */
 
 
@@ -783,7 +783,7 @@ char *phile_file (char *dst,char *name)
   }
   return dst;
 }
-
+
 /* Parse flag list
  * Accepts: MAIL stream
  *	    flag list as a character string
@@ -806,7 +806,7 @@ short phile_getflags (MAILSTREAM *stream,char *flag)
     strncpy (tmp,flag+i,(j = strlen (flag) - (2*i)));
     tmp[j] = '\0';
     t = ucase (tmp);		/* uppercase only from now on */
-
+
     while (*t) {		/* parse the flags */
       if (*t == '\\') {		/* system flag? */
 	switch (*++t) {		/* dispatch based on first character */
@@ -848,7 +848,7 @@ short phile_getflags (MAILSTREAM *stream,char *flag)
   }
   return f;
 }
-
+
 /* Search support routines
  * Accepts: MAIL stream
  *	    message number
@@ -892,7 +892,7 @@ char phile_search_new (MAILSTREAM *stream,long msgno,char *d,long n)
   MESSAGECACHE *elt = mail_elt (stream,msgno);
   return (elt->recent && !elt->seen) ? T : NIL;
 }
-
+
 char phile_search_old (MAILSTREAM *stream,long msgno,char *d,long n)
 {
   return mail_elt (stream,msgno)->recent ? NIL : T;
@@ -939,7 +939,7 @@ char phile_search_unseen (MAILSTREAM *stream,long msgno,char *d,long n)
 {
   return mail_elt (stream,msgno)->seen ? NIL : T;
 }
-
+
 char phile_search_before (MAILSTREAM *stream,long msgno,char *d,long n)
 {
   MESSAGECACHE *elt = mail_elt (stream,msgno);
@@ -979,7 +979,7 @@ char phile_search_text (MAILSTREAM *stream,long msgno,char *d,long n)
 {
   return phile_search_body (stream,msgno,d,n);
 }
-
+
 char phile_search_bcc (MAILSTREAM *stream,long msgno,char *d,long n)
 {
   char tmp[MAILTMPLEN];
@@ -1018,7 +1018,7 @@ char phile_search_to (MAILSTREAM *stream,long msgno,char *d,long n)
   rfc822_write_address (tmp,phile_fetchstructure (stream,msgno,NIL)->to);
   return search (tmp,strlen (tmp),d,n);
 }
-
+
 /* Search parsers */
 
 
@@ -1037,7 +1037,7 @@ search_t phile_search_date (search_t f,long *n)
   return (phile_search_string (f,&s,&i) && mail_parse_date (&elt,s) &&
 	  (*n = (elt.year << 9) + (elt.month << 5) + elt.day)) ? f : NIL;
 }
-
+
 /* Parse a flag
  * Accepts: function to return
  *	    pointer to string to return

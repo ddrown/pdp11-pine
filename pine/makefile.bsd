@@ -62,10 +62,35 @@ PROFILE=     # -pg
 DEBUG=       -g -DDEBUG
 
 LIBES=       -ltermlib
-LOCLIBES=    ../pico/libpico.a ../c-client/c-client.a
+# NB: no ../pico/libpico.a here -- pine hasn't called into pico's
+# editor internals in-process since send.c's run_composer_subprocess()
+# switched to fork()/execl()ing a separate `pico -P ...` child (see
+# TODO-pdp11.md/TODO-pdp11-done.md). Confirmed via nm: zero overlap
+# between every undefined symbol in pine's own object files and every
+# symbol defined across all of libpico.a's member .o's, and relinking
+# without it produces a byte-for-byte identical binary. Selective
+# archive linking already pulled zero members from it for that reason
+# (ld only pulls a library member that resolves an outstanding
+# undefined reference), so this line was always contributing 0 bytes
+# here -- dropped for clarity, not size (see pine-ovl below for where
+# dropping the *loose* equivalent actually mattered).
+LOCLIBES=    ../c-client/c-client.a
 
 # BSD gets defined in param.h so don't redefine here.
 CFLAGS= $(OPTIMIZE) $(PROFILE) $(DEBUG)
+
+# Explicit .c.o rule, not just the default one -- pine-ovl's
+# $(CCLIENTOFILES) prerequisites (e.g. ../c-client/mail.o) have a
+# directory prefix, and if make's builtin suffix rule (`$(CC)
+# $(CFLAGS) -c $<`, no -o) ever fires for one of them -- e.g. because
+# timestamps make it look stale -- `cc -c ../c-client/mail.c` drops
+# the result as bare `mail.o` in *this* directory instead of at
+# ../c-client/mail.o, since cc strips the source's directory prefix
+# from its default output name. Adding -o $@ here is a no-op for
+# same-directory files (pine's own $(obj)) and fixes it for prefixed
+# ones. $@/$< are original Make substitutions, not a GNU-ism.
+.c.o:
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 obj=    addrutil.o args.o context.o filter.o \
 	folder.o help.o helptext.o init.o mailcmd.o mailindx.o \
@@ -83,6 +108,89 @@ pine:  $(obj) $(LOCLIBES)
 	echo "char datestamp[]="\"`date`\"";" > date.c
 	$(CC) -c $(CFLAGS) -o date.o date.c
 	$(CC) $(LDFLAGS) $(CFLAGS) -o pine $(obj) date.o $(LOCLIBES) $(LIBES)
+
+#
+# pine is well over the PDP-11's 64KB text-segment limit too (same
+# problem as pico -- see pico/makefile.bsd's pico-ovl for the
+# background: mkovmake wants every .o file loose, not archived into a
+# library, so it can see cross-file calls and decide what goes in the
+# resident base vs. the swapped-in overlays).
+#
+# Earlier versions of this target also force-included every pico
+# object file here (PICOOFILES, loose, for the same reason c-client's
+# are loose below) -- that turned out to be pure dead weight. Loose
+# object files are *always* linked in, unlike an archived library
+# (which only pulls in members that resolve an outstanding undefined
+# reference), and pine hasn't called into pico's editor internals
+# in-process since send.c's run_composer_subprocess() switched to
+# fork()/execl()ing a separate `pico -P ...' child. Confirmed via nm
+# that pine's own object files reference zero symbols defined anywhere
+# in libpico.a, and that dropping it from the link entirely produces a
+# byte-for-byte identical `pine' binary on the lnx dev build. So unlike
+# c-client.a (see below), pico is simply not part of this link at all
+# any more -- no PICOOFILES, loose or archived.
+#
+# c-client.a, on the other hand, genuinely is needed, and needs to stay
+# loose rather than archived: per ld(1)'s overlay rules, anything
+# pulled from a library placed after the concluding -Y lands in the
+# same base-text budget as everything before the first -Z (base
+# rounded to 8Kb + largest overlay rounded to 8Kb must be <= 64Kb
+# total), with *no* overlay opportunity for it at all. That's fine for
+# pico-ovl's tiny -ltermcap, but not for a library as large as our own
+# c-client code -- real hardware confirmed it ("ld:
+# /usr/lib/libtermlib.a(termcap.o): text overflow", the base budget
+# finally breaking once termcap.o's pulled-in text landed on top of
+# whatever c-client.a needed, back when pico.a's now-removed members
+# were also competing for the same space). So c-client.a's member .o's
+# are listed loose here instead, same treatment as pine's own $(obj),
+# so mkovmake's optimizer can place them in overlays too rather than
+# forcing all of it into base. This assumes ../c-client has already
+# been built (via its own makefile.bsd's `all' target) so those loose
+# .o's exist; the list below must be kept in sync with
+# ../c-client/makefile.bsd's c-client.a member list.
+#
+# An earlier attempt at this (loose objects, unhinted -O2, no -Z) hit
+# a different real failure ("ld: too big for type 431") from letting
+# mkovmake freely pick its own base across all combined modules --
+# consistent with an oversized auto-guessed base blowing the same
+# base+overlay <= 64Kb ceiling. -O2 takes an optional basesize argument
+# to cap that guess instead of letting it pick freely; ld(1)'s own
+# worked example uses an 8Kb base against a 56Kb overlay, hence the
+# starting point below. This is very likely NOT the right number --
+# it's a first data point to bracket from, not a considered choice.
+# Try both directions (basesize up if 8k undershoots and mkovmake
+# can't fit enough in base to satisfy required cross-references,
+# ovsize/basesize tuned down if 8k overshoots) and see what mkovmake
+# actually reports.
+#
+MKOVMAKE=	mkovmake
+MKOVFLAGS=	-O2 8k
+
+CCLIENTOFILES=	../c-client/mail.o ../c-client/bezerk.o \
+		../c-client/dummy.o ../c-client/rfc822.o \
+		../c-client/misc.o ../c-client/osdep.o
+
+# $(CCLIENTOFILES) are prebuilt separately, via ../c-client's own
+# makefile.bsd `all' target, which compiles with real optimization
+# (CFLAGS = -g -O there vs. -g -DDEBUG, no -O, here). Give them an
+# explicit no-recipe rule so make's own .c.o: rule above -- which
+# uses *this* makefile's unoptimized CFLAGS -- never fires for them
+# via the implicit same-basename-.c suffix match. Without this, once
+# the .c.o: -o $@ fix (see above) let that implicit rule actually
+# resolve to the correct ../c-client/*.o output path instead of
+# mislocating it, `pine-ovl` started silently rebuilding these with
+# the wrong (larger, unoptimized) flags whenever timestamps made them
+# look stale, blowing the text/overlay budget on real hardware ("ld:
+# too big for type 431") -- see TODO-pdp11-done.md.
+$(CCLIENTOFILES): ;
+
+pine-ovl:	$(obj) $(CCLIENTOFILES)
+	echo "char datestamp[]="\"`date`\"";" > date.c
+	$(CC) -c $(CFLAGS) -o date.o date.c
+	$(MKOVMAKE) $(MKOVFLAGS) -o pine -f mkov \
+		$(obj) date.o $(CCLIENTOFILES) $(LIBES)
+	$(RM) pine
+	$(MAKE) -f mkov
 
 # this is not part of pine
 pine-use:	pine-use.c

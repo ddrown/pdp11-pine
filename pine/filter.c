@@ -78,6 +78,10 @@ static char rcsid[] = "$Id: filter.c,v 4.20 1993/10/30 00:27:42 mikes Exp $";
 #include "headers.h"
 #include "../pico/pico.h"
 
+/* message repeated verbatim at two call sites below -- shared storage
+ * instead of a separate copy at each site */
+static char *bad_qp_hex = "Bad hex char in QP encoding";
+
 
 /* INTERNAL PROTOTYPES */
 int	gf_so_readc(unsigned char *);
@@ -102,8 +106,19 @@ int	so_reaquire(STORE_S *);
  * the caller knowing if the storage is core or in a file 
  * or whatever.
  */
-#define	MSIZE_INIT	8192
-#define	MSIZE_INC	4096
+/* Was an unconditional CHUNK-sized 8192/4096 (matching bezerk.c's
+ * CHUNK-sized buffers) -- same class of oversized fixed buffer as the
+ * CHUNK-vs-MAILTMPLEN bezerk_open() bug and send.c's RBUFSZ, both
+ * fixed earlier (TODO-pdp11-done.md). so_writec()/so_puts() already
+ * grow a CharStar object's storage on demand (the latter in a loop,
+ * so multiple MSIZE_INC steps in one call are handled correctly), so
+ * a smaller start size only changes resize frequency, not
+ * correctness. This is the shared constant behind every CharStar
+ * object in the tree (composer body, reply/forward body, fcc
+ * storage, ...), so it's a much bigger lever than any one call site's
+ * own buffer. */
+#define	MSIZE_INIT	MAILTMPLEN
+#define	MSIZE_INC	MAILTMPLEN
 
 
 /*
@@ -149,12 +164,12 @@ so_get(source, name, rtype)
 	    if((so->txt = (void *)fopen(so->name, type)) == NULL){
 		fs_give((void **)&so->name);
 		fs_give((void **)&so); 		/* so freed & set to NULL */
-		q_status_message(1, 3, 5,"ERROR creating message file");
+		q_status_message(1, 3, 5,"Can't create msg file");
 	    }
 	}
 	else{
 	    if((so->txt = (void *)create_tmpfile()) == NULL){
-		q_status_message(1, 3, 5,"ERROR creating message temp file");
+		q_status_message(1, 3, 5,"Can't create temp file");
 		fs_give((void **)&so);		/* so freed & set to NULL */
 	    }
 	}
@@ -242,9 +257,18 @@ so_readc(c, so)
     unsigned char *c;
     STORE_S       *so;
 {
-    if(so->src == CharStar)
-      return((so->txtp - (unsigned char *)so->txt) < so->used ? 
-		*c = *(so->txtp)++, 1 : 0);
+    if(so->src == CharStar){
+	/* NB: not written as a single "cond ? a = b, 1 : 0" return --
+	 * 2.11BSD's cc rejects a comma expression in a conditional
+	 * operator's true-branch ("Illegal conditional"/"Lvalue
+	 * required"). */
+	if((so->txtp - (unsigned char *)so->txt) < so->used){
+	    *c = *(so->txtp)++;
+	    return(1);
+	}
+	else
+	  return(0);
+    }
     else{		/* must be FileStar or TmpFileStar */
 	if(!so->txt && !so_reaquire(so))
 	  return(0);
@@ -305,16 +329,31 @@ long     pos;
 int      orig;
 {
     if(so->src == CharStar){
+	/* NB: not written as "cond ? a = b, 0 : -1" returns -- 2.11BSD's
+	 * cc rejects a comma expression in a conditional operator's
+	 * true-branch ("Illegal conditional"/"Lvalue required"). */
 	switch(orig){
 	    case 0 :				/* SEEK_SET */
-	      return(pos < so->used ? 
-		so->txtp = (unsigned char *)so->txt + pos, 0 : -1);
+	      if(pos < so->used){
+		  so->txtp = (unsigned char *)so->txt + pos;
+		  return(0);
+	      }
+	      else
+		return(-1);
 	    case 1 :				/* SEEK_CUR */
-	      return(pos < (so->used - (so->txtp-(unsigned char *)so->txt)) ? 
-		so->txtp += pos, 0 : -1);
+	      if(pos < (so->used - (so->txtp-(unsigned char *)so->txt))){
+		  so->txtp += pos;
+		  return(0);
+	      }
+	      else
+		return(-1);
 	    case 2 :				/* SEEK_END */
-	      return(pos < so->used ? 
-		so->txtp = (unsigned char *)so->txt+(so->used-pos), 0 : -1);
+	      if(pos < so->used){
+		  so->txtp = (unsigned char *)so->txt+(so->used-pos);
+		  return(0);
+	      }
+	      else
+		return(-1);
 	    default :
 	      return(-1);
 	}
@@ -367,12 +406,12 @@ STORE_S *so;
 
     if(!so->txt && (so->src == FileStar || so->src == TmpFileStar)){
 	if((so->txt=(void *)fopen(so->name, type)) == NULL){
-	    q_status_message2(1, 3, 5, "ERROR reopening %s : %s", so->name,
+	    q_status_message2(1, 3, 5, "Can't reopen %s: %s", so->name,
 				error_description(errno));
 	    rv = 0;
 	}
 	else if(fset_pos((FILE *)so->txt, (fpos_t *)&(so->used))){
-	    q_status_message2(1, 3, 5, "ERROR positioning in %s : %s", 
+	    q_status_message2(1, 3, 5, "Seek error in %s: %s", 
 				so->name, error_description(errno));
 	    rv = 0;
 	}
@@ -540,7 +579,15 @@ int
 gf_sreadc(c)
 unsigned char *c;
 {
-    return((gf_in.n) ? *c = *(gf_in.txtp)++, gf_in.n-- : 0);
+    /* NB: not "cond ? a = b, n-- : 0" -- 2.11BSD's cc rejects a comma
+     * expression in a conditional operator's true-branch ("Illegal
+     * conditional"/"Lvalue required"). */
+    if(gf_in.n){
+	*c = *(gf_in.txtp)++;
+	return(gf_in.n--);
+    }
+    else
+      return(0);
 }
 
 
@@ -550,7 +597,15 @@ int
 gf_swritec(c)
     int c;
 {
-    return((gf_out.n) ? *(gf_out.txtp)++ = c, gf_out.n-- : 0);
+    /* NB: not "cond ? a = b, n-- : 0" -- 2.11BSD's cc rejects a comma
+     * expression in a conditional operator's true-branch ("Illegal
+     * conditional"/"Lvalue required"). */
+    if(gf_out.n){
+	*(gf_out.txtp)++ = c;
+	return(gf_out.n--);
+    }
+    else
+      return(0);
 }
 
 
@@ -632,7 +687,7 @@ gf_terminal(f, c, flg)
 {
     if(flg == GF_DATA)			/* generic terminal filter */
       if((*last_filter)(c) <= 0)
-        gf_error("Error writing out pipe");
+        gf_error("Pipe write error");
 }
 
 
@@ -781,7 +836,10 @@ gf_binary_b64(f, c, flg)
     int       c, flg;
 {
     if(flg == GF_DATA){
-	switch(f->n++ % 3){
+	/* NB: cast to (int) -- f->n is long, and 2.11BSD's cc rejects a
+	 * non-int switch selector ("Illegal type of operand"). Safe: the
+	 * value is always a small quantum position, never near LONG_MAX. */
+	switch((int)(f->n++ % 3)){
 	  case 0:
 	    (*f->next->f)(f->next, b64v[c >> 2], GF_DATA);
 					/* byte 1: high 6 bits (1) */
@@ -799,7 +857,7 @@ gf_binary_b64(f, c, flg)
 	    break;
 
 	  default:
-	    gf_error("Internal error in base64 encoder");
+	    gf_error("Base64 encoder error");
 	    return;			/* bummer! */
 	}
 
@@ -809,7 +867,7 @@ gf_binary_b64(f, c, flg)
 	}
     }
     else if(flg == GF_EOD){		/* no more data */
-	switch (f->n % 3) {		/* handle trailing bytes */
+	switch ((int)(f->n % 3)) {	/* handle trailing bytes */
 	  case 0:			/* no trailing bytes */
 	    break;
 
@@ -845,7 +903,7 @@ gf_b64_binary(f, c, flg)
 	if(f->f1){			/*  */
 	    f->f1 = 0;
 	    if (c != '=') {
-		gf_error("Illegal '=' in base64 text");
+		gf_error("Bad '=' in base64");
 	        return;
 	    }
 	}
@@ -856,7 +914,11 @@ gf_b64_binary(f, c, flg)
 	else if (c == '+') c = 62;
 	else if (c == '/') c = 63;
 	else if (c == '=') {		/* padding */
-	    switch ((f->n)++) {		/* check quantum position */
+	    /* NB: cast to (int) -- f->n is long, and 2.11BSD's cc
+	     * rejects a non-int switch selector ("Illegal type of
+	     * operand"). Safe: value is always a small quantum position
+	     * (0-3), reset well below LONG_MAX. */
+	    switch ((int)((f->n)++)) {	/* check quantum position */
 	      case 2:
 		f->f1++;		/* expect an equal as next char */
 		break;
@@ -864,14 +926,17 @@ gf_b64_binary(f, c, flg)
 		f->n = 0L;		/* restart quantum */
 		break;
 	      default:			/* impossible quantum position */
-		gf_error("Internal base64 decoder error");
+		gf_error("Base64 decoder error");
 		return;
 	    }
 	    return;
 	}
 	else return;			/* junk character */
 
-	switch ((f->n)++) {		/* install based on quantum position */
+	/* NB: cast to (int) -- f->n is long, and 2.11BSD's cc rejects a
+	 * non-int switch selector ("Illegal type of operand"). Safe:
+	 * value is always a small quantum position (0-3). */
+	switch ((int)((f->n)++)) {	/* install based on quantum position */
 	  case 0:
 	    f->t = c << 2;		/* byte 1: high 6 bits */
 	    break;
@@ -950,7 +1015,7 @@ gf_qp_8bit(f, c, flg)
 
 	    if(!isxdigit(c)){		/* must be hex! */
 		fs_give((void **)&(f->line));
-		gf_error("Non-hexadecimal character in QP encoding");
+		gf_error(bad_qp_hex);
 		return;
 	    }
 
@@ -966,7 +1031,7 @@ gf_qp_8bit(f, c, flg)
 	    f->f1 = DFL;
 	    if(!isxdigit(c)){		/* must be hex! */
 		fs_give((void **)&(f->line));
-		gf_error("Non-hexadecimal character in QP encoding");
+		gf_error(bad_qp_hex);
 		return;
 	    }
 
@@ -1257,7 +1322,7 @@ gf_rich2plain(f, c, flg)
 		if(f->linep - f->line > 40){
 		    /* What? rfc1341 says 40 char tokens MAX! */
 		    fs_give((void **)&(f->line));
-		    gf_error("Richtext token over 40 characters");
+		    gf_error("Richtext token too long");
 		    return;
 		}
 		
@@ -1288,7 +1353,7 @@ gf_rich2plain(f, c, flg)
     else if(flg == GF_EOD){
 	if(f->f1 = (f->linep != f->line)){
 	    /* incomplete token!! */
-	    gf_error("Incomplete token in richtext");
+	    gf_error("Incomplete richtext token");
 	}
 
 	fs_give((void **)&(f->line));

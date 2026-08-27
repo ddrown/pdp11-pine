@@ -272,7 +272,8 @@ read_with_timeout(int time_out)
      int    res;
 #else
      struct timeval tmo;
-     int            readfds, res;
+     fd_set         readfds;
+     int            res;
 #endif
      unsigned char  c;
 
@@ -303,15 +304,27 @@ read_with_timeout(int time_out)
 	pollfd.events = POLLIN;
 	res = poll (&pollfd, 1, time_out * 1000);
 #else
-         if(STDIN_FD == 0)
-           readfds    = 1;
-         else
-           readfds    = 1 << STDIN_FD; /* First bit for file desc 0 */
+         /* NB: readfds is a real fd_set, set up with FD_ZERO/FD_SET,
+          * not a hand-rolled "int" bitmask -- this file used to do
+          * `readfds = 1 << STDIN_FD`, treating readfds as a plain
+          * int. On this target fd_set is `struct { fd_mask
+          * fds_bits[1]; }` with fd_mask a 32-bit long, so a 16-bit
+          * int is the wrong size entirely: select() reading/writing
+          * a real fd_set through a pointer to a too-small int
+          * corrupts whatever stack memory follows it, and the
+          * "bitmask" it reads back is partly uninitialized garbage.
+          * That's why select() never correctly reported fd 0 as
+          * ready -- see TODO-pdp11-done.md. */
+         FD_ZERO(&readfds);
+         FD_SET(STDIN_FD, &readfds);
          tmo.tv_sec  = time_out;
-         tmo.tv_usec = 0; 
+         tmo.tv_usec = 0;
 
-
-         res = select(STDIN_FD+1, &readfds, 0, &readfds, &tmo);
+         /* exceptfds (4th arg) is NULL, not &readfds -- this code
+          * only ever cared about read-readiness; aliasing it to
+          * readfds would risk select() overwriting one result with
+          * the other. */
+         res = select(STDIN_FD+1, &readfds, 0, 0, &tmo);
 
 #endif
 

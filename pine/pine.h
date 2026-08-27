@@ -355,6 +355,15 @@ typedef long MsgNo;
 
 struct variable {
     char *name;
+    /* is_obsolete..is_list below are unsigned:1 bit-fields --
+     * variables[]'s static initializer (init.c) supplies just {name}
+     * positionally and lets these, plus the value unions below,
+     * zero-fill implicitly. 2.11BSD's cc can't initialize a bit-field
+     * member via an aggregate initializer at all ("No field
+     * initialization"), unlike the bezerkproto fix in bezerk.c which
+     * had only one bit-field to work around, these flags are set
+     * explicitly at runtime for every entry in init_init_vars()
+     * (init.c) instead. */
     unsigned  is_obsolete:1;	/* variable read in, not written unless set */
     unsigned  is_used:1;	/* Some variables are disabled */
     unsigned  been_written:1;
@@ -362,7 +371,6 @@ struct variable {
   /*unsigned  is_group:1; */
     unsigned  is_global:1;
     unsigned  is_list:1;	/* flag indicating variable is a list */
-    char     *description;
     union {
 	char *p;		/* pointer to single string value */
 	char **l;		/* pointer to list of string values */
@@ -624,10 +632,14 @@ typedef enum {InLine, QStatus} DetachErrStyle;
  * as a single ANSI prototype without splitting the typedef in two and
  * updating every declaration site referencing it.
  */
+#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-prototypes"
+#endif
 typedef int (*gf_io_t)();	/* type of get and put char function     */
+#ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
 struct filter_s;	/* forward decl so filter_t's parameter list binds to
 			 * the same tag as the typedef below, instead of an
 			 * unrelated type scoped to this prototype alone */
@@ -716,11 +728,13 @@ int         folder_complete(CONTEXT_S *, char *);
 void        init_folders(void);
 void       *find_folders(char *, char *);
 void        find_folders_in_context(CONTEXT_S *, char *);
+void        free_folders_in_context(CONTEXT_S *);
 FOLDER_S   *folder_entry(int, void *);
 FOLDER_S   *new_folder(char *);
 int         folder_insert(int, FOLDER_S *, void *);
 int         folder_index(char *, void *);
 char       *folder_is_nick(char *, void *);
+int         folder_total(void *);
 
 /*-- help.c --*/
 void helper(char *text[], char *title, int);
@@ -745,6 +759,7 @@ int   do_broach_folder(char *, CONTEXT_S *);
 void  expunge_and_close(MAILSTREAM *, char *);
 int   export_message(int, long);
 long  search_headers(int, long, long);
+void  save_attachment(int, long, struct attachment *);
 
 /*--- mailindx.c ---*/
 void  mail_index_screen(struct pine *);
@@ -804,7 +819,6 @@ int   fget_pos(FILE *, fpos_t *);
 int   fset_pos(FILE *, fpos_t *);
 void  coredump(void);
 void  getdomainnames(char *, int, char *, int);
-char *canonical_name(char *);
 int   have_job_control(void);
 int   stop_process(void);
 char *error_description(int);

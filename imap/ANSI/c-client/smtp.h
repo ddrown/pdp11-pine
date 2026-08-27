@@ -40,7 +40,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
-
+
 /* Constants */
 
 #define SMTPTCPPORT (long) 25	/* assigned TCP contact port */

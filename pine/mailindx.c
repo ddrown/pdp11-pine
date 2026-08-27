@@ -59,8 +59,11 @@ static char rcsid[] = "$Id: mailindx.c,v 4.52 1993/12/03 21:54:31 mikes Exp $";
  
 #include "headers.h"
 
+/* not static -- also used from folder.c, see the externs there */
+char *already_first_page = "\007Already on first page";
+char *already_last_page  = "\007Already on last page";
 
-static struct key index_keys[] = 
+static struct key index_keys[] =
      {{"?","Help",0},         {"O","OTHER CMDS",0},  {"M","Main Menu",0},
       {"V","[ViewMsg]",0},    {"P","PrevMsg",0},     {"N","NextMsg",0},
       {"-","PrevPage",0},     {"Spc","NextPage",0},  {"D","Delete",0},
@@ -186,7 +189,7 @@ mail_index_screen(state)
 	
 
     if(state->mail_stream == NULL) {
-	q_status_message(0, 1, 3, "No folder is currently open");
+	q_status_message(0, 1, 3, "No folder open");
         state->prev_screen = mail_index_screen;
 	state->next_screen = main_menu_screen;
 	return;
@@ -240,7 +243,7 @@ mail_index_screen(state)
                     if(index_body_state.paint_from >= 0)
                       tmp = min(tmp, index_body_state.paint_from);
                     if(tmp < 0L)
-                      panic("Error calculating index position");
+                      panic("Bad index position");
                     index_body_state.paint_from = tmp;
                 } else  {
                     index_body_state.paint_from = 
@@ -388,7 +391,7 @@ mail_index_screen(state)
 	    if(old_top_ent > lines_per_page)
                 state->current_sorted_msgno = old_top_ent - lines_per_page;
 	    else
-	        q_status_message(0, 0, 1, "\007Already on first page.");
+	        q_status_message(0, 0, 1, already_first_page);
 	    break;
 
 
@@ -401,7 +404,7 @@ mail_index_screen(state)
 	    if(lines_per_page + old_top_ent <= state->max_msgno)
                 state->current_sorted_msgno = old_top_ent + lines_per_page;
 	    else
-	        q_status_message(0, 0, 1, "\007Already on last page");
+	        q_status_message(0, 0, 1, already_last_page);
 	    break;
 
 
@@ -599,7 +602,7 @@ build_header_line(message_number)
        !envelope->newsgroups){
 	sprintf(buffer,"    %-3ld        %-*.*s", message_number,
 		max(i_cache_width()-15, 0), max(i_cache_width()-15, 0),
-		"[ No Message Text Available ]");
+		"[No Text]");
 	return(buffer);
     }
 
@@ -1100,7 +1103,7 @@ get_index_cache(msgno)
     long         msgno;
 {
     if(!i_cache_size(--msgno)){
-	q_status_message(0, 1, 3, "get_index_cache failed!");
+	q_status_message(0, 1, 3, "\007Index cache error");
 	return(NULL);
     }
 

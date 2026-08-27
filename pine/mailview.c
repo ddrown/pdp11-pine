@@ -77,6 +77,25 @@ char      *part_desc(char *,BODY *, int);
 char      *display_parameters(PARAMETER *);
 static int match_charset(char *);
 
+/* strings repeated verbatim at multiple call sites below -- shared
+ * storage instead of a separate copy of each at every site */
+static char *err_writing_msg = "Error writing message: %s";
+static char *us_ascii        = "us-ascii";
+static char *richtext        = "richtext";
+extern char *charset_attr;	/* send.c owns this copy -- also "charset" */
+extern char *word_not_found_msg;	/* mailcmd.c owns this copy */
+
+/* "message"/"help"/"text" word for the "Already at start/end of ..."
+ * status messages below -- was a 4-way ternary (with the "help" string
+ * literal written out twice) repeated verbatim at 5 call sites; this
+ * plus the two "Already at start/end of %s" format strings collapses
+ * that down to two literals instead of ~20 duplicated ones */
+static char *style_word(TextType style)
+{
+    return style == MessageText ? "message" :
+           (style == HelpText || style == ComposerHelpText) ? "help" : "text";
+}
+
 
 
 
@@ -363,10 +382,10 @@ type_desc(type, subtype, params, full)
 
     switch(type) {
       case TYPETEXT:
-        while(params != NULL && strucmp(params->attribute,"charset") != 0)
+        while(params != NULL && strucmp(params->attribute,charset_attr) != 0)
           params = params->next;
         if(params != NULL) {
-            if(strucmp(params->value, "us-ascii") == 0){
+            if(strucmp(params->value, us_ascii) == 0){
                 strcpy(type_d, "Text");
             } else {
                 strcpy(type_d, "Unknown text");
@@ -685,7 +704,7 @@ format_message(msgno, env, body, flgs, pc)
 
   write_error:
     if(flgs & FM_DO_PRINT)
-      q_status_message1(1, 2, 4, "Error writing message: %s", 
+      q_status_message1(1, 2, 4, err_writing_msg, 
 			error_description(errno));
     return(0);
 }
@@ -719,7 +738,7 @@ decode_text(att, msgno, pc, style, display_bound)
     char	      *err;
 
     if(att->body->subtype != NULL &&
-			strucmp(att->body->subtype, "richtext") == 0) {
+			strucmp(att->body->subtype, richtext) == 0) {
 	gf_rich2plain_opt(!display_bound);	/* maybe strip everything! */
 	aux_filter[filtcnt++] = gf_rich2plain;
 	if(!display_bound) {
@@ -729,22 +748,18 @@ decode_text(att, msgno, pc, style, display_bound)
     }
 
     for(param = att->body->parameter; 
-		param != NULL && strucmp(param->attribute,"charset") != 0;
+		param != NULL && strucmp(param->attribute,charset_attr) != 0;
 		param = param->next)
 	;
 
     match =  match_charset(param != NULL ? param->value : NULL);
 
     if(match == 1) {
-	strcpy(tmp_20k_buf, "    [The following text is in the \"");
+	strcpy(tmp_20k_buf, "    [Text is \"");
 	strcat(tmp_20k_buf, param->value);
-	strcat(tmp_20k_buf, "\" character set]");
-	strcat(tmp_20k_buf, NEWLINE);
-	strcat(tmp_20k_buf, "    [Your display is set for the \"US-ASCII\" character set]");
+	strcat(tmp_20k_buf, "\", display is US-ASCII, may look wrong]");
 	strcat(tmp_20k_buf, NEWLINE);
 	if(!gf_puts(tmp_20k_buf, pc)
-	   || !gf_puts("    [Some characters may be displayed incorrectly]",pc)
-	   || !gf_puts(NEWLINE, pc)
 	   || !gf_puts(NEWLINE, pc))
 	  goto write_error;
     }
@@ -766,7 +781,7 @@ decode_text(att, msgno, pc, style, display_bound)
     }
 
     if(att->body->subtype != NULL &&
-       strucmp(att->body->subtype, "richtext") == 0 && !display_bound){
+       strucmp(att->body->subtype, richtext) == 0 && !display_bound){
 	if(!gf_puts(NEWLINE, pc) || !gf_puts(NEWLINE, pc))
 	  goto write_error;
     }
@@ -775,7 +790,7 @@ decode_text(att, msgno, pc, style, display_bound)
 
   write_error:
     if(style == QStatus)
-      q_status_message1(1, 2, 4, "Error writing message: %s", 
+      q_status_message1(1, 2, 4, err_writing_msg, 
 			error_description(errno));
 
     return(1);
@@ -798,7 +813,7 @@ decode_text(att, msgno, pc, style, display_bound)
 static int
 match_charset(char *text_char_set)
 {
-    if(!text_char_set || strucmp(text_char_set, "us-ascii") == 0)
+    if(!text_char_set || strucmp(text_char_set, us_ascii) == 0)
       return(0);
 
     return(1);
@@ -901,17 +916,16 @@ part_desc(number, body, type)
     switch(type) {
       case 1:
         sstrcpy(&t,
-	    "  [Not Shown. Use the \"V\" command to view or save this part]");
+	    "  [Not shown; press V to view/save]");
 	sstrcpy(&t, NEWLINE);
         break;
 
       case 2:
-	sstrcpy(&t, "  [Can not ");
+	sstrcpy(&t, "  [Can't ");
 	if(body->type != TYPEAUDIO && body->type != TYPEVIDEO)
 	  sstrcpy(&t, "dis");
 
-	sstrcpy(&t, 
-		"play this part. Use the \"V\" command to save in a file]");
+	sstrcpy(&t, "play; press V to save]");
 	sstrcpy(&t, NEWLINE);
         break;
 
@@ -1235,11 +1249,8 @@ scrolltool(text, title, pages, style, source, att)
           case ctrl('Y'): 
           case KEY_PGUP:
 	    if(cur_top_line == 0) {
-	        q_status_message(0, 0, 1,
-                      style == MessageText   ? "Already at start of message" :
-	              style == HelpText         ? "Already at start of help" :
-	              style == ComposerHelpText ? "Already at start of help" :
-                                                  "Already at start of text");
+	        q_status_message1(0, 0, 1,
+                      "Already at start of %s", style_word(style));
 
 	    }else {
 	        if(pages == NULL) {
@@ -1268,19 +1279,13 @@ scrolltool(text, title, pages, style, source, att)
                             current_page++;
                         cur_top_line = pages[current_page];
                     }else {
-                        q_status_message(0, 0, 1,
-                         style == MessageText ? "Already at end of message" :
-                         style == ComposerHelpText ? "Already at end of help" :
-                         style == HelpText ?    "Already at end of help" :
-                                                "Already at end of text");
+                        q_status_message1(0, 0, 1,
+                         "Already at end of %s", style_word(style));
                     }   
 	        }
             }else {
-	        q_status_message(0, 0, 1,
-                  style == MessageText ? "Already at end of message" :
-	    	  style == HelpText ?         "Already at end of help" :
-	    	  style == ComposerHelpText ? "Already at end of help" :
-                                              "Already at end of text");
+	        q_status_message1(0, 0, 1,
+                  "Already at end of %s", style_word(style));
 	    }
             break;
 
@@ -1300,11 +1305,8 @@ scrolltool(text, title, pages, style, source, att)
 	  case KEY_DOWN:
 	  case ctrl('N'):
             if(cur_top_line + num_display_lines > num_text_lines)
-	        q_status_message(0, 0, 1,
-                 style == MessageText ? "Already at end of message" :
-	    	 style == HelpText ?         "Already at end of help" :
-	    	 style == ComposerHelpText ? "Already at end of help" :
-                                             "Already at end of text");
+	        q_status_message1(0, 0, 1,
+                 "Already at end of %s", style_word(style));
 	    else {
 	        cur_top_line++;
 	        if(pages != NULL&& cur_top_line >= pages[current_page+1] &&
@@ -1318,11 +1320,8 @@ scrolltool(text, title, pages, style, source, att)
           case KEY_UP:
 	  case ctrl('P'):
 	    if(cur_top_line == 0) {
-	       q_status_message(0, 0, 1,
-                      style == MessageText ? "Already at start of message" :
-                      style == HelpText ?         "Already at start of help":
-                      style == ComposerHelpText ? "Already at start of help":
-                                                  "Already at start of text");
+	       q_status_message1(0, 0, 1,
+                      "Already at start of %s", style_word(style));
 	    }else {
 	        cur_top_line--;
 	        if(pages != NULL && cur_top_line < pages[current_page])
@@ -1371,7 +1370,7 @@ whereis:
             }else if(found_on == -1) {
                 q_status_message(0, 0, 2, "\007Search cancelled");
             }else {
-                q_status_message(0, 1, 3, "\007Word not found");
+                q_status_message(0, 1, 3, word_not_found_msg);
             }
             break; 
 
@@ -1443,7 +1442,7 @@ whereis:
 unknown:
     	            /*----------- Unknown command -------*/
                     q_status_message2(0, 0, 2,
-              "\007Command \"%s\" not defined for this screen. Use %s for help",
+              "\007\"%s\" undefined here (%s for help)",
                           (void *)pretty_command(orig_ch), "?");
     	        }
             }

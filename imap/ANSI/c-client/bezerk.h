@@ -43,7 +43,7 @@
  * HUSKY FEVER!!!].
  *
  */
-
+
 /* Validate line known to start with ``F''
  * Accepts: pointer to candidate string to validate as a From header
  *	    return pointer to end of date/time field
@@ -95,7 +95,7 @@
  * Plus all of the above with `` remote from xxx'' after it. Thank you very
  * much, smail and Solaris, for making my life considerably more complicated.
  */
-
+
 /*
  * What?  You want to understand the VALID macro anyway?  Alright, since you
  * insist.  Actually, it isn't really all that difficult, provided that you
@@ -146,7 +146,7 @@
  * see if unquoted spaces were possible.  They are, and I've encountered enough
  * evil mail to be totally unwilling to trust that ``it will never happen''.
  */
-
+
 /* Build parameters */
 
 #define KODRETRY 15		/* kiss-of-death retry in seconds */
@@ -165,7 +165,7 @@
 /* Status string */
 
 #define STATUS "Status: RO\nX-Status: DFA\n\n"
-
+
 /* BEZERK per-message cache information */
 
 typedef struct file_cache {
@@ -197,7 +197,7 @@ typedef struct bezerk_local {
 /* Convenient access to local data */
 
 #define LOCAL ((BEZERKLOCAL *) stream->local)
-
+
 /* Function prototypes */
 
 long bezerk_valid (char *name);
@@ -227,7 +227,7 @@ long bezerk_move (MAILSTREAM *stream,char *sequence,char *mailbox);
 long bezerk_append (MAILSTREAM *stream,char *mailbox,STRING *message);
 long bezerk_append_putc (int fd,char *s,int *i,char c);
 void bezerk_gc (MAILSTREAM *stream,long gcflags);
-
+
 void bezerk_abort (MAILSTREAM *stream);
 char *bezerk_file (char *dst,char *name);
 int bezerk_lock (char *file,int flags,int mode,char *lock,int op);

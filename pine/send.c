@@ -106,6 +106,21 @@ int       call_mailer(char *, ENVELOPE *, BODY *);
  */
 static STORE_S *fcc_so = NULL;
 
+/* strings repeated verbatim at multiple call sites below -- shared
+ * storage instead of a separate copy of each at every site */
+static char *crlf                = "\015\012";
+/* not static -- also used from mailview.c, see the extern there */
+char         *charset_attr       = "charset";
+static char *mailer_daemon       = "mailer-daemon";
+static char *subject_field       = "SUBJECT";
+static char *boundary_attr       = "BOUNDARY";
+/* not static -- also used from mailcmd.c, see the extern there */
+char         *out_of_mem_msg     = "\007Out of memory";
+extern char *cancelled_msg;	/* mailcmd.c owns this copy */
+static char *cant_create_tmp_msg = "\007Can't create composer temp file";
+static char *fcc_doesnt_exist_fmt = "\"%.40s\" doesn't exist. Create";
+static char *fcc_rejected_msg    = "\007Fcc of message rejected";
+
 
 /*----------------------------------------------------------------------
     Compose screen (not forward or reply). Set up envelope, call composer
@@ -170,7 +185,7 @@ compose_mail(given_to)
 	      file_path[0] = '\0';
 	}
 	if(ret == 'x') {
-            q_status_message(1, 3, 4, "\007Message cancelled");
+            q_status_message(1, 3, 4, cancelled_msg);
 	    return;
 	}
 
@@ -231,8 +246,7 @@ compose_mail(given_to)
 	 * decoding...
 	 */
 	if((so = (void *)so_get(CharStar, NULL, EDIT_ACCESS)) == NULL){
-	    q_status_message(1, 2, 4,
-			     "\007Problem creating space for message text.");
+	    q_status_message(1, 2, 4, out_of_mem_msg);
 	    fclose(fp);
 	    return;
 	}
@@ -297,7 +311,7 @@ compose_mail(given_to)
 	 */
 	if((body->contents.binary = (void *)so_get(CharStar, NULL,
 						   EDIT_ACCESS)) == NULL){
-	    q_status_message(1, 2, 4, "\007Problem creating space for message text.");
+	    q_status_message(1, 2, 4, out_of_mem_msg);
 	    return;
 	}
 
@@ -462,6 +476,18 @@ reload_body_text(BODY *bod, char *path)
     if((fp = fopen(path, "r")) == NULL)
       return(-1);
 
+    /* Free the pre-edit body storage before allocating the fresh one
+     * below -- both are CharStar objects starting at MSIZE_INIT (8192,
+     * filter.c) bytes, and on this target's tight combined heap,
+     * needing both live at once (the old allocate-first order) can
+     * exhaust it where freeing first would not. so_get()'s "== NULL"
+     * check just below can't actually fire on this codebase (fs_get()
+     * calls fatal()/exit() instead of returning NULL on failure, see
+     * os_bsd.c), so there's no dangling-oldso risk from freeing here
+     * first. */
+    oldso = compose_body_store(bod);
+    so_give(&oldso);
+
     if((newso = so_get(CharStar, NULL, EDIT_ACCESS)) == NULL){
 	fclose(fp);
 	return(-1);
@@ -471,9 +497,6 @@ reload_body_text(BODY *bod, char *path)
       so_writec(c, newso);
 
     fclose(fp);
-
-    oldso = compose_body_store(bod);
-    so_give(&oldso);
 
     if(bod->type == TYPETEXT)
       bod->contents.binary = (void *)newso;
@@ -536,7 +559,7 @@ run_composer_subprocess(char *anchor, char *to, char *cc, char *bcc,
     strcpy(result_path, temp_nam(NULL, "pinecmpr"));
 
     if((fp = fopen(handoff_path, "w")) == NULL){
-	q_status_message(1, 2, 4, "\007Can't create composer temp file");
+	q_status_message(1, 2, 4, cant_create_tmp_msg);
 	goto fallback;
     }
 
@@ -545,7 +568,7 @@ run_composer_subprocess(char *anchor, char *to, char *cc, char *bcc,
     write_field(fp, "TO", to);
     write_field(fp, "CC", cc);
     write_field(fp, "BCC", bcc);
-    write_field(fp, "SUBJECT", sub);
+    write_field(fp, subject_field, sub);
     write_field(fp, "FCC", fcc);
     write_field(fp, "BODYFILE", bodyfile);
     { char flagbuf[16]; sprintf(flagbuf, "%u", flags); write_field(fp, "FLAGS", flagbuf); }
@@ -610,7 +633,7 @@ run_composer_subprocess(char *anchor, char *to, char *cc, char *bcc,
 	  *new_cc  = cpystr(cc);
 	if((*new_bcc = read_field(fp, "BCC"))     == NULL)
 	  *new_bcc = cpystr(bcc);
-	if((*new_sub = read_field(fp, "SUBJECT")) == NULL)
+	if((*new_sub = read_field(fp, subject_field)) == NULL)
 	  *new_sub = cpystr(sub);
 	if((*new_fcc = read_field(fp, "FCC"))     == NULL)
 	  *new_fcc = cpystr(fcc);
@@ -755,7 +778,7 @@ pine_send(outgoing, body, editor_title, fcc, are_replying)
 	    char *nt, *nc, *nb, *ns, *nf;
 
 	    q_status_message(1, 2, 4,
-			     "\007Can't create composer temp file");
+			     cant_create_tmp_msg);
 	    editor_result = COMP_CANCEL;
 	    nt = cpystr(tobuf); nc = cpystr(ccbuf); nb = cpystr(bccbuf);
 	    ns = cpystr(outgoing->subject); nf = cpystr(fccbuf);
@@ -944,13 +967,13 @@ check_addresses(ENVELOPE *e)
 
     /*---- Is he/she trying to send mail to the mailer-daemon ----*/
     for(a = e->to; a != NULL; a = a->next) 
-      if(strucmp(a->mailbox, "mailer-daemon") == 0)
+      if(strucmp(a->mailbox, mailer_daemon) == 0)
         goto really_send;
     for(a = e->cc; a != NULL; a = a->next) 
-      if(strucmp(a->mailbox, "mailer-daemon") == 0)
+      if(strucmp(a->mailbox, mailer_daemon) == 0)
         goto really_send;
     for(a = e->bcc; a != NULL; a = a->next) 
-      if(strucmp(a->mailbox, "mailer-daemon") == 0)
+      if(strucmp(a->mailbox, mailer_daemon) == 0)
           goto really_send;
 
     return(0); /* All is OK */
@@ -1015,11 +1038,19 @@ call_mailer(fcc, envelope, body)
 	    int  ok = 1;
 	    find_folders_in_context(fcc_cntxt, fcc);
 	    if(folder_index(fcc, fcc_cntxt->folders) < 0){
-		sprintf(tmp_20k_buf,
-			"Folder \"%.40s\" doesn't exist.  Create", fcc);
+		/* fcc_doesnt_exist_fmt is a fixed format string, just not
+		 * a literal at this call site -- always exactly one %s. */
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
+		sprintf(tmp_20k_buf, fcc_doesnt_exist_fmt, fcc);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 		if(want_to(tmp_20k_buf, 'y', 'n', NO_HELP, 0) != 'y'){
-		    q_status_message(0, 1, 3, "\007Fcc of message rejected");
+		    q_status_message(0, 1, 3, fcc_rejected_msg);
 		    ok = 0;
 		}
 		else if(!context_create(fcc_cntxt->context,
@@ -1033,10 +1064,19 @@ call_mailer(fcc, envelope, body)
 	}
 	else if(!folder_exists(NULL, fcc)){
 	    MAILSTREAM *create_stream;
-	    sprintf(tmp_20k_buf,"Folder \"%.40s\" doesn't exist.  Create",fcc);
+	    /* fcc_doesnt_exist_fmt is a fixed format string, just not a
+	     * literal at this call site -- always exactly one %s. */
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
+	    sprintf(tmp_20k_buf, fcc_doesnt_exist_fmt, fcc);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 	    if(want_to(tmp_20k_buf, 'y', 'n', NO_HELP, 0) != 'y'){
-		q_status_message(0, 1, 3, "\007Fcc of message rejected");
+		q_status_message(0, 1, 3, fcc_rejected_msg);
 		return(0);
 	    }
 
@@ -1047,8 +1087,7 @@ call_mailer(fcc, envelope, body)
 	}
 
 	if((fcc_so = so_get(FCC_SOURCE, NULL, WRITE_ACCESS)) == NULL){
-	    q_status_message(1, 2, 4, 
-			     "\007Problem creating space for Fcc.");
+	    q_status_message(1, 2, 4, out_of_mem_msg);
 	    return(0);
 	}
     }
@@ -1422,10 +1461,10 @@ append_message2(folder, env, bod, type, fcc)
     grow_tmp_20k_buf(pine_rfc822_header_size(env, bod));
     pine_rfc822_header(tmp_20k_buf, env, bod);
     removing_trailing_white_space(tmp_20k_buf);
-    strcat(tmp_20k_buf, "\015\012");
+    strcat(tmp_20k_buf, crlf);
     if(fcc_so){
 	so_puts(fcc_so, tmp_20k_buf);
-	so_puts(fcc_so, "\015\012");
+	so_puts(fcc_so, crlf);
     }
 
     if(unix_puts(folder_stream, tmp_20k_buf) == EOF)
@@ -1482,7 +1521,18 @@ void
 set_mime_types(body)
     BODY *body;
 {
-#define RBUFSZ	(8193)
+    /* just a chunked-read scratch buffer -- so_readc() below reads
+     * one byte at a time regardless of this size, and every stat this
+     * function tracks (max_line/eight_bit_chars/len/can_be_ascii)
+     * already accumulates correctly across a refill (see line_so_far
+     * below), so this only trades refill frequency for memory, not
+     * correctness. Was an unconditional CHUNK+1 (8193, matching
+     * bezerk.c's CHUNK-sized buffers) -- same class of oversized
+     * fixed buffer as the CHUNK-vs-MAILTMPLEN bezerk_open() bug fixed
+     * earlier (TODO-pdp11-done.md), found this time via a real
+     * "Out of free storage (8193 bytes)" crash and an adb stack trace
+     * pinning it to this fs_get() call. */
+#define RBUFSZ	(MAILTMPLEN + 1)
     unsigned char   *buf, *p, *bol;
     register size_t  n;
     long             max_line = 0L,
@@ -1528,7 +1578,17 @@ set_mime_types(body)
 	    for (n = 0; n < RBUFSZ-1 && so_readc(&buf[n], so) != 0; n++)
 	      ;
 	    len += n;
-	    p = buf;
+	    /* bol must move to the new chunk too, not just p -- left
+	     * behind, it would keep pointing at whatever offset the
+	     * last newline was found at in the *previous* chunk, which
+	     * this refill has just overwritten with unrelated bytes.
+	     * The next line_so_far + (p - bol) computation would then
+	     * measure a bogus (and typically much too small) distance
+	     * instead of the true in-progress line length. Practically
+	     * unreachable at the old RBUFSZ (8193 -- needed a single
+	     * unbroken 8KB+ line), but easily reachable at the smaller
+	     * size below (an ordinary long line/URL/quoted block). */
+	    p = bol = buf;
 	}else {
 	    p++;
 	}
@@ -1574,15 +1634,15 @@ set_mime_types(body)
 	if(can_be_ascii > 0) {
 	    if(body->parameter == NULL) {
 	        pm = body->parameter = mail_newbody_parameter();
-	        pm->attribute = cpystr("charset");
+	        pm->attribute = cpystr(charset_attr);
 	    }else {
                 for(pm = body->parameter;
-			strucmp(pm->attribute, "charset") && pm->next != NULL;
+			strucmp(pm->attribute, charset_attr) && pm->next != NULL;
 								pm = pm->next);
-	        if(strucmp(pm->attribute, "charset") != 0) {
+	        if(strucmp(pm->attribute, charset_attr) != 0) {
 		    pm->next = mail_newbody_parameter();
 		    pm = pm->next;
-		    pm->attribute = cpystr("charset");
+		    pm->attribute = cpystr(charset_attr);
 	        }else if(pm->value) {
 			fs_give((void **)&pm->value);
 		}
@@ -1713,7 +1773,7 @@ pine_encode_body (env,body)
       sprintf (tmp,"%ld-%ld-%ld:#%ld",gethostid (),(long) random (),time (0),
 	       (long) getpid ());
       body->parameter = mail_newbody_parameter ();
-      body->parameter->attribute = cpystr ("BOUNDARY");
+      body->parameter->attribute = cpystr (boundary_attr);
       body->parameter->value = cpystr (tmp);
     }
     part = body->contents.part;	/* encode body parts */
@@ -1865,7 +1925,7 @@ pine_rfc822_output_body(body, f, s)
 	part = body->contents.part;	/* first body part */
 					/* find cookie */
 	for (param = body->parameter; param && !cookie; param = param->next)
-	  if (!strcmp (param->attribute,"BOUNDARY")) cookie = param->value;
+	  if (!strcmp (param->attribute,boundary_attr)) cookie = param->value;
 	if (!cookie) cookie = "-";	/* yucky default */
 
 	/*
@@ -1913,11 +1973,11 @@ pine_rfc822_output_body(body, f, s)
 	sprintf (t = tmp,"--%s--",cookie);
 	if(fcc_so){
 	    so_puts(fcc_so, t);
-	    so_puts(fcc_so, "\015\012");
+	    so_puts(fcc_so, crlf);
 	}
 
 	{
-	    long rv = f ? ((*f) (s,t) && (*f) (s,"\015\012")) : 1;
+	    long rv = f ? ((*f) (s,t) && (*f) (s,crlf)) : 1;
 	    fs_give((void **) &tmp);
 	    return(rv);
 	}
@@ -1970,9 +2030,9 @@ pine_rfc822_output_body(body, f, s)
     so_release((STORE_S *)body->contents.binary);
 
     if(fcc_so)
-      so_puts(fcc_so, "\015\012");
+      so_puts(fcc_so, crlf);
 
-    return(f ? (*f)(s, "\015\012") : 1);	/* output final stuff */
+    return(f ? (*f)(s, crlf) : 1);	/* output final stuff */
 }
 
 
@@ -2001,7 +2061,7 @@ pine_write_body_header(dst, body)
 	rfc822_cat (*dst,param->value ? param->value : "",tspecials);
     } while (param = param->next);
     else if (body->type == TYPETEXT) strcat (*dst,"; charset=US-ASCII");
-    strcpy (*dst += strlen (*dst),"\015\012");
+    strcpy (*dst += strlen (*dst),crlf);
     if (body->encoding)		/* note: encoding 7BIT never output! */
       sprintf (*dst += strlen (*dst),"Content-Transfer-Encoding: %s\015\012",
 	       body_encodings[body->encoding == ENCBINARY ? ENCBASE64 :
@@ -2012,7 +2072,7 @@ pine_write_body_header(dst, body)
     if (body->description)
       sprintf (*dst += strlen (*dst),"Content-Description: %s\015\012",
 	       body->description);
-    strcat (*dst,"\015\012");	/* write terminating blank line */
+    strcat (*dst,crlf);	/* write terminating blank line */
 }
 
 
