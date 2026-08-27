@@ -50,28 +50,35 @@ DONE elsewhere or referenced in passing below.
 
 ### KEYMENU_S/`struct key` tables duplicate command-key strings across every screen
 
-- [ ] Found while string-cutting `mailindx.c` (see `TODO-pdp11-done.md`).
-      Every screen (`mailindx.c`'s index, `folder.c`'s folder list,
-      `mailview.c`'s message view, `pine.c`'s main menu, etc.) declares
-      its own `static struct key foo_keys[] = {{"?","Help",0}, ...}`
-      table, and the same single-letter keys and command labels
-      (`"C"`/`"Compose"`, `"D"`/`"Delete"`, `"GotoFldr"`, `"OTHER
-      CMDS"`, `"Quit"`, ...) are repeated verbatim across most of
-      them, since the same command is reachable from multiple screens.
-      This is a real, fairly large chunk of duplicated `.data` (dozens
-      of short strings across half a dozen files) -- but every one of
-      these tables is a compile-time static aggregate initializer, and
-      C requires constant expressions there, so none of it can be
-      pulled into a shared `char *` variable the way this session's
-      other string-sharing wins were. Doing anything about it would
-      mean restructuring these tables to populate at runtime (e.g. an
-      init function assigning each `.label` field from a shared
-      constant, the same trick already used for `folder.c`'s
-      `select_label`/`expand_label`, but applied wholesale across
-      every key-menu table in the tree) -- a much bigger, more
-      invasive change than this pass's one-string-at-a-time edits, and
-      worth scoping as its own deliberate task rather than folding
-      into the opportunistic string-cutting pass.
+- [x] **Partially addressed** -- see `TODO-pdp11-done.md`'s "Deduplicated
+      the common navigation-command strings..." entry (real hardware
+      `data` -560 bytes). The premise below (that a compile-time
+      static aggregate initializer can't reference a shared string
+      without restructuring to runtime population) turned out to be
+      wrong for the *content*: `char km_help[] = "Help";` (an array,
+      not a `char *`) decays to a valid constant-address expression
+      just like a string literal does, so `{km_help, ...}` works fine
+      as a static initializer. Used that to share the 24
+      highest-value duplicated strings (of 52 found) across all eight
+      tables without touching their structure at all.
+- [ ] What's *not* addressed, and still open: the `struct key`
+      array-of-*values* format itself. Each table is still its own
+      full `{char *, char *, short}` triple repeated per entry per
+      screen -- deduping the string content doesn't shrink the
+      per-entry `column` field or the fact that e.g. `{"D", 0}`-style
+      identical (key, label) *pairs* still occupy separate struct
+      slots in each table that uses them, just with shared string
+      pointers now. Actually eliminating that would mean restructuring
+      to runtime-populated tables (e.g. an init function assigning
+      each `.label`/`.name` from a shared constant into a table built
+      at startup, the same trick already used for `folder.c`'s
+      `select_label`/`expand_label`) -- a much bigger, more invasive
+      change than the content-level dedup above, and still worth
+      scoping as its own deliberate task rather than folding into the
+      opportunistic string-cutting pass. The remaining 28
+      lower-value duplicated strings (mostly 1-2 byte single-letter
+      command keys) were also left alone -- not worth a shared
+      variable's maintenance cost for the return.
 
 ### "Out of free storage (1001 bytes)" crash during Fcc append, on real hardware
 

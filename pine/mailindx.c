@@ -60,20 +60,59 @@
 char *already_first_page = "\007Already on first page";
 char *already_last_page  = "\007Already on last page";
 
+/* Command-key/label strings shared across every screen's key-menu
+ * table (index_keys/folder_keys/help_keys/composer_help_keys/
+ * view_keys/text_att_view_keys/main_keys/oe_keys) -- these are the
+ * common navigation commands (Help, OTHER CMDS, WhereIs, PrevPage/
+ * NextPage, Quit, ...) that show up on nearly every screen, so the
+ * same literal text was previously duplicated up to a dozen times
+ * across these files. Not static -- also used from folder.c/
+ * mailview.c/pine.c/ttyin.c, see the externs there. This only
+ * dedupes the *string content*; it doesn't touch the struct key
+ * array-of-values format itself (see TODO-pdp11.md's KEYMENU_S
+ * entry for that separate, larger, deliberately-deferred refactor).
+ */
+char km_qmark[] = "?";
+char km_help[] = "Help";
+char km_othercmds[] = "OTHER CMDS";
+char km_mainmenu[] = "Main Menu";
+char km_gotofldr[] = "GotoFldr";
+char km_compose[] = "Compose";
+char km_prevpage[] = "PrevPage";
+char km_nextpage[] = "NextPage";
+char km_spc[] = "Spc";
+char km_delete[] = "Delete";
+char km_undelete[] = "Undelete";
+char km_forward[] = "Forward";
+char km_prevmsg[] = "PrevMsg";
+char km_nextmsg[] = "NextMsg";
+char km_nextnew[] = "NextNew";
+char km_hdrmode[] = "HdrMode";
+char km_save[] = "Save";
+char km_whereis[] = "WhereIs";
+char km_listfldrs[] = "ListFldrs";
+char km_quit[] = "Quit";
+char km_exithelp[] = "Exit Help";
+char km_o[] = "O";
+char km_w[] = "W";
+char km_e[] = "E";
+char km_dash[] = "-";
+
+
 static struct key index_keys[] =
-     {{"?","Help",0},         {"O","OTHER CMDS",0},  {"M","Main Menu",0},
-      {"V","[ViewMsg]",0},    {"P","PrevMsg",0},     {"N","NextMsg",0},
-      {"-","PrevPage",0},     {"Spc","NextPage",0},  {"D","Delete",0},
-      {"U","Undelete",0},     {"R","Reply",0},       {"F","Forward",0}, 
+     {{km_qmark,km_help,0},         {km_o,km_othercmds,0},  {"M",km_mainmenu,0},
+      {"V","[ViewMsg]",0},    {"P",km_prevmsg,0},     {"N",km_nextmsg,0},
+      {km_dash,km_prevpage,0},     {km_spc,km_nextpage,0},  {"D",km_delete,0},
+      {"U",km_undelete,0},     {"R","Reply",0},       {"F",km_forward,0}, 
 
-      {"?","Help",0},         {"O","OTHER CMDS",0},  {"Q","Quit",0},
-      {"C","Compose",0},      {"L","ListFldrs",0},   {"G","GotoFldr",0},
-      {"Z","Zoom",0},         {"W","WhereIs",0},     {NULL,NULL,0},
-      {NULL,NULL,0},          {"S","Save",0},        {"E","Export",0},
+      {km_qmark,km_help,0},         {km_o,km_othercmds,0},  {"Q",km_quit,0},
+      {"C",km_compose,0},      {"L",km_listfldrs,0},   {"G",km_gotofldr,0},
+      {"Z","Zoom",0},         {km_w,km_whereis,0},     {NULL,NULL,0},
+      {NULL,NULL,0},          {"S",km_save,0},        {km_e,"Export",0},
 
-      {"?","Help",0},         {"O","OTHER CMDS",0},  {"X",NULL,0},
+      {km_qmark,km_help,0},         {km_o,km_othercmds,0},  {"X",NULL,0},
       {"&","unXclude",0},     {"A","Apply",0},       {"$","SortIndex",0},
-      {"J","Jump",0},         {"Tab","NextNew",0},   {"H","HdrMode",0},
+      {"J","Jump",0},         {"Tab",km_nextnew,0},   {"H",km_hdrmode,0},
       {"B","Bounce",0},       {"*","Flag",0},        {"|","Pipe",0}};
 static struct key_menu index_keymenu =
       {sizeof(index_keys)/(sizeof(index_keys[0])*12), 0, 0,0,0,0, index_keys};

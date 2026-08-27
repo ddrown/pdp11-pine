@@ -10356,3 +10356,74 @@ occasional flake.
   removing the one initialized `int ready_for_winch = 0;`; `jmp_buf
   winch_state` had no initializer so was already in `bss`, not
   `data`). Not a size-reduction change; noted for completeness only.
+
+### Deduplicated the common navigation-command strings shared across every screen's key-menu table
+
+Real hardware hit `Bug in Pine detected: "Out of free storage"` while
+just navigating between messages -- prompted going back to the
+data+bss reduction pass. `TODO-pdp11.md`'s `KEYMENU_S`/`struct key`
+entry had already identified these eight tables
+(`index_keys`/`folder_keys`/`help_keys`/`composer_help_keys`/
+`view_keys`/`text_att_view_keys`/`main_keys`/`oe_keys`, across
+`mailindx.c`/`folder.c`/`mailview.c`/`pine.c`/`ttyin.c`) as a large
+source of duplication, but deferred it as requiring a bigger
+restructure (from static compile-time `struct key` array-of-*values*
+literals to runtime-populated tables) -- real, and still not
+attempted. This entry only dedupes the *string content* inside the
+existing array-of-values format, which turned out to be separable
+from that bigger refactor and far lower risk.
+
+- **Found**: extracted every string literal from all eight tables at
+  once (same cross-file grouping technique as the earlier
+  `mailcmd.c`/`mailview.c`/`pine.c`/`reply.c` entry) and counted
+  duplicates. The `KEYMENU_S`/`struct key` comment in `pine.h` already
+  explains why: `column` is the only genuinely per-instance field, so
+  the same navigation commands (`Help`, `OTHER CMDS`, `WhereIs`,
+  `PrevPage`/`NextPage`, `Quit`, `GotoFldr`, `Compose`, ...) that
+  appear on nearly every screen were each typed out as a fresh literal
+  in every table that used them -- up to 12 copies of `"Help"` alone.
+  52 distinct strings were duplicated somewhere; the top 24 by
+  `(count-1) * (length+1)` accounted for 569 of the 686 total
+  duplicated bytes, so only those were worth the churn (the rest are
+  1-2 byte single-letter command keys where a shared-variable's
+  maintenance cost isn't worth the return).
+- **Fix**: same "define once, reference elsewhere" pattern as every
+  other dedup this session, with one real wrinkle. The 24 shared
+  strings are defined once in `mailindx.c` (chosen as owner since it
+  uses all 24) and referenced from the other four files via `extern`.
+  But `index_keys[]` etc. are `static` arrays with *static storage
+  duration* -- their initializers must be compile-time constant
+  expressions, so `char *km_help = "Help";` used directly in
+  `{km_help, ...}` doesn't work (`error: initializer element is not
+  constant`, since reading a `char *` variable's *value* is a runtime
+  operation, unlike a string literal or the address of an array/
+  function). Fixed by defining each shared string as `char
+  km_help[] = "Help";` (an array, not a pointer) instead --  an array
+  name decays to its address, which *is* a valid constant expression,
+  same as a string literal itself. `extern char km_help[];` in the
+  four consuming files. Mechanical, scripted substitution (Python) was
+  used to apply this across all eight tables rather than 200+ manual
+  edits; every substitution was scoped to just the `static struct key
+  NAME[] = { ... };` block text so no unrelated same-text string
+  elsewhere in these files (status messages, etc.) was touched.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31; a manual check of the rendered key menus (main menu and
+  folder index) via a scripted pty session confirmed the labels
+  (`Help`, `Main Menu`, `PrevMsg`, `PrevPage`, `Delete`, `Reply`,
+  `OTHER CMDS`, ...) still render correctly, not just that the binary
+  builds. Pushed to real hardware and rebuilt via `pine-ovl` cleanly.
+- **Size delta**: real hardware `data` `28110` -> `27550`
+  (**-560 bytes**), close to the 569-byte estimate from the
+  `(count-1)*(length+1)` accounting (the small gap is alignment/other
+  minor effects, not investigated further). Dev `lnx` build: `text`
+  `272642` -> `272170` (-472) but `data` `9000` -> `9224` (+224) --
+  this build's `char foo[] = "...";` arrays land in writable `.data`
+  rather than the `.rodata` a plain string-literal pointer would have
+  used (already merged across all uses by gcc within this one
+  binary), so the dev build actually gets *worse* by this specific
+  metric even though real hardware improves -- the same
+  data-segment-numbers-are-misleading-here caveat as the
+  `mailcmd.c`/etc. entry above, for a different underlying reason.
+  `TODO-pdp11.md`'s `KEYMENU_S` entry updated to note this is now
+  partially addressed (content deduped; the array-of-values structural
+  duplication itself is not).

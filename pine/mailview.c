@@ -87,6 +87,31 @@ extern char *charset_attr;	/* send.c owns this copy -- also "charset" */
 extern char *word_not_found_msg;	/* mailcmd.c owns this copy */
 extern char *undefined_here_msg;	/* mailcmd.c owns this copy */
 extern char *word_search_prompt;	/* mailcmd.c owns this copy */
+extern char km_qmark[];	/* mailindx.c owns this copy */
+extern char km_help[];	/* mailindx.c owns this copy */
+extern char km_othercmds[];	/* mailindx.c owns this copy */
+extern char km_mainmenu[];	/* mailindx.c owns this copy */
+extern char km_gotofldr[];	/* mailindx.c owns this copy */
+extern char km_compose[];	/* mailindx.c owns this copy */
+extern char km_prevpage[];	/* mailindx.c owns this copy */
+extern char km_nextpage[];	/* mailindx.c owns this copy */
+extern char km_spc[];	/* mailindx.c owns this copy */
+extern char km_delete[];	/* mailindx.c owns this copy */
+extern char km_undelete[];	/* mailindx.c owns this copy */
+extern char km_forward[];	/* mailindx.c owns this copy */
+extern char km_prevmsg[];	/* mailindx.c owns this copy */
+extern char km_nextmsg[];	/* mailindx.c owns this copy */
+extern char km_nextnew[];	/* mailindx.c owns this copy */
+extern char km_hdrmode[];	/* mailindx.c owns this copy */
+extern char km_save[];	/* mailindx.c owns this copy */
+extern char km_whereis[];	/* mailindx.c owns this copy */
+extern char km_listfldrs[];	/* mailindx.c owns this copy */
+extern char km_quit[];	/* mailindx.c owns this copy */
+extern char km_exithelp[];	/* mailindx.c owns this copy */
+extern char km_o[];	/* mailindx.c owns this copy */
+extern char km_w[];	/* mailindx.c owns this copy */
+extern char km_e[];	/* mailindx.c owns this copy */
+extern char km_dash[];	/* mailindx.c owns this copy */
 
 /* "message"/"help"/"text" word for the "Already at start/end of ..."
  * status messages below -- was a 4-way ternary (with the "help" string
@@ -958,36 +983,36 @@ part_desc(number, body, type)
  * is stored with each entry and it could be different for each.
  */
 static struct key help_keys[] =
-       {{"M","Main Menu",0},  {NULL,NULL,0},            {"E","Exit Help",0},
+       {{"M",km_mainmenu,0},  {NULL,NULL,0},            {km_e,km_exithelp,0},
         {NULL,NULL,0},        {NULL,NULL,0},            {NULL,NULL,0},
-        {"-","PrevPage",0},   {"Spc","NextPage",0},     {NULL,NULL,0},
-        {NULL,NULL,0},        {NULL,NULL,0},            {"W", "WhereIs",0}};
+        {km_dash,km_prevpage,0},   {km_spc,km_nextpage,0},     {NULL,NULL,0},
+        {NULL,NULL,0},        {NULL,NULL,0},            {km_w, km_whereis,0}};
 static struct key_menu help_keymenu =
 	{sizeof(help_keys)/(sizeof(help_keys[0])*12), 0, 0,0,0,0, help_keys};
 
 static struct key composer_help_keys[] =
-       {{NULL,NULL,0},        {NULL,NULL,0},            {"E","Exit Help",0},
+       {{NULL,NULL,0},        {NULL,NULL,0},            {km_e,km_exithelp,0},
         {NULL,NULL,0},        {NULL,NULL,0},            {NULL,NULL,0},
-        {"-","PrevPage",0},   {"Spc","NextPage",0},     {NULL,NULL,0},
-        {NULL,NULL,0},        {NULL,NULL,0},            {"W", "WhereIs",0}};
+        {km_dash,km_prevpage,0},   {km_spc,km_nextpage,0},     {NULL,NULL,0},
+        {NULL,NULL,0},        {NULL,NULL,0},            {km_w, km_whereis,0}};
 static struct key_menu composer_help_keymenu =
     {sizeof(composer_help_keys)/(sizeof(composer_help_keys[0])*12), 0, 0,0,0,0,
 							composer_help_keys};
 
 static struct key view_keys[] = 
-       {{"?","Help",0},        {"O","OTHER CMDS",0},    {"M","Main Menu",0},
-        {"V","ViewAttch",0},   {"P","PrevMsg",0},       {"N","NextMsg",0},
-        {"-","PrevPage",0},    {"Spc","NextPage",0},    {"D","Delete",0},
-        {"U","Undelete",0},    {"R","Reply",0},         {"F","Forward",0}, 
+       {{km_qmark,km_help,0},        {km_o,km_othercmds,0},    {"M",km_mainmenu,0},
+        {"V","ViewAttch",0},   {"P",km_prevmsg,0},       {"N",km_nextmsg,0},
+        {km_dash,km_prevpage,0},    {km_spc,km_nextpage,0},    {"D",km_delete,0},
+        {"U",km_undelete,0},    {"R","Reply",0},         {"F",km_forward,0}, 
 
-        {"?","Help",0},        {"O","OTHER CMDS",0},    {"Q","Quit",0},
-        {"C","Compose",0},     {"L","ListFldrs",0},     {"G","GotoFldr",0},
-        {"I","Index",0},       {"W","WhereIs",0},       {NULL,NULL,0},
-        {NULL,NULL,0},         {"S","Save",0},          {"E","Export",0},
+        {km_qmark,km_help,0},        {km_o,km_othercmds,0},    {"Q",km_quit,0},
+        {"C",km_compose,0},     {"L",km_listfldrs,0},     {"G",km_gotofldr,0},
+        {"I","Index",0},       {km_w,km_whereis,0},       {NULL,NULL,0},
+        {NULL,NULL,0},         {"S",km_save,0},          {km_e,"Export",0},
 
-        {"?","Help",0},        {"O","OTHER CMDS",0},    {NULL,NULL,0},
+        {km_qmark,km_help,0},        {km_o,km_othercmds,0},    {NULL,NULL,0},
         {NULL,NULL,0},         {NULL,NULL,0},           {NULL,NULL,0}, 
-        {"J","Jump",0},        {"TAB","NextNew",0},     {"H","HdrMode",0},
+        {"J","Jump",0},        {"TAB",km_nextnew,0},     {"H",km_hdrmode,0},
         {"B","Bounce",0},      {"*","Flag",0},          {"|","Pipe",0}}; 
 static struct key_menu view_keymenu =
 	{sizeof(view_keys)/(sizeof(view_keys[0])*12), 0, 0,0,0,0, view_keys};
@@ -997,10 +1022,10 @@ static struct key_menu view_keymenu =
 #define VIEW_PIPE_KEY 35
 
 static struct key text_att_view_keys[] =
-       {{"?","Help",0},       {NULL,NULL,0},           {"E","Exit Viewer",0},
+       {{km_qmark,km_help,0},       {NULL,NULL,0},           {km_e,"Exit Viewer",0},
         {NULL,NULL,0},        {NULL,NULL,0},           {NULL,NULL,0},
-        {"-","PrevPage",0},   {"Spc","NextPage",0},    {NULL,NULL,0},
-        {NULL,NULL,0},        {"S","Save",0},          {"W", "WhereIs",0}};
+        {km_dash,km_prevpage,0},   {km_spc,km_nextpage,0},    {NULL,NULL,0},
+        {NULL,NULL,0},        {"S",km_save,0},          {km_w, km_whereis,0}};
 static struct key_menu text_att_view_keymenu =
      {sizeof(text_att_view_keys)/(sizeof(text_att_view_keys[0])*12), 0, 0,0,0,0,
 							text_att_view_keys};

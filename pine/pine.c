@@ -56,6 +56,14 @@ char         version_buff[50];
 struct pine *ps_global;               /* sort of THE global variable */
 int          timeout = NEW_MAIL_TIME; /* referenced in weemacs */
 extern char *undefined_here_msg;	/* mailcmd.c owns this copy */
+extern char km_qmark[];	/* mailindx.c owns this copy */
+extern char km_help[];	/* mailindx.c owns this copy */
+extern char km_othercmds[];	/* mailindx.c owns this copy */
+extern char km_gotofldr[];	/* mailindx.c owns this copy */
+extern char km_compose[];	/* mailindx.c owns this copy */
+extern char km_listfldrs[];	/* mailindx.c owns this copy */
+extern char km_quit[];	/* mailindx.c owns this copy */
+extern char km_o[];	/* mailindx.c owns this copy */
 
 
 /*----------------------------------------------------------------------
@@ -110,12 +118,12 @@ void show_main_screen(struct pine *, int, OtherMenu, struct key_menu *);
 static void do_setup_task(int);
 
 static struct key main_keys[] =
-       {{"?","Help",0},        {"O","OTHER CMDS",0},  {NULL,NULL,0},    
+       {{km_qmark,km_help,0},        {km_o,km_othercmds,0},  {NULL,NULL,0},    
         {NULL,NULL, 0},        {"P","PrevCmd",0},     {"N","NextCmd",0},
 	{NULL,NULL,0},         {NULL,NULL,0},         {"R","RelNotes",0},
 	{NULL,NULL,0},         {NULL,NULL,0},         {NULL,NULL,0},
-	{"?","Help",0},        {"O","OTHER CMDS",0},  {"Q","Quit",0},
-        {"C","Compose",0},     {"L","ListFldrs",0},   {"G","GotoFldr",0},
+	{km_qmark,km_help,0},        {km_o,km_othercmds,0},  {"Q",km_quit,0},
+        {"C",km_compose,0},     {"L",km_listfldrs,0},   {"G",km_gotofldr,0},
 	{"I","Index",0},       {NULL,NULL,0},         {"S","Setup",0},
 	{NULL,NULL,0},         {NULL,NULL,0},         {NULL,NULL,0}};
 static struct key_menu main_keymenu =

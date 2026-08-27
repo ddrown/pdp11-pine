@@ -640,8 +640,10 @@ static struct display_line {
 
 
 
+extern char km_help[];	/* mailindx.c owns this copy */
+
 static struct key oe_keys[] =
-    {{"^G","Help",0},     {"RETURN","Enter",0},     {"^C","Cancel",0},
+    {{"^G",km_help,0},     {"RETURN","Enter",0},     {"^C","Cancel",0},
      {"^T","xxx",0},      {NULL,NULL,0},            {NULL,NULL,0},
      {NULL,NULL,0},       {NULL,NULL,0},            {NULL,NULL,0},
      {NULL,NULL,0},       {NULL,NULL,0},            {NULL,NULL,0}};
