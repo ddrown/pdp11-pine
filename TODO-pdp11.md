@@ -73,6 +73,32 @@ DONE elsewhere or referenced in passing below.
       worth scoping as its own deliberate task rather than folding
       into the opportunistic string-cutting pass.
 
+### "Out of free storage (1001 bytes)" crash during Fcc append, on real hardware
+
+- [ ] Found while retesting the `strlen()`-vs-`so->used` Fcc
+      corruption fix (see `TODO-pdp11-done.md`) on real hardware: a
+      Send of a short, ordinary message hit `Bug in Pine detected:
+      "Out of free storage (1001 bytes)"` (c-client's `fs_get()`,
+      already hardened in an earlier session to report the real
+      requested size on failure -- see `TODO-pdp11-done.md`, so this
+      is very likely a genuine allocation failure, not a
+      garbage/corrupted size) followed by an `IOT trap (core dumped)`,
+      right around `context_append()`'s Fcc write ("Message sent and
+      NOT copied to \"\"" was reported first). The message's own
+      `STORE_S` buffer was confirmed completely clean via a full dump
+      right before the crash -- this looks like a distinct issue from
+      the corruption bug, most likely a real, tight memory budget
+      during the Fcc/`context_append()` path on this constrained
+      target (`size pine` currently shows `data` alone at ~29-31KB
+      before any dynamic heap use) rather than a corrupted-size bug.
+      Not yet reproduced a second time or investigated further --
+      `ps`/`limit` on the real hardware showed no other process or
+      leftover state holding memory at the time. Next steps: retry the
+      same Send a few times to establish whether it's reliably
+      reproducible or transient/load-dependent; if reproducible, trace
+      what `context_append()`/`mail_append()`/the `bezerk` driver
+      allocates around a 1001-byte request during a folder append.
+
 ### Track down a small memory leak found while re-verifying the third fuzzing lead's fix
 
 - [ ] The third fuzzing lead (heap corruption in `rfc822_parse_adrlist()`

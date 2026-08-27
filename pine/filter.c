@@ -120,7 +120,6 @@ int	so_reaquire(STORE_S *);
 #define	MSIZE_INIT	MAILTMPLEN
 #define	MSIZE_INC	MAILTMPLEN
 
-
 /*
  * allocate resources associated with the specified type of
  * storage.  If requesting a named file object, open it for 
@@ -178,7 +177,7 @@ so_get(source, name, rtype)
 	so->size = MSIZE_INIT;
 	so->txt  = (void *)fs_get((size_t)so->size * sizeof(char));
 	memset(so->txt, 0, (size_t)so->size * sizeof(char));
-	so->txtp = (unsigned char *)so->txt; 
+	so->txtp = (unsigned char *)so->txt;
     }
 
     return(so);
@@ -291,7 +290,12 @@ so_puts(so, s)
     char    *s;
 {
     if(so->src == CharStar){
-	int l = strlen(s);
+	/* was `int l` -- a 16-bit-narrow type computed from strlen() on
+	 * the real target, capable of silently wrapping (even negative)
+	 * for a long enough string in a way this 32-bit dev build could
+	 * never observe. Found while canary-hunting a real-hardware
+	 * heap-corruption bug -- see TODO-pdp11-done.md. */
+	long l = (long) strlen(s);
 
 	if((so->used + l + 1) >= so->size){
 	    while(so->size <= (so->used + l + 1))
@@ -685,9 +689,10 @@ gf_terminal(f, c, flg)
     FILTER_S *f;
     int       c, flg;
 {
-    if(flg == GF_DATA)			/* generic terminal filter */
-      if((*last_filter)(c) <= 0)
-        gf_error("Pipe write error");
+    if(flg == GF_DATA){			/* generic terminal filter */
+	if((*last_filter)(c) <= 0)
+	  gf_error("Pipe write error");
+    }
 }
 
 
@@ -741,12 +746,11 @@ gf_pipe(gc, pc)
     gf_set_terminal(pc);
     gf_link_filter(gf_terminal);
 
-    /* 
+    /*
      * while there are chars to process, send them thru the pipe
      */
-    while((*gc)(&c)){
-        (*gf_master->f)(gf_master, (c&0xff), GF_DATA);
-    }
+    while((*gc)(&c))
+      (*gf_master->f)(gf_master, (c&0xff), GF_DATA);
 
     /*
      * toss an end-of-data marker down the pipe to give filters
@@ -755,6 +759,110 @@ gf_pipe(gc, pc)
     (*gf_master->f)(gf_master, 0, GF_EOD);
 
     return(NULL);			/* everything went OK */
+}
+
+
+/*
+ * "Network output" terminal function -- relocated here from send.c
+ * (was l_f/l_stream/l_out_buf/l_putc/l_flush_net). See TODO-pdp11-done.md
+ * for the full diagnosis: gf_terminal() above calls through last_filter,
+ * a gf_io_t set at runtime via gf_set_terminal(), which on this PDP-11
+ * auto-overlay ("ld -i -X") link is only safe if the pointer's target
+ * lives in the SAME overlay module as gf_terminal() itself. send.c's
+ * old l_putc() lived in a *different* overlay (OV5) than filter.o
+ * (OV1) -- calling gf_pipe() from send.c swapped OV5 out to load OV1,
+ * invalidating a raw function pointer into l_putc() that was taken
+ * *before* the swap, so gf_terminal()'s indirect call jumped into
+ * whatever instruction bytes OV1 happened to have loaded at that
+ * address instead. Symptoms ranged from a silently-missing message
+ * body to a genuine infinite loop unresponsive to every signal but
+ * SIGKILL to nonsensical adb backtraces, depending on what garbage
+ * code got executed. Moving this whole mechanism into filter.c
+ * guarantees gf_output_putc() is always resident whenever gf_terminal()
+ * is (same module, same overlay), so the pointer can never go stale.
+ */
+static soutr_t    gf_out_f;
+static TCPSTREAM *gf_out_stream;
+static STORE_S   *gf_out_fcc_so;
+static unsigned   gf_out_c_in_buf = 0;
+
+/*
+ * gf_out_buf is a fixed, dedicated buffer -- unlike tmp_20k_buf, its
+ * job is purely to batch bytes of the (already-formatted) outgoing
+ * message body to cut down on write() calls, so its size is a
+ * self-contained performance tradeoff, not a function of message
+ * content, and it never needs to grow.
+ */
+#define GF_OUT_BUF_LEN 1024
+static char       gf_out_buf[GF_OUT_BUF_LEN + 2];
+
+/*
+ * gf_set_output - register the real destination (soutr_t + stream, plus
+ *                 the optional Fcc storage object) before calling
+ *                 gf_pipe() with gf_output_putc_fn()'s function as the
+ *                 terminal. Replaces send.c's old direct l_f/l_stream
+ *                 assignment.
+ */
+void
+gf_set_output(soutr_t f, TCPSTREAM *s, STORE_S *fcc_so)
+{
+    gf_out_f = f;
+    gf_out_stream = s;
+    gf_out_fcc_so = fcc_so;
+    gf_out_c_in_buf = 0;
+}
+
+/*
+ * gf_out_putc - gf_io terminal function that calls the registered
+ *               soutr_t output function (e.g. unix_puts for
+ *               call_sendmail). Static -- callers never invoke this
+ *               directly, only indirectly via the pointer
+ *               gf_output_putc_fn() returns (see gf_set_terminal()).
+ */
+static int
+gf_out_putc(int c)
+{
+    gf_out_buf[gf_out_c_in_buf++] = (char) c;
+    gf_out_buf[gf_out_c_in_buf]   = '\0';
+
+    if(gf_out_c_in_buf > GF_OUT_BUF_LEN){
+	if(gf_out_fcc_so)
+	  so_puts(gf_out_fcc_so, gf_out_buf);
+
+        gf_out_c_in_buf = 0;
+        return(gf_out_f ? (int)(*gf_out_f)(gf_out_stream, gf_out_buf) : 1);
+    }
+    else
+	return(TRUE);
+}
+
+/*
+ * gf_output_putc_fn - hand back gf_out_putc's address for use as a
+ *                      gf_io_t terminal function (see gf_pipe()'s pc
+ *                      parameter). Call gf_set_output() first.
+ */
+gf_io_t
+gf_output_putc_fn(void)
+{
+    return((gf_io_t) gf_out_putc);
+}
+
+/*
+ * gf_flush_net - empties gf_out_putc's buffer. Call once after gf_pipe()
+ *                returns successfully.
+ */
+void
+gf_flush_net(void)
+{
+    if(gf_out_c_in_buf){
+	if(gf_out_f)
+	  (*gf_out_f)(gf_out_stream, gf_out_buf);
+
+	if(gf_out_fcc_so)
+	  so_puts(gf_out_fcc_so, gf_out_buf);
+    }
+
+    gf_out_c_in_buf = 0;
 }
 
 

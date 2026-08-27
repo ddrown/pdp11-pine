@@ -909,7 +909,10 @@ save(folder, context, message, index_sorted_msgno)
      * context_append...
      */
     /* set up string driver */
-    INIT(&msg, mail_string, (void *)so_text(so), strlen((char *)so_text(so)));
+    /* Was strlen((char *)so_text(so)) -- see send.c's append_message2()
+     * for why that's wrong on real hardware; so->used is the accurate,
+     * safe length. See TODO-pdp11-done.md. */
+    INIT(&msg, mail_string, (void *)so_text(so), (unsigned long) so->used);
 
     save_folder = (strucmp(folder, ps_global->inbox_name) == 0)
                    ? ps_global->VAR_INBOX_PATH : folder;

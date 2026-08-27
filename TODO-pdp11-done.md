@@ -9756,3 +9756,140 @@ fact.
   the crash message this time, with no `adb` archaeology needed --
   and, separately, the still-unexplained hang (no core available from
   that attempt) remains open if it recurs.
+
+### Cross-overlay indirect function pointer: `gf_terminal()`'s network-output terminal function could go stale mid-Send
+
+The hang/crash/missing-body saga above continued across many more
+real-hardware retest cycles (canary buffers added to every `STORE_S`
+allocation and to `gf_out_buf`, syslog tracing added to `gf_pipe()`,
+`gf_terminal()`, and `gf_local_nvtnl()`) before the actual root cause
+was found. Symptoms seen across different attempts, all from the same
+underlying bug: a message body silently missing from the sent copy, a
+genuine infinite loop unresponsive to every signal but `SIGKILL`, a
+crash with nonsensical `adb` backtrace arguments, and a "TERM not
+set." exit mid-Send.
+
+- **Root cause**: `pine-ovl` links with real 2.11BSD `ld -i -X`
+  (auto-overlay). `mkovmake` partitions object files into a resident
+  BASE plus swapped OVERLAY segments purely by *static, name-based
+  symbol matching* ("ties" between an undefined global symbol in one
+  module and a global text symbol in another) -- per its own manual,
+  "there is no way to tell mkovmake to put a certain group of modules
+  together." This scoring has zero visibility into runtime function
+  pointers. `filter.c`'s `gf_terminal()` invokes a registered
+  `gf_io_t` (a deliberately untyped K&R function pointer) via
+  `(*last_filter)(c)`; the pointer is set at runtime by
+  `gf_set_terminal()`, called from `gf_pipe()`, which `send.c`'s
+  `pine_rfc822_output_body()` calls passing its own local `l_putc()`
+  as the terminal. `mkovmake` happened to place `filter.o` in overlay
+  `OV1` and `send.o` in `OV5` (confirmed by `cat`-ing the generated
+  `mkov` makefile on real hardware) -- with no "tie" between them
+  visible to it, since the only link is a runtime pointer. Calling
+  `gf_pipe()` from `send.c` (in `OV5`) swaps `OV5` out of memory to
+  load `OV1`, invalidating the raw pointer to `l_putc()` taken
+  *before* the swap -- `l_putc()`'s actual compiled code is no longer
+  resident. `gf_terminal()`'s subsequent indirect call then jumps into
+  whatever instruction bytes `OV1` happened to have loaded at that
+  address instead, explaining every symptom above depending on what
+  garbage code happened to run.
+- **Fix**: relocated the entire "network output" terminal function and
+  its state (`l_f`/`l_stream`/`l_out_buf`/`l_putc`/`l_flush_net` in
+  `send.c`) into `filter.c` itself, renamed `gf_out_f`/`gf_out_stream`/
+  `gf_out_buf`/`gf_out_putc`/`gf_flush_net`, with a new
+  `gf_set_output()` to register the destination and
+  `gf_output_putc_fn()` to hand back the terminal function pointer.
+  This guarantees the indirect call from `gf_terminal()` never crosses
+  a module/overlay boundary, regardless of how `mkovmake` partitions
+  `filter.o` vs `send.o` -- more robust than fighting `mkovmake`'s
+  partitioning directly (see below). `send.c`'s call sites now do
+  `gf_set_output(f, s, fcc_so); pc = gf_output_putc_fn();` in place of
+  the old direct `l_f`/`l_stream` assignment. New prototypes added to
+  `pine.h`.
+- **Approach tried and abandoned**: forcing `filter.o` into
+  `mkovmake`'s BASE segment via `pine/makefile.bsd`'s `pine-ovl`
+  recipe (`filter.o -Z $(obj) ...`), with several `MKOVFLAGS` basesize
+  hints (20k, 17k, 11k, no hint) -- all four attempts failed to link
+  with `ld: too big for type 431`, despite `round8k(base) +
+  round8k(largest overlay) <= 64KB` arithmetic suggesting each should
+  fit; the exact mechanism behind these specific failures was not
+  fully diagnosed, and the approach was abandoned once the
+  file-relocation fix (above) proved simpler and more robust.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. Real hardware: `gf_out_putc` (via syslog tracing, since
+  removed) confirmed executing reliably with correct `c_in_buf`
+  progression across multiple Sends; sends no longer hang, crash, or
+  silently drop the body. `pine-ovl` still links cleanly under
+  `mkovmake`'s completely unmodified, automatic partitioning.
+- **Size delta**: negligible -- this is a relocation of existing code
+  between two files already linked together, not new logic.
+
+### `so_text()`'s callers used `strlen()` instead of `STORE_S->used` to size the Fcc/save-to-folder write
+
+Once the overlay bug (above) was fixed, sends stopped hanging/dropping
+the body, but a *new* symptom appeared: the saved Fcc copy
+(`~/mail/sent-mail`) sometimes contained literal binary garbage
+spliced into already-written header content (e.g. `Content-Type:
+TEXT/PLAIN; c` followed by NUL/garbage bytes in place of
+`charset=US-ASCII`, or a `To:` line trailing off into unrelated binary
+data ending in a recognizable leftover pathname fragment like
+`/home/abob/mail`). Confirmed via `cat -v` over a real command
+connection (`dz-exec.py`), ruling out terminal-rendering artifacts.
+
+Added a full-buffer dump helper (`dump_so_full()`, temporary, since
+removed) logging a `STORE_S`'s entire `used` region in 60-byte chunks
+from offset 0 -- the existing tail-only dump (`dump_so_tail()`, last
+60 bytes) had never actually covered early header fields like
+`Subject:`/`To:` in a 200+ byte header, which is why earlier checks
+kept reporting "clean" while the actual saved file was corrupt. The
+full dump showed the in-memory `STORE_S` buffer *itself* was correct
+end-to-end at every checkpoint, including immediately before the
+final disk write -- meaning the corruption was happening downstream
+of the buffer, in however its content got copied out.
+
+- **Root cause**: `append_message2()` (`send.c`) and `save_procedures()`
+  /`save_msg()`-style folder-save code (`mailcmd.c`) both compute the
+  byte length to hand to `context_append()`/`mail_string` via
+  `strlen((char *)so_text(fcc_so))` instead of the `STORE_S`'s own
+  accurate `->used` counter. `so_puts()`/`so_writec()` never write a
+  trailing NUL after copying content into the buffer -- the buffer
+  only reads as a clean, correctly-terminated C string because
+  `so_get()` does a one-time `memset(so->txt, 0, size)` over the whole
+  allocation at creation time. That zeroed tail is not a durable
+  guarantee: on real hardware, with a long-running process and
+  `malloc`/`free` churn across many prior allocations, the unused tail
+  of a freshly `malloc()`'d 1024-byte block is not reliably still
+  zero. `strlen()` then walks straight past the real end of the
+  written content into whatever stale bytes happen to be there,
+  continuing until it happens to hit some unrelated `\0` deep in
+  adjacent heap memory -- explaining both the garbage itself (leftover
+  heap content, e.g. a fragment of a previously-freed pathname string)
+  and its varying length (however far away the next stray zero byte
+  happens to be) between different runs. `so->used` is tracked
+  exactly by `so_puts()`/`so_writec()` on every write and is immune to
+  this failure mode.
+- **Fix**: both call sites (`send.c`'s `pine_send()`, right before its
+  `context_append()` call, and `mailcmd.c`'s save-to-folder path, same
+  pattern) now pass `(unsigned long) so->used`/`fcc_so->used` instead
+  of `strlen((char *)so_text(...))`.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. Real hardware: added a full-buffer dump immediately before
+  the `context_append()` write (in addition to the existing
+  post-header-format checkpoint) -- both showed completely clean,
+  correct content (matching what was actually typed, including the
+  `Subject:`/`To:` fields the old tail-only dump never covered) across
+  multiple real Sends after the fix, where the same test pattern
+  reliably produced corruption before it.
+- **Size delta**: negligible (one field access replacing one `strlen()`
+  call at each of two sites).
+- **Next step / new issue found**: a real-hardware Send hit a
+  previously-unseen `"Bug in Pine detected: \"Out of free storage
+  (1001 bytes)\""` crash (`IOT trap`) during Fcc append, in a message
+  whose own `STORE_S` buffer was confirmed clean by the same dump --
+  a distinct issue, not corruption; see `TODO-pdp11.md`'s open items.
+  All temporary diagnostics from this and the overlay-bug
+  investigation (canary buffers/checks on every `STORE_S` and on
+  `gf_out_buf`, `dump_so_tail()`/`dump_so_full()`, the `CP1`-`CP8`
+  syslog checkpoints, `gf_pipe()`'s progress logging, the
+  `/tmp/pine-debug-lastsend.txt` capture hook, and the
+  `append_message2_watchdog()` `SIGALRM` abort-forcer) have been
+  removed now that both bugs are fixed and verified.
