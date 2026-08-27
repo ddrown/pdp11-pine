@@ -207,37 +207,30 @@ DONE elsewhere or referenced in passing below.
 
 ### Close the remaining `pine-ovl` text/overlay and data+bss overage on real 2.11BSD hardware
 
-- [ ] `pine-ovl` (`pine/makefile.bsd`, see `TODO-pdp11-done.md`'s
-      several entries on it) links against real 2.11BSD `ld`, which
-      rejects the result if `round8k(base_text) + round8k(largest
-      overlay) > 64KB` *or* `data + bss > 56KB` (see `ld.c`'s size
-      check, reached via `-i`). Last real-hardware numbers (after the
-      `gethostbyname()`/resolver removal and the `prettysz()`
-      float-removal, both in `TODO-pdp11-done.md`): `text 41984`
-      (base) against a largest overlay of `24576` -- `round8k(41984)`
-      is `49152` (needs to drop under `40960`, i.e. base needs ~1024
-      more bytes off, to reclaim a segment and clear this check);
-      `data 46746 + bss 20542 = 67288`, over the 57344-byte ceiling by
-      `9944` bytes. Leads found so far, not yet acted on:
-    - `pico/edef.h:85`'s `char s[SLEN];` (`SLEN` = 8192, `pico/edef.h`)
-      is a non-`static` global scratch buffer shared across many pico
-      `.c` files -- confirmed (via `ld.c:1153`'s `bsize = add(bsize,
-      csize, "bss")`) that its 8192 bytes only show up in the *final
-      linked* binary's bss, invisible when `size`-ing any individual
-      `.o`, which is why it took real-hardware `nm -n pine | grep '
-      [bBcC] '`-style digging (worked around `nm`'s own out-of-memory
-      failure on the full symbol table by running `nm *.o | grep ' C
-      '` per object file instead) to find at all. Accounts for 8192 of
-      the 9944-byte data+bss shortfall by itself. **Not a bug** --
-      already went through a dedicated overflow audit in an earlier
-      session (see `TODO-pdp11-done.md`'s "pico/edef.h's 16KB global
-      scratch buffer" references) and `static` would be actively
-      wrong here (would give every including file its own separate
-      8KB copy instead of one shared one). Worth auditing whether
-      `SLEN` is generous headroom vs. a tight fit -- would need finding
-      the actual largest thing ever copied into `s` across every
-      caller before touching the constant, same rigor as any other
-      buffer-size change per this repo's verification discipline.
+- [x] **Resolved for now** -- both `pine-ovl` and `pico-ovl` link
+      cleanly on real hardware as of this session (`pine`: base text
+      `37888`, largest overlay `24320`, `data 27496`, `bss 13728`;
+      `pico`: base text `36160`, largest overlay `15936`, `data 14806`,
+      `bss 3600` -- see `TODO-pdp11-done.md`'s many entries this
+      session, especially the cross-file string dedup passes and the
+      `SLEN` shrink). The `round8k(base)+round8k(overlay)<=64KB`
+      formula this entry used to cite doesn't actually explain what's
+      observed (e.g. pine's current `round8k(37888)+round8k(24320) =
+      40960+32768 = 73728`, over 64KB by the old formula, yet the link
+      succeeds repeatedly) -- either the formula was always an
+      approximation or this target's split I/D space allows more than
+      a flat 64KB; not re-derived this session, flagging so a future
+      session doesn't trust the old numbers at face value. Re-open
+      this item if a future change makes either `-ovl` target fail to
+      link again; the leads below are still real, general future
+      targets, just no longer tied to an active build failure.
+    - ~~`pico/edef.h:85`'s `char s[SLEN];`~~ -- shrunk from 8192 to
+      2048 this session after a full audit of every writer, see
+      `TODO-pdp11-done.md`'s "Shrink pico/edef.h's SLEN" entry (which
+      also found and fixed two real bugs surfaced while verifying it:
+      an `mlreplyd()` off-by-one out-of-bounds read, and a
+      `getfnames()` heap-buffer-overflow from sizing its allocation off
+      a directory's `st_size` instead of its actual entry-name bytes).
     - String literal volume in `pine`'s bigger `.c` files is real,
       live, user-facing text (error messages/prompts/status lines),
       not dead code like the `struct variable` `description` field

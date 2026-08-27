@@ -10475,3 +10475,104 @@ ambiguity:
   this point; the `pico/edef.h` `SLEN` audit and the still-open
   structural `KEYMENU_S` duplication are the larger leads left in
   `TODO-pdp11.md`.
+
+### Shrink `pico/edef.h`'s `SLEN` (global scratch buffer `s`) from 8192 to 2048
+
+Prompted by a real-hardware "Out of free storage" crash sending mail
+(see `TODO-pdp11.md`) -- re-audited the global scratch buffer flagged
+as an unaudited shrink candidate in the "Cross-overlay indirect
+function pointer" entry above.
+
+- **Root cause of the original 8192 being wrong**: the existing
+  comment's "2x MAXPATHLEN" rationale was computed against *this dev
+  build's* `MAXPATHLEN` (4096, from Linux's `<sys/param.h>` --
+  `2*4096` is exactly 8192) rather than the real 2.11BSD target's,
+  which a one-line probe compiled and run on real hardware confirmed
+  is 256 -- a 16x-oversized number on the machine that actually
+  matters, same class of dev-build-vs-real-target mismatch as the
+  `MAXPATH`-sized `static char tmp[MAXPATH]`-style buffers found (and
+  ruled out as false leads) while looking for other targets in this
+  same session.
+- **Audit**: traced every writer of `s` (`strcpy`/`sprintf`/`strcat`
+  into it) across all 20 files that include `edef.h`. All of them are
+  in `browse.c` (directory-browser path-joining), `os_unix.c`
+  (`compresspath()`), `composer.c` (short field-help prompts), and
+  `display.c` (`mlyesno()`/`wkeyhelp()` -- the latter already
+  self-bounds against `sizeof(s)`, confirmed not a size driver).
+  Every path-shaped input feeding these (`dname`/`child`/`path`/
+  `base`, all `char foo[NLINE]`, `pico/estruct.h`'s `NLINE` = 256 --
+  unrelated to and much smaller than `MAXPATHLEN`) traces back to a
+  256-byte cap, and `pfnexpand()`'s `~user` expansion explicitly
+  rejects anything that would overflow its caller-supplied `len`
+  rather than truncating silently. Worst traced case: `dname` +
+  separator + `current->fname` (a `readdir()` entry, so at most
+  whatever the filesystem's own name-length limit is) lands around
+  511-533 bytes, not thousands. The Ctrl-T Fcc-folder-picker that used
+  to need much more headroom is already gone (see this file's earlier
+  entry on it).
+- **Fix**: `SLEN` 8192 -> 2048 (roughly 4x the traced worst case).
+- **Bugs found and fixed along the way**, surfaced while trying to
+  drive the file-browser through the actual worst-case path under
+  AddressSanitizer to confirm the new size holds (per this repo's
+  verification discipline for buffer-size changes) -- both real,
+  both independent of `SLEN`/`s` itself:
+    - **`mlreplyd()`'s insert-character loop read one byte before the
+      line buffer on literally the first keystroke of any prompt**
+      (`pico/display.c`, the `do { b[i+1] = b[i]; } while(i-- >= 0);`
+      shift-right-to-insert loop). The `>=` re-tests the
+      *pre-decrement* value of `i`, so when `i` reaches 0 (the normal
+      case -- shifting the NUL terminator when appending) the loop
+      runs one extra iteration reading/writing `b[-1]`. Silently
+      overwritten by the real character write immediately after, so
+      harmless *in practice* on a normal libc (whatever byte happens
+      to sit before the buffer is read then instantly discarded), but
+      a genuine out-of-bounds read confirmed via AddressSanitizer
+      (`stack-buffer-underflow`, caught because `mlreplyd()`'s `fname`
+      buffer in `insfile()` happened to sit at the very start of its
+      stack frame in that build). Fixed by changing `>=` to `>`.
+    - **`getfnames()` (`pico/os_unix.c`) sized its output buffer from
+      the directory's own `stat()` `st_size`**, which is a filesystem
+      block-accounting number with no reliable relationship to the
+      total bytes of the entry names inside it (this only ever worked
+      out on classic V7-style fixed-16-byte directory records, where
+      `st_size` really was `num_entries*16` -- wrong on every
+      filesystem where it isn't, which is effectively all of them
+      today). Confirmed via AddressSanitizer: a single long-named
+      entry in an otherwise-small directory (`tmpfs`, so a tiny
+      `st_size`) heap-overflowed the undersized `malloc()`. Fixed by
+      switching to two passes over the same open directory handle
+      (`readdir()` once to sum real name lengths, `rewinddir()`, then
+      the original copy pass) instead of trusting `st_size`.
+- **Also found while getting `pico-ovl` to relink after all of the
+  above**: `pico/makefile.bsd`'s `pico-ovl` target ran plain `mkovmake
+  -O2` with no basesize hint, which packed nearly everything into the
+  base (real hardware: base 49408 bytes against just 3 small
+  overlays) and then failed to link (`ld: too big for type 431` --
+  same unexplained internal `ld` limit as the `gf_terminal()`/
+  `gf_out_putc` entry above hit for `pine`, not the documented
+  `round8k(base)+round8k(overlay)<=64KB` ceiling, which isn't close to
+  binding here). Fixed the same way as that entry's `pine/makefile.bsd`
+  precedent: gave `mkovmake` an explicit basesize hint
+  (`MKOVFLAGS= -O2 16k`), confirmed working (base 36160, overlays
+  15872/15936/13696). Also added the `rm -f pico` step `pine-ovl` already
+  had before its own `make -f mkov` -- without it, `make -f mkov` reported
+  "'pico' is up to date" and silently skipped relinking even when the
+  object files backing it had just changed, one full round-trip lost
+  to this while verifying the fix above.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. AddressSanitizer build (`./build lnx ASAN=1`) driving `bin/pico`
+  directly (pexpect) through Ctrl-R (insert file) -> Ctrl-T (browse) ->
+  entering a real on-disk directory with a ~200-byte name containing
+  another long-named entry -- the exact `dname + fname` worst-case
+  concatenation path -- with no ASan report, after both bugs above were
+  fixed (both reproduced and were confirmed via ASan before their
+  fixes). Real hardware: `pico-ovl` rebuilds cleanly end-to-end via the
+  plain `make -f makefile.bsd pico-ovl` target.
+- **Size delta**: dev `lnx` build: `bin/pico` `bss` `10528` -> `4384`
+  (**-6144 bytes**, exactly matching `SLEN`'s 8192->2048 reduction,
+  confirming no other side effects). Real hardware: `bss` `3600`
+  after all of the above (no isolated pre-change real-hardware `pico`
+  baseline was captured before this entry's fixes landed together,
+  but the `SLEN` byte count itself is platform-independent -- `s` is a
+  plain `char` array, not pointer-sized -- so the same 6144-byte
+  reduction applies there too).
