@@ -1,6 +1,3 @@
-#if	!defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: os_unix.c,v 4.37 1993/11/23 05:40:11 mikes Exp $";
-#endif
 /*
  * Program:	Operating system dependent routines - Ultrix 4.1
  *

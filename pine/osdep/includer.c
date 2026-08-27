@@ -1,6 +1,3 @@
-#if !defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: includer.c,v 5.3 1993/07/20 21:24:07 hubert Exp $";
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

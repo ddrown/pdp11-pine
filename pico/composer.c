@@ -1,6 +1,3 @@
-#if	!defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: composer.c,v 4.10 1993/11/09 00:42:24 mikes Exp $";
-#endif
 /*
  * Program:	Pine composer routines
  *

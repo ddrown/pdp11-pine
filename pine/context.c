@@ -1,6 +1,3 @@
-#if !defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: context.c,v 4.25 1993/12/01 02:56:46 mikes Exp $";
-#endif
 /*
  * Program:	Mailbox Context Management
  *
