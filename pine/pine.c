@@ -64,6 +64,7 @@ extern char km_compose[];	/* mailindx.c owns this copy */
 extern char km_listfldrs[];	/* mailindx.c owns this copy */
 extern char km_quit[];	/* mailindx.c owns this copy */
 extern char km_o[];	/* mailindx.c owns this copy */
+extern char *term_envvar;	/* ttyout.c owns this copy */
 
 
 /*----------------------------------------------------------------------
@@ -261,13 +262,13 @@ main(int argc, char *argv[])
         switch(rv) {
           case -1: printf("TERM not set.\n");
             break;
-          case -2: printf("Unknown TERM \"%s\".\n", getenv("TERM"));
+          case -2: printf("Unknown TERM \"%s\".\n", getenv(term_envvar));
             break;
           case -3:
             printf("Can't open termcap file (check TERMCAP)\n");
             break;
           case -4:
-            printf("Terminal \"%s\" lacks needed functions.\n", getenv("TERM"));
+            printf("Terminal \"%s\" lacks needed functions.\n", getenv(term_envvar));
             break;
         }
         printf("\r");

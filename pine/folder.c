@@ -161,6 +161,7 @@ extern char km_quit[];	/* mailindx.c owns this copy */
 extern char km_o[];	/* mailindx.c owns this copy */
 extern char km_w[];	/* mailindx.c owns this copy */
 extern char km_dash[];	/* mailindx.c owns this copy */
+extern char km_mainmenu[];	/* mailindx.c owns this copy */
 
 static int sort_folder_entry = 0;
 
@@ -318,7 +319,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 	    if(do_what == FolderMaint){
 	      km->how_many = 2;
 	      folder_keys[MAIN_KEY].name = "M";
-	      folder_keys[MAIN_KEY].label = "Main Menu";
+	      folder_keys[MAIN_KEY].label = km_mainmenu;
 	      folder_keys[SELECT_KEY].name = "V";
 	      folder_keys[SELECT_KEY].label = 
 		   (fs.context->use & CNTXT_PSEUDO) ? select_label:"[ViewFldr]";

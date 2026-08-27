@@ -86,6 +86,8 @@ char         *word_not_found_msg = "\007Word not found";
 char         *undefined_here_msg = "\007\"%s\" undefined here (%s for help)";
 /* not static -- also used from mailview.c, see the extern there */
 char         *word_search_prompt = "Word to search for [%s] : ";
+extern char  *attr_name;	/* mailview.c owns this copy */
+extern char   km_save[];	/* mailindx.c owns this copy */
 
 
  
@@ -187,7 +189,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
               char *labels[3];
 	      int ret;
 
-              labels[0] = "Save";
+              labels[0] = km_save;
               labels[1] = "View";
               labels[2] = NULL;
 	      sprintf(prompt, "Save or View attachment %s ? (s/v) [s] ",
@@ -2113,7 +2115,7 @@ save_attachment(qline, msgno, a)
 
     /*-------  Figure out suggested file name ----*/
     for(param = a->body->parameter; param != NULL; param = param->next) {
-        if(strucmp(param->attribute, "name") == 0)
+        if(strucmp(param->attribute, attr_name) == 0)
           break;
     }
     if(param != NULL && param->value != NULL) {

@@ -10427,3 +10427,51 @@ from that bigger refactor and far lower risk.
   `TODO-pdp11.md`'s `KEYMENU_S` entry updated to note this is now
   partially addressed (content deduped; the array-of-values structural
   duplication itself is not).
+
+### One more cross-file string dedup pass, this time over the whole `pine/*.c` tree at once
+
+Re-ran the cross-file literal-duplication scan (same technique as the
+two entries above), but this time over every `pine/*.c` file
+simultaneously instead of the handful checked by hand before. Two
+false positives worth noting for next time: the naive "extract every
+double-quoted string" approach also matches `#pragma ... "-Wformat-
+nonliteral"` and `#include "headers.h"`-style preprocessor directives,
+which cost *zero* bytes (fully consumed by the preprocessor) -- had to
+filter those out before trusting the "savings" numbers.
+
+Of what was left, most candidates were under 10 bytes of real savings
+and/or generic single words (`"name"`, `"size"`, `"folder"`) risky to
+merge for the return. Did the handful with clear wins and no
+ambiguity:
+- `"name"` (`mailview.c` x3, `mailcmd.c` x1, all `strucmp(param->
+  attribute, ...)` MIME-parameter-name checks) -> new shared
+  `attr_name`, owned by `mailview.c`.
+- `"inbox"` (`osdep/expnfldr` (assembled into `os.c`) x2, `init.c` x1)
+  -> new shared `inbox_name`, owned by the `expnfldr` fragment (had to
+  go here and not `pine/os.c` itself -- that file is gitignored/build-
+  generated, a symlink to `osdep/os-bsd.c` or `osdep/os-lnx.c`
+  depending on target, per this repo's "edit the source, not the
+  copy" rule).
+- `"TERM"` (`ttyout.c` x2, `pine.c` x2, all `getenv("TERM")`) -> new
+  shared `term_envvar`, owned by `ttyout.c`. (`TODO-pdp11-done.md`'s
+  earlier cross-file entry had explicitly left this one alone as not
+  worth a dedicated pass by itself; picked it up now since the
+  broader pass was already touching similar-sized strings anyway.)
+- `"Save"` / `"Main Menu"` -- both already had a shared copy from the
+  `KEYMENU_S` entry above (`km_save`/`km_mainmenu`, `mailindx.c`), just
+  not referenced from every non-table use of the same text yet
+  (`mailcmd.c`'s attachment-view prompt, `log.c`'s IMAP-status-message
+  rewrite, `folder.c`'s runtime `folder_keys[MAIN_KEY].label`
+  assignment). These are ordinary runtime uses (a plain assignment/
+  function-argument), not static initializers, so the existing `char
+  km_save[]`/`char km_mainmenu[]` arrays could be referenced directly
+  with no new variable needed.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. Real hardware: `pine-ovl` rebuilt cleanly.
+- **Size delta**: real hardware `data` `27550` -> `27496`
+  (**-54 bytes**) -- smaller than the earlier two rounds, as expected
+  given how much smaller and more scattered these remaining
+  duplicates were. Diminishing returns from this specific technique at
+  this point; the `pico/edef.h` `SLEN` audit and the still-open
+  structural `KEYMENU_S` duplication are the larger leads left in
+  `TODO-pdp11.md`.

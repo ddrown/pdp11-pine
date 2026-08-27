@@ -110,6 +110,9 @@ static void CursorRight(int);
 #define FARAWAY 1000
 
 
+/* not static -- also used from pine.c, see the extern there */
+char *term_envvar = "TERM";
+
 static char *_clearscreen, *_moveto, *_up, *_down, *_right, *_left,
             *_setinverse, *_clearinverse,
             *_setunderline, *_clearunderline,
@@ -168,7 +171,7 @@ config_screen(tt)
     int err;
 
     *tt = NULL;
-    ttnm = getenv ("TERM");
+    ttnm = getenv (term_envvar);
     if (!ttnm) return -1;
     strcpy (termname, ttnm);
     setupterm (termname, 1 /* (ignored) */, &err);
@@ -211,7 +214,7 @@ config_screen(tt)
     char *ttnm;
 
     *tt = NULL;
-    if ((ttnm = getenv("TERM")) == NULL) return(-1);
+    if ((ttnm = getenv(term_envvar)) == NULL) return(-1);
 
     if (strcpy(termname, ttnm) == NULL)
     	return(-1);

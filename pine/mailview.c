@@ -83,6 +83,8 @@ char *richtext              = "richtext";
 char *external_body         = "external-body";
 char *err_fetching_text_msg = "    [ERROR fetching text of message]";
 char *formatting_error_fmt  = "%s%s    [Formatting error: %s]%s";
+/* not static -- also used from mailcmd.c, see the extern there */
+char *attr_name             = "name";
 extern char *charset_attr;	/* send.c owns this copy -- also "charset" */
 extern char *word_not_found_msg;	/* mailcmd.c owns this copy */
 extern char *undefined_here_msg;	/* mailcmd.c owns this copy */
@@ -337,11 +339,11 @@ describe_mime(body, prefix, num, should_show)
         a->body        = body;
         a->can_display = mime_can_display(body->type, body->subtype,
                                           body->parameter);
-	for(param = a->body->parameter; 
-	    param != NULL && strucmp(param->attribute,"name") != 0;
+	for(param = a->body->parameter;
+	    param != NULL && strucmp(param->attribute,attr_name) != 0;
 	    param = param->next)
 	      ;
-	if (param != NULL && strucmp(param->attribute,"name") == 0)
+	if (param != NULL && strucmp(param->attribute,attr_name) == 0)
 	    has_name = 1;
 	else
 	    has_name = 0;
@@ -427,7 +429,7 @@ type_desc(type, subtype, params, full)
 
       case TYPEAPPLICATION:
         if(subtype != NULL && strucmp(subtype, "octet-stream") == 0){
-            while(params != NULL && strucmp(params->attribute,"name") != 0)
+            while(params != NULL && strucmp(params->attribute,attr_name) != 0)
               params = params->next;
             if(full)
               sprintf(type_d, "Attached file \"%.100s\"",

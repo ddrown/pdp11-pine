@@ -57,6 +57,8 @@
 #include <time.h>
 #include "headers.h"
 
+extern char km_save[];	/* mailindx.c owns this copy */
+
 
 /*----------------------------------------------------------------------
       Queue imap log message for display in the message line
@@ -86,7 +88,7 @@ void mm_log(string, errflg)
 	if(ps_global->try_to_create) /* hide error if creating new folder  */
 	  return;
 
-	rplstr(string, 6, "Save"); /* replace "APPEND" with "Save" */
+	rplstr(string, 6, km_save); /* replace "APPEND" with "Save" */
     }
 
     /*---- replace all "mailbox" with "folder" ------*/
