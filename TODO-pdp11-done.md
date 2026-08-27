@@ -10261,3 +10261,98 @@ files, rather than per-file.
   confirmed `data` `28292` -> `28112` (**-180 bytes**), matching a
   hand estimate (five new 2-byte pointers, six removed duplicate
   string copies) to within a few bytes.
+
+### `longjmp botch` sending mail: SIGWINCH handler and its `longjmp()` target weren't guaranteed resident under `pine-ovl`'s auto-overlay text
+
+Real-hardware report: reading mail now worked (see the INBOX-open
+entries above), but sending hit `"sent-mail" doesn't exist. Create?`
+-> answering `y` immediately produced `longjmp botch` followed by a
+hung CPU (the literal, infinite-loop `botch()` routine in old BSD's
+`setjmp`/`longjmp` on a stack-frame-relationship sanity-check
+failure) -- reachable on the very first real Send attempt, not an
+occasional flake.
+
+- **Root cause**: `pine-ovl` links with real 2.11BSD `ld -i -X`
+  (auto-overlay text). `mkovmake` partitions object files into a
+  resident BASE plus swapped OVERLAY segments purely by *statically
+  visible calls* between modules -- it has no way to see a signal
+  handler registered with `signal()` (a raw function pointer the
+  *kernel*, not any of this program's own code, invokes later,
+  asynchronously) or a `longjmp()` target recorded by a `setjmp()` in
+  another file. `pine/signals.c`'s `winch_signal()` (SIGWINCH handler)
+  called `longjmp(winch_state, 1)` back into a `setjmp(winch_state)`
+  in `pine/ttyin.c`'s `read_with_timeout()`, guarded by a
+  `ready_for_winch` flag meant to only allow the jump while genuinely
+  blocked there. Neither `signals.o` nor `ttyin.o` was pinned to the
+  base (`pine/makefile.bsd`'s `pine-ovl` recipe passed `$(obj)` to
+  `mkovmake -O2 8k` with no `-Z` at all, leaving *every* module,
+  including these two, to the optimizer's free choice). Confirmed via
+  the real `mkovmake`/`ld` output that `ttyin.o` landed in a
+  `send.o`/`strings.o`/`ttyin.o` overlay, while the actual "create
+  sent-mail" code path for a non-ambiguous folder name
+  (`mail_create()` -> `bezerk_create()`) lives in `../c-client/
+  bezerk.o`'s own, different overlay -- so a `longjmp()` into
+  `ttyin.o`'s recorded frame while `bezerk.o`'s overlay is the one
+  actually resident jumps into whatever instruction bytes that
+  overlay happens to have loaded at that address instead. Same
+  underlying hazard as this file's `gf_terminal()`/`gf_out_putc` entry
+  above (an explicit function pointer instead of a signal handler);
+  the `ready_for_winch` staleness angle was investigated at length
+  first (never conclusively ruled in or out as *the* trigger) before
+  the overlay angle -- prompted by the user directly asking whether
+  signal handlers and `longjmp` targets need to live outside the
+  overlays -- turned out to explain it far more simply: it doesn't
+  need to be a narrow race at all if the target overlay is routinely
+  not the one resident when Fcc creation runs.
+- **Fix**, two parts:
+    1. Eliminated the `longjmp()`-out-of-signal-handler pattern
+       entirely instead of trying to keep both `signals.o` and
+       `ttyin.o` simultaneously resident. `winch_signal()` now only
+       sets the existing `winch_occured` flag; `read_with_timeout()`
+       already had a fast-path check for that flag, and now also
+       checks it on the `EINTR` a caught signal already produces from
+       its blocking `select()`/`read()`, returning `KEY_RESIZE`
+       through the same ordinary return-value path it always used for
+       the non-blocked case -- no more raw-PC jump, so no more
+       requirement that `ttyin.o` be resident at signal-delivery time.
+       Removed `jmp_buf winch_state` and `ready_for_winch` entirely
+       (both now dead).
+    2. Forced `signals.o` into `mkovmake`'s base
+       (`pine/makefile.bsd`'s `pine-ovl`: `signals.o -Z $(ovlobj)
+       ...`, new `ovlobj` = `$(obj)` minus `signals.o`) -- this file
+       is nothing but signal-handler plumbing (`auger_in_signal`,
+       `quit_signal`, `hup_signal`, `term_signal`, `usr2_signal`,
+       `winch_signal`), every one of which has the identical
+       "kernel can invoke this while any overlay is resident" hazard,
+       not just `winch_signal`. This is the same *kind* of fix the
+       `gf_terminal()` entry above tried and abandoned for `filter.o`
+       (`ld: too big for type 431`) -- but `signals.c` is roughly a
+       fifth the size (~380 lines vs. ~1750) and, unlike `filter.o`,
+       doesn't need to pull anything else along with it into the
+       base: everything it calls afterward (`want_to()`,
+       `mail_close()`, etc.) is an ordinary statically-visible call,
+       already handled correctly by the normal overlay trampoline
+       mechanism regardless of which overlay the callee ends up in.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31 (including `test_signal_handlers` and the composer-resize
+  tests, which already exercised `winch_signal()`/`SIGWINCH`
+  indirectly); a standalone manual check resizing the terminal while
+  genuinely blocked at the main index screen (not the composer),
+  confirming the new `EINTR`+flag path still redraws promptly instead
+  of merely surviving. On real hardware: `pine-ovl` linked
+  successfully with `signals.o` confirmed first in the base module
+  list (`/bin/ld -i -X ... /lib/crt0.o signals.o addrutil.o args.o
+  help.o log.o mailbox.o ../c-client/dummy.o ../c-client/misc.o -Z
+  ...`), no budget-overflow error. Brute-force SIGWINCH flooding
+  against the flat `lnx` dev build (which has no overlays at all)
+  could *not* reproduce the original crash -- expected in hindsight,
+  since the whole bug depends on overlay swapping that dev build
+  doesn't have, and a useful confirming data point once the real root
+  cause was found. End-to-end confirmation came from the user retrying
+  a real Send on hardware: the `longjmp botch` is gone (a message now
+  gets far enough to hit a separate, unrelated `data`+`bss` capacity
+  issue instead -- see `TODO-pdp11.md`).
+- **Size delta**: real hardware `data` `28112` -> `28110` (-2 bytes,
+  removing the one initialized `int ready_for_winch = 0;`; `jmp_buf
+  winch_state` had no initializer so was already in `bss`, not
+  `data`). Not a size-reduction change; noted for completeness only.

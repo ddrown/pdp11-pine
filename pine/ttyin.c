@@ -248,9 +248,7 @@ int state;
 
 
 
-jmp_buf winch_state;
 int     winch_occured = 0;
-int     ready_for_winch = 0;
 
 /*----------------------------------------------------------------------
      Lowest level read command. This reads one character with timeout. (UNIX)
@@ -279,19 +277,6 @@ read_with_timeout(int time_out)
      if(winch_occured) {
          winch_occured = 0;
          return(KEY_RESIZE);
-     }
-
-
-     if(setjmp(winch_state) != 0) {
-         ready_for_winch = 0;
-         winch_occured   = 0;
-#ifdef POSIX_SIGNALS
-	 /* Need to reset signal after longjmp from handler. */
-	 sigrelse (SIGWINCH);
-#endif
-         return((int)KEY_RESIZE);
-     } else {
-         ready_for_winch = 1;
      }
 
      if(time_out > 0) {
@@ -327,28 +312,37 @@ read_with_timeout(int time_out)
 
          if(res < 0) {
              if(errno == EINTR) {
-                 ready_for_winch = 0;
+                 /* A caught signal (most likely SIGWINCH) interrupted
+                  * the blocking wait -- pick up whatever it left in
+                  * winch_occured rather than silently swallowing a
+                  * resize until the next timeout tick. */
+                 if(winch_occured) {
+                     winch_occured = 0;
+                     return(KEY_RESIZE);
+                 }
                  return(NO_OP_COMMAND);
              }
              panic1("Select error: %s\n", error_description(errno));
          }
 
          if(res == 0) { /* the select timed out */
-             ready_for_winch = 0;
              return(time_out > 25 ? NO_OP_IDLE: NO_OP_COMMAND);
          }
      }
 
      res = read(STDIN_FD, &c, 1);
 
-     ready_for_winch = 0;
-
      if(res <= 0) {
          /* Got an error reading from the terminal. Treat this like
             a SIGHUP: clean up and exit. */
 
-         if(errno == EINTR)
-           return(NO_OP_COMMAND);
+         if(errno == EINTR) {
+             if(winch_occured) {
+                 winch_occured = 0;
+                 return(KEY_RESIZE);
+             }
+             return(NO_OP_COMMAND);
+         }
 
          if(ps_global->inbox_stream != NULL){
              if(ps_global->inbox_stream == ps_global->mail_stream)
