@@ -514,55 +514,43 @@ parse_date(given_date, d)
             d->min_off_gmt *= atoi(tmp);
             /* BUG: ought to snarf up the name if it's at the end */
         } else {
-            if(struncmp(p, "gmt", 3) == 0){        /* GMT */
-                strcpy(d->zone_name, "GMT");
+            /* struncmp() already case-folds both sides, so the same
+             * three-letter literal serves as both the match pattern
+             * (via the tz pointer) and the zone_name copy below --
+             * one literal per zone instead of a separate lowercase
+             * match string plus an uppercase copy string (was 11
+             * duplicate pairs). */
+            char *tz;
+
+            if(struncmp(p, (tz = "GMT"), 3) == 0)
+              d->hours_off_gmt = 0;
+            else if(struncmp(p, (tz = "PST"), 3) == 0)
+              d->hours_off_gmt = -8;
+            else if(struncmp(p, (tz = "PDT"), 3) == 0)
+              d->hours_off_gmt = -7;
+            else if(struncmp(p, (tz = "MST"), 3) == 0)
+              d->hours_off_gmt = -7;
+            else if(struncmp(p, (tz = "MDT"), 3) == 0)
+              d->hours_off_gmt = -6;
+            else if(struncmp(p, (tz = "CST"), 3) == 0)
+              d->hours_off_gmt = -6;
+            else if(struncmp(p, (tz = "CDT"), 3) == 0)
+              d->hours_off_gmt = -5;
+            else if(struncmp(p, (tz = "EST"), 3) == 0)
+              d->hours_off_gmt = -5;
+            else if(struncmp(p, (tz = "EDT"), 3) == 0)
+              d->hours_off_gmt = -4;
+            else if(struncmp(p, (tz = "IST"), 3) == 0)
+              d->hours_off_gmt = 2;
+            else if(struncmp(p, (tz = "JST"), 3) == 0)
+              d->hours_off_gmt = 9;
+            else {
+                tz = "???";
                 d->hours_off_gmt = 0;
-                d->min_off_gmt  = 0;
-            } else if(struncmp(p, "pst", 3) == 0){ /* Pacific Standard */
-                strcpy(d->zone_name, "PST");
-                d->hours_off_gmt = -8;
-                d->min_off_gmt  = 0;
-            } else if(struncmp(p, "pdt", 3) == 0){ /* Pacific Daylight */
-                strcpy(d->zone_name, "PDT");
-                d->hours_off_gmt = -7;
-                d->min_off_gmt  = 0;
-            } else if(struncmp(p, "mst", 3) == 0) { /* Mountain Standard */
-                strcpy(d->zone_name, "MST");
-                d->hours_off_gmt = -7;
-                d->min_off_gmt  = 0;
-            } else if(struncmp(p, "mdt", 3) == 0) { /* Mountatin Daylight */
-                strcpy(d->zone_name, "MDT");
-                d->hours_off_gmt = -6;
-                d->min_off_gmt  = 0;
-            } else if(struncmp(p, "cst", 3) == 0) { /* Central Standard */
-                strcpy(d->zone_name, "CST");
-                d->hours_off_gmt = -6;
-                d->min_off_gmt  = 0;
-            } else if(struncmp(p, "cdt", 3) == 0) { /* Central Daylight */
-                strcpy(d->zone_name, "CDT");
-                d->hours_off_gmt = -5;
-                d->min_off_gmt  = 0;
-            } else if(struncmp(p, "est", 3) == 0) { /* Eastern Standard */
-                strcpy(d->zone_name, "EST");
-                d->hours_off_gmt = -5;
-                d->min_off_gmt  = 0;
-            } else if(struncmp(p, "edt", 3) == 0) { /* Eastern Daylight */
-                strcpy(d->zone_name, "EDT");
-                d->hours_off_gmt = -4;
-                d->min_off_gmt  = 0;
-            } else if(struncmp(p, "ist", 3) == 0) { /* Israel Standard */
-                strcpy(d->zone_name, "IST");
-                d->hours_off_gmt = 2;
-                d->min_off_gmt  = 0;
-            } else if(struncmp(p, "jst", 3) == 0) { /* Japan Standard */
-                strcpy(d->zone_name, "JST");
-                d->hours_off_gmt = 9;
-                d->min_off_gmt  = 0;
-            } else {
-                strcpy(d->zone_name, "???"); /* Don't know what it is: use GMT */
-                d->hours_off_gmt = 0;
-                d->min_off_gmt  = 0;
             }
+
+            strcpy(d->zone_name, tz);
+            d->min_off_gmt = 0;
         }
     }
 }
@@ -703,10 +691,9 @@ pretty_command(c)
     } else if(c < ' ') {
         sprintf(buf, "^%c", c + 'A' - 1);
         return(buf);
-    } else if(c > '~') {
-        sprintf(buf, "%c", c);
-        return(buf);
     } else {
+        /* c > '~' fell into the same "%c" branch as the plain default
+         * case below -- merged, they were identical. */
         sprintf(buf, "%c", c);
         return(buf);
     }
@@ -788,7 +775,7 @@ char *
 byte_string(bytes)
      long bytes;
 {
-    char       *a, aa[5];
+    char       *a, aa[5], *bytes_str = "bytes";
     char       *abbrevs = "GMK";
     long        i, ones, tenths;
     static char string[64];	/* room for two full-width longs */
@@ -797,7 +784,7 @@ byte_string(bytes)
     tenths = 0L;
 
     if(bytes == 0L){
-        strcpy(string, "0 bytes");
+        sprintf(string, "0%s", bytes_str);
     } else {
         for(a = abbrevs, i = 1000000000; i >= 1; i /= 1000, a++) {
             if(bytes > i) {
@@ -811,9 +798,9 @@ byte_string(bytes)
         aa[0] = *a;  aa[1] = '\0'; 
     
         if(tenths == 0)
-          sprintf(string, "%ld%s%s", ones, aa, *a ? "B" : "bytes");
+          sprintf(string, "%ld%s%s", ones, aa, *a ? "B" : bytes_str);
         else
-          sprintf(string, "%ld.%ld%s%s", ones, tenths, aa, *a ? "B" : "bytes");
+          sprintf(string, "%ld.%ld%s%s", ones, tenths, aa, *a ? "B" : bytes_str);
     }
 
     return(string);

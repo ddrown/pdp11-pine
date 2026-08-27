@@ -9893,3 +9893,50 @@ of the buffer, in however its content got copied out.
   `/tmp/pine-debug-lastsend.txt` capture hook, and the
   `append_message2_watchdog()` `SIGALRM` abort-forcer) have been
   removed now that both bugs are fixed and verified.
+
+### Shrink `strings.c`'s string literal footprint (`pine-ovl` data+bss)
+
+Resuming the file-by-file string-cutting pass (see the `mailcmd.c`/
+`mailview.c`/etc. entries above) after the Send corruption/overlay
+investigation. `strings.c` had 73 string literals totaling ~569 bytes
+on this dev build's measure, the biggest remaining un-cut file (every
+bigger `.c` file in the tree was already done).
+
+- **`parse_date()`'s timezone block**: 11 `if`/`else if` branches, each
+  matching a lowercase three-letter abbreviation (`struncmp(p, "gmt",
+  3)`) then separately `strcpy`-ing the uppercase version (`"GMT"`)
+  into `d->zone_name` -- 22 literal occurrences for 11 zones.
+  `struncmp()` already case-folds both operands for comparison, so
+  `struncmp(p, "GMT", 3)` matches lowercase input identically to
+  `struncmp(p, "gmt", 3)` -- the separate lowercase copy was pure
+  duplication. Rewrote each branch to assign the single uppercase
+  literal into a local `char *tz` inside the comparison
+  (`struncmp(p, (tz = "GMT"), 3) == 0`), then `strcpy(d->zone_name,
+  tz)` once after the chain -- one literal per zone (11 total) instead
+  of 22, plus the repeated `strcpy(...)`/`d->min_off_gmt = 0` in every
+  branch collapsed to one copy each. (A table-driven version was tried
+  first -- a `static struct {char *name; short hrs;}` array plus a
+  lookup loop -- but measured *worse* on real hardware: the table's
+  own per-entry pointer+short storage cost more than the string
+  dedup saved, a net data-segment loss. Reverted in favor of the
+  if/else-chain-with-shared-pointer version above.)
+- **`pretty_command()`**: the `c > '~'` and final `else` branches were
+  byte-for-byte identical (`sprintf(buf, "%c", c); return(buf);`) --
+  dead duplication, merged into one branch.
+- **`byte_string()`**: `"0 bytes"` (the `bytes == 0` case) and
+  `"bytes"` (the generic case's `*a ? "B" : "bytes"`) were two
+  separate literals for overlapping text. Introduced one local
+  `bytes_str = "bytes"` and reused it in both
+  (`sprintf(string, "0%s", bytes_str)` for the zero case), leaving
+  only one copy of `"bytes"` in the object file.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite 31/31
+  (no test asserts on any touched string or on timezone-name/offset
+  parsing). Real hardware (`pine-build.py`): `data` `29456` -> `29400`
+  (-56 bytes) and, more surprisingly, overlay group 5 (`send.o
+  strings.o ttyin.o`) `text` `23360` -> `23104` (-256 bytes) --
+  collapsing 11 near-identical `if`/`else if` branches (and the
+  `pretty_command()` dead-branch merge) shrank *code*, not just
+  string data, on this target. Total overlay text `212736` ->
+  `212480`.
+- **Size delta**: -56 bytes data, -256 bytes overlay text (real
+  2.11BSD hardware, see above).
