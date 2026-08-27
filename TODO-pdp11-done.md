@@ -10181,3 +10181,83 @@ untouched.
   (no prior real-hardware `size pico` baseline existed before this
   session touched it) but the dev-build delta (-1116 bytes) confirms
   the same win applies there.
+
+### Cross-file string literal deduplication, found via `nm --size-sort` ground-truth inspection instead of source grep
+
+Every string-cutting entry so far found candidates by grepping one
+file's own source for repeated literals. That method structurally
+cannot see duplication *across* files -- and this toolchain's linker
+never merges identical string constants across separate `.o` files
+either (each `.c` file is its own translation unit; there's no
+COMDAT-style folding on this old `a.out` toolchain), so a message
+string repeated verbatim in three different `.c` files costs three
+full copies in the final binary, invisible to any one file's own
+literal audit.
+
+Found these instead by inspecting the *linked* binary directly:
+`nm --size-sort -S bin/pine` (the ELF `lnx` dev build) ranks every
+symbol by size, giving quick ground-truth visibility into the biggest
+`.data`/`.bss` consumers (confirmed, as a sanity check, that this
+surfaces the already-tracked `KEYMENU_S`/`struct key` duplication
+issue -- `index_keys`/`view_keys`/`folder_keys`/`main_keys` and the
+help-key tables all show up near the top, exactly matching that
+already-deferred TODO item). Cross-file *string* duplication doesn't
+show up this way, though (gcc already merges identical `.rodata`
+constants within one binary before `nm` ever sees it) -- for that,
+wrote a small script extracting every string literal (comment-
+stripped, same technique as the `context.c`/`ttyout.c` entry) from
+*every* `pine/*.c` file at once and grouping by exact text across
+files, rather than per-file.
+
+- **Found and fixed** (same "define once, `extern` elsewhere" pattern
+  already established for `already_first_page`/`cancelled_msg`/
+  `word_not_found_msg`):
+    - `"\007\"%s\" undefined here (%s for help)"` (39 bytes) --
+      identical in `mailcmd.c`, `mailview.c`, and `pine.c`. New shared
+      `undefined_here_msg`, owned by `mailcmd.c`.
+    - `"Word to search for [%s] : "` (27 bytes) -- `mailcmd.c` and
+      `mailview.c`. New shared `word_search_prompt`, owned by
+      `mailcmd.c`.
+    - `"richtext"` (8 bytes), `"external-body"` (13 bytes), `"
+      [ERROR fetching text of message]"` (37 bytes), and `"%s%s
+      [Formatting error: %s]%s"` (33 bytes) -- all four duplicated
+      between `mailview.c` and `reply.c` (these two files' message-
+      body-formatting functions are close cousins, which is why so
+      much overlapped). `richtext` already existed as a `static`
+      variable in `mailview.c`; made it non-`static` and pointed
+      `reply.c` at it via `extern`. Added three new shared variables
+      (`external_body`, `err_fetching_text_msg`,
+      `formatting_error_fmt`) owned by `mailview.c`.
+- **Not touched**: `"To: "`/`"Cc: "` (`mailview.c`/`reply.c`, via
+  `pretty_addr_string()` calls) -- only 4 bytes each, and `mailview.c`
+  has three *other* field-name literals (`"From: "`, `"Reply to:
+  "`, `"Bcc: "`) in the same call group that aren't duplicated
+  anywhere, so sharing just these two would be an inconsistent,
+  low-value special case. `"TERM"` (`pine.c`/`ttyout.c`) and the
+  `KEYMENU_S` table duplication: left alone, see `TODO-pdp11.md`.
+- **New warning class hit and fixed**: two of the four newly-shared
+  variables (`word_search_prompt`, `formatting_error_fmt`) are used as
+  the *format* argument to `sprintf()` -- unlike `q_status_message()`/
+  `q_status_message2()` (this tree's usual message-string sink, which
+  isn't `printf`-attribute-annotated, so passing it a non-literal
+  format never triggers anything), `sprintf()` is a real, GCC-
+  recognized `printf`-family function, so a variable (non-literal)
+  format argument trips `-Wformat=2`'s `-Wformat-nonliteral` -- a
+  real, if slightly surprising, new warning class from this exact
+  refactor. Fixed with the same `#pragma GCC diagnostic push` /
+  `ignored "-Wformat-nonliteral"` / `pop` bracketing already
+  established in `ttyout.c`'s `PutLineN()` family for the identical
+  reason.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31.
+- **Size delta**: counterintuitively, this *dev* build's `data`
+  went **up** (`8968` -> `9000`, +32 bytes): every new shared
+  variable is a `char *` pointer, 8 bytes on this 64-bit ELF build,
+  while the deduplicated string *content* itself lives in `.rodata`
+  (reported under `text`, which dropped `272842` -> `272706`, -136
+  bytes) -- so the dev build's `data` number is actively misleading
+  for this specific kind of change. On real 2.11BSD hardware, where a
+  `char *` is 2 bytes, not 8, the arithmetic flips heavily favorable:
+  confirmed `data` `28292` -> `28112` (**-180 bytes**), matching a
+  hand estimate (five new 2-byte pointers, six removed duplicate
+  string copies) to within a few bytes.

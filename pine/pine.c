@@ -55,6 +55,7 @@
 char         version_buff[50];
 struct pine *ps_global;               /* sort of THE global variable */
 int          timeout = NEW_MAIL_TIME; /* referenced in weemacs */
+extern char *undefined_here_msg;	/* mailcmd.c owns this copy */
 
 
 /*----------------------------------------------------------------------
@@ -682,8 +683,7 @@ main_menu_screen(pine_state)
   
 	  default:
           bleep:
-            q_status_message2(0, 0, 2,
-	      "\007\"%s\" undefined here (%s for help)",
+            q_status_message2(0, 0, 2, undefined_here_msg,
                               (void *)pretty_command(orig_ch), "?");
 	 } /* the switch */
     } /* the BIG while loop! */

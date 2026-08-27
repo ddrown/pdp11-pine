@@ -78,9 +78,15 @@ static int match_charset(char *);
  * storage instead of a separate copy of each at every site */
 static char *err_writing_msg = "Error writing message: %s";
 static char *us_ascii        = "us-ascii";
-static char *richtext        = "richtext";
+/* not static -- also used from reply.c, see the externs there */
+char *richtext              = "richtext";
+char *external_body         = "external-body";
+char *err_fetching_text_msg = "    [ERROR fetching text of message]";
+char *formatting_error_fmt  = "%s%s    [Formatting error: %s]%s";
 extern char *charset_attr;	/* send.c owns this copy -- also "charset" */
 extern char *word_not_found_msg;	/* mailcmd.c owns this copy */
+extern char *undefined_here_msg;	/* mailcmd.c owns this copy */
+extern char *word_search_prompt;	/* mailcmd.c owns this copy */
 
 /* "message"/"help"/"text" word for the "Already at start/end of ..."
  * status messages below -- was a 4-way ternary (with the "help" string
@@ -563,15 +569,25 @@ format_message(msgno, env, body, flgs, pc)
 	    gf_filter_init();
 	    gf_link_filter(gf_nvtnl_local);
 	    if(decode_error = gf_pipe(gc, pc)){
-                sprintf(tmp_20k_buf, "%s%s    [Formatting error: %s]%s",
+		/* formatting_error_fmt is a compile-time-fixed literal
+		 * shared with reply.c, not a user-influenced format
+		 * string. */
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
+                sprintf(tmp_20k_buf, formatting_error_fmt,
 			NEWLINE, NEWLINE, decode_error, NEWLINE);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 		if(!gf_puts(tmp_20k_buf, pc))
 		  goto write_error;
 	    }
 	}
 	else{
 	    if(!gf_puts(NEWLINE, pc)
-	       || !gf_puts("    [ERROR fetching text of message]", pc)
+	       || !gf_puts(err_fetching_text_msg, pc)
 	       || !gf_puts(NEWLINE, pc)
 	       || !gf_puts(NEWLINE, pc))
 	      goto write_error;
@@ -671,7 +687,7 @@ format_message(msgno, env, body, flgs, pc)
 		format_envelope(a->body->contents.msg.env, pc);
 	    }
             else if(a->body->subtype 
-		    && strucmp(a->body->subtype, "external-body") == 0) {
+		    && strucmp(a->body->subtype, external_body) == 0) {
 		if(!gf_puts("This part is not included and can be ", pc)
 		   || !gf_puts("fetched as follows:", pc)
 		   || !gf_puts(NEWLINE, pc)
@@ -1438,8 +1454,7 @@ whereis:
                 }else {
 unknown:
     	            /*----------- Unknown command -------*/
-                    q_status_message2(0, 0, 2,
-              "\007\"%s\" undefined here (%s for help)",
+                    q_status_message2(0, 0, 2, undefined_here_msg,
                           (void *)pretty_command(orig_ch), "?");
     	        }
             }
@@ -1480,7 +1495,16 @@ search_text(q_line, start_line)
     HelpType	help;
     int         rc;
 
-    sprintf(prompt, "Word to search for [%s] : ", search_string);
+    /* word_search_prompt is a compile-time-fixed literal shared with
+     * mailcmd.c, not a user-influenced format string. */
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
+    sprintf(prompt, word_search_prompt, search_string);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
     help = NO_HELP;
     nsearch_string[0] = '\0';
 

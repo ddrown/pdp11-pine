@@ -82,6 +82,10 @@ static char *cant_open_use_compose    = "\007Can't open \"%s\", use Compose";
 extern char *out_of_mem_msg;	/* send.c owns this copy */
 /* not static -- also used from folder.c/mailview.c, see the externs there */
 char         *word_not_found_msg = "\007Word not found";
+/* not static -- also used from mailview.c/pine.c, see the externs there */
+char         *undefined_here_msg = "\007\"%s\" undefined here (%s for help)";
+/* not static -- also used from mailview.c, see the extern there */
+char         *word_search_prompt = "Word to search for [%s] : ";
 
 
  
@@ -671,8 +675,7 @@ do_sortindex:
           /*--------- Default, unknown command ----------*/
         default:
         bogus:
-          q_status_message2(0, 0, 2,
-	      "\007\"%s\" undefined here (%s for help)",
+          q_status_message2(0, 0, 2, undefined_here_msg,
                           (void *)pretty_command(orig_command), "?");
           break;
       }
@@ -1813,7 +1816,16 @@ search_headers(command_line, sorted_msg, max_msg)
     HelpType	help;
 
 
-    sprintf(prompt, "Word to search for [%s] : ", search_string);
+    /* word_search_prompt is a compile-time-fixed literal shared with
+     * mailview.c, not a user-influenced format string. */
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
+    sprintf(prompt, word_search_prompt, search_string);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
     help = NO_HELP;
     new_string[0] = '\0';
 
