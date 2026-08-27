@@ -211,11 +211,12 @@ config_screen(tt)
 #else
     int  tgetent(char *, const char *);      /* get termcap entry */
     int  err;
+    char *ttnm;
 
     *tt = NULL;
-    if (getenv("TERM") == NULL) return(-1);
+    if ((ttnm = getenv("TERM")) == NULL) return(-1);
 
-    if (strcpy(termname, getenv("TERM")) == NULL)
+    if (strcpy(termname, ttnm) == NULL)
     	return(-1);
 
     if ((err = tgetent(_terminal, termname)) != 1)

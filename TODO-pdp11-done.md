@@ -10131,3 +10131,53 @@ comment prose, not code).
   copies, -4 for the removed `"TERM"` copy); `text`/overlays
   unchanged (string cuts only affect `.data`).
 - **Size delta**: -36 bytes data (real 2.11BSD hardware).
+
+### Tree-wide removal of every `.c` file's unused RCS `$Id$` identifier string
+
+Per the previous entry's "flagged for a possible future pass" note --
+the user asked for it. Every `.c` file under `pine/`, `pico/`, and
+`pine/osdep/` carries an identical-shaped block:
+```c
+#if !defined(lint) && !defined(DOS)
+static char rcsid[] = "$Id: <file>,v <rev> <date> mikes Exp $";
+#endif
+```
+Confirmed via `grep -rn '\brcsid\b'` across every `.c`/`.h` in both
+trees that the variable is referenced nowhere else (no about-screen,
+no `-version` flag, nothing) -- it exists solely for the classic RCS
+`ident`/`what(1)` utilities to extract a source-version string from a
+built binary, a nicety with no user on a personal, offline PDP-11 mail
+station. `imap/ANSI/c-client/*.c` does *not* use this pattern (a
+different upstream convention -- Mark Crispin's c-client), so it was
+untouched.
+
+- **Fix**: a small Python script matched the exact 3-line block
+  (`#if !defined(lint) && !defined(DOS)` / `static char rcsid[] =
+  "$Id: ...$";` / `#endif`, tolerating the `#if`/tab whitespace
+  variants actually present) and removed it, once per file, across
+  every `pine/*.c`, `pico/*.c`, and `pine/osdep/*.c` file that had one
+  -- 41 files total (`pine/pine-use.c` and `pine/osdep/includer.c`
+  included for tree-wide consistency, even though neither links into
+  the final `pine`/`pico` binaries -- standalone tool and a build-time
+  code generator, respectively). `pico/osdep.c` also matched (it's a
+  build-time `cp` of `pico/os_unix.c`, gitignored per `.gitignore`) --
+  harmless to have edited directly since the next build overwrites it
+  from the now-fixed `os_unix.c`.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings;
+  full smoketest suite 31/31. Real hardware: pushed all 20 changed
+  `pine/*.c` files and all 18 changed `pico/*.c` files, rebuilt
+  `pico-ovl` (first real-hardware pico link this session -- note
+  `pico/makefile.bsd`'s plain `pico` target still fails with `ld:
+  text overflow` on real 2.11BSD, a pre-existing, already-documented-
+  in-makefile issue unrelated to this change; `pico-ovl` is the
+  correct target, same as `pine-ovl` for pine) and `pine-ovl` --
+  both linked cleanly with unchanged overlay/module structure.
+- **Size delta**: this dev (`lnx`) build: `bin/pine` data `10184` ->
+  `8968` (-1216 bytes), `bin/pico` data `6356` -> `5240` (-1116
+  bytes). Real 2.11BSD hardware: `pine` data `29364` -> `28292`
+  (-1072 bytes, `text`/`bss`/overlay structure unchanged, as expected
+  for a pure `.data` cut spread across 20 files averaging ~54 bytes
+  each). `pico`'s real-hardware delta wasn't separately measured
+  (no prior real-hardware `size pico` baseline existed before this
+  session touched it) but the dev-build delta (-1116 bytes) confirms
+  the same win applies there.

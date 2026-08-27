@@ -180,6 +180,11 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
      * MAXPATH-sized) -- see the bounds-check fix below and
      * context_fqn_to_an()'s comment for why. */
     static char tmp[MAXPATH];
+    /* shared by all three "too long" return sites below -- a C
+     * compiler this old doesn't dedupe identical string literals even
+     * within one function, so three separate copies each cost the
+     * full 17 bytes. See TODO-pdp11-done.md. */
+    static char *too_long = "Context too long";
     char *p, *viewp = view;
     int   i = 0;
 
@@ -209,7 +214,7 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
 	     * anything else fixed alongside it -- see TODO-pdp11-done.md.
 	     */
 	    if(i >= MAXPATH - 1)
-	      return("Context too long");
+	      return(too_long);
 	    rcontext[i++] = *p;		/* copy if requested */
 	}
 
@@ -240,7 +245,7 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
 	     * but with no length check at all rather than just the
 	     * wrong constant -- see TODO-pdp11-done.md. */
 	    if(viewp - view >= MAXPATH - 1)
-	      return("Context too long");
+	      return(too_long);
 	    *viewp++ = *p;
 	}
     }
@@ -251,7 +256,7 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
     for(; *p ; p++){			/* trailing context ? */
 	if(rcontext){
 	    if(i >= MAXPATH - 1)
-	      return("Context too long");
+	      return(too_long);
 	    rcontext[i++] = *p;
 	}
     }
