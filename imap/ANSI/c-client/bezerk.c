@@ -784,7 +784,19 @@ long bezerk_move (MAILSTREAM *stream,char *sequence,char *mailbox)
  * Returns: T if append successful, else NIL
  */
 
-#define BUFLEN 8*MAILTMPLEN
+/* Was 8*MAILTMPLEN (8192) -- a stack-allocated write-batching buffer
+ * this size is the same class of oversized fixed buffer as this
+ * file's own CHUNK-vs-MAILTMPLEN bezerk_open() bug and pine's
+ * MSIZE_INIT/RBUFSZ, all fixed elsewhere this session (see
+ * TODO-pdp11-done.md) -- confirmed via a real-hardware adb crash
+ * ("Illegal instruction") inside bezerk_append_putc(), called from
+ * bezerk_append(), right after a Send: this function's ~9KB combined
+ * stack frame (this buffer plus lock[MAILTMPLEN] just below) landing
+ * on top of an already near-full 64KB D-space very plausibly collided
+ * the stack into the heap. BUFLEN only controls how often
+ * bezerk_append_putc() flushes to write(2) -- smaller just means more
+ * write() calls for a large message, not a correctness change. */
+#define BUFLEN (MAILTMPLEN/2)
 
 long bezerk_append (MAILSTREAM *stream,char *mailbox,STRING *message)
 {
