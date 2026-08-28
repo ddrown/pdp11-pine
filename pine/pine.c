@@ -147,6 +147,80 @@ static struct key_menu main_keymenu =
 #define LONGEST_NAME 1   /* length of longest name from keymenu */
 
 
+/* Stack high-water-mark instrumentation -- TEMPORARY, to measure real
+ * peak stack depth instead of inferring it from adb crash traces (pdp11)
+ * or guessing from /proc/<pid>/maps (lnx -- doesn't work: glibc/ld.so
+ * startup already pre-faults a stack VMA far bigger than anything pine
+ * itself adds, so no growth is ever visible there). Paint a range below
+ * the current SP with a marker byte at startup, then at normal exit
+ * scan for the lowest address the marker was disturbed at -- that's the
+ * deepest the stack ever reached. Remove this once the measurement is
+ * taken.
+ *
+ * The paint floor is relative to the SP at paint time, not an assumed
+ * absolute address: an earlier version anchored the pdp11 floor to
+ * 0xE010, reasoning from the empirically-confirmed data+bss+heap
+ * ceiling of 57344 bytes (7 * 8192 -- TODO-pdp11-done.md) that the 8th
+ * APR (57344-65535) must be a fixed page reserved for the stack. That
+ * crashed for real (SIGSEGV inside stack_paint_init() itself, confirmed
+ * via adb) -- brk()'s ceiling doesn't guarantee every byte above it is
+ * mapped writable stack memory, so don't gamble on it.
+ *
+ * The range comes from a genuine local array, not alloca(): writing to
+ * an address the real SP register never actually reached faulted, so
+ * the reservation has to happen via ordinary compiler-generated
+ * function-prologue code (a `sub #N,sp`-equivalent), which every C
+ * compiler must get right regardless of runtime library quality.
+ * alloca() was tried first and produced two different kinds of wrong
+ * answer in a row: a low bound only ~120 bytes from high instead of
+ * ~4000 (this old K&R-era compiler's alloca() evidently isn't a real
+ * compiler-cooperating SP adjustment), and before that a 16-bit
+ * pointer-overflow in the low+RANGE math used to derive high from it.
+ * A plain local array sidesteps both: the compiler itself must reserve
+ * exactly sizeof(buf) bytes below the old SP, and high is naturally
+ * buf+sizeof(buf) -- the old, valid, pre-existing SP value, not a
+ * potentially-overflowing computed one. */
+#ifdef LNX
+#define STACK_PAINT_RANGE (4L * 1024 * 1024)  /* well under the 8MB default ulimit -s */
+#else
+#define STACK_PAINT_RANGE 7000  /* widened from 4000: that window measured depth=3974,
+				   too close to its own edge to trust as the true peak */
+#endif
+#define STACK_PAINT_BYTE 0xAA
+
+static char *stack_paint_low;
+static char *stack_paint_high;  /* SP at paint time, i.e. the depth-0 reference */
+
+static void
+stack_paint_init(void)
+{
+    char buf[STACK_PAINT_RANGE];  /* auto, not static -- must be a real stack reservation */
+    char *p;
+
+    stack_paint_low = buf;
+    stack_paint_high = buf + STACK_PAINT_RANGE;
+    for(p = stack_paint_low; p < stack_paint_high; p++)
+      *p = STACK_PAINT_BYTE;
+}
+
+static void
+stack_paint_report(void)
+{
+    char *p;
+
+    for(p = stack_paint_low; ; p++)
+      if(*(unsigned char *)p != (unsigned char) STACK_PAINT_BYTE)
+        break;
+
+    /* real usage is measured from stack_paint_high (SP at the top of
+     * main(), i.e. depth 0), not from the paint floor -- the low end of
+     * a generously-sized (lnx) or page-anchored (pdp11) paint range
+     * stays untouched by design and isn't itself the measurement. */
+    printf("stack high-water mark: depth=%ld bytes below main()'s start\n",
+	   (long) (stack_paint_high - p));
+}
+
+
 /*----------------------------------------------------------------------
      main routine -- entry point
 
@@ -167,6 +241,8 @@ main(int argc, char *argv[])
     struct pine  *pine_state;
     char          int_mail[MAXPATH+1];
     extern MAILSTREAM bezerkproto;
+
+    stack_paint_init();
 
     /*----------------------------------------------------------------------
           Set up buffering and some data structures
@@ -982,6 +1058,8 @@ quit_screen(pine_state)
       fs_give((void **)&pine_state->folders_dir);
 
     fs_give((void **)&pine_state);
+
+    stack_paint_report();
 
     printf("\n\n\nPine finished\n\n");
     exit(0);
