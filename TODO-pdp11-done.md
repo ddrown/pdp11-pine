@@ -11016,3 +11016,18 @@ conditional one.
   `size` at all) -- confirmed via a real-hardware rebuild showing the
   full 384-byte drop with no other `size`-visible change in the same
   build.
+
+### Re-ran the fuzz corpus after merging `three/main`, found two more real bugs and a second harness-init gap
+
+Rebuilding the fuzz harnesses after merging in `three/main`'s batch of
+context.c/cross-overlay fixes required extending `fuzz/pine_ui_stubs.c`
+again (`three/main`'s own string-literal-sharing pass added `km_*`
+key-menu constants, `undefined_here_msg`, `word_search_prompt`, and a
+newly-non-static `unix_puts()`, none owned by files this harness
+links) -- same shape as the earlier `charset_attr`/etc. fix, just a
+longer list this time. Once it linked again, an extended run turned up
+two more real, pre-existing bugs (both present since the original
+Pine 3.89 import, unrelated to anything in this session's merge) plus
+a second fuzz-harness initialization gap, each covered in its own
+entry below.
+
