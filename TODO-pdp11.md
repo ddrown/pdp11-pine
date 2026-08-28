@@ -10,6 +10,22 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
+### `context_apply()` writes into its caller's buffer with no bounds check at all
+
+- [ ] Found while resizing `context.c`'s sibling functions' stack
+      buffers to `MAXPATH` (see `TODO-pdp11-done.md`). `context_apply
+      (char *b, char *c, char *n)` writes an ambiguous name `n`
+      (caller-supplied, no length cap anywhere upstream, same as every
+      other address/name field this session found unbounded) into `b`
+      via a raw `sprintf()`/`strcpy()`, with no size parameter and no
+      check against `b`'s actual capacity. Every call site in the tree
+      now passes a `MAXPATH` (256)-sized local (after this session's
+      resizes) -- an `n` longer than that overflows it. Not fixed:
+      closing this properly means adding a size parameter to
+      `context_apply()` and updating every call site (six, all in
+      `context.c`), more invasive than this session's per-caller
+      resizes. Worth a dedicated pass.
+
 ### The real memory budget: `data+bss+heap` appears hard-capped at 57344 bytes, not the full 64KB
 
 - [ ] See `TODO-pdp11-done.md`'s "The send/read/compose crash chain"

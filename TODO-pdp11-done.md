@@ -10838,3 +10838,93 @@ finding reframes how to read every earlier one.
   distinct bug from the memory-pressure chain above, with a trivial
   workaround (don't confirm the create when it's wrong) that didn't
   block continuing to test the crashes that mattered more.
+
+### Five more `context.c` functions still had `MAILTMPLEN` stack locals the earlier resize missed, plus a real aliasing bug found fixing them
+
+Resuming the general data/rodata reduction pass (broadened past
+reacting to specific crashes), grepping for `MAILTMPLEN`-sized buffers
+tree-wide turned up `context_create()`/`context_open()`/
+`context_rename()`/`context_delete()`/`context_append()`
+(`pine/context.c`) -- five siblings of `context_fqn_to_an()`/
+`context_digest()`/`context_find_all()`/`context_apply()`, already
+resized from `MAILTMPLEN` to `MAXPATH` in an earlier entry in this
+file, with the *exact* same "build FQN from ambiguous name" comment
+and code shape, that the earlier pass simply didn't reach. All five
+hold the same folder/context-path content the earlier fix's contract
+already established as `MAXPATH`-bounded.
+
+- **Fix**: resized all five to `MAXPATH` (256, from `MAILTMPLEN`
+  1024). `context_append()` in particular sits directly in the Fcc-
+  append call chain this session's crash-chasing entry already found
+  tight on stack (`bezerk_append()`'s 8192-byte buffer, above).
+- **Found and fixed while resizing**: the `else if` branch in each of
+  these functions did a raw, unbounded `strcpy()` of caller-supplied
+  content (`mailbox`/`name`/`old`/`new` -- all "no length cap
+  anywhere upstream" per this session's established pattern) into the
+  local buffer, with no bounds check at all -- reachable at the old
+  1024-byte size too, just needing a longer trigger string, so this
+  isn't new exposure from the resize, but shrinking the buffer without
+  also bounding the write would have tightened the trigger length.
+  Replaced every such `strcpy()` with a `strncpy()` capped to the
+  buffer's remaining space plus explicit NUL-termination.
+  `context_create()`'s two `sprintf()` calls that copy caller content
+  into a same-sized `errbuf`/`tmp` got explicit `%.219s`-style
+  precision for the same reason.
+- **Found and fixed while resizing, a genuine pre-existing bug**:
+  `context_rename()`'s second branch (building the fully-qualified
+  *new* name) wrote into `tmp` -- the *first* branch's buffer --
+  instead of the `tmp2` it was clearly meant to use (declared for
+  exactly this, named to match, just never referenced). If both `old`
+  and `new` took that branch, `s` and `t` ended up aliased to the same
+  buffer, and computing the new name would silently overwrite the
+  already-computed old name before `mail_rename()` ever ran. Fixed by
+  writing into `tmp2` as intended.
+- **Found and left alone, flagged for later**: `context_apply()`
+  itself (called by all six of these functions, both the four fixed
+  earlier and the five fixed here) writes into its caller-supplied
+  buffer via an unbounded `sprintf()`/`strcpy()` with no size
+  parameter at all -- every caller passing a `MAXPATH`-sized local
+  (after this and the earlier entry) means a `n` (ambiguous name)
+  longer than that overflows it. Not fixed here: closing it properly
+  means adding a size parameter to `context_apply()` and updating
+  every call site, a bigger, more invasive change than this pass's
+  per-caller resizes, and out of scope for what was otherwise a
+  data-segment reduction pass. Logged in `TODO-pdp11.md`.
+- Also found and removed while re-reading `context_open()`: a
+  `char host[MAILTMPLEN]` local that's declared and never referenced
+  anywhere in the function -- dead code, not merely oversized.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31, including the Fcc-overflow-specific tests
+  (`test_fcc_netmbx_overflow`/`test_fcc_tilde_overflow`) that exercise
+  this exact `context_isambig()`/`context_apply()` chain. Pushed and
+  rebuilt on real hardware.
+- **Size delta**: these five buffers are all plain stack locals (not
+  `static`), so their resize doesn't show up in `size`'s `data`/`bss`
+  columns on either build -- the real effect is reduced stack depth
+  in the Fcc-append call chain (and every other caller of these
+  functions), the same class of fix as `bezerk_append()`'s `BUFLEN`
+  above, not a `size`-measurable one.
+
+### `ttyout.c`'s already-audited `temp_format` tightened from `MAILTMPLEN` to its real measured worst case
+
+`PutLine1()`..`PutLine5()`'s shared `temp_format` buffer already had a
+thorough worst-case audit from an earlier session (every call site
+checked, real worst case ~570 bytes from `update_titlebar_message()`'s
+format string), but was sized to `MAILTMPLEN` (1024) anyway "matching
+this codebase's existing convention" rather than the audited number.
+Continuing the general data+rodata reduction pass, tightened to 640 --
+still ~70 bytes of margin over the existing audit, which this change
+doesn't revisit or invalidate. Unlike the stack-local fixes elsewhere
+in this file, `temp_format` is `static` (BSS), so every byte here is a
+permanent, unconditional cost for the process's whole lifetime, not a
+conditional one.
+
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite 31/31.
+  Pushed and rebuilt on real hardware.
+- **Size delta**: real hardware `bss` (or `data`, depending on how
+  this target's linker classifies an uninitialized `static` array)
+  dropped by exactly 384 bytes (1024-640) alongside this entry's
+  `context.c` changes (which are stack-only and don't show up in
+  `size` at all) -- confirmed via a real-hardware rebuild showing the
+  full 384-byte drop with no other `size`-visible change in the same
+  build.
