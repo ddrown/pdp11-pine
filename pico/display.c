@@ -864,8 +864,16 @@ void
 modeline(WINDOW *wp)
 {
     if(Pmaster){
-	static char keys[13], labels[160];
-	
+	/* not static: wkeyhelp() only reads keys/labels (copies them
+	 * char-by-char into its own scratch buffer `s`), never retains
+	 * either pointer past this call -- confirmed by reading its
+	 * whole body, and by every other wkeyhelp() call site in the
+	 * tree passing a string literal instead of a variable. Real
+	 * stack space instead of a permanent bss cost, same reasoning
+	 * as ttyout.c's temp_format (see TODO-pdp11-done.md's
+	 * "Measuring real stack depth directly" entry). */
+	char keys[13], labels[160];
+
         if(ComposerEditing)
 	  ShowPrompt();
 	else{
