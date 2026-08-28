@@ -896,7 +896,16 @@ ADDRESS *rfc822_parse_address (char **string,char *defaulthost)
     if ((phrase = rfc822_parse_phrase (s)) &&
 	(adr = rfc822_parse_routeaddr (phrase,string,defaulthost))) {
       *phrase = '\0';		/* tie off phrase */
-				/* phrase is a personal name */
+				/* phrase is a personal name -- takes
+				   priority over any fallback name
+				   rfc822_parse_addrspec() may already
+				   have pulled from a trailing comment
+				   inside the route-addr (its own
+				   "try person name in comments if
+				   missing" case), but that fallback,
+				   if set, needs freeing first or it
+				   leaks */
+      if (adr->personal) fs_give ((void **) &adr->personal);
       adr->personal = rfc822_cpy (s);
     }
     else adr = rfc822_parse_addrspec (s,string,defaulthost);

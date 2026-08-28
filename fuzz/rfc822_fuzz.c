@@ -63,8 +63,19 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     if (size == 0)
       return 0;
 
-    msg = malloc(size);
+    /* real callers (bezerk.c's bezerk_parse()) always keep the header
+       inside a larger, NUL-terminated buffer that also holds the body
+       right after it (m->internal, see its "n->internal[j] = '\0';"
+       and "m->body = ++s;") -- rfc822_parse_msg()'s header-folding
+       scan peeks one byte past a '\n' it finds (checking for a
+       continuation-line leading space/tab) relying on that byte
+       always being valid, whether or not there's an actual body.
+       Allocate one extra, NUL byte here too, or the fuzzer "finds"
+       an overflow that's really just this harness handing
+       rfc822_parse_msg() a header with nothing valid after it. */
+    msg = malloc(size + 1);
     memcpy(msg, data, size);
+    msg[size] = '\0';
 
     /* find the header/body boundary: first blank line. If there
        isn't one, treat the whole input as header with an empty body

@@ -9757,6 +9757,94 @@ fact.
   and, separately, the still-unexplained hang (no core available from
   that attempt) remains open if it recurs.
 
+### Tracked down the small memory leak left open from the third fuzzing lead
+
+Resolved the leak documented in the TODO item of the same name: a
+2-byte `cpystr()` allocation not reachable from `env->from` (or
+`sender`/`reply_to`) by the time `mail_free_envelope()` runs, on
+input `From:<a;I<EYE(N)`.
+
+- **Root cause**: `rfc822_parse_address()`'s "phrase <route-addr>"
+  branch (`imap/ANSI/c-client/rfc822.c`, handles the `I<EYE(N)` shape
+  -- a leading phrase `I` followed by a route-addr `<EYE(N)`). This
+  branch treats the leading phrase as the address's personal name,
+  which is meant to take priority over any personal name
+  `rfc822_parse_addrspec()` may already have derived on its own --
+  `rfc822_parse_addrspec()` has a fallback that pulls a personal name
+  out of a trailing `(comment)` inside the route-addr itself (used
+  only when the addr-spec had no `@host` part, which is exactly this
+  input's shape: `EYE(N)` parses as local-part `EYE` with comment
+  `N`, no host). So by the time control reaches the "phrase
+  <route-addr>" branch, `adr->personal` is already a live, separately
+  `cpystr()`-allocated `"N"` -- and the branch's `adr->personal =
+  rfc822_cpy (s)` unconditionally overwrites the pointer with the
+  phrase's own personal name (`"I"`) *without freeing the old value
+  first*, leaking it.
+- **Confirmed via `gdb`-assisted tracing** (single, non-libFuzzer-
+  wrapped process run -- LeakSanitizer's own report can't run under a
+  debugger, "LeakSanitizer does not work under ptrace", so this had to
+  be a separate pass from the actual leak-detection confirmation):
+  planted breakpoints at the addrspec-fallback allocation site and at
+  the phrase-branch overwrite site, confirmed `adr->personal` held a
+  valid, non-NULL "N" allocation immediately before the overwrite, and
+  that no `free()`/`fs_give()` call anywhere in the run's lifetime
+  ever touched that address. `ASAN_OPTIONS=malloc_context_size=30:
+  fast_unwind_on_malloc=0` was needed to get LeakSanitizer's full
+  allocation-site stack trace (the default is shallow, only ~2
+  frames) -- with it, the trace ran cleanly down through `fs_get` ->
+  `cpystr` -> `rfc822_cpy` -> `rfc822_parse_addrspec` -> ... to
+  `LLVMFuzzerTestOneInput`. Also had to account for libFuzzer's own
+  `TryDetectingAMemoryLeak` re-executing the single input a second
+  time internally -- an initial "duplicate allocation" reading of two
+  identical-looking breakpoint hits was actually just this internal
+  re-run, confirmed by checking the second hit's backtrace for that
+  frame.
+- **Fixed**: free `adr->personal` (if already set) immediately before
+  the phrase-branch's overwrite, in `rfc822_parse_address()`.
+- **Verified**: `From:<a;I<EYE(N)` (saved permanently as
+  `fuzz/corpus/rfc822/regress_overwritten_personal_leak`) now runs
+  clean under `ASAN_OPTIONS=detect_leaks=1`. Re-ran both `rfc822_fuzz`
+  and `adrlist_fuzz` at length with leak detection on (39.2M and
+  35.1M execs respectively) with zero leaks or crashes, then again
+  after merging a large batch of upstream changes (17.1M more execs
+  on `rfc822_fuzz`, 12.9M on `adrlist_fuzz`, 8.6M on `consumer_fuzz`)
+  to confirm the fix holds on the final tree. Full clean rebuild, 0
+  warnings; 31/31 smoketests.
+- **Size delta**: negligible (one `if`/`fs_give()` call added to a
+  rarely-taken parsing branch). Not separately measured.
+
+### Fixed a fuzz-harness-only false positive found while re-verifying the leak fix: header buffer needs a valid trailing byte
+
+The same extended leak-detection fuzzing run that confirmed the fix
+above also turned up a new SEGV in `rfc822.c`'s header-folding scan
+(`if (s[1] != ' ' && s[1] != '\t') *t = c = '\0';`) -- investigated
+and determined to be a harness artifact, not a real bug reachable
+from `bezerk.c`.
+
+- **Root cause**: `rfc822_parse_msg()`'s header-folding scan, on
+  finding a `'\n'`, peeks one byte past it (`s[1]`) to check for a
+  continuation line's leading whitespace. Real callers
+  (`bezerk_fetchstructure()`, `imap/ANSI/c-client/bezerk.c`) always
+  keep the header inside a larger, always-NUL-terminated buffer
+  (`m->internal`) with the body (or a NUL, if there's no body)
+  immediately following it in the same allocation -- so that peek is
+  always safe in real operation. `fuzz/rfc822_fuzz.c` and
+  `fuzz/consumer_fuzz.c` both allocated the header as an exactly-
+  `size`-byte standalone buffer for their "no blank line found in
+  this input" case, with nothing valid immediately after it -- a
+  buffer-layout mismatch from the real caller, not a parser bug.
+  Confirmed the two harnesses' scratch-buffer *sizing* formula
+  (`max(headersize, bodysize) + 1`) already matched
+  `bezerk_fetchstructure()`'s exactly; only the trailing-byte
+  guarantee was missing.
+- **Fixed**: both harnesses now allocate `size + 1` bytes for the
+  message buffer and NUL-terminate it, matching the guarantee real
+  `bezerk.c`-delivered messages always provide.
+- **Verified**: the crashing input no longer reproduces; re-ran
+  extended fuzzing (figures above) with zero further crashes on any
+  of the three harnesses.
+- **Size delta**: none (fuzz harness only, not shipped code).
+
 ### Cross-overlay indirect function pointer: `gf_terminal()`'s network-output terminal function could go stale mid-Send
 
 The hang/crash/missing-body saga above continued across many more

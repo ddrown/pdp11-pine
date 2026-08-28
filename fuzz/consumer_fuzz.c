@@ -77,8 +77,15 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     if (size == 0)
       return 0;
 
-    msg = malloc(size);
+    /* see fuzz/rfc822_fuzz.c's matching comment -- real callers always
+       keep the header inside a larger, NUL-terminated buffer with a
+       valid byte right after it (bezerk.c's m->internal); allocate
+       one extra byte here too so this harness's header-only inputs
+       don't manufacture an overflow rfc822_parse_msg() would never
+       see from real bezerk.c-delivered mail. */
+    msg = malloc(size + 1);
     memcpy(msg, data, size);
+    msg[size] = '\0';
 
     header = msg;
     headersize = size;
