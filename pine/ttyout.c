@@ -1007,13 +1007,19 @@ PutLine0n8b(x, y, line, length)
  * MAILTMPLEN (1024, "matching this codebase's convention" rather than
  * the audited real max) -- tightened to 640 (still ~70 bytes above
  * the ~570-byte worst case established by the audit above, which this
- * change doesn't revisit or invalidate) once every other MAILTMPLEN-
- * as-a-floor buffer this size class turned out to matter on real
- * hardware (see TODO-pdp11-done.md's "send/read/compose crash chain"
- * entry) -- this is a static/BSS buffer, so unlike a stack or heap
- * floor, every byte here is a permanent, unconditional cost for the
- * entire life of the process. */
-static char temp_format[640];
+ * change doesn't revisit or invalidate).
+ *
+ * temp_format itself used to be one static/BSS buffer shared by all
+ * five functions below -- a permanent, unconditional 640-byte cost for
+ * the entire life of the process. It never actually needs to be
+ * shared or to outlive a single call: sprintf() fills it and PutLine0()
+ * (-> Write_to_screen() -> Writechar()) consumes it synchronously in
+ * the same call, with no pointer to it retained anywhere. So each
+ * function below now declares its own local temp_format instead --
+ * real stack storage, at zero permanent cost, since PutLine1/2/4/5
+ * never nest inside one another (only one of these locals is ever
+ * live at a time). See TODO-pdp11-done.md's "send/read/compose crash
+ * chain" entry for why this size class matters on real hardware. */
 /*----------------------------------------------------------------------
       Printf style output line to the screen at given position, 1 arg
 
@@ -1032,6 +1038,8 @@ PutLine1(x,y, line, arg1)
      char       *line;
      void       *arg1;
 {
+	char temp_format[640];
+
 	/* every PutLineN() call site passes a compile-time literal for
 	 * line -- this whole family is a fixed-arity printf wrapper
 	 * (see the VARARGS comments above each). */
@@ -1067,6 +1075,8 @@ PutLine2(x,y, line, arg1, arg2)
      char        *line;
      void        *arg1, *arg2;
 {
+    char temp_format[640];  /* see the audit comment above PutLine1() */
+
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
@@ -1096,6 +1106,8 @@ PutLine4(x, y, line, arg1, arg2, arg3, arg4)
      char *line;
      void *arg1, *arg2, *arg3, *arg4;
 {
+    char temp_format[640];  /* see the audit comment above PutLine1() */
+
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
@@ -1126,6 +1138,8 @@ PutLine5(x, y, line, arg1, arg2, arg3, arg4, arg5)
      char *line;
      void *arg1, *arg2, *arg3, *arg4, *arg5;
 {
+    char temp_format[640];  /* see the audit comment above PutLine1() */
+
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
