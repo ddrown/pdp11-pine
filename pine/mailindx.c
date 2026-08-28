@@ -720,6 +720,36 @@ build_header_line(message_number)
     sprintf(buffer, "%s%s%s%s", status, from, size, subject);
     /* Truncate it to proper size */
     buffer[min(ps_global->ttyo->screen_cols, i_cache_width())] = '\0';
+
+    /*
+     * The formatted summary line above is all this function's callers
+     * ever need again -- it's already saved into pine's own index
+     * cache (get_index_cache()/i_cache_size(), already bounded to
+     * IC_SIZE entries). The full ENVELOPE/BODY c-client just fetched
+     * to build it, though, stays cached in the stream's LONGCACHE for
+     * the rest of the session with no bound at all (same underlying
+     * issue as mail_view_screen()'s mail_gc(GC_ENV) call). Unlike
+     * there, this function runs once per *row* while populating the
+     * index -- calling the whole-stream mail_gc() here would be
+     * O(nmsgs) per row, O(nmsgs^2) total, so free just this one
+     * message's entry directly via mail_lelt(), the same fields
+     * mail_gc() itself frees. Confirmed via a real-hardware crash
+     * with more messages in the inbox than earlier sessions had:
+     * "Out of free storage (12 bytes)" -- a bare ADDRESS struct,
+     * about as small an allocation as this tree ever makes -- in
+     * mail_newaddr(), deep inside rfc822_parse_msg(), called from
+     * mail_fetchstructure() from *this* function, while just
+     * populating the index for a bigger mailbox than before.
+     */
+    {
+	LONGCACHE *lelt = mail_lelt(ps_global->mail_stream,
+				     ps_global->sort[message_number]);
+	if(lelt){
+	    mail_free_envelope(&lelt->env);
+	    mail_free_body(&lelt->body);
+	}
+    }
+
     return(buffer);
 }
 

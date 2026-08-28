@@ -113,9 +113,27 @@ int	so_reaquire(STORE_S *);
  * correctness. This is the shared constant behind every CharStar
  * object in the tree (composer body, reply/forward body, fcc
  * storage, ...), so it's a much bigger lever than any one call site's
- * own buffer. */
-#define	MSIZE_INIT	MAILTMPLEN
-#define	MSIZE_INC	MAILTMPLEN
+ * own buffer.
+ *
+ * Shrunk further from MAILTMPLEN (1024) after a confirmed real-hardware
+ * crash: mail_view_screen()'s so_get(CharStar,...) -- the message-
+ * display buffer -- hit "Out of free storage (1024 bytes)" right after
+ * a Send, at a point where the process was already close enough to the
+ * 64KB D-space ceiling that even this single upfront allocation didn't
+ * fit (confirmed via adb: fs_get(02000) octal = 1024 decimal, called
+ * directly from so_get()). 256 makes the *first* allocation for any
+ * CharStar object small enough to have real headroom even under this
+ * kind of memory pressure; so_puts()/so_writec()'s existing on-demand
+ * growth (unaffected by this change) covers whatever the real content
+ * size turns out to be, same as always -- see this same tree's
+ * TmpFileStar/FileStar source types (already implemented, already used
+ * elsewhere) as the real fix if 256 turns out not to be enough: the
+ * message-display path doesn't support pointing scrolltool() at a file
+ * source yet, so switching CharStar to TmpFileStar there specifically
+ * would need real changes to format_scroll_text()'s line-array-building
+ * logic, not just a source-type swap (see TODO-pdp11.md). */
+#define	MSIZE_INIT	256
+#define	MSIZE_INC	256
 
 /*
  * allocate resources associated with the specified type of

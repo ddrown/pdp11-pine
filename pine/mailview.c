@@ -58,7 +58,20 @@
 
 
 
-#define TYPICAL_BIG_MESSAGE_LINES 200 
+/* Was 200 -- format_scroll_text() below allocates this many
+ * char*+short slots (text_lines[]/line_lengths[]) up front and
+ * doubles (fs_resize()) whenever an actual message needs more, so
+ * this is only an initial guess, not a cap. On this target a char* is
+ * 2 bytes, so 200 slots cost 400 bytes for text_lines[] alone -- a
+ * real "Out of free storage (400 bytes)" crash here, confirmed via
+ * adb (mail_view_screen -> scrolltool -> format_scroll_text ->
+ * fs_get), is the same "oversized initial guess" pattern as every
+ * other buffer fixed this session (MSIZE_INIT, RBUFSZ, bezerk.c's
+ * BUFLEN, pretty_addr_string()'s MAILTMPLEN floor) -- just the next
+ * smallest one, once those were gone. A short message needs far fewer
+ * than 200 lines; doubling still gets a long one to the same eventual
+ * size either way, just via a couple more resize() calls. */
+#define TYPICAL_BIG_MESSAGE_LINES 25
 
 void       format_envelope(ENVELOPE *, gf_io_t);
 void	   set_scroll_text(void *, int, int, int, SourceType);
@@ -222,6 +235,25 @@ mail_view_screen(pine_state)
                    (int *)NULL, MessageText, src, (struct attachment *)NULL);
 
 	so_give(&store);	/* free resources associated with store */
+
+	/*
+	 * c-client caches every message's ENVELOPE/BODY (mail_elt()'s
+	 * LONGCACHE) for the life of the stream -- fine on a normal
+	 * machine, but on this target's single 64KB D-space it's an
+	 * unbounded, ever-growing cost with no eviction anywhere in this
+	 * tree (mail_gc() was never called from pine at all). Confirmed
+	 * on real hardware: repeated "Out of free storage" crashes at
+	 * progressively *smaller* request sizes across a session, each
+	 * one just the next-smallest allocation once the last was fixed
+	 * -- the real driver was cumulative cache growth from browsing,
+	 * not any single buffer. Free this message's envelope/body right
+	 * after displaying it -- mail_elt()'s lighter per-message flags/
+	 * dates (used by the index) aren't touched by GC_ENV, so the
+	 * index stays correct; only re-viewing an already-seen message
+	 * costs a re-fetch/re-parse from the mailbox file instead of a
+	 * cache hit.
+	 */
+	mail_gc(pine_state->mail_stream, GC_ENV);
 
         if(pine_state->max_msgno == 0) {
             q_status_message(0, 2, 3, "\007No messages to read!");
