@@ -703,7 +703,14 @@ void rfc822_parse_content_header (BODY *body,char *name,char *s)
     if (!(strcmp (name+1,"D") || body->id)) body->id = cpystr (s);
     break;
   case 'D':			/* possible Content-Description */
-    if (!(strcmp (name+1,"ESCRIPTION")) || body->description)
+				/* only take first, matching header --
+				   this used to be "!(strcmp(...)) ||
+				   body->description", the De Morgan
+				   negation of case 'I''s pattern above
+				   flipped by mistake, so a second
+				   Content-D* header line overwrote (and
+				   leaked) an already-set description */
+    if (!(strcmp (name+1,"ESCRIPTION") || body->description))
       body->description = cpystr (s);
     break;
   case 'T':			/* possible Content-Type/Transfer-Encoding */

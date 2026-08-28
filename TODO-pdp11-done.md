@@ -11031,3 +11031,33 @@ Pine 3.89 import, unrelated to anything in this session's merge) plus
 a second fuzz-harness initialization gap, each covered in its own
 entry below.
 
+### Fixed a memory leak in `rfc822_parse_content_header()`'s Content-Description case
+
+- **Root cause**: `rfc822_parse_content_header()`'s `case 'D':`
+  (Content-Description) read `if (!(strcmp (name+1,"ESCRIPTION")) ||
+  body->description) body->description = cpystr (s);` -- the `||`
+  should have been the De Morgan negation of `case 'I'` (Content-ID)'s
+  pattern immediately above it (`if (!(strcmp(...) || body->id))
+  body->id = cpystr(s);`), i.e. `&&`/no-negation-flip. As written, a
+  *second* header whose 8-char-stripped name starts with `D` (matching
+  "ESCRIPTION" or not) unconditionally overwrites an already-set
+  `body->description` without freeing the old allocation first,
+  leaking it. Minimized trigger: `MIME-Version:\nContent-Description:
+  \nContent-D:B` (46 bytes) -- first header sets a 1-byte
+  `body->description`, second (`Content-D:B`, not even a full
+  "Description" match) overwrites it.
+- **Fixed**: restored the same "only take the first, matching header"
+  logic as the `case 'I'` pattern: `if (!(strcmp (name+1,"ESCRIPTION")
+  || body->description)) body->description = cpystr (s);`.
+- **Verified**: `fuzz/corpus/rfc822/regress_overwritten_personal_leak`
+  was already covering this bug's general shape from an earlier
+  session, but for a different field (`ADDRESS.personal`) -- this is
+  a genuinely different trigger, on `BODY.description`, so no new
+  regression seed was needed beyond confirming the minimized 46-byte
+  trigger runs clean under `ASAN_OPTIONS=detect_leaks=1` post-fix.
+  Full clean rebuild (plain and `ASAN=1`), 0 warnings; 31/31
+  smoketests; extended `rfc822_fuzz` run (18.5M execs) with zero
+  further leaks.
+- **Size delta**: negligible (one operator/negation change, no
+  size-constant impact). Not separately measured.
+
