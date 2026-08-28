@@ -73,37 +73,6 @@ DONE elsewhere or referenced in passing below.
       worth scoping as its own deliberate task rather than folding
       into the opportunistic string-cutting pass.
 
-### Track down a small memory leak found while re-verifying the third fuzzing lead's fix
-
-- [ ] The third fuzzing lead (heap corruption in `rfc822_parse_adrlist()`
-      -- see `TODO-pdp11-done.md`) is fixed. Re-running the fuzzers to
-      confirm (22M+ execs on `adrlist_fuzz`, 14M+ on the full
-      `rfc822_fuzz`, zero further crashes) turned up a separate, minor
-      LeakSanitizer finding instead: a 2-byte `cpystr()` allocation not
-      reachable from any of `env->from`/`sender`/`reply_to`/etc. by the
-      time `mail_free_envelope()` runs, on input `From:<a;I<EYE(N)`.
-      Confirmed via `gdb`-assisted tracing that the three "a" mailbox
-      copies this input's `From:` header produces (the real one plus
-      the auto-derived `sender`/`reply_to` copies from
-      `rfc822_cpy_adr()`) are *not* the leaking allocation -- all three
-      were confirmed freed by cross-referencing their exact addresses
-      against every `free()` call in the same process run. The actual
-      leaking 2-byte string's identity wasn't pinned down in the time
-      available (multiple `malloc(2)`-sized strings exist for this
-      input -- three "a"s plus a personal-name "I" -- and a
-      `gdb`-Python attempt to auto-diff every `malloc(2)`/`free()`
-      pair hit tooling friction rather than a real answer).
-    - Not a security bug (no crash, no corruption, bounded to 2 bytes
-      per malformed message, and pine is an interactive reader, not a
-      long-running server accumulating leaks) -- much lower priority
-      than the crash-class bugs found so far, left for a future
-      session. `From:<a;I<EYE(N)` reproduces it deterministically and
-      standalone (unlike the crash-class bugs), so it should be a much
-      easier trace than those were -- likely just needs `gdb`'s
-      `commands`/`finish` combination used carefully within a *single*
-      process run rather than across separate invocations (addresses
-      aren't stable between runs).
-
 ### Close the remaining `pine-ovl` text/overlay and data+bss overage on real 2.11BSD hardware
 
 - [ ] `pine-ovl` (`pine/makefile.bsd`, see `TODO-pdp11-done.md`'s
