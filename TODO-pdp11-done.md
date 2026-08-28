@@ -11321,3 +11321,163 @@ real-hardware rebuild); real hardware `data` -40 bytes.
 **Running total this pass**: 246 + 40 = 286 bytes of `data`, on top of
 the 1856 bytes of `bss` from the stack-depth entry above -- **2142
 bytes** freed this session so far.
+
+### Root-caused the "Out of free storage" crash chain: `bezerk_open()` permanently caches every message's full raw text
+
+Despite the 2142 bytes freed above, "Out of free storage"/"Can't
+resize free storage" and "Can't create composer temp file" kept
+recurring on real hardware, now clearly correlating with mailbox size
+("as my mailbox grows, crashes happen sooner" -- the user's own
+observation, and the thread that led to this entry). Chased it with
+the same durable file-logging technique the stack-depth entry above
+used (`fopen`/`fprintf`/`fclose` per checkpoint, appending to
+`/tmp/compose_brk.log` on the real target, so each line survives even
+if the process aborts moments later) -- `printf()`'s stdio buffer
+isn't guaranteed to flush before an `abort()`, and this target's
+terminal scrollback is finite anyway, so a durable log was necessary,
+not just convenient.
+
+**The investigation, in order (each step logged for anyone tracing
+this later)**:
+
+1. **Hypothesis: a leak in the send path itself.** Traced
+   `pine_send()` -> `call_mailer()` -> `context_append()` ->
+   `mail_append()` -> `mail_valid()`/`bezerk_append()` end to end by
+   reading every function in the chain. All clean: every `so_get()`
+   is paired with `so_give()` on every return path (including two
+   early returns in `pine_rfc822_output_body()` that motivated moving
+   `gf_out_buf` onto the caller's stack in an earlier entry above),
+   and `bezerk_append()` itself doesn't even open a `MAILSTREAM` for
+   the Fcc write -- just a raw file descriptor, written and closed.
+   `outgoing2strings()`'s `msgtext` output looked like a candidate
+   (assigned, never referenced again in `send.c`) but turned out to be
+   `so_text()` -- a pointer into memory already owned and freed
+   elsewhere, not a new allocation.
+2. **Direct measurement: `compose_mail()` entry/exit `brk()`
+   checkpoints.** Added `brk_checkpoint()` (the same durable-log
+   helper) bracketing `compose_mail()`. First real data: one full
+   compose+send cycle grew `brk` by exactly 2048 bytes (55296 ->
+   57344) and pinned there -- immediately suggestive of `tmp_20k_buf`
+   doubling from its `TMP_20K_BUF_BASELINE` (2048), so
+   `grow_tmp_20k_buf()` itself was instrumented to log every real
+   resize. It fired rarely and its growth never matched the crash-time
+   deltas -- a real, if minor, contributor (this buffer never
+   shrinks, by design -- see its own comment in `pine.c`), but not the
+   dominant one.
+3. **Hypothesis: c-client envelope/body caching during index
+   building.** `build_header_line()` already had a per-message
+   `mail_lelt()`-based free from an earlier session (fixing a
+   different, already-documented crash). Instrumented it with an
+   unconditional log at function entry (before any early return) plus
+   distinct logs at both of its early-return paths (`NULL`
+   envelope/cache; "empty" envelope -- the latter genuinely does skip
+   the free block, a real small gap, never separately fixed). Result:
+   **zero log lines** in a run that should have called this function
+   for every visible index row -- ruling out this specific function
+   as the dominant source, and revealing the growth happens before
+   the index is ever drawn.
+4. **Hypothesis: c-client's LONGCACHE more broadly, not just this one
+   function.** Added a proactive `mail_gc(ps_global->mail_stream,
+   GC_ENV)` call at the very start of `compose_mail()`, bracketed with
+   checkpoints -- the same whole-stream cleanup already used
+   successfully in `mail_view_screen()`. **Reclaimed exactly zero
+   bytes.** This is a clean, definitive result: c-client's per-message
+   envelope/body cache (`LONGCACHE`, freed by `mail_free_envelope()`/
+   `mail_free_body()`) is not where this memory lives at all, no
+   matter which code path populates it.
+5. **Bracketing the actual folder-open sequence.** Instrumented
+   `do_broach_folder()` (`mailcmd.c`) at three points: right after the
+   raw `context_open()` call, right after `sort_current_folder()`,
+   and at return. Result: for a 12-message, 4781-byte mailbox, `brk`
+   jumped from 43008 to 57344 (the full 14336-byte crash-causing
+   growth) **entirely within `context_open()`** -- zero further growth
+   during sorting, index building, or composing. This is the
+   breakthrough: the cost is incurred at the moment the mailbox file
+   is opened and parsed, before anything else runs.
+
+**Root cause, found by reading `bezerk_parse()`
+(`imap/ANSI/c-client/bezerk.c`)**: for every message found while
+scanning the mailbox file, it allocates a `FILECACHE` node
+(`imap/ANSI/c-client/bezerk.h`) sized `sizeof(FILECACHE) + <message
+length> + 1` via `fs_get()`, copies that message's entire raw text
+into it, and links it into `LOCAL->msgs[]` -- **a permanent array for
+the stream's whole lifetime**, not parse scratch space. `FILECACHE`
+itself is two pointers, two `unsigned long`s, and a 27-byte `status`
+buffer (`sizeof(STATUS)`) before its flexible `internal[]` array --
+roughly 40 bytes of fixed overhead per message on top of that
+message's full byte length. Separately, `LOCAL->buf` (the file-read
+buffer used while parsing) only shrinks back down if it happened to
+exceed `CHUNK` (8192 bytes) during this parse; for a mailbox smaller
+than that, it grows once to roughly the file's own size and then
+stays there permanently, since nothing ever shrinks it further.
+
+For this session's 12-message/4781-byte mailbox: ~5.4KB for the
+`FILECACHE` list (40 bytes/message overhead + the file's own content
+size), ~3.7KB for `LOCAL->buf`'s unshrunk one-time growth (1025 bytes
+baseline -> ~4782), plus the stream's own `MESSAGECACHE` array and
+`LOCAL->msgs[]` pointer table -- a rough hand estimate of ~9-10KB
+against the observed 14336, same order of magnitude (the gap is
+likely allocator overhead, alignment padding, and fields not modeled
+in this estimate, not a second distinct leak).
+
+**This is architectural, not a bug to patch**: `bezerk_open()` copies
+the *entire* mailbox's raw content into memory and keeps it there for
+as long as the stream is open, by design -- a three-decade-old
+c-client driver written for machines where holding a whole mailbox in
+RAM was unremarkable. Memory use scales directly with total mailbox
+*byte size*, independent of how many messages have been viewed or
+composed -- exactly matching "crashes happen sooner as the mailbox
+grows." On a target with a ~57344-byte total `data+bss+heap` ceiling
+(see "The real memory budget" elsewhere in this file), a mailbox
+anywhere near a few tens of KB will exhaust the budget on its own,
+regardless of any other fix.
+
+**Confirmed directly with a clean before/after comparison**: the same
+`do_broach_folder()` checkpoints, rerun starting from a freshly
+emptied mailbox instead of the 12-message one. Opening the *empty*
+mailbox cost only 4096 bytes (43008 -> 47104) at the exact same
+checkpoint that cost 14336 bytes with 12 messages/4781 bytes present
+-- a direct, isolated measurement of `bezerk_open()`'s own cost as a
+function of mailbox content, with everything else (the checkpoint,
+the code path, the target) held identical. With that overhead gone,
+two full compose-and-send cycles completed back to back without
+error, ending at `brk=53248` -- 4096 bytes of margin under the
+57344-byte ceiling, where the loaded-mailbox test had crashed with
+zero margin on the very first cycle. (Two smaller, unexplained
+wrinkles noted in passing, not chased further: sorting the empty
+folder cost its own 2048 bytes, and the two sends' `grow_tmp_20k_buf`-
+style growth landed at slightly different points in `pine_send()`
+-- both plausibly just message-content-dependent, and both dwarfed by
+the `bezerk_open()` effect this comparison isolates.)
+
+This supersedes the earlier "unbounded c-client envelope/body
+caching" framing from the send/read/compose crash chain entry above
+as *the* dominant driver -- that caching was real and the `mail_gc()`
+fixes there were worth making, but this session's `mail_gc(GC_ENV)`
+reclaiming zero bytes proves it's a distinct, smaller mechanism from
+`bezerk_open()`'s raw-text cache, which is the actual dominant cost.
+
+**Not fixed this session** -- a real fix means re-reading each
+message's raw text from the mailbox file on demand (when actually
+fetching structure/body) instead of copying and permanently caching
+every message's full text at open time. That's a genuine rewrite of
+`bezerk.c`'s caching model (`LOCAL->msgs[]`/`FILECACHE` is threaded
+through `bezerk_structure()`, `bezerk_header()`, `bezerk_text()`, and
+others), not a small patch, and deliberately not attempted here --
+flagged in `TODO-pdp11.md` for dedicated scoping.
+
+**Temporary diagnostic instrumentation added chasing this, still in
+place** (durable file logging to `/tmp/compose_brk.log`, same
+survives-an-abort() reasoning as the stack-depth entry's
+`stack_paint_init()`/`stack_paint_report()`, which are also still
+in place): `pine.c`'s `grow_tmp_20k_buf()` resize logging; `send.c`'s
+`brk_checkpoint()` helper and its call sites in `compose_mail()`
+(entry, after the `mail_gc()` call, exit) and `pine_send()` (after the
+editor, before/after `call_mailer()`); `mailindx.c`'s
+`build_header_line()` logging (unconditional entry, plus both
+early-return paths); `mailcmd.c`'s `do_broach_folder()` logging
+(after `context_open()`, after `sort_current_folder()`, at return).
+The `mail_gc(GC_ENV)` call itself in `compose_mail()` is harmless and
+could stay as a no-cost hygiene improvement even though it didn't
+address this particular issue -- or be reverted since it doesn't fix
+anything real; left as a judgment call for whoever cleans this up.
