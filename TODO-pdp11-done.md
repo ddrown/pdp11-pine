@@ -11092,3 +11092,27 @@ entry below.
 - **Size delta**: negligible (one added `break` condition). Not
   separately measured.
 
+### Fixed a fuzz-harness init gap: `tmp_20k_buf` never allocated before `display_parameters()` runs
+
+- **Root cause**: the same investigation above also turned up a
+  NULL-pointer write crash in `display_parameters()`
+  (`tmp_20k_buf[0] = '\0'` when `parameter_list == NULL`) on the same
+  1-byte-`application/octet-stream` input. Real `pine.c` startup
+  unconditionally calls `grow_tmp_20k_buf(TMP_20K_BUF_BASELINE)` once,
+  before any UI-rendering code can run (`pine.c:181`, well before
+  `pine_state` itself is even allocated) -- guaranteeing `tmp_20k_buf`
+  is always non-NULL by the time `display_parameters()` touches it in
+  real operation. `fuzz/consumer_fuzz.c`'s `LLVMFuzzerInitialize()`
+  never did the equivalent, so `tmp_20k_buf` stayed NULL until some
+  other code path happened to call `grow_tmp_20k_buf()` with a
+  positive `need` first -- which never happens for a body with no
+  Content-Type parameters. Not a real pine bug (harness initialization
+  gap only).
+- **Fixed**: added the matching `grow_tmp_20k_buf()` call to
+  `LLVMFuzzerInitialize()`.
+- **Verified**: the minimized repro added as a permanent regression
+  seed, `fuzz/corpus/consumer/regress_display_parameters_null_tmpbuf`.
+  Full clean rebuild (plain and `ASAN=1`), 0 warnings; 31/31
+  smoketests; extended `consumer_fuzz` run (7.5M execs) with zero
+  further crashes.
+- **Size delta**: none (fuzz harness only, not shipped code).

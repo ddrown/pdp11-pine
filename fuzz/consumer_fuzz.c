@@ -138,5 +138,16 @@ int LLVMFuzzerInitialize(int *argc, char ***argv)
     ps_global->atmts = (struct attachment *) fs_get(sizeof(struct attachment));
     ps_global->atmts_allocated = 1;
     ps_global->atmts->description = NULL;
+
+    /* real callers (pine/pine.c's startup, right before pine_state is
+       even allocated) always call this once, unconditionally, before
+       any UI-rendering code can run -- so tmp_20k_buf is guaranteed
+       non-NULL by the time display_parameters()/format_mime_size()
+       etc. touch it. Without this, a body with no Content-Type
+       parameters (parameter_list == NULL) hits display_parameters()'s
+       "tmp_20k_buf[0] = '\0';" with tmp_20k_buf still NULL -- a
+       harness initialization gap, not a real pine bug. */
+    grow_tmp_20k_buf(20480);	/* fuzz/pine_ui_stubs.c's TMP_20K_BUF_BASELINE
+				   -- not visible here, it's file-local there */
     return 0;
 }
