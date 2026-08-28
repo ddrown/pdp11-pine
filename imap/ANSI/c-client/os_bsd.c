@@ -71,15 +71,26 @@ void *fs_get (size_t size)
 {
   void *block = malloc (size);
   if (!block) {
-    /* Report the failed request size -- on a target this memory-
-     * constrained, knowing whether a future "out of free storage"
-     * crash is a small/reasonable allocation (real exhaustion) or a
-     * huge/garbage one (an integer underflow computing a bad size
-     * upstream) is worth the one sprintf() on this failure-only
-     * path. Found the CHUNK-vs-MAILTMPLEN bug in bezerk_open() this
-     * way -- see TODO-pdp11-done.md. */
-    char msg[64];
-    sprintf (msg, "Out of free storage (%lu bytes)", (unsigned long) size);
+    /* Report the failed request size, the current brk(2), and an
+     * approximation of the current stack pointer (a local variable's
+     * own address, close enough to compare across crashes -- this
+     * target has no portable way to read the real SP register from
+     * C) -- on a target this memory-constrained, knowing whether a
+     * future "out of free storage" crash is a small/reasonable
+     * allocation (real exhaustion) or a huge/garbage one (an integer
+     * underflow computing a bad size upstream) is worth the one
+     * sprintf() on this failure-only path. Found the CHUNK-vs-
+     * MAILTMPLEN bug in bezerk_open() this way -- see TODO-pdp11-
+     * done.md. brk/sp are included because brk alone has repeatedly
+     * turned out *not* to predict failure (a request can fail well
+     * short of the nominal 64KB D-space ceiling measured against brk
+     * once the stack is accounted for), so seeing the gap directly in
+     * the crash message beats reasoning about it after the fact from
+     * a separate log. */
+    char msg[96], sp_probe;
+    sprintf (msg, "Out of free storage (%lu bytes, brk=%ld sp=%ld gap=%ld)",
+	     (unsigned long) size, (long) sbrk(0), (long) &sp_probe,
+	     (long) &sp_probe - (long) sbrk(0));
     fatal (msg);
   }
   return (block);
@@ -101,9 +112,12 @@ void fs_resize (void **block,size_t size)
      * past the character-filter callback layer (garbage-looking
      * arguments, nonsensical caller names), so report the size here
      * directly instead of relying on the debugger to recover it.
-     * See TODO-pdp11-done.md. */
-    char msg[64];
-    sprintf (msg, "Can't resize free storage (%lu bytes)", (unsigned long) size);
+     * See TODO-pdp11-done.md. brk/sp included for the same reason as
+     * fs_get() above. */
+    char msg[96], sp_probe;
+    sprintf (msg, "Can't resize free storage (%lu bytes, brk=%ld sp=%ld gap=%ld)",
+	     (unsigned long) size, (long) sbrk(0), (long) &sp_probe,
+	     (long) &sp_probe - (long) sbrk(0));
     fatal (msg);
   }
   *block = new_block;
