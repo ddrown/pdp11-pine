@@ -171,7 +171,15 @@ void rfc822_address_line (char **header,char *type,ENVELOPE *env,ADDRESS *adr)
                      + (adr->host    ? strlen (adr->host)    : 0)
                      + (adr->adl     ? strlen (adr->adl)     : 0))
                 + 32;		/* "<>", "@", quotes, ": ", ", ", ";" */
-      if (tmpneed < MAILTMPLEN) tmpneed = MAILTMPLEN;
+      /* No MAILTMPLEN floor -- same fix, same reason, as pine/reply.c's
+       * pretty_addr_string() (this function's display-side sibling):
+       * an ordinary short address needs a small fraction of 1024
+       * bytes, and forcing every address in every outgoing header up
+       * to a full MAILTMPLEN regardless of actual size is exactly
+       * what real "Out of free storage (1024 bytes)" crashes on this
+       * target traced back to. The `+ 32` above already covers this
+       * function's own escaping/quoting overhead for the smallest
+       * addresses. */
       *(t = tmp = (char *) fs_get (tmpneed)) = '\0';
 					/* initially empty string */
 				/* start of group? */

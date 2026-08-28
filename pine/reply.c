@@ -1117,14 +1117,23 @@ pretty_addr_string(field_name, addr, line_prefix, pc)
 	 * stack (jumped to an address built from the injected bytes).
 	 * Size dynamically per address instead, same technique as
 	 * addrutil.c's addr_string().
+	 *
+	 * No MAILTMPLEN floor here (there used to be one, "if(need <
+	 * MAILTMPLEN) need = MAILTMPLEN;") -- an ordinary short address
+	 * needs a small fraction of that, and forcing every single
+	 * address in every viewed message's To/Cc/From up to a full
+	 * 1024 bytes regardless is exactly what a real "Out of free
+	 * storage (1024 bytes)" crash here on real hardware traced back
+	 * to (confirmed via adb: mail_view_screen -> format_message ->
+	 * format_envelope -> pretty_addr_string -> fs_get). The `+32`
+	 * above already covers this function's own escaping/quoting
+	 * overhead for the smallest addresses.
 	 */
 	need = 2 * ((addr->personal ? strlen(addr->personal) : 0)
 	            + (addr->mailbox ? strlen(addr->mailbox) : 0)
 	            + (addr->host   ? strlen(addr->host)   : 0)
 	            + (addr->adl    ? strlen(addr->adl)    : 0))
 	       + 32;    /* "<>", "@", quotes, group ": ", ";" */
-	if(need < MAILTMPLEN)
-	  need = MAILTMPLEN;
 	buf        = (char *) fs_get(need);
 	buf[0]     = '\0';
 	rfc822_write_address(buf, addr); /* write address into buf */

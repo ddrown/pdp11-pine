@@ -1552,10 +1552,24 @@ set_mime_types(body)
      * correctness. Was an unconditional CHUNK+1 (8193, matching
      * bezerk.c's CHUNK-sized buffers) -- same class of oversized
      * fixed buffer as the CHUNK-vs-MAILTMPLEN bezerk_open() bug fixed
-     * earlier (TODO-pdp11-done.md), found this time via a real
-     * "Out of free storage (8193 bytes)" crash and an adb stack trace
-     * pinning it to this fs_get() call. */
-#define RBUFSZ	(MAILTMPLEN + 1)
+     * earlier (TODO-pdp11-done.md), found via a real "Out of free
+     * storage (8193 bytes)" crash and an adb stack trace pinning it to
+     * this fs_get() call. Shrunk once to MAILTMPLEN+1 (1025) -- still
+     * too big: a second real-hardware crash ("Out of free storage
+     * (1025 bytes)", same fs_get() call, confirmed via adb) hit during
+     * an ordinary compose+Send, not a specially large message. Shrunk
+     * again to 257, then again to 65 after a *third* real-hardware
+     * crash at 257 bytes, same call site, same session (after
+     * mail_view_screen()'s new mail_gc(GC_ENV) call already cut
+     * cumulative cache growth from browsing -- this was the next
+     * limiting allocation once that was in place, not evidence the
+     * gc fix didn't help). The refill loop below already handles a
+     * chunk boundary landing anywhere, including mid-line (see the
+     * bol/line_so_far comment at the refill site), so this remains
+     * the same "changes refill frequency, not correctness" tradeoff,
+     * just pushed further given how little real headroom this target
+     * has in practice. */
+#define RBUFSZ	65
     unsigned char   *buf, *p, *bol;
     register size_t  n;
     long             max_line = 0L,
