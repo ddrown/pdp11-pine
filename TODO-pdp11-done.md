@@ -9813,3 +9813,34 @@ input `From:<a;I<EYE(N)`.
 - **Size delta**: negligible (one `if`/`fs_give()` call added to a
   rarely-taken parsing branch). Not separately measured.
 
+### Fixed a fuzz-harness-only false positive found while re-verifying the leak fix: header buffer needs a valid trailing byte
+
+The same extended leak-detection fuzzing run that confirmed the fix
+above also turned up a new SEGV in `rfc822.c`'s header-folding scan
+(`if (s[1] != ' ' && s[1] != '\t') *t = c = '\0';`) -- investigated
+and determined to be a harness artifact, not a real bug reachable
+from `bezerk.c`.
+
+- **Root cause**: `rfc822_parse_msg()`'s header-folding scan, on
+  finding a `'\n'`, peeks one byte past it (`s[1]`) to check for a
+  continuation line's leading whitespace. Real callers
+  (`bezerk_fetchstructure()`, `imap/ANSI/c-client/bezerk.c`) always
+  keep the header inside a larger, always-NUL-terminated buffer
+  (`m->internal`) with the body (or a NUL, if there's no body)
+  immediately following it in the same allocation -- so that peek is
+  always safe in real operation. `fuzz/rfc822_fuzz.c` and
+  `fuzz/consumer_fuzz.c` both allocated the header as an exactly-
+  `size`-byte standalone buffer for their "no blank line found in
+  this input" case, with nothing valid immediately after it -- a
+  buffer-layout mismatch from the real caller, not a parser bug.
+  Confirmed the two harnesses' scratch-buffer *sizing* formula
+  (`max(headersize, bodysize) + 1`) already matched
+  `bezerk_fetchstructure()`'s exactly; only the trailing-byte
+  guarantee was missing.
+- **Fixed**: both harnesses now allocate `size + 1` bytes for the
+  message buffer and NUL-terminate it, matching the guarantee real
+  `bezerk.c`-delivered messages always provide.
+- **Verified**: the crashing input no longer reproduces; re-ran
+  extended fuzzing (figures above) with zero further crashes on any
+  of the three harnesses.
+- **Size delta**: none (fuzz harness only, not shipped code).
