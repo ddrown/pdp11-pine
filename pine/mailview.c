@@ -91,6 +91,7 @@ static int match_charset(char *);
  * storage instead of a separate copy of each at every site */
 static char *err_writing_msg = "Error writing message: %s";
 static char *us_ascii        = "us-ascii";
+static char *already_at_end_fmt = "Already at end of %s";
 /* not static -- also used from reply.c, see the externs there */
 char *richtext              = "richtext";
 char *external_body         = "external-body";
@@ -1352,12 +1353,12 @@ scrolltool(text, title, pages, style, source, att)
                         cur_top_line = pages[current_page];
                     }else {
                         q_status_message1(0, 0, 1,
-                         "Already at end of %s", style_word(style));
+                         already_at_end_fmt, style_word(style));
                     }   
 	        }
             }else {
 	        q_status_message1(0, 0, 1,
-                  "Already at end of %s", style_word(style));
+                  already_at_end_fmt, style_word(style));
 	    }
             break;
 
@@ -1378,7 +1379,7 @@ scrolltool(text, title, pages, style, source, att)
 	  case ctrl('N'):
             if(cur_top_line + num_display_lines > num_text_lines)
 	        q_status_message1(0, 0, 1,
-                 "Already at end of %s", style_word(style));
+                 already_at_end_fmt, style_word(style));
 	    else {
 	        cur_top_line++;
 	        if(pages != NULL&& cur_top_line >= pages[current_page+1] &&
