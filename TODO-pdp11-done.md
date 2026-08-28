@@ -10928,3 +10928,308 @@ conditional one.
   `size` at all) -- confirmed via a real-hardware rebuild showing the
   full 384-byte drop with no other `size`-visible change in the same
   build.
+
+### Measuring real stack depth directly ("stack painting"), and the two real bss buffers it led to fixing
+
+All prior estimates of how deep this target's stack actually gets
+during real use came from limited evidence -- individual adb crash
+traces, informally summarized as "haven't seen usage above 1.2k".
+Wanting a real number instead of an inference from a handful of
+crashes, built a small, temporary instrumentation into `pine/pine.c`:
+`stack_paint_init()` fills a range below the stack pointer with a
+marker byte (`0xAA`) as the very first thing `main()` does, and
+`stack_paint_report()` (called right before the normal `Pine
+finished`/`exit(0)`) scans from the bottom of that range upward for
+the first byte that's no longer the marker -- the address where that
+happens is the deepest point the stack ever reached during the run.
+Both functions are guarded to compile for the `lnx` dev build too
+(with a much larger, ASLR-relative range, since there's no known fixed
+page boundary there and ordinary `/proc/<pid>/maps` inspection turned
+out not to work -- glibc/ld.so startup already pre-faults a stack VMA
+far bigger than anything pine itself adds, so growth from pine's own
+code is never visible there). **This instrumentation is intentionally
+still in `pine.c`** (not stripped out after use, unlike the disposable
+`MEMCK`-style instrumentation elsewhere in this file) -- left in place
+for continued use across future sessions.
+
+Getting a *correct* measurement took several real, instructive wrong
+turns, each caught by testing on real hardware rather than trusted on
+first build:
+
+- **First attempt: anchor the paint floor to the address implied by
+  the `brk` ceiling.** The earlier-established 57344-byte
+  `data+bss+heap` ceiling (see "The send/read/compose crash chain"
+  above) implies the 8th APR (57344-65535, the top 8192 bytes of the
+  64KB D-space) is reserved for the stack, so painting downward from
+  `0xE010` seemed like a safe, page-anchored floor. It crashed --
+  SIGSEGV *inside* `stack_paint_init()` itself, confirmed via `adb`'s
+  `$c`. This is a real, useful negative result: `brk()`'s ceiling
+  constrains where the *data* segment can grow to, but doesn't
+  guarantee every byte above it is mapped, writable stack memory
+  reachable via an arbitrary pointer -- whatever backs that page
+  appears to require genuinely reaching it via the SP register moving
+  through it, not a raw pointer poke to an absolute address, even one
+  derived from a real, confirmed constraint.
+- **Second attempt: `alloca()`, range relative to SP instead of an
+  absolute address.** This introduced a real bug in the
+  instrumentation's own arithmetic: computing the paint ceiling as
+  `low + STACK_PAINT_RANGE` *after* `alloca()` returned `low`
+  overflowed the 16-bit address space, since `low` came back near the
+  top of the 64KB space (expected, right at the top of `main()`) --
+  the sum wrapped past `0xFFFF` to a value numerically *smaller* than
+  `low`, so the paint loop's `low < high` bound check was false on its
+  first iteration and nothing ever got painted. The "depth" that fell
+  out was just wraparound-arithmetic noise, not a measurement -- caught
+  by manually inspecting `_stack_paint_low`/`_stack_paint_high` via
+  `adb` (`0xfdfa`/`0x0d9a`: `0x0d9a` is `(0xfdfa + 4000) mod 0x10000`).
+  Fixed by capturing the ceiling independently, from a local's address
+  (`&sp_probe - 128`, a subtraction, before calling `alloca()`) instead
+  of deriving it from `low` by addition.
+- **Third attempt: same fix, still wrong.** After the overflow fix,
+  `alloca(4000)`'s returned pointer came back only ~122 bytes from the
+  independently-captured ceiling, not ~4000 -- confirmed again via
+  `adb`. A user-written minimal test program (`alloca()` called
+  directly from `main()`, next to a large fixed local array) showed
+  `alloca()` *can* correctly reserve real, writable stack space on
+  this target when called that way, so the exact mechanism behind the
+  ~122-byte anomaly in the nested-function case was never pinned down
+  -- left unresolved, since the fix below sidesteps it entirely rather
+  than needing to explain it.
+- **Fix: drop `alloca()` entirely, use a genuine local array.**
+  `char buf[STACK_PAINT_RANGE]` is ordinary, compiler-generated
+  function-prologue stack reservation -- no runtime-library dependency,
+  nothing for a possibly-uncooperative old K&R `alloca()`
+  implementation to get wrong. (Hit one more K&R-compiler quirk along
+  the way: an array bound with an `L` suffix, `4000L`, failed to
+  compile on the real target with `Constant required` -- plain `4000`
+  was fine.) Verified correct via `adb` hexdump: the painted range
+  read back as an unbroken run of `aaaa` words up to exactly the byte
+  offset the reported depth predicted, with real (non-`aaaa`) content
+  starting immediately after.
+
+**Real measured results** (all via the fixed, local-array-based
+instrumentation, on real hardware):
+
+- Baseline (read/navigate only, no compose or send): **4814 bytes**
+  below where `main()` starts painting.
+- Through a Send (navigate -> forward -> attempt Fcc/`sent-mail`
+  creation, which failed on this run -- see the `folder_exists()`/
+  `mail_valid()` disagreement above): **6072 bytes**. Cross-validated
+  two independent ways on the *same* run: once from the normal exit
+  report, and again by hand from a *crashed* run's core file (the
+  paint survives a crash, since `stack_paint_init()` already ran
+  before whatever later failed) -- computed manually from a `adb`
+  hexdump as the offset where the `aaaa` run stopped, landing on the
+  identical 6072 figure. Also used `adb`'s `$r` on that same core file
+  to distinguish two genuinely different numbers that aren't a
+  contradiction: the *instantaneous* SP at the moment of the crash
+  (`fatal()` -> `abort()` -> `kill()`, only ~1098 bytes deep -- `kill()`
+  itself is a shallow call) versus the *high-water mark* (6072 bytes --
+  the deepest point reached earlier in the same run, before the call
+  chain unwound back up to the shallower point where the crash actually
+  happened).
+- After the two bss fixes below, a *successful* Send (same navigate ->
+  forward -> send path, this time completing cleanly): **4984 bytes**
+  -- lower than the failed run above despite the fixes adding a new
+  ~1026-byte local at exactly this call chain's deepest point, most
+  likely because a clean send skips whatever extra
+  error/retry/prompt-handling path the failed run above took.
+
+These numbers revise the earlier "~1.2k" estimate upward by roughly
+4-5x -- real peak usage during an ordinary interactive Send is several
+KB, not close to one.
+
+**Two real bss buffers found and fixed as a direct result of having
+real numbers to reason about margin against** -- both were permanent
+`static`/BSS allocations that, on inspection, never actually needed to
+outlive a single call:
+
+- **`ttyout.c`'s `temp_format` (640 bytes)**: shared by `PutLine1()`,
+  `PutLine2()`, `PutLine4()`, and `PutLine5()`, each of which
+  `sprintf()`s into it and immediately passes it to `PutLine0()` ->
+  `Write_to_screen()` -> `Writechar()` -- fully synchronous, confirmed
+  by reading the whole chain, no pointer to it retained anywhere past
+  the single call. Converted from one shared `static` array to four
+  per-call local arrays (one per function) -- since none of these four
+  functions ever call into one another, only one such local is ever
+  live at a time, so this costs zero permanent floor, only transient
+  per-call stack space that's reclaimed the instant each function
+  returns.
+- **`filter.c`'s `gf_out_buf` (1026 bytes, `GF_OUT_BUF_LEN+2`)**:
+  unlike `temp_format`, this one *is* a genuine multi-call accumulator
+  (`gf_out_putc()` fills it one character at a time across many calls,
+  tracked via `gf_out_c_in_buf`) -- so it can't simply become a
+  per-call local the same way. But its whole lifetime is still scoped
+  to a single `pine_rfc822_output_body()` call: `gf_set_output()` and
+  `gf_flush_net()` (the session start/end) are each called exactly
+  once, both from there. `gf_set_output()` gained a third `char *buf`
+  parameter instead of allocating anything itself, and
+  `pine_rfc822_output_body()` now owns the storage as an ordinary local
+  array, passed in by pointer. Deliberately *not* implemented as
+  `fs_get()`/`fs_give()` scoped to the same two calls: that would have
+  competed with the `data+bss+heap` budget this whole exercise is
+  trying to relieve pressure on (the exact budget already causing "Out
+  of free storage" crashes in this same call chain), and two early
+  returns between `gf_set_output()` and `gf_flush_net()` (no binary
+  content; a `gf_pipe()` encode error) would have leaked an explicit
+  heap allocation -- a stack local is reclaimed automatically on every
+  return path, with no explicit free needed at any of them.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite 31/31
+  after each change, including the send-path-specific tests
+  (`test_send_body_header_overflow`,
+  `test_send_body_header_overflow_via_sendmail`) that exercise this
+  exact `gf_set_output()`/`gf_out_putc()`/`gf_flush_net()` chain,
+  covering both the normal and the Fcc-only/`f=NULL` early-return
+  path. Pushed and rebuilt on real hardware after each fix.
+- **Size delta**: real hardware `bss` dropped 640 bytes for
+  `temp_format`, then another 1024 for `gf_out_buf` -- 1664 bytes
+  total freed from the `data+bss+heap` budget, `data` unaffected by
+  either change.
+- **Net outcome**: real hardware went from repeatedly hitting "Out of
+  free storage"/"Can't resize free storage" (`brk=57344`) during
+  Fcc/`sent-mail` creation to completing a full navigate -> compose ->
+  send cleanly. Not confirmed as fully, permanently resolved -- only
+  tested with one message so far, and the underlying budget is still
+  tight (see "The real memory budget" above) -- but a real, measured
+  improvement either way.
+
+**Caveats carried forward, not resolved by this entry**:
+
+- The 57344-byte / one-8192-byte-page assumption behind "how much
+  stack margin is left" is still not independently, cleanly confirmed
+  -- the one direct attempt to touch that exact boundary (the first
+  wrong turn above) crashed the *instrumentation*, which was read as
+  "reach it via SP, not a raw pointer" rather than "the boundary
+  itself is wrong", but that reading was never separately verified.
+  Margin estimates quoted in conversation this session (e.g. "~1608
+  bytes free", "~2696 bytes free" after the two bss fixes) are built on
+  this still-unconfirmed total, not an independently measured one.
+  Whether the "Out of free storage" Fcc/`sent-mail` crash is fully
+  fixed or just avoided by freeing 1664 bytes also wants a stress test
+  with a longer/more complex message before treating it as closed.
+    - **Update**: stress-tested with a fuller inbox (8 messages, all
+      viewed, then a Send) on real hardware -- completed cleanly, no
+      "Out of free storage"/"Can't resize free storage" crash. Stack
+      high-water mark read the same 4984 bytes as the earlier single-
+      message successful Send, consistent with peak depth being set
+      by the deepest call chain reached rather than by how many
+      messages get browsed in sequence (the message-count-driven cost
+      is on the heap side -- c-client's envelope/body caching -- which
+      is exactly what the two bss fixes bought headroom against).
+      Meaningfully raises confidence this is a real fix, not a
+      narrowly-avoided one, though still not an exhaustive test (a
+      much longer individual message, or many more than 8, could
+      still find the edge of the freed headroom).
+
+**Follow-up audit for more `temp_format`-shaped buffers**: swept every
+`static char foo[N]`/`static char foo[N], bar[M]` at both file scope
+and function scope across `pine/*.c`, `pico/*.c`, and
+`imap/ANSI/c-client/*.c` (~35 candidates). Nearly all turned out to be
+one of two legitimate, *not*-a-bug patterns, distinguishable by
+checking whether the pointer escapes the function that owns it:
+
+- **Classic "returns `char *` into its own static buffer" idiom**
+  (`os.c`'s `error_description()`/`gcos_name()`/
+  `local_name_lookup()`/`filter_filename()`, `strings.c`'s whole
+  number/string-formatting family, `folder.c`'s
+  `add_new_folder()`/`rename_folder()`/`pretty_fn()`,
+  `mailcmd.c`'s `broach_folder()`/`detach()`, `reply.c`'s
+  `generate_message_id()`, `mailview.c`'s `type_desc()`,
+  `pico/browse.c`'s `prettysz()`, `screen.c`'s `status_string()`) --
+  the caller receives and uses the returned pointer, so the storage
+  genuinely must outlive the call. `static` is correct here, not an
+  oversight.
+- **Already-deliberate, already-documented static-for-stack-depth
+  trade-offs from earlier sessions** (`context.c`'s
+  `context_fqn_to_an()`/`context_digest()`/`context_find_all()`
+  locals, `folder.c:1817`'s `rcontext`/`view`, `send.c`'s
+  `pico_child_path()`/`pine_send()`/`call_sendmail()`/
+  `append_message2()` locals) -- each already carries a comment
+  explaining it was deliberately moved off the stack (not into
+  transient stack space) because it sits in the same deep,
+  non-reentrant Fcc-append call chain a previous session confirmed
+  tight on stack. Converting these back to locals would undo that
+  fix and reintroduce exactly the stack pressure this whole
+  investigation is about.
+- One genuinely persistent case: `search_string` (appears three
+  times, in `folder.c`/`mailcmd.c`/`mailview.c`) intentionally
+  remembers the last search term across separate search invocations
+  -- a real feature, not a bug.
+- **One more real fix, matching `temp_format`'s exact shape**:
+  `pico/display.c`'s `modeline()` had `static char keys[13],
+  labels[160]` (173 bytes), filled by `sprintf()` and passed directly
+  to `wkeyhelp()` in the same call. Read `wkeyhelp()`'s full body: it
+  only reads through `keys`/`labels` (copies characters into its own
+  scratch buffer `s`), never stores either pointer anywhere -- and
+  every *other* `wkeyhelp()` call site in the tree passes a string
+  literal rather than a variable, consistent with no caller ever
+  needing these to persist. Converted to plain (non-`static`) locals.
+  Verified: `./build lnx`, 0 warnings, full smoketest suite 31/31.
+  Pushed and rebuilt on real hardware -- `pico`'s overlay build (the
+  one that actually runs on the target: `pico_child_path()` above
+  confirms pine spawns `pico` as a separate subprocess on real
+  hardware rather than linking it in, so `pine`'s own `size` is
+  unaffected by this fix) dropped `bss` by 192 bytes.
+- **Running total this session's stack-depth investigation has
+  freed from permanent bss**: 640 (`temp_format`) + 1024
+  (`gf_out_buf`) + 192 (`modeline()`'s `keys`/`labels`) = **1856
+  bytes**, across `pine`'s and `pico`'s `bss` combined.
+
+### More string-literal deduplication: `pico/browse.c`'s repeated `wkeyhelp()`/`emlwrite()` arguments
+
+Continuing the general data/rodata reduction pass (this old K&R
+compiler doesn't dedupe identical string literals -- see the earlier
+key-menu string-cutting entries), scanned the whole tree for exact
+duplicate string literals appearing 3+ times, excluding two large
+sources of false positives: the per-file UW copyright comment block
+(matched by a naive scan since its continuation lines don't start with
+`*`, but it's pure comment text costing nothing in the binary either
+way) and `pico/osdep.c` (a build-time `cp` of `os_unix.c`, gitignored
+-- counting both double-counts every string that happens to be in a
+function `osdep.c` also contains).
+
+The highest-value real duplication, once those were excluded, was
+concentrated in one file: `pico/browse.c`'s file browser repeats the
+same `wkeyhelp("GC0000000000", "Get Help,Cancel")` call at 6 different
+menu states, `emlwrite("Cancelled", NULL)` at 8, and
+`emlwrite("\007No help yet!", NULL)` at 6 more.
+
+- **Fix**: four `static char foo[] = "...";` file-scope constants
+  (`km_gc_keys`, `km_get_help_cancel`, `cancelled_msg`,
+  `no_help_yet_msg`), same non-`const` array-not-pointer convention as
+  `mailindx.c`'s existing `km_help[]`/`km_qmark[]` (needed there so it
+  could double as a static aggregate initializer; not needed here
+  since these are just plain function arguments, but kept for
+  consistency), referenced from all 20 call sites instead of repeating
+  the literals.
+- **A real trap found evaluating this on the `lnx` dev build**: `size`
+  showed `text` drop 56 bytes but `data` *grow* 64 -- net 8 bytes
+  *worse* on that build. A non-`const` `static char[]` is writable, so
+  gcc/ELF must place it in `.data`; the plain string-literal arguments
+  it replaced were read-only and lived in `.text`/rodata instead, so
+  gcc's section accounting made this look like a bad trade. This
+  turned out to be an artifact of the dev build's ELF/gcc toolchain,
+  not a real problem -- real-hardware `size` (the actual a.out/PDP-11
+  toolchain this project targets) showed a clean 246-byte `data`
+  drop with `text`/`bss` unchanged, no such trade-off. Another
+  reminder (like the stack-depth numbers earlier in this file) that
+  this dev build's numbers are directional at best for anything
+  touching section placement, not a substitute for a real-hardware
+  `size` check.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. Pushed and rebuilt (`pico-ovl`) on real hardware.
+- **Size delta**: real hardware `data` -246 bytes (`text`/`bss`
+  unchanged).
+
+Same pass also found `mailview.c`'s `"Already at end of %s"` repeated
+across three `q_status_message1()` call sites (a scroll-past-the-end
+status message, hit from three different key-handling branches --
+page-down/space, down-arrow, and one more). Shared via the same
+`static char *foo = "...";` pointer convention `mailview.c` already
+uses for `err_writing_msg`/`us_ascii` just above it in the file.
+Verified the same way (`./build lnx` 0 warnings, smoketest 31/31,
+real-hardware rebuild); real hardware `data` -40 bytes.
+
+**Running total this pass**: 246 + 40 = 286 bytes of `data`, on top of
+the 1856 bytes of `bss` from the stack-depth entry above -- **2142
+bytes** freed this session so far.

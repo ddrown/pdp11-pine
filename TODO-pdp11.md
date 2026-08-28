@@ -51,6 +51,19 @@ DONE elsewhere or referenced in passing below.
       ceiling to design `data+bss` and peak heap usage against -- not
       64KB minus whatever the stack happens to be using at the moment,
       which is what earlier size accounting in this file assumed.
+    - **Update**: a still later session tried to directly confirm the
+      exact page boundary by painting a known byte pattern down to
+      `0xE010` (this ceiling's implied floor) and scanning for
+      disturbance -- it crashed the instrumentation itself (`SIGSEGV`
+      inside `stack_paint_init()`, confirmed via `adb`), read as
+      "reachable only via genuine SP movement, not an arbitrary
+      pointer" rather than "the boundary is wrong", but that reading
+      was never independently re-verified. See
+      `TODO-pdp11-done.md`'s "Measuring real stack depth directly"
+      entry -- real stack usage during an ordinary Send measured
+      several KB (not the ~1.2k this entry and others had assumed),
+      which motivated finding and fixing two permanent bss buffers
+      that only needed transient lifetime, freeing 1664 bytes.
     - Until/unless the ceiling itself moves, the only lever available
       from pine's own source is minimizing how much of that fixed
       57344-byte budget gets used -- i.e. exactly the ongoing data+
@@ -143,6 +156,35 @@ DONE elsewhere or referenced in passing below.
       lower-value duplicated strings (mostly 1-2 byte single-letter
       command keys) were also left alone -- not worth a shared
       variable's maintenance cost for the return.
+    - **Investigated further, recommend NOT pursuing**: a later
+      session scoped the "array of pointers to shared `struct key`
+      instances" approach (predefine each common `{key,label,column}`
+      triple once, e.g. `{km_qmark,km_help,0}`/`{km_o,km_othercmds,0}`/
+      `{NULL,NULL,0}`, and have each table's array hold pointers to
+      the shared instances instead of separate copies) as a lighter-
+      weight alternative to full runtime population. Real duplication
+      is substantial (`{km_qmark,km_help,0}` alone appears ~11 times
+      across the 8 tables, `{NULL,NULL,0}` dozens of times), but
+      turned out unsafe: runtime mutation of individual table slots is
+      widespread, not an isolated case -- `pine.c`'s
+      `show_main_screen()` does `km->keys[DEFAULT_KEY].label = label;`
+      (and `DEFAULT_KEY` in `main_keys` is currently one of the
+      `{NULL,NULL,0}` slots, exactly the most-shared candidate),
+      `folder.c` rewrites its `MAIN_KEY`/`SELECT_KEY` slots, `ttyin.c`
+      overwrites a run of slots in `oe_keymenu`, and `screen.c:236`
+      does `km->keys[off].column = km->keys[off+6].column = 0;` on a
+      *generic* `key_menu *km` with a caller-supplied `off` -- meaning
+      it can mutate an arbitrary slot of *any* table depending on call
+      site, making "is this slot ever mutated" essentially unprovable
+      without tracing every caller. Sharing an instance across tables
+      is only safe for slots no mutator can ever reach, and the
+      likely-safe set (mostly `{NULL,NULL,0}` filler) heavily overlaps
+      with exactly the slots these mutators use as scratch space --
+      the real payoff shrinks a lot once those are excluded. Not
+      pursued further; if revisited, would need a full trace of every
+      `->keys[...]` write site (the four found above, and any others)
+      before touching structure, not just a content-level count of
+      duplicate triples.
 
 ### "Out of free storage (1001 bytes)" crash during Fcc append, on real hardware
 
@@ -190,6 +232,26 @@ DONE elsewhere or referenced in passing below.
       and the deep Fcc-append call chain is a real stack cost too"
       story -- worth a fresh retest before assuming this one specific
       report is still open on its own.
+    - **Update 3**: a still later session directly measured real stack
+      depth through this exact call chain for the first time (see
+      `TODO-pdp11-done.md`'s "Measuring real stack depth directly"
+      entry -- real peak usage turned out to be several KB, ~5x the
+      informal "~1.2k" estimate this and other entries had been
+      working from) and found/fixed two more permanent bss buffers
+      (`ttyout.c`'s `temp_format`, `filter.c`'s `gf_out_buf`) that only
+      ever needed transient, single-call lifetime, freeing 1664 bytes
+      from the `data+bss+heap` budget. Real hardware went from
+      repeatedly hitting "Out of free storage"/"Can't resize free
+      storage" during Fcc/`sent-mail` creation to completing a full
+      send cleanly -- but only tested with one message so far, so
+      still not confirmed fully closed rather than just improved.
+    - **Update 4**: stress-tested with a fuller inbox (8 messages, all
+      viewed, then a Send) on real hardware -- completed cleanly, no
+      crash, stack high-water mark unchanged from the single-message
+      test (4984 bytes). Meaningfully raises confidence this is a real
+      fix rather than a narrowly-avoided one, though still not
+      exhaustive -- a much longer individual message, or many more
+      than 8, could still find the edge of the freed headroom.
 
 ### "Out of free storage (1024 bytes)" viewing a second message, real hardware
 
