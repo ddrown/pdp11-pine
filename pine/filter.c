@@ -778,7 +778,28 @@ gf_pipe(gc, pc)
  * guarantees gf_output_putc() is always resident whenever gf_terminal()
  * is (same module, same overlay), so the pointer can never go stale.
  */
-static soutr_t    gf_out_f;
+/* unix_puts() (send.c, prototyped in pine.h) is called directly below.
+ * gf_out_putc()/gf_flush_net() used to reach it through a
+ * stored soutr_t pointer (gf_out_f) instead of calling it directly --
+ * the exact same cross-overlay hazard as the l_putc()/last_filter bug
+ * just described, one level further out: gf_set_output() (called from
+ * send.c, so send.o's overlay is guaranteed loaded right then) stored
+ * unix_puts's address, but gf_out_putc()/gf_flush_net() (this file,
+ * a *different* overlay) called through that stored pointer much
+ * later, after gf_pipe()'s filter chain had certainly swapped several
+ * other overlays through the same region -- so unix_puts's overlay
+ * was usually not the one resident by then. Confirmed via a real adb
+ * crash: SIGSEGV/SIGILL inside gf_flush_net(), called from
+ * pine_rfc822_output_body(), called from append_message2(), called
+ * from call_sendmail() -- i.e. on every real Send. Unlike the
+ * l_putc() fix, this one doesn't need relocating any code: unix_puts()
+ * has exactly one real caller chain (grep confirms `f` is always
+ * literally `unix_puts` at pine_rfc822_output_body()'s one non-
+ * recursive call site in append_message2()), so gf_out_putc()/
+ * gf_flush_net() now just call it directly -- an ordinary
+ * statically-visible cross-file call, which the auto-overlay linker's
+ * trampoline mechanism (unlike a raw runtime pointer) already handles
+ * correctly regardless of which overlay unix_puts ends up in. */
 static TCPSTREAM *gf_out_stream;
 static STORE_S   *gf_out_fcc_so;
 static unsigned   gf_out_c_in_buf = 0;
@@ -794,27 +815,26 @@ static unsigned   gf_out_c_in_buf = 0;
 static char       gf_out_buf[GF_OUT_BUF_LEN + 2];
 
 /*
- * gf_set_output - register the real destination (soutr_t + stream, plus
- *                 the optional Fcc storage object) before calling
- *                 gf_pipe() with gf_output_putc_fn()'s function as the
- *                 terminal. Replaces send.c's old direct l_f/l_stream
- *                 assignment.
+ * gf_set_output - register the real destination (stream, plus the
+ *                 optional Fcc storage object) before calling gf_pipe()
+ *                 with gf_output_putc_fn()'s function as the terminal.
+ *                 Replaces send.c's old direct l_f/l_stream assignment.
  */
 void
-gf_set_output(soutr_t f, TCPSTREAM *s, STORE_S *fcc_so)
+gf_set_output(TCPSTREAM *s, STORE_S *fcc_so)
 {
-    gf_out_f = f;
     gf_out_stream = s;
     gf_out_fcc_so = fcc_so;
     gf_out_c_in_buf = 0;
 }
 
 /*
- * gf_out_putc - gf_io terminal function that calls the registered
- *               soutr_t output function (e.g. unix_puts for
- *               call_sendmail). Static -- callers never invoke this
- *               directly, only indirectly via the pointer
- *               gf_output_putc_fn() returns (see gf_set_terminal()).
+ * gf_out_putc - gf_io terminal function that calls unix_puts() to
+ *               flush a full buffer. Static -- callers never invoke
+ *               this directly, only indirectly via the pointer
+ *               gf_output_putc_fn() returns (see gf_set_terminal()) --
+ *               that indirection is fine since it never leaves this
+ *               file/overlay, unlike the gf_out_f one removed above.
  */
 static int
 gf_out_putc(int c)
@@ -827,7 +847,11 @@ gf_out_putc(int c)
 	  so_puts(gf_out_fcc_so, gf_out_buf);
 
         gf_out_c_in_buf = 0;
-        return(gf_out_f ? (int)(*gf_out_f)(gf_out_stream, gf_out_buf) : 1);
+	/* gf_out_stream is NULL on the Fcc-only/no-recipient path
+	 * (pine_rfc822_output() called with f=NULL,s=NULL -- see
+	 * call_mailer()) -- there's no real destination to flush to
+	 * then, only the Fcc copy already written just above. */
+        return(gf_out_stream ? (int) unix_puts(gf_out_stream, gf_out_buf) : 1);
     }
     else
 	return(TRUE);
@@ -852,8 +876,8 @@ void
 gf_flush_net(void)
 {
     if(gf_out_c_in_buf){
-	if(gf_out_f)
-	  (*gf_out_f)(gf_out_stream, gf_out_buf);
+	if(gf_out_stream)
+	  unix_puts(gf_out_stream, gf_out_buf);
 
 	if(gf_out_fcc_so)
 	  so_puts(gf_out_fcc_so, gf_out_buf);

@@ -1377,8 +1377,13 @@ Normally this is used for writing a message down a TCP stream, but
 writing a MIME body out is complex business so we use it here.
 We must convert the network CRLF to the local new line convention, in this
 case on UNIX it's LF.
+
+Not static -- filter.c's gf_out_putc()/gf_flush_net() also call this
+directly, see the extern there. That direct (statically-visible) call
+is what fixed a real cross-overlay crash confirmed via adb on a real
+Send -- see filter.c's comment above gf_out_stream for the full story.
  ----*/
-static int
+int
 unix_puts(void *stream_x, char *string)
 {
     FILE *stream = (FILE *)stream_x;
@@ -1957,7 +1962,7 @@ pine_rfc822_output_body(body, f, s)
 	}
     }
 
-    gf_set_output(f, s, fcc_so);	/* set up for writing chars...  */
+    gf_set_output(s, fcc_so);	/* set up for writing chars...  */
     pc       = gf_output_putc_fn();	/* using our output function	*/
     gf_filter_init();
 
