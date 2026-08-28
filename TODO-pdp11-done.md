@@ -10576,3 +10576,265 @@ function pointer" entry above.
   but the `SLEN` byte count itself is platform-independent -- `s` is a
   plain `char` array, not pointer-sized -- so the same 6144-byte
   reduction applies there too).
+
+### The send/read/compose crash chain: a cross-overlay Send crash, a stack-collision Fcc-append crash, and the real shape of this target's memory ceiling
+
+A single extended real-hardware testing session (send a message, read it
+back, compose again, repeat) surfaced a chain of distinct, real bugs --
+each one fixed and verified before the next became visible underneath
+it -- and ended with a clear, evidence-based picture of why "Out of
+free storage" keeps recurring on this target no matter how many
+individual buffers get trimmed. Documenting the whole arc together
+since the entries build on each other and the final architectural
+finding reframes how to read every earlier one.
+
+- **`gf_flush_net()`/`gf_out_putc()`: a second cross-overlay stale
+  function pointer, crashing on every real Send.** The
+  `gf_terminal()`/`gf_out_putc` fix earlier in this file (see "Cross-
+  overlay indirect function pointer" above) turned out to fix only
+  half of this hazard. `gf_out_putc()`/`gf_flush_net()` (`filter.c`)
+  still reached their actual output sink through a second stored
+  pointer, `gf_out_f` (a `soutr_t`, set by `gf_set_output()` from
+  `send.c` to `unix_puts`) -- the exact same "raw pointer captured in
+  one overlay, invoked from a different one after `gf_pipe()`'s filter
+  chain has swapped several other overlays through the same memory"
+  hazard, just one indirection further out. Confirmed via a real adb
+  stack trace: `SIGSEGV`/`SIGILL` inside `gf_flush_net()`, called from
+  `pine_rfc822_output_body()` -> `append_message2()` ->
+  `call_sendmail()` -- i.e. on every real Send with a recipient, not
+  an edge case. Fixed the same way as the earlier hazard, but without
+  needing to relocate any code this time: grep confirmed `unix_puts`
+  is the *only* function `pine_rfc822_output_body()`'s `f` parameter
+  is ever called with (one non-recursive call site, in
+  `append_message2()`), so `gf_out_putc()`/`gf_flush_net()` now call
+  it directly by name -- an ordinary statically-visible cross-file
+  call, which the auto-overlay linker's trampoline mechanism (unlike a
+  raw runtime pointer) already handles correctly regardless of which
+  overlay `unix_puts` ends up in. `unix_puts()` (`send.c`) made
+  non-`static` for this; `gf_set_output()`'s signature dropped the now-
+  unused `soutr_t f` parameter it used to just store and pass along.
+  `pine_rfc822_output_body()`'s own internal `(*f)(...)` call sites
+  (its multipart-boundary/cookie-line writes) were *not* touched --
+  those execute from within `send.c` itself, calling a function also
+  defined in `send.c`, so they're safe by construction (the calling
+  code executing at all already proves that file's overlay is
+  resident) in a way the filter.c-to-send.c crossing never was.
+  Verified: `./build lnx` clean, 31/31 smoketests (one regression
+  caught and fixed by the suite itself -- see below), real hardware
+  Send confirmed working after this fix where it had reliably crashed
+  before.
+    - **Regression caught by the smoketest suite**: the first version
+      of this fix dropped `gf_out_f`'s NULL case entirely, assuming
+      it was always `unix_puts`. Wrong -- `call_mailer()`'s Fcc-only/
+      no-real-recipient path calls `pine_rfc822_output()` with
+      `f=NULL, s=NULL` on purpose (no real destination to write to,
+      only the Fcc copy), and `test_send_body_header_overflow`
+      immediately caught the resulting NULL-`FILE*` crash. Fixed by
+      checking `gf_out_stream` (which is NULL in exactly the same
+      case `gf_out_f` used to be) before calling `unix_puts()`,
+      instead of trying to preserve the removed pointer's NULL state
+      directly.
+- **`bezerk_append()`: an 8192-byte stack buffer, causing an
+  "Illegal instruction" crash appending the sent copy to `sent-mail`.**
+  Once Sends stopped crashing in `gf_flush_net()`, the very next step
+  (copying the sent message into `sent-mail` via c-client's own
+  `mail_append()` -> `bezerk_append()`) crashed differently: `Illegal
+  instruction (core dumped)`, adb pinning it inside
+  `bezerk_append_putc()`. `bezerk_append()` (`bezerk.c`) declares
+  `char buf[BUFLEN]` where `BUFLEN` was `8*MAILTMPLEN` (8192) --  a
+  plain **stack**-allocated write-batching buffer (accumulate bytes,
+  flush to `write(2)` when full), not heap. Combined with a second
+  `lock[MAILTMPLEN]` (1024) in the same frame, that's over 9KB in one
+  stack frame on a target where the whole D-space is 64KB and this
+  call happens right after a Send has already pushed `data`+`bss`+heap
+  close to their own ceiling -- exactly the kind of stack-vs-heap
+  collision this repo's "deep, buffer-heavy call chain" precedent
+  (see `pine_send()`'s `bodyfile_path`, made `static` for the same
+  reason) already knew to watch for, just not yet audited in
+  c-client's own driver code. Shrunk `BUFLEN` to `MAILTMPLEN/2` (512)
+  -- it only controls how often `bezerk_append_putc()` flushes to
+  `write()`, not correctness. Verified: `./build lnx`, 31/31
+  smoketests, real hardware Send-and-append confirmed working.
+- **Three more instances of the "oversized MAILTMPLEN floor/initial-
+  size" pattern**, found by continuing to retest after each fix
+  exposed the next-smallest failing allocation (`"Out of free storage
+  (N bytes)"` with `N` shrinking each time: 1024, 1025, 1024, 400,
+  256, 257, 65...) -- each one a real, independently-confirmed
+  real-hardware crash, each fixed the same low-risk way as this
+  session's earlier `MSIZE_INIT`/`RBUFSZ`-style fixes (shrink an
+  initial/floor size that an existing grow-on-demand or dynamic-sizing
+  path already handles correctly regardless of size):
+    - `mail_view_screen()`'s `so_get(CharStar, NULL, EDIT_ACCESS)`
+      (`mailview.c`) -- the message-display buffer -- inherited
+      `MSIZE_INIT`/`MSIZE_INC` (see the `filter.c` entry earlier in
+      this file). Confirmed via adb (`so_get` -> `fs_get`) at exactly
+      1024 bytes. Already covered by that entry's `MSIZE_INIT`
+      shrink to 256 -- included here because it's the crash that
+      first showed this specific call site was live.
+    - `format_scroll_text()`'s `text_lines[]`/`line_lengths[]` arrays
+      (`mailview.c`) started at `TYPICAL_BIG_MESSAGE_LINES` (200)
+      slots and doubled (`fs_resize()`) on demand -- 200 `char*`
+      slots cost exactly 400 bytes on this target's 2-byte pointers,
+      matching a real `"Out of free storage (400 bytes)"` crash
+      (adb: `mail_view_screen` -> `scrolltool` -> `format_scroll_text`
+      -> `fs_get`) hit with more messages in the inbox than earlier
+      sessions had. Shrunk to 25 -- a short message needs far fewer
+      slots, and doubling still gets a long one to the same eventual
+      capacity either way, just via a couple more `fs_resize()` calls.
+    - `pretty_addr_string()` (`reply.c`) already computed a correctly
+      dynamic per-address size (`2 * (field lengths) + 32`, covering
+      RFC822 quoting/escaping) but then applied
+      `if(need < MAILTMPLEN) need = MAILTMPLEN;` on top of it,
+      forcing every address in every viewed message's To/Cc/From up
+      to a full 1024 bytes regardless of actual size. Confirmed via
+      adb (`mail_view_screen` -> `format_message` -> `format_envelope`
+      -> `pretty_addr_string` -> `fs_get`, 1024 bytes). Removed the
+      floor entirely -- the dynamic computation was already correct
+      and was the whole point of the fix that introduced it (see that
+      function's own comment, and the `rfc822.c` sibling below).
+    - `rfc822_address_line()` (`imap/ANSI/c-client/rfc822.c`) --
+      `pretty_addr_string()`'s header-*writing* counterpart, used
+      building outgoing To/Cc/From lines -- had the exact same
+      `if (tmpneed < MAILTMPLEN) tmpneed = MAILTMPLEN;` floor on top
+      of an equally-correct dynamic computation. Found by grepping for
+      the same `< MAILTMPLEN` floor pattern across the whole tree
+      after finding `pretty_addr_string()`'s copy, not from a separate
+      crash. Removed the same way.
+    - `set_mime_types()`'s `RBUFSZ` (`send.c`, already `MAILTMPLEN+1`
+      = 1025 per an earlier entry in this file) hit *two more* real
+      crashes at that size and its next reduction (`"Out of free
+      storage (1025 bytes)"`, then again at `"(257 bytes)"`, both adb-
+      confirmed at the same `fs_get()` call site) during ordinary
+      compose+Send, not specially large messages. Shrunk twice more,
+      257 then 65 -- the refill loop already handles a chunk boundary
+      landing anywhere including mid-line (see that function's own
+      comment), so this remains the same "changes refill frequency,
+      not correctness" tradeoff, just pushed further given how little
+      real headroom this target has in practice.
+- **The real driver behind the recurring crashes: c-client caches
+  every viewed message's `ENVELOPE`/`BODY` for the life of the stream,
+  and nothing in this tree ever called `mail_gc()` to free any of it.**
+  Once the buffer-floor fixes above stopped being enough on their own
+  -- the same session hit a fresh crash ("Out of free storage (256
+  bytes)" starting a new compose, right after successfully reading
+  several messages) at a call site with no oversized buffer of its
+  own -- the pattern across the whole session's crash log (failing
+  request sizes shrinking release over release, at *different* call
+  sites each time, not a stack loop of the same one) pointed at
+  cumulative growth from browsing, not any single buffer. Grepping
+  this tree for `mail_gc`/`mail_free_envelope`/`mail_free_body` found
+  they're called only for pine's own *outgoing* (composed) envelopes
+  (`send.c`, `reply.c`) -- never for anything fetched while reading.
+  Every message ever opened or even just summarized in the index
+  keeps its full `ENVELOPE` (personal names, mailbox/host/adl strings,
+  `ADDRESS` nodes for every recipient) and `BODY` alive in the
+  stream's `LONGCACHE` for the rest of the session, unconditionally.
+  Two call sites needed the fix, found in order:
+    - `mail_view_screen()` (`mailview.c`): added
+      `mail_gc(pine_state->mail_stream, GC_ENV)` right after each
+      message is displayed (`so_give(&store)`), so at most one
+      message's envelope/body is live at a time while reading.
+      `mail_gc(..., GC_ENV)` is a whole-stream sweep (loops every
+      `nmsgs`), but this call site only runs once per message actually
+      opened for reading, not once per index row, so the O(nmsgs) cost
+      per call is fine here.
+    - `build_header_line()` (`mailindx.c`): the *other* place a full
+      `ENVELOPE` gets fetched is populating the folder index itself --
+      `mail_fetchstructure()` runs once per row (guarded by
+      `get_index_cache()`'s own already-bounded cache, so only on a
+      cache miss) purely to build one formatted summary line, and the
+      line is all any caller ever needs again. Confirmed the remaining
+      accumulation via adb: `"Out of free storage (12 bytes)"` -- a
+      bare `ADDRESS` struct, about as small an allocation as this tree
+      ever makes -- inside `mail_newaddr()`, deep inside
+      `rfc822_parse_msg()`, while just populating the index for a
+      bigger inbox than earlier sessions had used, i.e. before any
+      message had even been individually opened. Whole-stream
+      `mail_gc()` would be O(nmsgs) *per row* here (O(nmsgs^2) total)
+      since this runs once per row, not once per session, so freed
+      just this one message's entry directly instead, via
+      `mail_lelt()` (the same fields `mail_gc()` itself frees:
+      `mail_free_envelope(&lelt->env)`, `mail_free_body(&lelt->body)`).
+    - Both confirmed not to break the visible index/message-view
+      content (a scripted pty check after the `mailindx.c` fix
+      confirmed From/Subject/Date still render correctly for every
+      row; re-viewing an already-summarized-or-read message now costs
+      a re-fetch/re-parse from the mailbox file instead of a cache
+      hit, the expected memory-for-speed tradeoff). Verified: `./build
+      lnx` clean, 31/31 smoketests both times, real hardware
+      confirmed each fix let the *next* crash in the chain surface
+      (concrete forward progress each time, not a no-op).
+- **`fs_get()`/`fs_resize()`'s failure message now reports `brk`, an
+  approximate stack pointer, and the gap between them**
+  (`imap/ANSI/c-client/os_bsd.c`) -- a permanent diagnostic
+  improvement, not a bug fix, kept because it directly answered the
+  question the rest of this entry needed answered. Originally added
+  as temporary `syslog()` tracing (a `MEMCK` macro at a handful of
+  guessed checkpoints in `pine.c`/`mailcmd.c`/`send.c`, later a
+  log-every-call version in `fs_get()`/`fs_resize()` themselves) --
+  both approaches worked but cost real bytes on the very target being
+  debugged and needed guessing where to look. Landed on the simplest
+  version: fold `brk(2)`'s current value, the address of a local
+  variable (an approximation of the current stack pointer -- this
+  target has no portable way to read the real SP register from C),
+  and their difference directly into the existing `fatal()` message
+  that already fires on every allocation failure, no separate log
+  needed. `msg[]` widened from 64 to 96 bytes to fit the longer
+  message (worst case ~88 bytes on this target's 32-bit
+  `long`/`size_t`; the wider dev-build types were checked too and
+  don't matter since this file only builds for the real target).
+- **What the `brk`/`sp`/`gap` numbers actually revealed**: every "Out
+  of free storage" crash chased in this entry showed `gap` (the
+  measured distance from the current stack pointer to `brk`) in the
+  *thousands* of bytes -- nowhere close to the failing request size --
+  yet the allocation still failed, and always right around `brk`
+  57344. Two independent real-hardware crashes hit that exact number.
+  57344 = 7 * 8192, and 65536 - 57344 = 8192 exactly -- one full
+  8192-byte page short of the 64KB D-space, matching this target's
+  KT11 MMU page size precisely. The likely mechanism (not yet
+  confirmed by reading the kernel's own exec/VM setup code, but
+  consistent with every measurement so far and with
+  `pdp/machparam.h`'s `SSIZE` = 20 * 64 = 1280-byte *initial* stack
+  content, comfortably fitting inside one such page): stack growth
+  happens in whole-page units via the same APR mechanism as everything
+  else, so a full 8KB page gets mapped for stack at exec time
+  regardless of how little of it the initial ~1280 bytes actually
+  uses, and `brk()` can never claim any part of a page once it's
+  mapped for stack -- a *static*, page-granularity reservation decided
+  once at process start, not a dynamic boundary that tracks the
+  stack's actual current depth. This is why the `sp`/`gap`
+  instrumentation above didn't predict any of these failures: the real
+  constraint isn't "how deep is the stack right now", it's "how many
+  pages were handed to stack at exec time", and that's fixed for the
+  process's whole lifetime. Checked for a `MAXDSIZ`/`MAXSSIZ`-style
+  tunable constant in the kernel source (`limit`'s `datasize`/
+  `stacksize` both show as the shell's unlimited default, not a
+  compiled kernel maximum) -- not found by name; if this split is
+  hardcoded in the kernel's own exec/VM image setup rather than a
+  tunable, moving it would mean real kernel VM code changes, not a
+  `#define`, and hasn't been attempted. **Practical upshot for future
+  work**: 57344 bytes is very likely a hard ceiling for `data+bss
+  +heap` combined on this target, not a soft one that more `sp`-aware
+  code can negotiate around -- the only lever available from pine's
+  own source is minimizing how much of that fixed 57344-byte budget
+  gets used before it's needed, which is exactly what this session's
+  `MSIZE_INIT`/`RBUFSZ`/floor-removal/`mail_gc()` fixes (and the
+  ongoing data+rodata reduction work elsewhere in this file) already
+  do -- there's no fix available that raises the ceiling itself from
+  pine's side.
+- **Found, not yet fixed**: `folder_exists()` (`pine/folder.c`, used
+  by `send.c`'s Fcc-exists check) and `mail_create()`'s internal
+  `mail_valid()` check (`imap/ANSI/c-client/mail.c`) disagree about
+  whether a folder exists -- hit live when answering "y" to `"sent-
+  mail" doesn't exist. Create?` produced `Can't create ... folder
+  already exists` immediately after. `folder_exists()` answers via
+  `context_find_all()` (a pattern-matching folder *search*, built for
+  browsing/completion UI), while `mail_create()` answers via
+  `mail_valid()` (a direct existence check) -- plausible that
+  `context_find_all()` doesn't correctly match a plain, non-wildcard
+  name when called with a NULL context (`send.c`'s exact call shape),
+  but not traced further this session. Logged in `TODO-pdp11.md`
+  rather than chased immediately -- real and worth fixing, but a
+  distinct bug from the memory-pressure chain above, with a trivial
+  workaround (don't confirm the create when it's wrong) that didn't
+  block continuing to test the crashes that mattered more.

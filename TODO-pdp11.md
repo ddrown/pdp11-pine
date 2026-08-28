@@ -10,6 +10,54 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
+### The real memory budget: `data+bss+heap` appears hard-capped at 57344 bytes, not the full 64KB
+
+- [ ] See `TODO-pdp11-done.md`'s "The send/read/compose crash chain"
+      entry for the full derivation. Two independent real-hardware
+      "Out of free storage" crashes both failed at exactly `brk=57344`
+      despite thousands of bytes of measured gap to the current stack
+      pointer -- 57344 = 7*8192, and 65536-57344 is exactly one
+      8192-byte page (this target's MMU page size), consistent with a
+      *static*, page-granularity stack reservation decided once at
+      exec time (not a dynamic boundary that tracks actual stack
+      depth). Checked for a `MAXDSIZ`/`MAXSSIZ`-style tunable in the
+      kernel source and didn't find one by name (`limit`'s
+      `datasize`/`stacksize` both just show the shell's unlimited
+      default); `pdp/machparam.h`'s `SSIZE` (20*64=1280 bytes, the
+      *initial* stack content at exec) is consistent with this but
+      doesn't by itself explain why a whole 8KB page gets reserved for
+      it.
+    - **Next steps if revisited**: read the kernel's own exec/VM image
+      setup code (wherever it decides how many pages/APRs go to stack
+      vs. data at process start) to confirm the mechanism and check
+      whether the split is actually hardcoded or has an adjustable
+      parameter. If it's genuinely fixed, 57344 bytes is the real
+      ceiling to design `data+bss` and peak heap usage against -- not
+      64KB minus whatever the stack happens to be using at the moment,
+      which is what earlier size accounting in this file assumed.
+    - Until/unless the ceiling itself moves, the only lever available
+      from pine's own source is minimizing how much of that fixed
+      57344-byte budget gets used -- i.e. exactly the ongoing data+
+      rodata reduction work in this file and `TODO-pdp11-done.md`.
+
+### `folder_exists()` and `mail_create()`'s internal `mail_valid()` check disagree about whether a folder exists
+
+- [ ] Found live on real hardware: answering "y" to `"sent-mail"
+      doesn't exist. Create?` immediately produced `Can't create ...
+      folder already exists`. `pine/folder.c`'s `folder_exists()`
+      (used by `send.c`'s Fcc-exists check before prompting) answers
+      via `context_find_all()` -- a pattern-matching folder *search*
+      built for browsing/completion UI -- while `mail_create()`
+      (`imap/ANSI/c-client/mail.c`) answers via `mail_valid()`, a
+      direct existence check. Plausible that `context_find_all()`
+      doesn't correctly match a plain, non-wildcard name when called
+      with a NULL context (`folder_exists(NULL, fcc)`, `send.c`'s
+      exact call shape), but not traced further -- has a trivial
+      workaround (don't confirm the create when it's already there),
+      so didn't block continuing to test other things. See
+      `TODO-pdp11-done.md`'s "The send/read/compose crash chain" entry
+      for the exact repro sequence.
+
 ### `do_suspend()`'s IMAP-connection-timeout warning may be dead code on this fork
 
 - [ ] Found while string-cutting `signals.c` (see `TODO-pdp11-done.md`).
@@ -112,38 +160,32 @@ DONE elsewhere or referenced in passing below.
       this target's unprototyped (empty-parens K&R) `memset()`/
       `write()` declarations, the same bug class documented in
       `TODO-pdp11-done.md`'s "INBOX wouldn't open" entry. That specific
-      call site is now fixed (cast to `(unsigned)`), but this Fcc-path
-      crash itself hasn't been re-tested since -- worth retrying a
-      Send with an Fcc now to see if it's actually gone.
+      call site is now fixed (cast to `(unsigned)`).
+    - **Update 2**: a still later session (see `TODO-pdp11-done.md`'s
+      "send/read/compose crash chain" entry) fixed several more real
+      bugs in this same neighborhood -- `bezerk_append()`'s own 8192-
+      byte *stack* buffer (a different crash, "Illegal instruction",
+      not this entry's "Out of free storage"), plus the unbounded
+      c-client envelope/body cache growth that turned out to be the
+      actual driver behind most of this session's "Out of free
+      storage" crashes generally. Never specifically re-confirmed at
+      this exact 1001-byte figure/call site, but everything found
+      since points at the same underlying "very little real headroom,
+      and the deep Fcc-append call chain is a real stack cost too"
+      story -- worth a fresh retest before assuming this one specific
+      report is still open on its own.
 
 ### "Out of free storage (1024 bytes)" viewing a second message, real hardware
 
-- [ ] Found immediately after fixing the INBOX-open crashes (see
-      `TODO-pdp11-done.md`): with a freshly-opened, real 2-message
-      INBOX, reading the first message works, but going back to the
-      index and opening the second hits `Bug in Pine detected: "Out of
-      free storage (1024 bytes)"` (`IOT trap`). `adb`'s trace: `main ->
-      mail_view_screen -> format_message -> format_envelope ->
-      pretty_addr_string -> fs_get`. 1024 is exactly `MAILTMPLEN`,
-      `pretty_addr_string()`'s (`reply.c`) minimum per-address buffer
-      size, and that function already frees each buffer
-      (`fs_give()`) before formatting the next address -- doesn't look
-      like an obviously-corrupted/garbage size the way the `bezerk.c`
-      bugs were. With real hardware `data`+`bss` at 43492 bytes inside
-      a 64KB D-space, only ~22KB remains for heap+stack combined,
-      which is tight enough that ordinary c-client per-message
-      envelope/body caching (kept alive for the stream's lifetime by
-      design, not a leak) could plausibly exhaust it after only two
-      small test messages. Not yet confirmed either way. Next steps:
-      reproduce again to see if it's message-count-dependent (does a
-      3rd/4th message make it worse, or does it reproduce on message 2
-      every time regardless of order); check whether anything from
-      viewing message 1 is *not* being freed when the user navigates
-      back to the index (a real per-view leak, vs. inherent
-      structure-cache growth); and consider whether this is better
-      framed as an instance of the already-tracked "Close the
-      remaining pine-ovl text/overlay and data+bss overage" item below
-      rather than a standalone bug.
+- [x] **Fixed** -- this was `pretty_addr_string()`'s
+      `if(need < MAILTMPLEN) need = MAILTMPLEN;` floor forcing every
+      address's buffer up to 1024 bytes regardless of the (already
+      correctly computed) actual size needed. See `TODO-pdp11-done.md`'s
+      "send/read/compose crash chain" entry for the fix and the
+      broader investigation it was found alongside (the *real* driver
+      of most crashes like this turned out to be c-client's unbounded
+      per-message envelope/body caching, not this floor alone --
+      fixed separately in the same entry).
 
 ### Audit the rest of the tree for unprototyped read/write/mem*/str* calls fed a `long`-typed size
 
