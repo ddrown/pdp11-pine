@@ -34,6 +34,12 @@ char *h_mail_view[] = { NULL };
 char *h_mail_text_att_view[] = { NULL };
 char *h_oe_searchview[] = { NULL };
 
+/* cross-file shared string literals (data+bss shrink) -- real owners
+   are pine/mailcmd.c and pine/send.c, neither linked here. */
+char *charset_attr = "charset";
+char *word_not_found_msg = "\007Word not found";
+char *cancelled_msg = "\007Cancelled";
+
 #define TMP_20K_BUF_BASELINE 20480
 
 void grow_tmp_20k_buf(size_t need)
