@@ -1,6 +1,3 @@
-#if !defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: send.c,v 4.75 1993/12/07 01:42:03 mikes Exp $";
-#endif
 /*----------------------------------------------------------------------
 
             T H E    P I N E    M A I L   S Y S T E M
@@ -711,7 +708,15 @@ pine_send(outgoing, body, editor_title, fcc, are_replying)
     char    *tobuf, *ccbuf, *bccbuf, *fccbuf, *anchor;
     void    *msgtext;
     unsigned pine_flags;
-    char     bodyfile_path[MAXPATH + 1];
+    /* static -- see call_sendmail()/append_message2()'s own MAXPATH+1
+     * buffers just below: this whole chain (pine_send() -> call_sendmail()
+     * -> append_message2() -> pine_rfc822_output_body() -> gf_pipe() ->
+     * the character-filter chain) is the same class of deep, buffer-
+     * heavy call chain that caused a confirmed stack-exhaustion SIGILL
+     * in context.c's chain (2 bytes of margin measured there) -- see
+     * TODO-pdp11-done.md. Non-reentrant: pine_send() is never called
+     * while an outer pine_send() frame is still live. */
+    static char bodyfile_path[MAXPATH + 1];
 
     /*
      * Remember the real current message number, as new mail arrival
@@ -1125,8 +1130,22 @@ call_mailer(fcc, envelope, body)
 	STRING      msg;
 
 	so_seek(fcc_so, 0L, 0);
+	/*
+	 * Was strlen((char *)so_text(fcc_so)) -- WRONG.  so_puts()/
+	 * so_writec() never write a trailing NUL after the copied
+	 * content; the buffer only reads as a clean C string because
+	 * so_get() memset() the whole allocation to zero once, at
+	 * creation.  On real hardware that unused tail of the malloc'd
+	 * block isn't reliably still zero (heap reuse over the process's
+	 * lifetime), so strlen() can walk straight past the real end of
+	 * the message into unrelated heap garbage until it happens to
+	 * hit some other, unrelated NUL byte -- producing a saved Fcc
+	 * copy with garbage appended past the real message. so->used is
+	 * tracked exactly by so_puts()/so_writec() and is immune to
+	 * this; use it instead. See TODO-pdp11-done.md.
+	 */
 	INIT(&msg, mail_string, (void *)so_text(fcc_so),
-	     strlen((char *)so_text(fcc_so)));
+	     (unsigned long) fcc_so->used);
 
 	if(!(rrv = context_append(fcc_cntxt->context, NULL, fcc, &msg))){
 	    q_status_message1(0,2,2,"\007Fcc to \"%s\" FAILED!!!", fcc);
@@ -1176,7 +1195,7 @@ call_sendmail(envelope, body)
     ENVELOPE *envelope;
     BODY     *body;
 {
-    char        mail_cmd[MAXPATH+1];
+    static char mail_cmd[MAXPATH+1];	/* see pine_send()'s bodyfile_path */
     static char error_mess[100];
     char       *tmpfile;
     int         rv;
@@ -1191,9 +1210,8 @@ call_sendmail(envelope, body)
     if(rv < 0)
       goto io_error;
 
-    sprintf(mail_cmd, "( ( %s %s ; /bin/rm -f %s ) < %s & )",
+    sprintf(mail_cmd, "( %s %s ; /bin/rm -f %s ) < %s &",
             SENDMAIL, SENDMAILFLAGS, tmpfile, tmpfile);
-
 
     (void)call_system(mail_cmd);
 
@@ -1359,8 +1377,13 @@ Normally this is used for writing a message down a TCP stream, but
 writing a MIME body out is complex business so we use it here.
 We must convert the network CRLF to the local new line convention, in this
 case on UNIX it's LF.
+
+Not static -- filter.c's gf_out_putc()/gf_flush_net() also call this
+directly, see the extern there. That direct (statically-visible) call
+is what fixed a real cross-overlay crash confirmed via adb on a real
+Send -- see filter.c's comment above gf_out_stream for the full story.
  ----*/
-static int
+int
 unix_puts(void *stream_x, char *string)
 {
     FILE *stream = (FILE *)stream_x;
@@ -1412,7 +1435,7 @@ append_message2(folder, env, bod, type, fcc)
     BODY       *bod;
     AppendTypes type;
 {
-    char   filename[MAXPATH+1];
+    static char filename[MAXPATH+1];	/* see pine_send()'s bodyfile_path */
     int    rv, save_errno;
     FILE  *folder_stream;
     long   start_of_append;
@@ -1529,10 +1552,24 @@ set_mime_types(body)
      * correctness. Was an unconditional CHUNK+1 (8193, matching
      * bezerk.c's CHUNK-sized buffers) -- same class of oversized
      * fixed buffer as the CHUNK-vs-MAILTMPLEN bezerk_open() bug fixed
-     * earlier (TODO-pdp11-done.md), found this time via a real
-     * "Out of free storage (8193 bytes)" crash and an adb stack trace
-     * pinning it to this fs_get() call. */
-#define RBUFSZ	(MAILTMPLEN + 1)
+     * earlier (TODO-pdp11-done.md), found via a real "Out of free
+     * storage (8193 bytes)" crash and an adb stack trace pinning it to
+     * this fs_get() call. Shrunk once to MAILTMPLEN+1 (1025) -- still
+     * too big: a second real-hardware crash ("Out of free storage
+     * (1025 bytes)", same fs_get() call, confirmed via adb) hit during
+     * an ordinary compose+Send, not a specially large message. Shrunk
+     * again to 257, then again to 65 after a *third* real-hardware
+     * crash at 257 bytes, same call site, same session (after
+     * mail_view_screen()'s new mail_gc(GC_ENV) call already cut
+     * cumulative cache growth from browsing -- this was the next
+     * limiting allocation once that was in place, not evidence the
+     * gc fix didn't help). The refill loop below already handles a
+     * chunk boundary landing anywhere, including mid-line (see the
+     * bol/line_so_far comment at the refill site), so this remains
+     * the same "changes refill frequency, not correctness" tradeoff,
+     * just pushed further given how little real headroom this target
+     * has in practice. */
+#define RBUFSZ	65
     unsigned char   *buf, *p, *bol;
     register size_t  n;
     long             max_line = 0L,
@@ -1818,59 +1855,15 @@ pine_rfc822_output(t,env,body,f,s)
 }
 
 
-static soutr_t    l_f;
-static TCPSTREAM *l_stream;
-static unsigned   c_in_buf = 0;
-
 /*
- * l_out_buf is a fixed, dedicated buffer -- unlike tmp_20k_buf, its
- * job is purely to batch bytes of the (already-formatted) outgoing
- * message body to cut down on write() calls, so its size is a
- * self-contained performance tradeoff, not a function of message
- * content, and it never needs to grow.
+ * The soutr_t-writing "network output" terminal function (l_f/l_stream/
+ * l_out_buf/l_putc/l_flush_net) that used to live here has moved to
+ * filter.c (gf_set_output/gf_output_putc_fn/gf_flush_net) -- see the
+ * comment there and TODO-pdp11-done.md for why: gf_terminal() invokes
+ * it through a raw function pointer at runtime, which is only safe
+ * across this PDP-11 auto-overlay link if caller and callee are in the
+ * same overlay module.
  */
-#define L_OUT_BUF_LEN 1024
-static char       l_out_buf[L_OUT_BUF_LEN + 2];
-
-/*
- * l_flust_net - empties gf_io terminal function's buffer
- */
-static void
-l_flush_net(void)
-{
-    if(c_in_buf){
-	if(l_f)
-	  (*l_f)(l_stream, l_out_buf);
-
-	if(fcc_so)
-	  so_puts(fcc_so, l_out_buf);
-    }
-
-    c_in_buf = 0;
-}
-
-
-/*
- * l_putc - gf_io terminal function that calls the soutr_t output function
- *          (e.g. unix_puts for call_sendmail).
- *
- */
-static int
-l_putc(int c)
-{
-    l_out_buf[c_in_buf++] = (char) c;
-    l_out_buf[c_in_buf]   = '\0';
-
-    if(c_in_buf > L_OUT_BUF_LEN){
-	if(fcc_so)
-	  so_puts(fcc_so, l_out_buf);
-
-        c_in_buf = 0;
-        return(l_f ? (int)(*l_f)(l_stream, l_out_buf) : 1);
-    }
-    else
-	return(TRUE);
-}
 
 
 /*
@@ -1983,9 +1976,8 @@ pine_rfc822_output_body(body, f, s)
 	}
     }
 
-    l_f      = f;			/* set up for writing chars...  */
-    l_stream = s;			/* out other end of pipe...     */
-    pc       = l_putc;			/* using our output function	*/
+    gf_set_output(s, fcc_so);	/* set up for writing chars...  */
+    pc       = gf_output_putc_fn();	/* using our output function	*/
     gf_filter_init();
 
     if(body->contents.binary)
@@ -2018,14 +2010,14 @@ pine_rfc822_output_body(body, f, s)
 	}
     }
 
-    if(encode_error = gf_pipe(gc, pc)){ /* shove body part down pipe */
+    if((encode_error = gf_pipe(gc, pc))){ /* shove body part down pipe */
 	q_status_message1(1, 3, 4,
 			  "\007Encoding Error \"%s\"", encode_error);
 	display_message('x');
 	return(0);
     }
     else
-      l_flush_net();
+      gf_flush_net();
 
     so_release((STORE_S *)body->contents.binary);
 

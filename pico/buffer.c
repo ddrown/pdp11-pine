@@ -1,6 +1,3 @@
-#if	!defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: buffer.c,v 4.5 1993/08/02 20:27:19 mikes Exp $";
-#endif
 /*
  * Program:	Buffer management routines
  *

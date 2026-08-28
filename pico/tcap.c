@@ -1,6 +1,3 @@
-#if	!defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: tcap.c,v 4.11 1993/11/22 19:33:47 mikes Exp $";
-#endif
 /*
  * Program:	Display routines
  *

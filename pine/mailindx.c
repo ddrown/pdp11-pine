@@ -1,6 +1,3 @@
-#if !defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: mailindx.c,v 4.52 1993/12/03 21:54:31 mikes Exp $";
-#endif
 /*----------------------------------------------------------------------
 
             T H E    P I N E    M A I L   S Y S T E M
@@ -63,20 +60,59 @@ static char rcsid[] = "$Id: mailindx.c,v 4.52 1993/12/03 21:54:31 mikes Exp $";
 char *already_first_page = "\007Already on first page";
 char *already_last_page  = "\007Already on last page";
 
+/* Command-key/label strings shared across every screen's key-menu
+ * table (index_keys/folder_keys/help_keys/composer_help_keys/
+ * view_keys/text_att_view_keys/main_keys/oe_keys) -- these are the
+ * common navigation commands (Help, OTHER CMDS, WhereIs, PrevPage/
+ * NextPage, Quit, ...) that show up on nearly every screen, so the
+ * same literal text was previously duplicated up to a dozen times
+ * across these files. Not static -- also used from folder.c/
+ * mailview.c/pine.c/ttyin.c, see the externs there. This only
+ * dedupes the *string content*; it doesn't touch the struct key
+ * array-of-values format itself (see TODO-pdp11.md's KEYMENU_S
+ * entry for that separate, larger, deliberately-deferred refactor).
+ */
+char km_qmark[] = "?";
+char km_help[] = "Help";
+char km_othercmds[] = "OTHER CMDS";
+char km_mainmenu[] = "Main Menu";
+char km_gotofldr[] = "GotoFldr";
+char km_compose[] = "Compose";
+char km_prevpage[] = "PrevPage";
+char km_nextpage[] = "NextPage";
+char km_spc[] = "Spc";
+char km_delete[] = "Delete";
+char km_undelete[] = "Undelete";
+char km_forward[] = "Forward";
+char km_prevmsg[] = "PrevMsg";
+char km_nextmsg[] = "NextMsg";
+char km_nextnew[] = "NextNew";
+char km_hdrmode[] = "HdrMode";
+char km_save[] = "Save";
+char km_whereis[] = "WhereIs";
+char km_listfldrs[] = "ListFldrs";
+char km_quit[] = "Quit";
+char km_exithelp[] = "Exit Help";
+char km_o[] = "O";
+char km_w[] = "W";
+char km_e[] = "E";
+char km_dash[] = "-";
+
+
 static struct key index_keys[] =
-     {{"?","Help",0},         {"O","OTHER CMDS",0},  {"M","Main Menu",0},
-      {"V","[ViewMsg]",0},    {"P","PrevMsg",0},     {"N","NextMsg",0},
-      {"-","PrevPage",0},     {"Spc","NextPage",0},  {"D","Delete",0},
-      {"U","Undelete",0},     {"R","Reply",0},       {"F","Forward",0}, 
+     {{km_qmark,km_help,0},         {km_o,km_othercmds,0},  {"M",km_mainmenu,0},
+      {"V","[ViewMsg]",0},    {"P",km_prevmsg,0},     {"N",km_nextmsg,0},
+      {km_dash,km_prevpage,0},     {km_spc,km_nextpage,0},  {"D",km_delete,0},
+      {"U",km_undelete,0},     {"R","Reply",0},       {"F",km_forward,0}, 
 
-      {"?","Help",0},         {"O","OTHER CMDS",0},  {"Q","Quit",0},
-      {"C","Compose",0},      {"L","ListFldrs",0},   {"G","GotoFldr",0},
-      {"Z","Zoom",0},         {"W","WhereIs",0},     {NULL,NULL,0},
-      {NULL,NULL,0},          {"S","Save",0},        {"E","Export",0},
+      {km_qmark,km_help,0},         {km_o,km_othercmds,0},  {"Q",km_quit,0},
+      {"C",km_compose,0},      {"L",km_listfldrs,0},   {"G",km_gotofldr,0},
+      {"Z","Zoom",0},         {km_w,km_whereis,0},     {NULL,NULL,0},
+      {NULL,NULL,0},          {"S",km_save,0},        {km_e,"Export",0},
 
-      {"?","Help",0},         {"O","OTHER CMDS",0},  {"X",NULL,0},
+      {km_qmark,km_help,0},         {km_o,km_othercmds,0},  {"X",NULL,0},
       {"&","unXclude",0},     {"A","Apply",0},       {"$","SortIndex",0},
-      {"J","Jump",0},         {"Tab","NextNew",0},   {"H","HdrMode",0},
+      {"J","Jump",0},         {"Tab",km_nextnew,0},   {"H",km_hdrmode,0},
       {"B","Bounce",0},       {"*","Flag",0},        {"|","Pipe",0}};
 static struct key_menu index_keymenu =
       {sizeof(index_keys)/(sizeof(index_keys[0])*12), 0, 0,0,0,0, index_keys};
@@ -684,6 +720,36 @@ build_header_line(message_number)
     sprintf(buffer, "%s%s%s%s", status, from, size, subject);
     /* Truncate it to proper size */
     buffer[min(ps_global->ttyo->screen_cols, i_cache_width())] = '\0';
+
+    /*
+     * The formatted summary line above is all this function's callers
+     * ever need again -- it's already saved into pine's own index
+     * cache (get_index_cache()/i_cache_size(), already bounded to
+     * IC_SIZE entries). The full ENVELOPE/BODY c-client just fetched
+     * to build it, though, stays cached in the stream's LONGCACHE for
+     * the rest of the session with no bound at all (same underlying
+     * issue as mail_view_screen()'s mail_gc(GC_ENV) call). Unlike
+     * there, this function runs once per *row* while populating the
+     * index -- calling the whole-stream mail_gc() here would be
+     * O(nmsgs) per row, O(nmsgs^2) total, so free just this one
+     * message's entry directly via mail_lelt(), the same fields
+     * mail_gc() itself frees. Confirmed via a real-hardware crash
+     * with more messages in the inbox than earlier sessions had:
+     * "Out of free storage (12 bytes)" -- a bare ADDRESS struct,
+     * about as small an allocation as this tree ever makes -- in
+     * mail_newaddr(), deep inside rfc822_parse_msg(), called from
+     * mail_fetchstructure() from *this* function, while just
+     * populating the index for a bigger mailbox than before.
+     */
+    {
+	LONGCACHE *lelt = mail_lelt(ps_global->mail_stream,
+				     ps_global->sort[message_number]);
+	if(lelt){
+	    mail_free_envelope(&lelt->env);
+	    mail_free_body(&lelt->body);
+	}
+    }
+
     return(buffer);
 }
 
@@ -1036,9 +1102,17 @@ static struct index_cache {
 } icache = { NULL, 0L, 0 };
   
 /*
- * cache size growth increment
+ * cache size growth increment. Was 100 -- an unconditional first
+ * allocation of (100+1)*(screen_cols+1) bytes (8181 at 80 columns) as
+ * soon as the FIRST index line is drawn, regardless of how many
+ * messages the folder actually has (2, for a brand new PDP-11 user's
+ * INBOX). fs_resize() below already grows this on demand in IC_SIZE
+ * steps, so a smaller increment only changes resize frequency for a
+ * large folder, not correctness -- same tradeoff as MSIZE_INIT
+ * (filter.c) and other "start small, grow on demand" fixes in this
+ * tree. See TODO-pdp11-done.md.
  */
-#define	IC_SIZE		100
+#define	IC_SIZE		20
 
 /*
  * important values for cache building
@@ -1082,12 +1156,12 @@ i_cache_size(indx)
 
 	if(icache.cache == NULL){
 	    icache.cache = (void *)fs_get((icache.num+1)*tmplen);
-	    memset(icache.cache, 0, (icache.num+1)*tmplen);
+	    memset(icache.cache, 0, (unsigned)((icache.num+1)*tmplen));
 	}
 	else{
             fs_resize((void **)&(icache.cache), (size_t)(icache.num+1)*tmplen);
 	    tmpline = (char *)icache.cache + ((j+1) * tmplen);
-	    memset(tmpline, 0, (icache.num - j) * tmplen);
+	    memset(tmpline, 0, (unsigned)((icache.num - j) * tmplen));
 	}
     }
 

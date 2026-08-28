@@ -1,6 +1,3 @@
-#if	!defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: display.c,v 4.16 1993/11/19 04:01:12 mikes Exp $";
-#endif
 /*
  * Program:	Display functions
  *
@@ -1268,7 +1265,20 @@ mlreplyd(char *prompt, char *buf, int nbuf, int flg)
 		}
 		do				/* blat out left char   */
 		  b[i+1] = b[i];
-		while(i-- >= 0);
+		while(i-- > 0);		/* NB: >, not >= -- i==0 must
+					   still shift b[0] (the NUL
+					   terminator when appending)
+					   into b[1], but the loop must
+					   not run again after that:
+					   the old `>=` re-tested the
+					   *pre-decrement* i==0 as true,
+					   so it ran one extra iteration
+					   reading/writing b[-1], one byte
+					   before this string -- silently
+					   overwritten by the *b++ = c
+					   right after, but still a real
+					   out-of-bounds read (confirmed
+					   via AddressSanitizer). */
 		*b++ = c;
 		pputc(c, 0);
 	    }

@@ -50,20 +50,30 @@
 #define	EDEF_H
 
 /*
- * Shrunk from the original 16384 after auditing every writer of `s`
- * (see TODO-pdp11-done.md): wkeyhelp() (pico/display.c) is now bounded
- * against sizeof(s) itself regardless of terminal width, so it no
- * longer drives this number. Sized to 8192 (2x MAXPATHLEN) to cover
- * the largest remaining writer with headroom, without having fully
- * audited/fixed that path yet (folded into the still-open general
- * buffer-overflow-audit TODO item). NOTE: this used to also need to
- * cover composer.c's Ctrl-T Fcc-folder-picker's round trip through
- * pine's folders_for_fcc()/context_apply(), but that picker and the
- * multi-collection support it depended on are gone now (see
- * TODO-pdp11-done.md) -- SLEN may be a further shrink candidate, not
- * yet re-audited for this.
+ * Re-audited every writer of `s` (see TODO-pdp11-done.md's "Shrink
+ * pico/edef.h's SLEN" entry). The 8192 this used to be (itself
+ * shrunk from an original 16384) was reasoned as "2x MAXPATHLEN" but
+ * computed against *this dev build's* MAXPATHLEN (4096, from Linux's
+ * <sys/param.h>) rather than the real 2.11BSD target's (256, confirmed
+ * by compiling and running a one-line probe on real hardware) -- an
+ * 16x-oversized number on the machine that actually matters. The true
+ * largest writer, traced through every strcpy(s,...)/sprintf(s,...)/
+ * strcat(s,...) call site across every file that includes this header
+ * (pico/browse.c's directory-browser path-joining, os_unix.c's
+ * compresspath(), composer.c's field-help prompts, display.c's
+ * mlyesno()/wkeyhelp() -- the last already self-bounds against
+ * sizeof(s)), bottoms out at browse.c's `dname[NLINE] + C_FILESEP +
+ * current->fname` path-join (NLINE, pico/estruct.h, is 256 --
+ * unrelated to and much smaller than MAXPATHLEN): a worst case around
+ * 511-533 bytes, not thousands. 2048 leaves roughly 4x headroom over
+ * that traced worst case. NOTE: this used to also need to cover
+ * composer.c's Ctrl-T Fcc-folder-picker's round trip through pine's
+ * folders_for_fcc()/context_apply(), but that picker and the multi-
+ * collection support it depended on are gone now (see
+ * TODO-pdp11-done.md), which is part of why the real worst case
+ * dropped this far.
  */
-#define	SLEN	8192			/* size of global scratch string s */
+#define	SLEN	2048			/* size of global scratch string s */
 
 #ifdef	maindef
 

@@ -310,6 +310,9 @@ last_cmpnt(filename)
 
 BUG should limit length to MAXPATH
   ----*/
+/* not static -- also used from init.c, see the extern there */
+char inbox_name[] = "inbox";
+
 int
 expand_foldername(filename)
     char *filename;
@@ -326,8 +329,8 @@ expand_foldername(filename)
     }
 
     strcpy(temp_filename, filename);
-    if(strucmp(temp_filename, "inbox") == 0) {
-        strcpy(filename, ps_global->VAR_INBOX_PATH == NULL ? "inbox" :
+    if(strucmp(temp_filename, inbox_name) == 0) {
+        strcpy(filename, ps_global->VAR_INBOX_PATH == NULL ? inbox_name :
                ps_global->VAR_INBOX_PATH);
     } else if(temp_filename[0] == '{') {
         strcpy(filename, temp_filename);

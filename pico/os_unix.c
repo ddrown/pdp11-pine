@@ -1,6 +1,3 @@
-#if	!defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: os_unix.c,v 4.37 1993/11/23 05:40:11 mikes Exp $";
-#endif
 /*
  * Program:	Operating system dependent routines - Ultrix 4.1
  *
@@ -865,23 +862,43 @@ getfnames(char *dn, int *n)
 	return(NULL);
     } 
     else{
-	l = sbuf.st_size;
 	if((sbuf.st_mode&S_IFMT) != S_IFDIR){
 	    emlwrite("\007Not a directory: \"%s\"", dn);
 	    return(NULL);
 	}
     }
 
-    if((namebuf=(char *)malloc(sizeof(char)*l)) == NULL){
-	emlwrite("\007Can't malloc space for file names", NULL);
-	return(NULL);
-    }
-
     errno = 0;
     if((dirp=opendir(dn)) == NULL){
 	sprintf(s,"\007Can't open \"%s\": %s", dn, errstr(errno));
 	emlwrite(s, NULL);
-	free((char *)namebuf);
+	return(NULL);
+    }
+
+    /*
+     * A directory's own stat() st_size is *not* the byte count of the
+     * names it contains -- it's whatever the filesystem happens to
+     * charge for the directory's own on-disk block accounting, which
+     * has no reliable relationship to entry-name lengths (this used
+     * to be sized directly off st_size, which happened to work out on
+     * classic V7-style fixed 16-byte directory records where st_size
+     * really was num_entries*16, but overflows the mallocd buffer on
+     * every filesystem where it isn't -- confirmed via AddressSanitizer:
+     * a single long-named entry in an otherwise-small tmpfs directory
+     * heap-overflowed a 60-byte allocation). Count the real total
+     * first, over a rewound pass of the same open directory, then
+     * allocate exactly that (plus the two bytes '.'/".." always cost
+     * elsewhere in this same walk need nothing extra -- each name's
+     * own NUL is already included below).
+     */
+    l = 0;
+    while((dp = readdir(dirp)) != NULL)
+      l += strlen(dp->d_name) + 1;
+    rewinddir(dirp);
+
+    if((namebuf=(char *)malloc(sizeof(char)*(l > 0 ? l : 1))) == NULL){
+	emlwrite("\007Can't malloc space for file names", NULL);
+	closedir(dirp);
 	return(NULL);
     }
 

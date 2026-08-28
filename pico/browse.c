@@ -1,6 +1,3 @@
-#if	!defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: browse.c,v 4.10 1993/10/20 23:06:57 mikes Exp $";
-#endif
 /*
  * Program:	Routines to support file browser in pico and Pine composer
  *

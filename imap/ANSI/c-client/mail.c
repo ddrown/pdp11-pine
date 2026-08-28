@@ -600,7 +600,7 @@ void mail_fetchfrom (char *s,MAILSTREAM *stream,long msgno,long length)
   int freet = 0;
   ENVELOPE *env = mail_fetchstructure (stream,msgno,NIL);
   ADDRESS *adr = env ? env->from : NIL;
-  memset (s,' ',length);	/* fill it with spaces */
+  memset (s,' ',(unsigned)length);	/* fill it with spaces */
   s[length] = '\0';		/* tie off with null */
 				/* get first from address from envelope */
   while (adr && !adr->host) adr = adr->next;
@@ -613,7 +613,7 @@ void mail_fetchfrom (char *s,MAILSTREAM *stream,long msgno,long length)
       sprintf (t,"%s@%s",adr->mailbox,adr->host);
       freet = 1;
     }
-    memcpy (s,t,min (length,(long) strlen (t)));
+    memcpy (s,t,(unsigned) min (length,(long) strlen (t)));
     if (freet) fs_give ((void **) &t);
   }
 }
@@ -630,9 +630,9 @@ void mail_fetchfrom (char *s,MAILSTREAM *stream,long msgno,long length)
 void mail_fetchsubject (char *s,MAILSTREAM *stream,long msgno,long length)
 {
   ENVELOPE *env = mail_fetchstructure (stream,msgno,NIL);
-  memset (s,'\0',length+1);
+  memset (s,'\0',(unsigned)(length+1));
 				/* copy subject from envelope */
-  if (env && env->subject) strncpy (s,env->subject,length);
+  if (env && env->subject) strncpy (s,env->subject,(unsigned)length);
   else *s = ' ';		/* if no subject then just a space */
 }
 

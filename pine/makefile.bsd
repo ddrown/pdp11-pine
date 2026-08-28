@@ -104,6 +104,15 @@ cfiles= addrutil.c args.c context.c filter.c \
 	send.c signals.c status.c strings.c ttyin.c ttyout.c os.c log.c \
 	mailbox.c
 
+# $(obj) minus signals.o, for pine-ovl below -- signals.o is forced
+# into mkovmake's base there instead of left for the optimizer, so it
+# has to be left out of the overlay-eligible list passed after -Z.
+ovlobj= addrutil.o args.o context.o filter.o \
+	folder.o help.o helptext.o init.o mailcmd.o mailindx.o \
+	mailview.o newmail.o pine.o reply.o screen.o \
+	send.o status.o strings.o ttyin.o ttyout.o os.o log.o \
+	mailbox.o
+
 pine:  $(obj) $(LOCLIBES)
 	echo "char datestamp[]="\"`date`\"";" > date.c
 	$(CC) -c $(CFLAGS) -o date.o date.c
@@ -184,11 +193,31 @@ CCLIENTOFILES=	../c-client/mail.o ../c-client/bezerk.o \
 # too big for type 431") -- see TODO-pdp11-done.md.
 $(CCLIENTOFILES): ;
 
+# signals.o is forced into the base (before the -Z) rather than left
+# for mkovmake's optimizer like everything else. Every function in it
+# is a signal handler invoked directly by the kernel via a raw
+# function-pointer registered with signal() -- mkovmake's "ties"
+# heuristic only tracks statically-visible calls, so it has no way to
+# know signals.o needs to be resident no matter which overlay was
+# loaded at the moment a signal actually arrives; if it landed in a
+# swapped-out overlay, the kernel would jump into whatever code that
+# overlay's segment happened to have at that address instead of the
+# real handler. See signals.c's winch_signal() comment and
+# TODO-pdp11-done.md's gf_terminal()/gf_out_putc entry for the same
+# class of hazard via an explicit function pointer instead. Unlike
+# that entry's abandoned attempt to force the much larger filter.o
+# into the base (~1750 lines, hit "ld: too big for type 431"),
+# signals.o is small (~380 lines, nothing but signal plumbing) and
+# doesn't pull in the rest of the program with it -- everything it
+# calls afterward (want_to(), mail_close(), etc.) is an ordinary
+# statically-visible call, which the normal overlay trampoline
+# mechanism already handles correctly regardless of where the callee
+# ends up.
 pine-ovl:	$(obj) $(CCLIENTOFILES)
 	echo "char datestamp[]="\"`date`\"";" > date.c
 	$(CC) -c $(CFLAGS) -o date.o date.c
 	$(MKOVMAKE) $(MKOVFLAGS) -o pine -f mkov \
-		$(obj) date.o $(CCLIENTOFILES) $(LIBES)
+		signals.o -Z $(ovlobj) date.o $(CCLIENTOFILES) $(LIBES)
 	$(RM) pine
 	$(MAKE) -f mkov
 

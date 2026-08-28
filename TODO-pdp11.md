@@ -10,6 +10,70 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
+### `context_apply()` writes into its caller's buffer with no bounds check at all
+
+- [ ] Found while resizing `context.c`'s sibling functions' stack
+      buffers to `MAXPATH` (see `TODO-pdp11-done.md`). `context_apply
+      (char *b, char *c, char *n)` writes an ambiguous name `n`
+      (caller-supplied, no length cap anywhere upstream, same as every
+      other address/name field this session found unbounded) into `b`
+      via a raw `sprintf()`/`strcpy()`, with no size parameter and no
+      check against `b`'s actual capacity. Every call site in the tree
+      now passes a `MAXPATH` (256)-sized local (after this session's
+      resizes) -- an `n` longer than that overflows it. Not fixed:
+      closing this properly means adding a size parameter to
+      `context_apply()` and updating every call site (six, all in
+      `context.c`), more invasive than this session's per-caller
+      resizes. Worth a dedicated pass.
+
+### The real memory budget: `data+bss+heap` appears hard-capped at 57344 bytes, not the full 64KB
+
+- [ ] See `TODO-pdp11-done.md`'s "The send/read/compose crash chain"
+      entry for the full derivation. Two independent real-hardware
+      "Out of free storage" crashes both failed at exactly `brk=57344`
+      despite thousands of bytes of measured gap to the current stack
+      pointer -- 57344 = 7*8192, and 65536-57344 is exactly one
+      8192-byte page (this target's MMU page size), consistent with a
+      *static*, page-granularity stack reservation decided once at
+      exec time (not a dynamic boundary that tracks actual stack
+      depth). Checked for a `MAXDSIZ`/`MAXSSIZ`-style tunable in the
+      kernel source and didn't find one by name (`limit`'s
+      `datasize`/`stacksize` both just show the shell's unlimited
+      default); `pdp/machparam.h`'s `SSIZE` (20*64=1280 bytes, the
+      *initial* stack content at exec) is consistent with this but
+      doesn't by itself explain why a whole 8KB page gets reserved for
+      it.
+    - **Next steps if revisited**: read the kernel's own exec/VM image
+      setup code (wherever it decides how many pages/APRs go to stack
+      vs. data at process start) to confirm the mechanism and check
+      whether the split is actually hardcoded or has an adjustable
+      parameter. If it's genuinely fixed, 57344 bytes is the real
+      ceiling to design `data+bss` and peak heap usage against -- not
+      64KB minus whatever the stack happens to be using at the moment,
+      which is what earlier size accounting in this file assumed.
+    - Until/unless the ceiling itself moves, the only lever available
+      from pine's own source is minimizing how much of that fixed
+      57344-byte budget gets used -- i.e. exactly the ongoing data+
+      rodata reduction work in this file and `TODO-pdp11-done.md`.
+
+### `folder_exists()` and `mail_create()`'s internal `mail_valid()` check disagree about whether a folder exists
+
+- [ ] Found live on real hardware: answering "y" to `"sent-mail"
+      doesn't exist. Create?` immediately produced `Can't create ...
+      folder already exists`. `pine/folder.c`'s `folder_exists()`
+      (used by `send.c`'s Fcc-exists check before prompting) answers
+      via `context_find_all()` -- a pattern-matching folder *search*
+      built for browsing/completion UI -- while `mail_create()`
+      (`imap/ANSI/c-client/mail.c`) answers via `mail_valid()`, a
+      direct existence check. Plausible that `context_find_all()`
+      doesn't correctly match a plain, non-wildcard name when called
+      with a NULL context (`folder_exists(NULL, fcc)`, `send.c`'s
+      exact call shape), but not traced further -- has a trivial
+      workaround (don't confirm the create when it's already there),
+      so didn't block continuing to test other things. See
+      `TODO-pdp11-done.md`'s "The send/read/compose crash chain" entry
+      for the exact repro sequence.
+
 ### `do_suspend()`'s IMAP-connection-timeout warning may be dead code on this fork
 
 - [ ] Found while string-cutting `signals.c` (see `TODO-pdp11-done.md`).
@@ -50,62 +114,150 @@ DONE elsewhere or referenced in passing below.
 
 ### KEYMENU_S/`struct key` tables duplicate command-key strings across every screen
 
-- [ ] Found while string-cutting `mailindx.c` (see `TODO-pdp11-done.md`).
-      Every screen (`mailindx.c`'s index, `folder.c`'s folder list,
-      `mailview.c`'s message view, `pine.c`'s main menu, etc.) declares
-      its own `static struct key foo_keys[] = {{"?","Help",0}, ...}`
-      table, and the same single-letter keys and command labels
-      (`"C"`/`"Compose"`, `"D"`/`"Delete"`, `"GotoFldr"`, `"OTHER
-      CMDS"`, `"Quit"`, ...) are repeated verbatim across most of
-      them, since the same command is reachable from multiple screens.
-      This is a real, fairly large chunk of duplicated `.data` (dozens
-      of short strings across half a dozen files) -- but every one of
-      these tables is a compile-time static aggregate initializer, and
-      C requires constant expressions there, so none of it can be
-      pulled into a shared `char *` variable the way this session's
-      other string-sharing wins were. Doing anything about it would
-      mean restructuring these tables to populate at runtime (e.g. an
-      init function assigning each `.label` field from a shared
-      constant, the same trick already used for `folder.c`'s
-      `select_label`/`expand_label`, but applied wholesale across
-      every key-menu table in the tree) -- a much bigger, more
-      invasive change than this pass's one-string-at-a-time edits, and
-      worth scoping as its own deliberate task rather than folding
-      into the opportunistic string-cutting pass.
+- [x] **Partially addressed** -- see `TODO-pdp11-done.md`'s "Deduplicated
+      the common navigation-command strings..." entry (real hardware
+      `data` -560 bytes). The premise below (that a compile-time
+      static aggregate initializer can't reference a shared string
+      without restructuring to runtime population) turned out to be
+      wrong for the *content*: `char km_help[] = "Help";` (an array,
+      not a `char *`) decays to a valid constant-address expression
+      just like a string literal does, so `{km_help, ...}` works fine
+      as a static initializer. Used that to share the 24
+      highest-value duplicated strings (of 52 found) across all eight
+      tables without touching their structure at all.
+- [ ] What's *not* addressed, and still open: the `struct key`
+      array-of-*values* format itself. Each table is still its own
+      full `{char *, char *, short}` triple repeated per entry per
+      screen -- deduping the string content doesn't shrink the
+      per-entry `column` field or the fact that e.g. `{"D", 0}`-style
+      identical (key, label) *pairs* still occupy separate struct
+      slots in each table that uses them, just with shared string
+      pointers now. Actually eliminating that would mean restructuring
+      to runtime-populated tables (e.g. an init function assigning
+      each `.label`/`.name` from a shared constant into a table built
+      at startup, the same trick already used for `folder.c`'s
+      `select_label`/`expand_label`) -- a much bigger, more invasive
+      change than the content-level dedup above, and still worth
+      scoping as its own deliberate task rather than folding into the
+      opportunistic string-cutting pass. The remaining 28
+      lower-value duplicated strings (mostly 1-2 byte single-letter
+      command keys) were also left alone -- not worth a shared
+      variable's maintenance cost for the return.
+
+### "Out of free storage (1001 bytes)" crash during Fcc append, on real hardware
+
+- [ ] Found while retesting the `strlen()`-vs-`so->used` Fcc
+      corruption fix (see `TODO-pdp11-done.md`) on real hardware: a
+      Send of a short, ordinary message hit `Bug in Pine detected:
+      "Out of free storage (1001 bytes)"` (c-client's `fs_get()`,
+      already hardened in an earlier session to report the real
+      requested size on failure -- see `TODO-pdp11-done.md`, so this
+      is very likely a genuine allocation failure, not a
+      garbage/corrupted size) followed by an `IOT trap (core dumped)`,
+      right around `context_append()`'s Fcc write ("Message sent and
+      NOT copied to \"\"" was reported first). The message's own
+      `STORE_S` buffer was confirmed completely clean via a full dump
+      right before the crash -- this looks like a distinct issue from
+      the corruption bug, most likely a real, tight memory budget
+      during the Fcc/`context_append()` path on this constrained
+      target (`size pine` currently shows `data` alone at ~29-31KB
+      before any dynamic heap use) rather than a corrupted-size bug.
+      Not yet reproduced a second time or investigated further --
+      `ps`/`limit` on the real hardware showed no other process or
+      leftover state holding memory at the time. Next steps: retry the
+      same Send a few times to establish whether it's reliably
+      reproducible or transient/load-dependent; if reproducible, trace
+      what `context_append()`/`mail_append()`/the `bezerk` driver
+      allocates around a 1001-byte request during a folder append.
+    - **Update**: a later session found and fixed a real bug in
+      exactly this vicinity -- `bezerk_extend()` (`bezerk.c`, the
+      mailbox-growing routine used by Fcc/append) called
+      `memset()`/`write()` with a `long`-typed size argument against
+      this target's unprototyped (empty-parens K&R) `memset()`/
+      `write()` declarations, the same bug class documented in
+      `TODO-pdp11-done.md`'s "INBOX wouldn't open" entry. That specific
+      call site is now fixed (cast to `(unsigned)`).
+    - **Update 2**: a still later session (see `TODO-pdp11-done.md`'s
+      "send/read/compose crash chain" entry) fixed several more real
+      bugs in this same neighborhood -- `bezerk_append()`'s own 8192-
+      byte *stack* buffer (a different crash, "Illegal instruction",
+      not this entry's "Out of free storage"), plus the unbounded
+      c-client envelope/body cache growth that turned out to be the
+      actual driver behind most of this session's "Out of free
+      storage" crashes generally. Never specifically re-confirmed at
+      this exact 1001-byte figure/call site, but everything found
+      since points at the same underlying "very little real headroom,
+      and the deep Fcc-append call chain is a real stack cost too"
+      story -- worth a fresh retest before assuming this one specific
+      report is still open on its own.
+
+### "Out of free storage (1024 bytes)" viewing a second message, real hardware
+
+- [x] **Fixed** -- this was `pretty_addr_string()`'s
+      `if(need < MAILTMPLEN) need = MAILTMPLEN;` floor forcing every
+      address's buffer up to 1024 bytes regardless of the (already
+      correctly computed) actual size needed. See `TODO-pdp11-done.md`'s
+      "send/read/compose crash chain" entry for the fix and the
+      broader investigation it was found alongside (the *real* driver
+      of most crashes like this turned out to be c-client's unbounded
+      per-message envelope/body caching, not this floor alone --
+      fixed separately in the same entry).
+
+### Audit the rest of the tree for unprototyped read/write/mem*/str* calls fed a `long`-typed size
+
+- [ ] `TODO-pdp11-done.md`'s "INBOX wouldn't open" entry found a real,
+      confirmed bug class on this target: `unistd.h`/`string.h`
+      declare `read`/`write`/`lseek`/`memcpy`/`memmove`/`memset`/
+      `memcmp`/`memccpy`/`memchr`/`strcpy`/`strncpy`/`strcat`/
+      `strncat` etc. with empty-parens K&R-style prototypes (e.g.
+      `ssize_t read();`), which do *no* argument-type checking --
+      passing a `long`/`unsigned long`-typed size/count argument
+      (rather than `int` or a bare `sizeof(...)`, both of which are
+      already single-word-safe) silently pushes an extra word the
+      real single-word-`unsigned` implementation never consumes,
+      corrupting what the callee actually sees. Confirmed on real
+      hardware to cause a `read()` requesting 559 bytes to return 0,
+      and (separately) a `memcpy()` to copy the wrong number of bytes
+      entirely. Fixed every occurrence *this session's real-hardware
+      testing actually reached* (`bezerk.c`, `mail.c`, `rfc822.c`,
+      `mailindx.c` -- see `TODO-pdp11-done.md` for the exact list) by
+      casting the argument to `(unsigned)` at the call site, but this
+      was reactive, not a tree-wide audit. A dedicated pass -- grep
+      every `.c` file in `pine`/`pico`/`c-client` for calls to these
+      functions, check whether the size/count argument's *declared
+      type* is `long`/`unsigned long` (not the runtime value, which is
+      usually small enough to look harmless), and cast/fix each one --
+      would very likely turn up more of these, since this bug is
+      silent (no compiler warning, since there's no prototype to
+      conflict with) and was only found this time because it happened
+      to reach three different, very visible crashes in a row.
 
 ### Close the remaining `pine-ovl` text/overlay and data+bss overage on real 2.11BSD hardware
 
-- [ ] `pine-ovl` (`pine/makefile.bsd`, see `TODO-pdp11-done.md`'s
-      several entries on it) links against real 2.11BSD `ld`, which
-      rejects the result if `round8k(base_text) + round8k(largest
-      overlay) > 64KB` *or* `data + bss > 56KB` (see `ld.c`'s size
-      check, reached via `-i`). Last real-hardware numbers (after the
-      `gethostbyname()`/resolver removal and the `prettysz()`
-      float-removal, both in `TODO-pdp11-done.md`): `text 41984`
-      (base) against a largest overlay of `24576` -- `round8k(41984)`
-      is `49152` (needs to drop under `40960`, i.e. base needs ~1024
-      more bytes off, to reclaim a segment and clear this check);
-      `data 46746 + bss 20542 = 67288`, over the 57344-byte ceiling by
-      `9944` bytes. Leads found so far, not yet acted on:
-    - `pico/edef.h:85`'s `char s[SLEN];` (`SLEN` = 8192, `pico/edef.h`)
-      is a non-`static` global scratch buffer shared across many pico
-      `.c` files -- confirmed (via `ld.c:1153`'s `bsize = add(bsize,
-      csize, "bss")`) that its 8192 bytes only show up in the *final
-      linked* binary's bss, invisible when `size`-ing any individual
-      `.o`, which is why it took real-hardware `nm -n pine | grep '
-      [bBcC] '`-style digging (worked around `nm`'s own out-of-memory
-      failure on the full symbol table by running `nm *.o | grep ' C
-      '` per object file instead) to find at all. Accounts for 8192 of
-      the 9944-byte data+bss shortfall by itself. **Not a bug** --
-      already went through a dedicated overflow audit in an earlier
-      session (see `TODO-pdp11-done.md`'s "pico/edef.h's 16KB global
-      scratch buffer" references) and `static` would be actively
-      wrong here (would give every including file its own separate
-      8KB copy instead of one shared one). Worth auditing whether
-      `SLEN` is generous headroom vs. a tight fit -- would need finding
-      the actual largest thing ever copied into `s` across every
-      caller before touching the constant, same rigor as any other
-      buffer-size change per this repo's verification discipline.
+- [x] **Resolved for now** -- both `pine-ovl` and `pico-ovl` link
+      cleanly on real hardware as of this session (`pine`: base text
+      `37888`, largest overlay `24320`, `data 27496`, `bss 13728`;
+      `pico`: base text `36160`, largest overlay `15936`, `data 14806`,
+      `bss 3600` -- see `TODO-pdp11-done.md`'s many entries this
+      session, especially the cross-file string dedup passes and the
+      `SLEN` shrink). The `round8k(base)+round8k(overlay)<=64KB`
+      formula this entry used to cite doesn't actually explain what's
+      observed (e.g. pine's current `round8k(37888)+round8k(24320) =
+      40960+32768 = 73728`, over 64KB by the old formula, yet the link
+      succeeds repeatedly) -- either the formula was always an
+      approximation or this target's split I/D space allows more than
+      a flat 64KB; not re-derived this session, flagging so a future
+      session doesn't trust the old numbers at face value. Re-open
+      this item if a future change makes either `-ovl` target fail to
+      link again; the leads below are still real, general future
+      targets, just no longer tied to an active build failure.
+    - ~~`pico/edef.h:85`'s `char s[SLEN];`~~ -- shrunk from 8192 to
+      2048 this session after a full audit of every writer, see
+      `TODO-pdp11-done.md`'s "Shrink pico/edef.h's SLEN" entry (which
+      also found and fixed two real bugs surfaced while verifying it:
+      an `mlreplyd()` off-by-one out-of-bounds read, and a
+      `getfnames()` heap-buffer-overflow from sizing its allocation off
+      a directory's `st_size` instead of its actual entry-name bytes).
     - String literal volume in `pine`'s bigger `.c` files is real,
       live, user-facing text (error messages/prompts/status lines),
       not dead code like the `struct variable` `description` field

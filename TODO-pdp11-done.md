@@ -9844,3 +9844,1175 @@ from `bezerk.c`.
   extended fuzzing (figures above) with zero further crashes on any
   of the three harnesses.
 - **Size delta**: none (fuzz harness only, not shipped code).
+
+### Cross-overlay indirect function pointer: `gf_terminal()`'s network-output terminal function could go stale mid-Send
+
+The hang/crash/missing-body saga above continued across many more
+real-hardware retest cycles (canary buffers added to every `STORE_S`
+allocation and to `gf_out_buf`, syslog tracing added to `gf_pipe()`,
+`gf_terminal()`, and `gf_local_nvtnl()`) before the actual root cause
+was found. Symptoms seen across different attempts, all from the same
+underlying bug: a message body silently missing from the sent copy, a
+genuine infinite loop unresponsive to every signal but `SIGKILL`, a
+crash with nonsensical `adb` backtrace arguments, and a "TERM not
+set." exit mid-Send.
+
+- **Root cause**: `pine-ovl` links with real 2.11BSD `ld -i -X`
+  (auto-overlay). `mkovmake` partitions object files into a resident
+  BASE plus swapped OVERLAY segments purely by *static, name-based
+  symbol matching* ("ties" between an undefined global symbol in one
+  module and a global text symbol in another) -- per its own manual,
+  "there is no way to tell mkovmake to put a certain group of modules
+  together." This scoring has zero visibility into runtime function
+  pointers. `filter.c`'s `gf_terminal()` invokes a registered
+  `gf_io_t` (a deliberately untyped K&R function pointer) via
+  `(*last_filter)(c)`; the pointer is set at runtime by
+  `gf_set_terminal()`, called from `gf_pipe()`, which `send.c`'s
+  `pine_rfc822_output_body()` calls passing its own local `l_putc()`
+  as the terminal. `mkovmake` happened to place `filter.o` in overlay
+  `OV1` and `send.o` in `OV5` (confirmed by `cat`-ing the generated
+  `mkov` makefile on real hardware) -- with no "tie" between them
+  visible to it, since the only link is a runtime pointer. Calling
+  `gf_pipe()` from `send.c` (in `OV5`) swaps `OV5` out of memory to
+  load `OV1`, invalidating the raw pointer to `l_putc()` taken
+  *before* the swap -- `l_putc()`'s actual compiled code is no longer
+  resident. `gf_terminal()`'s subsequent indirect call then jumps into
+  whatever instruction bytes `OV1` happened to have loaded at that
+  address instead, explaining every symptom above depending on what
+  garbage code happened to run.
+- **Fix**: relocated the entire "network output" terminal function and
+  its state (`l_f`/`l_stream`/`l_out_buf`/`l_putc`/`l_flush_net` in
+  `send.c`) into `filter.c` itself, renamed `gf_out_f`/`gf_out_stream`/
+  `gf_out_buf`/`gf_out_putc`/`gf_flush_net`, with a new
+  `gf_set_output()` to register the destination and
+  `gf_output_putc_fn()` to hand back the terminal function pointer.
+  This guarantees the indirect call from `gf_terminal()` never crosses
+  a module/overlay boundary, regardless of how `mkovmake` partitions
+  `filter.o` vs `send.o` -- more robust than fighting `mkovmake`'s
+  partitioning directly (see below). `send.c`'s call sites now do
+  `gf_set_output(f, s, fcc_so); pc = gf_output_putc_fn();` in place of
+  the old direct `l_f`/`l_stream` assignment. New prototypes added to
+  `pine.h`.
+- **Approach tried and abandoned**: forcing `filter.o` into
+  `mkovmake`'s BASE segment via `pine/makefile.bsd`'s `pine-ovl`
+  recipe (`filter.o -Z $(obj) ...`), with several `MKOVFLAGS` basesize
+  hints (20k, 17k, 11k, no hint) -- all four attempts failed to link
+  with `ld: too big for type 431`, despite `round8k(base) +
+  round8k(largest overlay) <= 64KB` arithmetic suggesting each should
+  fit; the exact mechanism behind these specific failures was not
+  fully diagnosed, and the approach was abandoned once the
+  file-relocation fix (above) proved simpler and more robust.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. Real hardware: `gf_out_putc` (via syslog tracing, since
+  removed) confirmed executing reliably with correct `c_in_buf`
+  progression across multiple Sends; sends no longer hang, crash, or
+  silently drop the body. `pine-ovl` still links cleanly under
+  `mkovmake`'s completely unmodified, automatic partitioning.
+- **Size delta**: negligible -- this is a relocation of existing code
+  between two files already linked together, not new logic.
+
+### `so_text()`'s callers used `strlen()` instead of `STORE_S->used` to size the Fcc/save-to-folder write
+
+Once the overlay bug (above) was fixed, sends stopped hanging/dropping
+the body, but a *new* symptom appeared: the saved Fcc copy
+(`~/mail/sent-mail`) sometimes contained literal binary garbage
+spliced into already-written header content (e.g. `Content-Type:
+TEXT/PLAIN; c` followed by NUL/garbage bytes in place of
+`charset=US-ASCII`, or a `To:` line trailing off into unrelated binary
+data ending in a recognizable leftover pathname fragment like
+`/home/abob/mail`). Confirmed via `cat -v` over a real command
+connection (`dz-exec.py`), ruling out terminal-rendering artifacts.
+
+Added a full-buffer dump helper (`dump_so_full()`, temporary, since
+removed) logging a `STORE_S`'s entire `used` region in 60-byte chunks
+from offset 0 -- the existing tail-only dump (`dump_so_tail()`, last
+60 bytes) had never actually covered early header fields like
+`Subject:`/`To:` in a 200+ byte header, which is why earlier checks
+kept reporting "clean" while the actual saved file was corrupt. The
+full dump showed the in-memory `STORE_S` buffer *itself* was correct
+end-to-end at every checkpoint, including immediately before the
+final disk write -- meaning the corruption was happening downstream
+of the buffer, in however its content got copied out.
+
+- **Root cause**: `append_message2()` (`send.c`) and `save_procedures()`
+  /`save_msg()`-style folder-save code (`mailcmd.c`) both compute the
+  byte length to hand to `context_append()`/`mail_string` via
+  `strlen((char *)so_text(fcc_so))` instead of the `STORE_S`'s own
+  accurate `->used` counter. `so_puts()`/`so_writec()` never write a
+  trailing NUL after copying content into the buffer -- the buffer
+  only reads as a clean, correctly-terminated C string because
+  `so_get()` does a one-time `memset(so->txt, 0, size)` over the whole
+  allocation at creation time. That zeroed tail is not a durable
+  guarantee: on real hardware, with a long-running process and
+  `malloc`/`free` churn across many prior allocations, the unused tail
+  of a freshly `malloc()`'d 1024-byte block is not reliably still
+  zero. `strlen()` then walks straight past the real end of the
+  written content into whatever stale bytes happen to be there,
+  continuing until it happens to hit some unrelated `\0` deep in
+  adjacent heap memory -- explaining both the garbage itself (leftover
+  heap content, e.g. a fragment of a previously-freed pathname string)
+  and its varying length (however far away the next stray zero byte
+  happens to be) between different runs. `so->used` is tracked
+  exactly by `so_puts()`/`so_writec()` on every write and is immune to
+  this failure mode.
+- **Fix**: both call sites (`send.c`'s `pine_send()`, right before its
+  `context_append()` call, and `mailcmd.c`'s save-to-folder path, same
+  pattern) now pass `(unsigned long) so->used`/`fcc_so->used` instead
+  of `strlen((char *)so_text(...))`.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. Real hardware: added a full-buffer dump immediately before
+  the `context_append()` write (in addition to the existing
+  post-header-format checkpoint) -- both showed completely clean,
+  correct content (matching what was actually typed, including the
+  `Subject:`/`To:` fields the old tail-only dump never covered) across
+  multiple real Sends after the fix, where the same test pattern
+  reliably produced corruption before it.
+- **Size delta**: negligible (one field access replacing one `strlen()`
+  call at each of two sites).
+- **Next step / new issue found**: a real-hardware Send hit a
+  previously-unseen `"Bug in Pine detected: \"Out of free storage
+  (1001 bytes)\""` crash (`IOT trap`) during Fcc append, in a message
+  whose own `STORE_S` buffer was confirmed clean by the same dump --
+  a distinct issue, not corruption; see `TODO-pdp11.md`'s open items.
+  All temporary diagnostics from this and the overlay-bug
+  investigation (canary buffers/checks on every `STORE_S` and on
+  `gf_out_buf`, `dump_so_tail()`/`dump_so_full()`, the `CP1`-`CP8`
+  syslog checkpoints, `gf_pipe()`'s progress logging, the
+  `/tmp/pine-debug-lastsend.txt` capture hook, and the
+  `append_message2_watchdog()` `SIGALRM` abort-forcer) have been
+  removed now that both bugs are fixed and verified.
+
+### Shrink `strings.c`'s string literal footprint (`pine-ovl` data+bss)
+
+Resuming the file-by-file string-cutting pass (see the `mailcmd.c`/
+`mailview.c`/etc. entries above) after the Send corruption/overlay
+investigation. `strings.c` had 73 string literals totaling ~569 bytes
+on this dev build's measure, the biggest remaining un-cut file (every
+bigger `.c` file in the tree was already done).
+
+- **`parse_date()`'s timezone block**: 11 `if`/`else if` branches, each
+  matching a lowercase three-letter abbreviation (`struncmp(p, "gmt",
+  3)`) then separately `strcpy`-ing the uppercase version (`"GMT"`)
+  into `d->zone_name` -- 22 literal occurrences for 11 zones.
+  `struncmp()` already case-folds both operands for comparison, so
+  `struncmp(p, "GMT", 3)` matches lowercase input identically to
+  `struncmp(p, "gmt", 3)` -- the separate lowercase copy was pure
+  duplication. Rewrote each branch to assign the single uppercase
+  literal into a local `char *tz` inside the comparison
+  (`struncmp(p, (tz = "GMT"), 3) == 0`), then `strcpy(d->zone_name,
+  tz)` once after the chain -- one literal per zone (11 total) instead
+  of 22, plus the repeated `strcpy(...)`/`d->min_off_gmt = 0` in every
+  branch collapsed to one copy each. (A table-driven version was tried
+  first -- a `static struct {char *name; short hrs;}` array plus a
+  lookup loop -- but measured *worse* on real hardware: the table's
+  own per-entry pointer+short storage cost more than the string
+  dedup saved, a net data-segment loss. Reverted in favor of the
+  if/else-chain-with-shared-pointer version above.)
+- **`pretty_command()`**: the `c > '~'` and final `else` branches were
+  byte-for-byte identical (`sprintf(buf, "%c", c); return(buf);`) --
+  dead duplication, merged into one branch.
+- **`byte_string()`**: `"0 bytes"` (the `bytes == 0` case) and
+  `"bytes"` (the generic case's `*a ? "B" : "bytes"`) were two
+  separate literals for overlapping text. Introduced one local
+  `bytes_str = "bytes"` and reused it in both
+  (`sprintf(string, "0%s", bytes_str)` for the zero case), leaving
+  only one copy of `"bytes"` in the object file.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite 31/31
+  (no test asserts on any touched string or on timezone-name/offset
+  parsing). Real hardware (`pine-build.py`): `data` `29456` -> `29400`
+  (-56 bytes) and, more surprisingly, overlay group 5 (`send.o
+  strings.o ttyin.o`) `text` `23360` -> `23104` (-256 bytes) --
+  collapsing 11 near-identical `if`/`else if` branches (and the
+  `pretty_command()` dead-branch merge) shrank *code*, not just
+  string data, on this target. Total overlay text `212736` ->
+  `212480`.
+- **Size delta**: -56 bytes data, -256 bytes overlay text (real
+  2.11BSD hardware, see above).
+
+### INBOX wouldn't open on real hardware: unprototyped read()/memcpy() silently corrupted `long`-typed argument widths
+
+Separate, real-mail bug report: opening a genuinely UUCP-delivered
+INBOX (as opposed to pine's own Fcc'd copies, all this session's prior
+testing) failed immediately with `"Mailbox format invalidated (consult
+an expert), aborted"`, even though the mailbox file itself, checked
+byte-for-byte via `dz-download.py`, was a perfectly well-formed mbox
+file that independently validated fine against `bezerk.h`'s `VALID()`
+macro in a standalone test compiled with the same real `cc`.
+
+- **Root cause (bug 1, `bezerk_parse()`'s `read()` call)**: this
+  target's `unistd.h` declares `read()`/`write()`/`lseek()` etc. as
+  empty-parens K&R-style declarations (e.g. `ssize_t read();`) --
+  *zero* argument-type checking or coercion. `bezerk_parse()`'s
+  chunked-read loop calls `read(fd,s1,i)` with `i` declared `long`
+  (needed elsewhere in the same function for byte offsets that can
+  exceed 32K). With no prototype forcing a narrower type, the compiler
+  pushes `i` as a full 32-bit `long` (two words on this 16-bit
+  target), but the real `read()` syscall stub's count parameter is a
+  single-word `unsigned` (confirmed: `size_t` is `typedef u_int
+  size_t` on this target's `sys/types.h`) -- the callee only consumes
+  ONE of the two pushed words. Added temporary syslog tracing
+  (`fd`/`requested`/`got`/`errno`) directly in `bezerk_parse()` and
+  confirmed on real hardware: `read(fd=4, buf, 559)` returned `got=0,
+  errno=0` (clean EOF, not an error) even though `lseek`/`tell`
+  confirmed the file position was genuinely 0 and `fstat` reported the
+  real 559-byte size -- i.e. the kernel received an effective count of
+  0, not 559. Casting the call to `read(fd,s1,(unsigned)i)` fixed it
+  immediately: same test, `got=559`, correct bytes (confirmed
+  character-by-character in the trace).
+- **Root cause (bug 2, `bezerk_parse()`'s `memcpy()` call)**: fixing
+  bug 1 got past mailbox validation but immediately hit a new crash,
+  `fatal("Bogus entry in new cache list")`. Same bug class: `string.h`
+  on this target declares `memcpy()` (and `memset`/`memmove`/`memcmp`/
+  `memccpy`/`memchr`) the same empty-parens way, and the per-message
+  cache-slicing loop calls `memcpy(n->internal,s,j)` with `j` (a
+  message length) declared `long`. Fixed the same way: `memcpy
+  (n->internal,s,(unsigned)j)`. Confirmed on real hardware: INBOX
+  opened successfully ("Folder \"INBOX\" opened with 2 messages") and
+  the folder index displayed both messages correctly.
+- **Broader pattern, partially audited**: this class of bug (a
+  `long`-typed size/count argument passed to a `read`/`write`/`mem*`/
+  `str*` function this target declares with empty-parens K&R
+  prototypes, silently losing/misreading a word of the argument) is
+  not limited to `bezerk.c`. Audited and fixed the same pattern
+  wherever a `long`/`unsigned long` variable (not an `int`, and not a
+  bare `sizeof(...)`, which is already single-word-safe by definition)
+  was passed as a size/count argument, in the files touched by this
+  investigation:
+    - `bezerk.c`: the `memmove(LOCAL->buf,s,i)` unparsed-data-shift
+      call, `memset(s,0,f)`/`write(fd,s,f)` in `bezerk_extend()`
+      (mailbox-growing, used by Fcc/append -- plausibly the real
+      explanation for the still-open "Out of free storage (1001
+      bytes)" Fcc-append crash, see `TODO-pdp11.md`), the KOD
+      (Kiss-Of-Death lock-busy) `read()`/`write()` calls in
+      `bezerk_open()`, and `bezerk_snarf()`'s two `memcpy()` calls
+      (Tenex-driver-only, likely unreachable on this fork, fixed
+      anyway for correctness).
+    - `mail.c`: `mail_fetchfrom()`/`mail_fetchsubject()`'s
+      `memset()`/`memcpy()`/`strncpy()` calls (`length` is `long`) --
+      these build the From/Subject columns for *every* line of the
+      folder index, so this was a near-certain next blocker once the
+      index actually started rendering.
+    - `rfc822.c`: `rfc822_contents()`'s `memcpy(*dst,src,srcl)`
+      (`srcl` is `unsigned long`) -- the BINARY-encoded MIME body
+      path (attachments).
+  **Not** exhaustively audited across the rest of `pine`/`pico`/
+  `c-client` -- this was fixed opportunistically for the call sites
+  this session's real-hardware testing actually reached, following
+  the same "fix what you hit, verify, move on" discipline as
+  everything else in this log. A dedicated tree-wide grep for
+  `long`/`unsigned long` arguments to unprototyped `mem*`/`str*`/
+  `read`/`write` calls is a good candidate for a future session --
+  see `TODO-pdp11.md`.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. Real hardware: INBOX (a genuine, externally-delivered mbox
+  file, not one of pine's own Fcc copies) now opens, the folder index
+  displays correctly, and messages can be opened and read -- all of
+  which failed outright before this fix. Temporary syslog tracing
+  removed from `bezerk_parse()` once both bugs were confirmed fixed.
+- **Size delta**: real hardware, `data` `29744` -> `29400` (-344
+  bytes, from removing the temporary tracing); `text`/overlays
+  likewise shrank slightly for the same reason. The `(unsigned)` casts
+  themselves are cost-free (a handful of instructions each).
+
+### Index-line cache (`mailindx.c`) unconditionally allocated for 100 messages on the very first index redraw
+
+Immediately after fixing the two bugs above, INBOX opened but drawing
+the folder index crashed: `"Bug in Pine detected: \"Out of free
+storage (8181 bytes)\""`. `adb`'s stack trace (`$c` on the core file)
+pointed at `i_cache_size()` (`mailindx.c`) via `get_index_cache()` <-
+`build_header_line()` <- `redraw_index_body()`.
+
+- **Root cause**: `i_cache_size()`'s cache-growth increment,
+  `#define IC_SIZE 100`, means the very first call (drawing line 1 of
+  a brand new INBOX with as few as 2 messages) immediately allocates
+  room for 100 cache lines: `fs_get((icache.num+1) * (screen_cols+1))`
+  = `fs_get(101 * 81)` = `fs_get(8181)` at an 80-column terminal --
+  regardless of how many messages the folder actually has. On a
+  target where `data`+`bss` alone already consume most of a single
+  64KB address space (leaving roughly 20KB for heap+stack combined,
+  per this file's `size pine` history), an unconditional 8KB-plus
+  up-front allocation for index caching is the same class of problem
+  as `MSIZE_INIT`/`pico/edef.h`'s `SLEN` scratch buffer -- oversized
+  "just in case" headroom this target can't spare. The cache already
+  grows on demand via `fs_resize()` in the `else` branch, so a smaller
+  increment only changes resize frequency for a large folder, not
+  correctness.
+- **Fix**: `IC_SIZE` 100 -> 20 (first allocation for an 80-column
+  terminal drops from 8181 bytes to 1701). Also fixed two `memset()`
+  calls in the same function (`memset(icache.cache,0,(icache.num+1)*
+  tmplen)` and the resize-tail one) to cast their `long`-typed size
+  expression to `(unsigned)` -- same unprototyped-`memset()` bug class
+  as the `bezerk.c`/`mail.c`/`rfc822.c` entry above; these two call
+  sites happened to be silently zeroing 0 bytes (a no-op, since the
+  high word of a value that fits in 16 bits is 0) rather than crashing,
+  so newly-grown cache slots weren't guaranteed zero-filled before
+  this fix.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. Real hardware: index now draws successfully for the
+  2-message INBOX from the entry above.
+- **Size delta**: not separately measured (bundled into the next
+  real-hardware `size pine` alongside other changes); the allocation
+  itself now starts at 1701 bytes instead of 8181 for a small folder,
+  growing by 1620-byte (20-line) increments instead of 8100-byte
+  (100-line) ones as a folder grows past that.
+- **Next issue found**: viewing a second message after the first
+  crashed with `"Out of free storage (1024 bytes)"` from
+  `pretty_addr_string()` (`reply.c`, called while formatting the
+  message's header for display) -- `adb`'s trace (`main ->
+  mail_view_screen -> format_message -> format_envelope ->
+  pretty_addr_string -> fs_get`) shows a plain allocation failure, not
+  an obviously-corrupted size (1024 is exactly `MAILTMPLEN`, this
+  function's minimum buffer size, and `pretty_addr_string()` already
+  frees each address's buffer before moving to the next). With
+  `data`+`bss` at 43492 bytes and a 64KB D-space ceiling, only ~22KB
+  remains for heap and stack combined -- this looks like genuine
+  cumulative memory pressure from c-client's normal per-message
+  envelope/body caching (kept alive for the stream's lifetime by
+  design) rather than a new corruption bug, but not yet confirmed --
+  see `TODO-pdp11.md`.
+
+### Shrink `context.c`'s and `ttyout.c`'s string literal footprint (`pine-ovl` data+bss)
+
+Resumed the string-cutting pass with the two next-biggest un-cut files
+by real (comment-stripped) literal byte count. Wrote a small
+comment-stripping script this time (the earlier naive "grep every
+quoted substring" measure, used throughout this pass, counts text
+inside `/* ... */` comments as if it were a real literal, which had
+been overstating several files' remaining potential -- e.g. `status.c`
+and part of `ttyout.c`'s and `context.c`'s totals turned out to be
+comment prose, not code).
+
+- **`context.c`**: `context_digest()` had three separate
+  `return("Context too long")` sites -- an old single-pass `cc`
+  doesn't dedupe identical literals even within one function (same
+  finding as the `mailcmd.c`/`strings.c` entries above), so each cost
+  the full 17 bytes. Introduced one `static char *too_long = "Context
+  too long";` and made all three sites `return(too_long);`.
+- **`ttyout.c`**: real content here is almost entirely termcap/
+  terminfo capability names (`"smcup"`, `"cuu1"`, `"sgr0"`, ...) --
+  mandatory, fixed-by-convention 2-5 byte identifiers passed to
+  `tgetstr()`/`tigetstr()`, not shortenable or dedupeable without
+  breaking terminal setup. The one real duplicate: the `#else`
+  (non-terminfo) branch of the terminal-setup function called
+  `getenv("TERM")` twice in three lines (once to check for NULL, again
+  to actually use the value) -- cached the first call's result in a
+  local `ttnm` instead of a second call, removing the second `"TERM"`
+  literal and a redundant environment lookup. (A third `"TERM"` exists
+  in the `#ifdef USE_TERMINFO` branch, but that and the `#else`
+  branch are mutually exclusive at compile time -- only one is ever
+  in the built binary, so it isn't a real duplicate.)
+- **Not touched, flagged for a possible future, separate pass**: every
+  `.c` file in this tree (not just these two) carries an identical-
+  shaped `static char rcsid[] = "$Id: <file>,v ... $";` under `#if
+  !defined(lint) && !defined(DOS)`, averaging ~50 bytes -- a real
+  string literal, referenced by nothing at runtime except the classic
+  RCS `ident`/`what(1)` utilities for identifying a binary's source
+  version in the field. Deliberately left alone here (removing it is
+  a tree-wide, ~25-file mechanical change, a different shape of task
+  than "cut this file's literals," and changes a long-standing
+  convention rather than fixing a bug or an oversized buffer) --
+  worth a dedicated pass if the ~1-1.5KB of accumulated savings across
+  the whole tree is wanted.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. Real hardware: `data` `29400` -> `29364` (-36 bytes, matching
+  hand estimates: -32 for the two removed `"Context too long"`
+  copies, -4 for the removed `"TERM"` copy); `text`/overlays
+  unchanged (string cuts only affect `.data`).
+- **Size delta**: -36 bytes data (real 2.11BSD hardware).
+
+### Tree-wide removal of every `.c` file's unused RCS `$Id$` identifier string
+
+Per the previous entry's "flagged for a possible future pass" note --
+the user asked for it. Every `.c` file under `pine/`, `pico/`, and
+`pine/osdep/` carries an identical-shaped block:
+```c
+#if !defined(lint) && !defined(DOS)
+static char rcsid[] = "$Id: <file>,v <rev> <date> mikes Exp $";
+#endif
+```
+Confirmed via `grep -rn '\brcsid\b'` across every `.c`/`.h` in both
+trees that the variable is referenced nowhere else (no about-screen,
+no `-version` flag, nothing) -- it exists solely for the classic RCS
+`ident`/`what(1)` utilities to extract a source-version string from a
+built binary, a nicety with no user on a personal, offline PDP-11 mail
+station. `imap/ANSI/c-client/*.c` does *not* use this pattern (a
+different upstream convention -- Mark Crispin's c-client), so it was
+untouched.
+
+- **Fix**: a small Python script matched the exact 3-line block
+  (`#if !defined(lint) && !defined(DOS)` / `static char rcsid[] =
+  "$Id: ...$";` / `#endif`, tolerating the `#if`/tab whitespace
+  variants actually present) and removed it, once per file, across
+  every `pine/*.c`, `pico/*.c`, and `pine/osdep/*.c` file that had one
+  -- 41 files total (`pine/pine-use.c` and `pine/osdep/includer.c`
+  included for tree-wide consistency, even though neither links into
+  the final `pine`/`pico` binaries -- standalone tool and a build-time
+  code generator, respectively). `pico/osdep.c` also matched (it's a
+  build-time `cp` of `pico/os_unix.c`, gitignored per `.gitignore`) --
+  harmless to have edited directly since the next build overwrites it
+  from the now-fixed `os_unix.c`.
+- **Verified**: `./build clean && ./build lnx`, exit 0, 0 warnings;
+  full smoketest suite 31/31. Real hardware: pushed all 20 changed
+  `pine/*.c` files and all 18 changed `pico/*.c` files, rebuilt
+  `pico-ovl` (first real-hardware pico link this session -- note
+  `pico/makefile.bsd`'s plain `pico` target still fails with `ld:
+  text overflow` on real 2.11BSD, a pre-existing, already-documented-
+  in-makefile issue unrelated to this change; `pico-ovl` is the
+  correct target, same as `pine-ovl` for pine) and `pine-ovl` --
+  both linked cleanly with unchanged overlay/module structure.
+- **Size delta**: this dev (`lnx`) build: `bin/pine` data `10184` ->
+  `8968` (-1216 bytes), `bin/pico` data `6356` -> `5240` (-1116
+  bytes). Real 2.11BSD hardware: `pine` data `29364` -> `28292`
+  (-1072 bytes, `text`/`bss`/overlay structure unchanged, as expected
+  for a pure `.data` cut spread across 20 files averaging ~54 bytes
+  each). `pico`'s real-hardware delta wasn't separately measured
+  (no prior real-hardware `size pico` baseline existed before this
+  session touched it) but the dev-build delta (-1116 bytes) confirms
+  the same win applies there.
+
+### Cross-file string literal deduplication, found via `nm --size-sort` ground-truth inspection instead of source grep
+
+Every string-cutting entry so far found candidates by grepping one
+file's own source for repeated literals. That method structurally
+cannot see duplication *across* files -- and this toolchain's linker
+never merges identical string constants across separate `.o` files
+either (each `.c` file is its own translation unit; there's no
+COMDAT-style folding on this old `a.out` toolchain), so a message
+string repeated verbatim in three different `.c` files costs three
+full copies in the final binary, invisible to any one file's own
+literal audit.
+
+Found these instead by inspecting the *linked* binary directly:
+`nm --size-sort -S bin/pine` (the ELF `lnx` dev build) ranks every
+symbol by size, giving quick ground-truth visibility into the biggest
+`.data`/`.bss` consumers (confirmed, as a sanity check, that this
+surfaces the already-tracked `KEYMENU_S`/`struct key` duplication
+issue -- `index_keys`/`view_keys`/`folder_keys`/`main_keys` and the
+help-key tables all show up near the top, exactly matching that
+already-deferred TODO item). Cross-file *string* duplication doesn't
+show up this way, though (gcc already merges identical `.rodata`
+constants within one binary before `nm` ever sees it) -- for that,
+wrote a small script extracting every string literal (comment-
+stripped, same technique as the `context.c`/`ttyout.c` entry) from
+*every* `pine/*.c` file at once and grouping by exact text across
+files, rather than per-file.
+
+- **Found and fixed** (same "define once, `extern` elsewhere" pattern
+  already established for `already_first_page`/`cancelled_msg`/
+  `word_not_found_msg`):
+    - `"\007\"%s\" undefined here (%s for help)"` (39 bytes) --
+      identical in `mailcmd.c`, `mailview.c`, and `pine.c`. New shared
+      `undefined_here_msg`, owned by `mailcmd.c`.
+    - `"Word to search for [%s] : "` (27 bytes) -- `mailcmd.c` and
+      `mailview.c`. New shared `word_search_prompt`, owned by
+      `mailcmd.c`.
+    - `"richtext"` (8 bytes), `"external-body"` (13 bytes), `"
+      [ERROR fetching text of message]"` (37 bytes), and `"%s%s
+      [Formatting error: %s]%s"` (33 bytes) -- all four duplicated
+      between `mailview.c` and `reply.c` (these two files' message-
+      body-formatting functions are close cousins, which is why so
+      much overlapped). `richtext` already existed as a `static`
+      variable in `mailview.c`; made it non-`static` and pointed
+      `reply.c` at it via `extern`. Added three new shared variables
+      (`external_body`, `err_fetching_text_msg`,
+      `formatting_error_fmt`) owned by `mailview.c`.
+- **Not touched**: `"To: "`/`"Cc: "` (`mailview.c`/`reply.c`, via
+  `pretty_addr_string()` calls) -- only 4 bytes each, and `mailview.c`
+  has three *other* field-name literals (`"From: "`, `"Reply to:
+  "`, `"Bcc: "`) in the same call group that aren't duplicated
+  anywhere, so sharing just these two would be an inconsistent,
+  low-value special case. `"TERM"` (`pine.c`/`ttyout.c`) and the
+  `KEYMENU_S` table duplication: left alone, see `TODO-pdp11.md`.
+- **New warning class hit and fixed**: two of the four newly-shared
+  variables (`word_search_prompt`, `formatting_error_fmt`) are used as
+  the *format* argument to `sprintf()` -- unlike `q_status_message()`/
+  `q_status_message2()` (this tree's usual message-string sink, which
+  isn't `printf`-attribute-annotated, so passing it a non-literal
+  format never triggers anything), `sprintf()` is a real, GCC-
+  recognized `printf`-family function, so a variable (non-literal)
+  format argument trips `-Wformat=2`'s `-Wformat-nonliteral` -- a
+  real, if slightly surprising, new warning class from this exact
+  refactor. Fixed with the same `#pragma GCC diagnostic push` /
+  `ignored "-Wformat-nonliteral"` / `pop` bracketing already
+  established in `ttyout.c`'s `PutLineN()` family for the identical
+  reason.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31.
+- **Size delta**: counterintuitively, this *dev* build's `data`
+  went **up** (`8968` -> `9000`, +32 bytes): every new shared
+  variable is a `char *` pointer, 8 bytes on this 64-bit ELF build,
+  while the deduplicated string *content* itself lives in `.rodata`
+  (reported under `text`, which dropped `272842` -> `272706`, -136
+  bytes) -- so the dev build's `data` number is actively misleading
+  for this specific kind of change. On real 2.11BSD hardware, where a
+  `char *` is 2 bytes, not 8, the arithmetic flips heavily favorable:
+  confirmed `data` `28292` -> `28112` (**-180 bytes**), matching a
+  hand estimate (five new 2-byte pointers, six removed duplicate
+  string copies) to within a few bytes.
+
+### `longjmp botch` sending mail: SIGWINCH handler and its `longjmp()` target weren't guaranteed resident under `pine-ovl`'s auto-overlay text
+
+Real-hardware report: reading mail now worked (see the INBOX-open
+entries above), but sending hit `"sent-mail" doesn't exist. Create?`
+-> answering `y` immediately produced `longjmp botch` followed by a
+hung CPU (the literal, infinite-loop `botch()` routine in old BSD's
+`setjmp`/`longjmp` on a stack-frame-relationship sanity-check
+failure) -- reachable on the very first real Send attempt, not an
+occasional flake.
+
+- **Root cause**: `pine-ovl` links with real 2.11BSD `ld -i -X`
+  (auto-overlay text). `mkovmake` partitions object files into a
+  resident BASE plus swapped OVERLAY segments purely by *statically
+  visible calls* between modules -- it has no way to see a signal
+  handler registered with `signal()` (a raw function pointer the
+  *kernel*, not any of this program's own code, invokes later,
+  asynchronously) or a `longjmp()` target recorded by a `setjmp()` in
+  another file. `pine/signals.c`'s `winch_signal()` (SIGWINCH handler)
+  called `longjmp(winch_state, 1)` back into a `setjmp(winch_state)`
+  in `pine/ttyin.c`'s `read_with_timeout()`, guarded by a
+  `ready_for_winch` flag meant to only allow the jump while genuinely
+  blocked there. Neither `signals.o` nor `ttyin.o` was pinned to the
+  base (`pine/makefile.bsd`'s `pine-ovl` recipe passed `$(obj)` to
+  `mkovmake -O2 8k` with no `-Z` at all, leaving *every* module,
+  including these two, to the optimizer's free choice). Confirmed via
+  the real `mkovmake`/`ld` output that `ttyin.o` landed in a
+  `send.o`/`strings.o`/`ttyin.o` overlay, while the actual "create
+  sent-mail" code path for a non-ambiguous folder name
+  (`mail_create()` -> `bezerk_create()`) lives in `../c-client/
+  bezerk.o`'s own, different overlay -- so a `longjmp()` into
+  `ttyin.o`'s recorded frame while `bezerk.o`'s overlay is the one
+  actually resident jumps into whatever instruction bytes that
+  overlay happens to have loaded at that address instead. Same
+  underlying hazard as this file's `gf_terminal()`/`gf_out_putc` entry
+  above (an explicit function pointer instead of a signal handler);
+  the `ready_for_winch` staleness angle was investigated at length
+  first (never conclusively ruled in or out as *the* trigger) before
+  the overlay angle -- prompted by the user directly asking whether
+  signal handlers and `longjmp` targets need to live outside the
+  overlays -- turned out to explain it far more simply: it doesn't
+  need to be a narrow race at all if the target overlay is routinely
+  not the one resident when Fcc creation runs.
+- **Fix**, two parts:
+    1. Eliminated the `longjmp()`-out-of-signal-handler pattern
+       entirely instead of trying to keep both `signals.o` and
+       `ttyin.o` simultaneously resident. `winch_signal()` now only
+       sets the existing `winch_occured` flag; `read_with_timeout()`
+       already had a fast-path check for that flag, and now also
+       checks it on the `EINTR` a caught signal already produces from
+       its blocking `select()`/`read()`, returning `KEY_RESIZE`
+       through the same ordinary return-value path it always used for
+       the non-blocked case -- no more raw-PC jump, so no more
+       requirement that `ttyin.o` be resident at signal-delivery time.
+       Removed `jmp_buf winch_state` and `ready_for_winch` entirely
+       (both now dead).
+    2. Forced `signals.o` into `mkovmake`'s base
+       (`pine/makefile.bsd`'s `pine-ovl`: `signals.o -Z $(ovlobj)
+       ...`, new `ovlobj` = `$(obj)` minus `signals.o`) -- this file
+       is nothing but signal-handler plumbing (`auger_in_signal`,
+       `quit_signal`, `hup_signal`, `term_signal`, `usr2_signal`,
+       `winch_signal`), every one of which has the identical
+       "kernel can invoke this while any overlay is resident" hazard,
+       not just `winch_signal`. This is the same *kind* of fix the
+       `gf_terminal()` entry above tried and abandoned for `filter.o`
+       (`ld: too big for type 431`) -- but `signals.c` is roughly a
+       fifth the size (~380 lines vs. ~1750) and, unlike `filter.o`,
+       doesn't need to pull anything else along with it into the
+       base: everything it calls afterward (`want_to()`,
+       `mail_close()`, etc.) is an ordinary statically-visible call,
+       already handled correctly by the normal overlay trampoline
+       mechanism regardless of which overlay the callee ends up in.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31 (including `test_signal_handlers` and the composer-resize
+  tests, which already exercised `winch_signal()`/`SIGWINCH`
+  indirectly); a standalone manual check resizing the terminal while
+  genuinely blocked at the main index screen (not the composer),
+  confirming the new `EINTR`+flag path still redraws promptly instead
+  of merely surviving. On real hardware: `pine-ovl` linked
+  successfully with `signals.o` confirmed first in the base module
+  list (`/bin/ld -i -X ... /lib/crt0.o signals.o addrutil.o args.o
+  help.o log.o mailbox.o ../c-client/dummy.o ../c-client/misc.o -Z
+  ...`), no budget-overflow error. Brute-force SIGWINCH flooding
+  against the flat `lnx` dev build (which has no overlays at all)
+  could *not* reproduce the original crash -- expected in hindsight,
+  since the whole bug depends on overlay swapping that dev build
+  doesn't have, and a useful confirming data point once the real root
+  cause was found. End-to-end confirmation came from the user retrying
+  a real Send on hardware: the `longjmp botch` is gone (a message now
+  gets far enough to hit a separate, unrelated `data`+`bss` capacity
+  issue instead -- see `TODO-pdp11.md`).
+- **Size delta**: real hardware `data` `28112` -> `28110` (-2 bytes,
+  removing the one initialized `int ready_for_winch = 0;`; `jmp_buf
+  winch_state` had no initializer so was already in `bss`, not
+  `data`). Not a size-reduction change; noted for completeness only.
+
+### Deduplicated the common navigation-command strings shared across every screen's key-menu table
+
+Real hardware hit `Bug in Pine detected: "Out of free storage"` while
+just navigating between messages -- prompted going back to the
+data+bss reduction pass. `TODO-pdp11.md`'s `KEYMENU_S`/`struct key`
+entry had already identified these eight tables
+(`index_keys`/`folder_keys`/`help_keys`/`composer_help_keys`/
+`view_keys`/`text_att_view_keys`/`main_keys`/`oe_keys`, across
+`mailindx.c`/`folder.c`/`mailview.c`/`pine.c`/`ttyin.c`) as a large
+source of duplication, but deferred it as requiring a bigger
+restructure (from static compile-time `struct key` array-of-*values*
+literals to runtime-populated tables) -- real, and still not
+attempted. This entry only dedupes the *string content* inside the
+existing array-of-values format, which turned out to be separable
+from that bigger refactor and far lower risk.
+
+- **Found**: extracted every string literal from all eight tables at
+  once (same cross-file grouping technique as the earlier
+  `mailcmd.c`/`mailview.c`/`pine.c`/`reply.c` entry) and counted
+  duplicates. The `KEYMENU_S`/`struct key` comment in `pine.h` already
+  explains why: `column` is the only genuinely per-instance field, so
+  the same navigation commands (`Help`, `OTHER CMDS`, `WhereIs`,
+  `PrevPage`/`NextPage`, `Quit`, `GotoFldr`, `Compose`, ...) that
+  appear on nearly every screen were each typed out as a fresh literal
+  in every table that used them -- up to 12 copies of `"Help"` alone.
+  52 distinct strings were duplicated somewhere; the top 24 by
+  `(count-1) * (length+1)` accounted for 569 of the 686 total
+  duplicated bytes, so only those were worth the churn (the rest are
+  1-2 byte single-letter command keys where a shared-variable's
+  maintenance cost isn't worth the return).
+- **Fix**: same "define once, reference elsewhere" pattern as every
+  other dedup this session, with one real wrinkle. The 24 shared
+  strings are defined once in `mailindx.c` (chosen as owner since it
+  uses all 24) and referenced from the other four files via `extern`.
+  But `index_keys[]` etc. are `static` arrays with *static storage
+  duration* -- their initializers must be compile-time constant
+  expressions, so `char *km_help = "Help";` used directly in
+  `{km_help, ...}` doesn't work (`error: initializer element is not
+  constant`, since reading a `char *` variable's *value* is a runtime
+  operation, unlike a string literal or the address of an array/
+  function). Fixed by defining each shared string as `char
+  km_help[] = "Help";` (an array, not a pointer) instead --  an array
+  name decays to its address, which *is* a valid constant expression,
+  same as a string literal itself. `extern char km_help[];` in the
+  four consuming files. Mechanical, scripted substitution (Python) was
+  used to apply this across all eight tables rather than 200+ manual
+  edits; every substitution was scoped to just the `static struct key
+  NAME[] = { ... };` block text so no unrelated same-text string
+  elsewhere in these files (status messages, etc.) was touched.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31; a manual check of the rendered key menus (main menu and
+  folder index) via a scripted pty session confirmed the labels
+  (`Help`, `Main Menu`, `PrevMsg`, `PrevPage`, `Delete`, `Reply`,
+  `OTHER CMDS`, ...) still render correctly, not just that the binary
+  builds. Pushed to real hardware and rebuilt via `pine-ovl` cleanly.
+- **Size delta**: real hardware `data` `28110` -> `27550`
+  (**-560 bytes**), close to the 569-byte estimate from the
+  `(count-1)*(length+1)` accounting (the small gap is alignment/other
+  minor effects, not investigated further). Dev `lnx` build: `text`
+  `272642` -> `272170` (-472) but `data` `9000` -> `9224` (+224) --
+  this build's `char foo[] = "...";` arrays land in writable `.data`
+  rather than the `.rodata` a plain string-literal pointer would have
+  used (already merged across all uses by gcc within this one
+  binary), so the dev build actually gets *worse* by this specific
+  metric even though real hardware improves -- the same
+  data-segment-numbers-are-misleading-here caveat as the
+  `mailcmd.c`/etc. entry above, for a different underlying reason.
+  `TODO-pdp11.md`'s `KEYMENU_S` entry updated to note this is now
+  partially addressed (content deduped; the array-of-values structural
+  duplication itself is not).
+
+### One more cross-file string dedup pass, this time over the whole `pine/*.c` tree at once
+
+Re-ran the cross-file literal-duplication scan (same technique as the
+two entries above), but this time over every `pine/*.c` file
+simultaneously instead of the handful checked by hand before. Two
+false positives worth noting for next time: the naive "extract every
+double-quoted string" approach also matches `#pragma ... "-Wformat-
+nonliteral"` and `#include "headers.h"`-style preprocessor directives,
+which cost *zero* bytes (fully consumed by the preprocessor) -- had to
+filter those out before trusting the "savings" numbers.
+
+Of what was left, most candidates were under 10 bytes of real savings
+and/or generic single words (`"name"`, `"size"`, `"folder"`) risky to
+merge for the return. Did the handful with clear wins and no
+ambiguity:
+- `"name"` (`mailview.c` x3, `mailcmd.c` x1, all `strucmp(param->
+  attribute, ...)` MIME-parameter-name checks) -> new shared
+  `attr_name`, owned by `mailview.c`.
+- `"inbox"` (`osdep/expnfldr` (assembled into `os.c`) x2, `init.c` x1)
+  -> new shared `inbox_name`, owned by the `expnfldr` fragment (had to
+  go here and not `pine/os.c` itself -- that file is gitignored/build-
+  generated, a symlink to `osdep/os-bsd.c` or `osdep/os-lnx.c`
+  depending on target, per this repo's "edit the source, not the
+  copy" rule).
+- `"TERM"` (`ttyout.c` x2, `pine.c` x2, all `getenv("TERM")`) -> new
+  shared `term_envvar`, owned by `ttyout.c`. (`TODO-pdp11-done.md`'s
+  earlier cross-file entry had explicitly left this one alone as not
+  worth a dedicated pass by itself; picked it up now since the
+  broader pass was already touching similar-sized strings anyway.)
+- `"Save"` / `"Main Menu"` -- both already had a shared copy from the
+  `KEYMENU_S` entry above (`km_save`/`km_mainmenu`, `mailindx.c`), just
+  not referenced from every non-table use of the same text yet
+  (`mailcmd.c`'s attachment-view prompt, `log.c`'s IMAP-status-message
+  rewrite, `folder.c`'s runtime `folder_keys[MAIN_KEY].label`
+  assignment). These are ordinary runtime uses (a plain assignment/
+  function-argument), not static initializers, so the existing `char
+  km_save[]`/`char km_mainmenu[]` arrays could be referenced directly
+  with no new variable needed.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. Real hardware: `pine-ovl` rebuilt cleanly.
+- **Size delta**: real hardware `data` `27550` -> `27496`
+  (**-54 bytes**) -- smaller than the earlier two rounds, as expected
+  given how much smaller and more scattered these remaining
+  duplicates were. Diminishing returns from this specific technique at
+  this point; the `pico/edef.h` `SLEN` audit and the still-open
+  structural `KEYMENU_S` duplication are the larger leads left in
+  `TODO-pdp11.md`.
+
+### Shrink `pico/edef.h`'s `SLEN` (global scratch buffer `s`) from 8192 to 2048
+
+Prompted by a real-hardware "Out of free storage" crash sending mail
+(see `TODO-pdp11.md`) -- re-audited the global scratch buffer flagged
+as an unaudited shrink candidate in the "Cross-overlay indirect
+function pointer" entry above.
+
+- **Root cause of the original 8192 being wrong**: the existing
+  comment's "2x MAXPATHLEN" rationale was computed against *this dev
+  build's* `MAXPATHLEN` (4096, from Linux's `<sys/param.h>` --
+  `2*4096` is exactly 8192) rather than the real 2.11BSD target's,
+  which a one-line probe compiled and run on real hardware confirmed
+  is 256 -- a 16x-oversized number on the machine that actually
+  matters, same class of dev-build-vs-real-target mismatch as the
+  `MAXPATH`-sized `static char tmp[MAXPATH]`-style buffers found (and
+  ruled out as false leads) while looking for other targets in this
+  same session.
+- **Audit**: traced every writer of `s` (`strcpy`/`sprintf`/`strcat`
+  into it) across all 20 files that include `edef.h`. All of them are
+  in `browse.c` (directory-browser path-joining), `os_unix.c`
+  (`compresspath()`), `composer.c` (short field-help prompts), and
+  `display.c` (`mlyesno()`/`wkeyhelp()` -- the latter already
+  self-bounds against `sizeof(s)`, confirmed not a size driver).
+  Every path-shaped input feeding these (`dname`/`child`/`path`/
+  `base`, all `char foo[NLINE]`, `pico/estruct.h`'s `NLINE` = 256 --
+  unrelated to and much smaller than `MAXPATHLEN`) traces back to a
+  256-byte cap, and `pfnexpand()`'s `~user` expansion explicitly
+  rejects anything that would overflow its caller-supplied `len`
+  rather than truncating silently. Worst traced case: `dname` +
+  separator + `current->fname` (a `readdir()` entry, so at most
+  whatever the filesystem's own name-length limit is) lands around
+  511-533 bytes, not thousands. The Ctrl-T Fcc-folder-picker that used
+  to need much more headroom is already gone (see this file's earlier
+  entry on it).
+- **Fix**: `SLEN` 8192 -> 2048 (roughly 4x the traced worst case).
+- **Bugs found and fixed along the way**, surfaced while trying to
+  drive the file-browser through the actual worst-case path under
+  AddressSanitizer to confirm the new size holds (per this repo's
+  verification discipline for buffer-size changes) -- both real,
+  both independent of `SLEN`/`s` itself:
+    - **`mlreplyd()`'s insert-character loop read one byte before the
+      line buffer on literally the first keystroke of any prompt**
+      (`pico/display.c`, the `do { b[i+1] = b[i]; } while(i-- >= 0);`
+      shift-right-to-insert loop). The `>=` re-tests the
+      *pre-decrement* value of `i`, so when `i` reaches 0 (the normal
+      case -- shifting the NUL terminator when appending) the loop
+      runs one extra iteration reading/writing `b[-1]`. Silently
+      overwritten by the real character write immediately after, so
+      harmless *in practice* on a normal libc (whatever byte happens
+      to sit before the buffer is read then instantly discarded), but
+      a genuine out-of-bounds read confirmed via AddressSanitizer
+      (`stack-buffer-underflow`, caught because `mlreplyd()`'s `fname`
+      buffer in `insfile()` happened to sit at the very start of its
+      stack frame in that build). Fixed by changing `>=` to `>`.
+    - **`getfnames()` (`pico/os_unix.c`) sized its output buffer from
+      the directory's own `stat()` `st_size`**, which is a filesystem
+      block-accounting number with no reliable relationship to the
+      total bytes of the entry names inside it (this only ever worked
+      out on classic V7-style fixed-16-byte directory records, where
+      `st_size` really was `num_entries*16` -- wrong on every
+      filesystem where it isn't, which is effectively all of them
+      today). Confirmed via AddressSanitizer: a single long-named
+      entry in an otherwise-small directory (`tmpfs`, so a tiny
+      `st_size`) heap-overflowed the undersized `malloc()`. Fixed by
+      switching to two passes over the same open directory handle
+      (`readdir()` once to sum real name lengths, `rewinddir()`, then
+      the original copy pass) instead of trusting `st_size`.
+- **Also found while getting `pico-ovl` to relink after all of the
+  above**: `pico/makefile.bsd`'s `pico-ovl` target ran plain `mkovmake
+  -O2` with no basesize hint, which packed nearly everything into the
+  base (real hardware: base 49408 bytes against just 3 small
+  overlays) and then failed to link (`ld: too big for type 431` --
+  same unexplained internal `ld` limit as the `gf_terminal()`/
+  `gf_out_putc` entry above hit for `pine`, not the documented
+  `round8k(base)+round8k(overlay)<=64KB` ceiling, which isn't close to
+  binding here). Fixed the same way as that entry's `pine/makefile.bsd`
+  precedent: gave `mkovmake` an explicit basesize hint
+  (`MKOVFLAGS= -O2 16k`), confirmed working (base 36160, overlays
+  15872/15936/13696). Also added the `rm -f pico` step `pine-ovl` already
+  had before its own `make -f mkov` -- without it, `make -f mkov` reported
+  "'pico' is up to date" and silently skipped relinking even when the
+  object files backing it had just changed, one full round-trip lost
+  to this while verifying the fix above.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31. AddressSanitizer build (`./build lnx ASAN=1`) driving `bin/pico`
+  directly (pexpect) through Ctrl-R (insert file) -> Ctrl-T (browse) ->
+  entering a real on-disk directory with a ~200-byte name containing
+  another long-named entry -- the exact `dname + fname` worst-case
+  concatenation path -- with no ASan report, after both bugs above were
+  fixed (both reproduced and were confirmed via ASan before their
+  fixes). Real hardware: `pico-ovl` rebuilds cleanly end-to-end via the
+  plain `make -f makefile.bsd pico-ovl` target.
+- **Size delta**: dev `lnx` build: `bin/pico` `bss` `10528` -> `4384`
+  (**-6144 bytes**, exactly matching `SLEN`'s 8192->2048 reduction,
+  confirming no other side effects). Real hardware: `bss` `3600`
+  after all of the above (no isolated pre-change real-hardware `pico`
+  baseline was captured before this entry's fixes landed together,
+  but the `SLEN` byte count itself is platform-independent -- `s` is a
+  plain `char` array, not pointer-sized -- so the same 6144-byte
+  reduction applies there too).
+
+### The send/read/compose crash chain: a cross-overlay Send crash, a stack-collision Fcc-append crash, and the real shape of this target's memory ceiling
+
+A single extended real-hardware testing session (send a message, read it
+back, compose again, repeat) surfaced a chain of distinct, real bugs --
+each one fixed and verified before the next became visible underneath
+it -- and ended with a clear, evidence-based picture of why "Out of
+free storage" keeps recurring on this target no matter how many
+individual buffers get trimmed. Documenting the whole arc together
+since the entries build on each other and the final architectural
+finding reframes how to read every earlier one.
+
+- **`gf_flush_net()`/`gf_out_putc()`: a second cross-overlay stale
+  function pointer, crashing on every real Send.** The
+  `gf_terminal()`/`gf_out_putc` fix earlier in this file (see "Cross-
+  overlay indirect function pointer" above) turned out to fix only
+  half of this hazard. `gf_out_putc()`/`gf_flush_net()` (`filter.c`)
+  still reached their actual output sink through a second stored
+  pointer, `gf_out_f` (a `soutr_t`, set by `gf_set_output()` from
+  `send.c` to `unix_puts`) -- the exact same "raw pointer captured in
+  one overlay, invoked from a different one after `gf_pipe()`'s filter
+  chain has swapped several other overlays through the same memory"
+  hazard, just one indirection further out. Confirmed via a real adb
+  stack trace: `SIGSEGV`/`SIGILL` inside `gf_flush_net()`, called from
+  `pine_rfc822_output_body()` -> `append_message2()` ->
+  `call_sendmail()` -- i.e. on every real Send with a recipient, not
+  an edge case. Fixed the same way as the earlier hazard, but without
+  needing to relocate any code this time: grep confirmed `unix_puts`
+  is the *only* function `pine_rfc822_output_body()`'s `f` parameter
+  is ever called with (one non-recursive call site, in
+  `append_message2()`), so `gf_out_putc()`/`gf_flush_net()` now call
+  it directly by name -- an ordinary statically-visible cross-file
+  call, which the auto-overlay linker's trampoline mechanism (unlike a
+  raw runtime pointer) already handles correctly regardless of which
+  overlay `unix_puts` ends up in. `unix_puts()` (`send.c`) made
+  non-`static` for this; `gf_set_output()`'s signature dropped the now-
+  unused `soutr_t f` parameter it used to just store and pass along.
+  `pine_rfc822_output_body()`'s own internal `(*f)(...)` call sites
+  (its multipart-boundary/cookie-line writes) were *not* touched --
+  those execute from within `send.c` itself, calling a function also
+  defined in `send.c`, so they're safe by construction (the calling
+  code executing at all already proves that file's overlay is
+  resident) in a way the filter.c-to-send.c crossing never was.
+  Verified: `./build lnx` clean, 31/31 smoketests (one regression
+  caught and fixed by the suite itself -- see below), real hardware
+  Send confirmed working after this fix where it had reliably crashed
+  before.
+    - **Regression caught by the smoketest suite**: the first version
+      of this fix dropped `gf_out_f`'s NULL case entirely, assuming
+      it was always `unix_puts`. Wrong -- `call_mailer()`'s Fcc-only/
+      no-real-recipient path calls `pine_rfc822_output()` with
+      `f=NULL, s=NULL` on purpose (no real destination to write to,
+      only the Fcc copy), and `test_send_body_header_overflow`
+      immediately caught the resulting NULL-`FILE*` crash. Fixed by
+      checking `gf_out_stream` (which is NULL in exactly the same
+      case `gf_out_f` used to be) before calling `unix_puts()`,
+      instead of trying to preserve the removed pointer's NULL state
+      directly.
+- **`bezerk_append()`: an 8192-byte stack buffer, causing an
+  "Illegal instruction" crash appending the sent copy to `sent-mail`.**
+  Once Sends stopped crashing in `gf_flush_net()`, the very next step
+  (copying the sent message into `sent-mail` via c-client's own
+  `mail_append()` -> `bezerk_append()`) crashed differently: `Illegal
+  instruction (core dumped)`, adb pinning it inside
+  `bezerk_append_putc()`. `bezerk_append()` (`bezerk.c`) declares
+  `char buf[BUFLEN]` where `BUFLEN` was `8*MAILTMPLEN` (8192) --  a
+  plain **stack**-allocated write-batching buffer (accumulate bytes,
+  flush to `write(2)` when full), not heap. Combined with a second
+  `lock[MAILTMPLEN]` (1024) in the same frame, that's over 9KB in one
+  stack frame on a target where the whole D-space is 64KB and this
+  call happens right after a Send has already pushed `data`+`bss`+heap
+  close to their own ceiling -- exactly the kind of stack-vs-heap
+  collision this repo's "deep, buffer-heavy call chain" precedent
+  (see `pine_send()`'s `bodyfile_path`, made `static` for the same
+  reason) already knew to watch for, just not yet audited in
+  c-client's own driver code. Shrunk `BUFLEN` to `MAILTMPLEN/2` (512)
+  -- it only controls how often `bezerk_append_putc()` flushes to
+  `write()`, not correctness. Verified: `./build lnx`, 31/31
+  smoketests, real hardware Send-and-append confirmed working.
+- **Three more instances of the "oversized MAILTMPLEN floor/initial-
+  size" pattern**, found by continuing to retest after each fix
+  exposed the next-smallest failing allocation (`"Out of free storage
+  (N bytes)"` with `N` shrinking each time: 1024, 1025, 1024, 400,
+  256, 257, 65...) -- each one a real, independently-confirmed
+  real-hardware crash, each fixed the same low-risk way as this
+  session's earlier `MSIZE_INIT`/`RBUFSZ`-style fixes (shrink an
+  initial/floor size that an existing grow-on-demand or dynamic-sizing
+  path already handles correctly regardless of size):
+    - `mail_view_screen()`'s `so_get(CharStar, NULL, EDIT_ACCESS)`
+      (`mailview.c`) -- the message-display buffer -- inherited
+      `MSIZE_INIT`/`MSIZE_INC` (see the `filter.c` entry earlier in
+      this file). Confirmed via adb (`so_get` -> `fs_get`) at exactly
+      1024 bytes. Already covered by that entry's `MSIZE_INIT`
+      shrink to 256 -- included here because it's the crash that
+      first showed this specific call site was live.
+    - `format_scroll_text()`'s `text_lines[]`/`line_lengths[]` arrays
+      (`mailview.c`) started at `TYPICAL_BIG_MESSAGE_LINES` (200)
+      slots and doubled (`fs_resize()`) on demand -- 200 `char*`
+      slots cost exactly 400 bytes on this target's 2-byte pointers,
+      matching a real `"Out of free storage (400 bytes)"` crash
+      (adb: `mail_view_screen` -> `scrolltool` -> `format_scroll_text`
+      -> `fs_get`) hit with more messages in the inbox than earlier
+      sessions had. Shrunk to 25 -- a short message needs far fewer
+      slots, and doubling still gets a long one to the same eventual
+      capacity either way, just via a couple more `fs_resize()` calls.
+    - `pretty_addr_string()` (`reply.c`) already computed a correctly
+      dynamic per-address size (`2 * (field lengths) + 32`, covering
+      RFC822 quoting/escaping) but then applied
+      `if(need < MAILTMPLEN) need = MAILTMPLEN;` on top of it,
+      forcing every address in every viewed message's To/Cc/From up
+      to a full 1024 bytes regardless of actual size. Confirmed via
+      adb (`mail_view_screen` -> `format_message` -> `format_envelope`
+      -> `pretty_addr_string` -> `fs_get`, 1024 bytes). Removed the
+      floor entirely -- the dynamic computation was already correct
+      and was the whole point of the fix that introduced it (see that
+      function's own comment, and the `rfc822.c` sibling below).
+    - `rfc822_address_line()` (`imap/ANSI/c-client/rfc822.c`) --
+      `pretty_addr_string()`'s header-*writing* counterpart, used
+      building outgoing To/Cc/From lines -- had the exact same
+      `if (tmpneed < MAILTMPLEN) tmpneed = MAILTMPLEN;` floor on top
+      of an equally-correct dynamic computation. Found by grepping for
+      the same `< MAILTMPLEN` floor pattern across the whole tree
+      after finding `pretty_addr_string()`'s copy, not from a separate
+      crash. Removed the same way.
+    - `set_mime_types()`'s `RBUFSZ` (`send.c`, already `MAILTMPLEN+1`
+      = 1025 per an earlier entry in this file) hit *two more* real
+      crashes at that size and its next reduction (`"Out of free
+      storage (1025 bytes)"`, then again at `"(257 bytes)"`, both adb-
+      confirmed at the same `fs_get()` call site) during ordinary
+      compose+Send, not specially large messages. Shrunk twice more,
+      257 then 65 -- the refill loop already handles a chunk boundary
+      landing anywhere including mid-line (see that function's own
+      comment), so this remains the same "changes refill frequency,
+      not correctness" tradeoff, just pushed further given how little
+      real headroom this target has in practice.
+- **The real driver behind the recurring crashes: c-client caches
+  every viewed message's `ENVELOPE`/`BODY` for the life of the stream,
+  and nothing in this tree ever called `mail_gc()` to free any of it.**
+  Once the buffer-floor fixes above stopped being enough on their own
+  -- the same session hit a fresh crash ("Out of free storage (256
+  bytes)" starting a new compose, right after successfully reading
+  several messages) at a call site with no oversized buffer of its
+  own -- the pattern across the whole session's crash log (failing
+  request sizes shrinking release over release, at *different* call
+  sites each time, not a stack loop of the same one) pointed at
+  cumulative growth from browsing, not any single buffer. Grepping
+  this tree for `mail_gc`/`mail_free_envelope`/`mail_free_body` found
+  they're called only for pine's own *outgoing* (composed) envelopes
+  (`send.c`, `reply.c`) -- never for anything fetched while reading.
+  Every message ever opened or even just summarized in the index
+  keeps its full `ENVELOPE` (personal names, mailbox/host/adl strings,
+  `ADDRESS` nodes for every recipient) and `BODY` alive in the
+  stream's `LONGCACHE` for the rest of the session, unconditionally.
+  Two call sites needed the fix, found in order:
+    - `mail_view_screen()` (`mailview.c`): added
+      `mail_gc(pine_state->mail_stream, GC_ENV)` right after each
+      message is displayed (`so_give(&store)`), so at most one
+      message's envelope/body is live at a time while reading.
+      `mail_gc(..., GC_ENV)` is a whole-stream sweep (loops every
+      `nmsgs`), but this call site only runs once per message actually
+      opened for reading, not once per index row, so the O(nmsgs) cost
+      per call is fine here.
+    - `build_header_line()` (`mailindx.c`): the *other* place a full
+      `ENVELOPE` gets fetched is populating the folder index itself --
+      `mail_fetchstructure()` runs once per row (guarded by
+      `get_index_cache()`'s own already-bounded cache, so only on a
+      cache miss) purely to build one formatted summary line, and the
+      line is all any caller ever needs again. Confirmed the remaining
+      accumulation via adb: `"Out of free storage (12 bytes)"` -- a
+      bare `ADDRESS` struct, about as small an allocation as this tree
+      ever makes -- inside `mail_newaddr()`, deep inside
+      `rfc822_parse_msg()`, while just populating the index for a
+      bigger inbox than earlier sessions had used, i.e. before any
+      message had even been individually opened. Whole-stream
+      `mail_gc()` would be O(nmsgs) *per row* here (O(nmsgs^2) total)
+      since this runs once per row, not once per session, so freed
+      just this one message's entry directly instead, via
+      `mail_lelt()` (the same fields `mail_gc()` itself frees:
+      `mail_free_envelope(&lelt->env)`, `mail_free_body(&lelt->body)`).
+    - Both confirmed not to break the visible index/message-view
+      content (a scripted pty check after the `mailindx.c` fix
+      confirmed From/Subject/Date still render correctly for every
+      row; re-viewing an already-summarized-or-read message now costs
+      a re-fetch/re-parse from the mailbox file instead of a cache
+      hit, the expected memory-for-speed tradeoff). Verified: `./build
+      lnx` clean, 31/31 smoketests both times, real hardware
+      confirmed each fix let the *next* crash in the chain surface
+      (concrete forward progress each time, not a no-op).
+- **`fs_get()`/`fs_resize()`'s failure message now reports `brk`, an
+  approximate stack pointer, and the gap between them**
+  (`imap/ANSI/c-client/os_bsd.c`) -- a permanent diagnostic
+  improvement, not a bug fix, kept because it directly answered the
+  question the rest of this entry needed answered. Originally added
+  as temporary `syslog()` tracing (a `MEMCK` macro at a handful of
+  guessed checkpoints in `pine.c`/`mailcmd.c`/`send.c`, later a
+  log-every-call version in `fs_get()`/`fs_resize()` themselves) --
+  both approaches worked but cost real bytes on the very target being
+  debugged and needed guessing where to look. Landed on the simplest
+  version: fold `brk(2)`'s current value, the address of a local
+  variable (an approximation of the current stack pointer -- this
+  target has no portable way to read the real SP register from C),
+  and their difference directly into the existing `fatal()` message
+  that already fires on every allocation failure, no separate log
+  needed. `msg[]` widened from 64 to 96 bytes to fit the longer
+  message (worst case ~88 bytes on this target's 32-bit
+  `long`/`size_t`; the wider dev-build types were checked too and
+  don't matter since this file only builds for the real target).
+- **What the `brk`/`sp`/`gap` numbers actually revealed**: every "Out
+  of free storage" crash chased in this entry showed `gap` (the
+  measured distance from the current stack pointer to `brk`) in the
+  *thousands* of bytes -- nowhere close to the failing request size --
+  yet the allocation still failed, and always right around `brk`
+  57344. Two independent real-hardware crashes hit that exact number.
+  57344 = 7 * 8192, and 65536 - 57344 = 8192 exactly -- one full
+  8192-byte page short of the 64KB D-space, matching this target's
+  KT11 MMU page size precisely. The likely mechanism (not yet
+  confirmed by reading the kernel's own exec/VM setup code, but
+  consistent with every measurement so far and with
+  `pdp/machparam.h`'s `SSIZE` = 20 * 64 = 1280-byte *initial* stack
+  content, comfortably fitting inside one such page): stack growth
+  happens in whole-page units via the same APR mechanism as everything
+  else, so a full 8KB page gets mapped for stack at exec time
+  regardless of how little of it the initial ~1280 bytes actually
+  uses, and `brk()` can never claim any part of a page once it's
+  mapped for stack -- a *static*, page-granularity reservation decided
+  once at process start, not a dynamic boundary that tracks the
+  stack's actual current depth. This is why the `sp`/`gap`
+  instrumentation above didn't predict any of these failures: the real
+  constraint isn't "how deep is the stack right now", it's "how many
+  pages were handed to stack at exec time", and that's fixed for the
+  process's whole lifetime. Checked for a `MAXDSIZ`/`MAXSSIZ`-style
+  tunable constant in the kernel source (`limit`'s `datasize`/
+  `stacksize` both show as the shell's unlimited default, not a
+  compiled kernel maximum) -- not found by name; if this split is
+  hardcoded in the kernel's own exec/VM image setup rather than a
+  tunable, moving it would mean real kernel VM code changes, not a
+  `#define`, and hasn't been attempted. **Practical upshot for future
+  work**: 57344 bytes is very likely a hard ceiling for `data+bss
+  +heap` combined on this target, not a soft one that more `sp`-aware
+  code can negotiate around -- the only lever available from pine's
+  own source is minimizing how much of that fixed 57344-byte budget
+  gets used before it's needed, which is exactly what this session's
+  `MSIZE_INIT`/`RBUFSZ`/floor-removal/`mail_gc()` fixes (and the
+  ongoing data+rodata reduction work elsewhere in this file) already
+  do -- there's no fix available that raises the ceiling itself from
+  pine's side.
+- **Found, not yet fixed**: `folder_exists()` (`pine/folder.c`, used
+  by `send.c`'s Fcc-exists check) and `mail_create()`'s internal
+  `mail_valid()` check (`imap/ANSI/c-client/mail.c`) disagree about
+  whether a folder exists -- hit live when answering "y" to `"sent-
+  mail" doesn't exist. Create?` produced `Can't create ... folder
+  already exists` immediately after. `folder_exists()` answers via
+  `context_find_all()` (a pattern-matching folder *search*, built for
+  browsing/completion UI), while `mail_create()` answers via
+  `mail_valid()` (a direct existence check) -- plausible that
+  `context_find_all()` doesn't correctly match a plain, non-wildcard
+  name when called with a NULL context (`send.c`'s exact call shape),
+  but not traced further this session. Logged in `TODO-pdp11.md`
+  rather than chased immediately -- real and worth fixing, but a
+  distinct bug from the memory-pressure chain above, with a trivial
+  workaround (don't confirm the create when it's wrong) that didn't
+  block continuing to test the crashes that mattered more.
+
+### Five more `context.c` functions still had `MAILTMPLEN` stack locals the earlier resize missed, plus a real aliasing bug found fixing them
+
+Resuming the general data/rodata reduction pass (broadened past
+reacting to specific crashes), grepping for `MAILTMPLEN`-sized buffers
+tree-wide turned up `context_create()`/`context_open()`/
+`context_rename()`/`context_delete()`/`context_append()`
+(`pine/context.c`) -- five siblings of `context_fqn_to_an()`/
+`context_digest()`/`context_find_all()`/`context_apply()`, already
+resized from `MAILTMPLEN` to `MAXPATH` in an earlier entry in this
+file, with the *exact* same "build FQN from ambiguous name" comment
+and code shape, that the earlier pass simply didn't reach. All five
+hold the same folder/context-path content the earlier fix's contract
+already established as `MAXPATH`-bounded.
+
+- **Fix**: resized all five to `MAXPATH` (256, from `MAILTMPLEN`
+  1024). `context_append()` in particular sits directly in the Fcc-
+  append call chain this session's crash-chasing entry already found
+  tight on stack (`bezerk_append()`'s 8192-byte buffer, above).
+- **Found and fixed while resizing**: the `else if` branch in each of
+  these functions did a raw, unbounded `strcpy()` of caller-supplied
+  content (`mailbox`/`name`/`old`/`new` -- all "no length cap
+  anywhere upstream" per this session's established pattern) into the
+  local buffer, with no bounds check at all -- reachable at the old
+  1024-byte size too, just needing a longer trigger string, so this
+  isn't new exposure from the resize, but shrinking the buffer without
+  also bounding the write would have tightened the trigger length.
+  Replaced every such `strcpy()` with a `strncpy()` capped to the
+  buffer's remaining space plus explicit NUL-termination.
+  `context_create()`'s two `sprintf()` calls that copy caller content
+  into a same-sized `errbuf`/`tmp` got explicit `%.219s`-style
+  precision for the same reason.
+- **Found and fixed while resizing, a genuine pre-existing bug**:
+  `context_rename()`'s second branch (building the fully-qualified
+  *new* name) wrote into `tmp` -- the *first* branch's buffer --
+  instead of the `tmp2` it was clearly meant to use (declared for
+  exactly this, named to match, just never referenced). If both `old`
+  and `new` took that branch, `s` and `t` ended up aliased to the same
+  buffer, and computing the new name would silently overwrite the
+  already-computed old name before `mail_rename()` ever ran. Fixed by
+  writing into `tmp2` as intended.
+- **Found and left alone, flagged for later**: `context_apply()`
+  itself (called by all six of these functions, both the four fixed
+  earlier and the five fixed here) writes into its caller-supplied
+  buffer via an unbounded `sprintf()`/`strcpy()` with no size
+  parameter at all -- every caller passing a `MAXPATH`-sized local
+  (after this and the earlier entry) means a `n` (ambiguous name)
+  longer than that overflows it. Not fixed here: closing it properly
+  means adding a size parameter to `context_apply()` and updating
+  every call site, a bigger, more invasive change than this pass's
+  per-caller resizes, and out of scope for what was otherwise a
+  data-segment reduction pass. Logged in `TODO-pdp11.md`.
+- Also found and removed while re-reading `context_open()`: a
+  `char host[MAILTMPLEN]` local that's declared and never referenced
+  anywhere in the function -- dead code, not merely oversized.
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite
+  31/31, including the Fcc-overflow-specific tests
+  (`test_fcc_netmbx_overflow`/`test_fcc_tilde_overflow`) that exercise
+  this exact `context_isambig()`/`context_apply()` chain. Pushed and
+  rebuilt on real hardware.
+- **Size delta**: these five buffers are all plain stack locals (not
+  `static`), so their resize doesn't show up in `size`'s `data`/`bss`
+  columns on either build -- the real effect is reduced stack depth
+  in the Fcc-append call chain (and every other caller of these
+  functions), the same class of fix as `bezerk_append()`'s `BUFLEN`
+  above, not a `size`-measurable one.
+
+### `ttyout.c`'s already-audited `temp_format` tightened from `MAILTMPLEN` to its real measured worst case
+
+`PutLine1()`..`PutLine5()`'s shared `temp_format` buffer already had a
+thorough worst-case audit from an earlier session (every call site
+checked, real worst case ~570 bytes from `update_titlebar_message()`'s
+format string), but was sized to `MAILTMPLEN` (1024) anyway "matching
+this codebase's existing convention" rather than the audited number.
+Continuing the general data+rodata reduction pass, tightened to 640 --
+still ~70 bytes of margin over the existing audit, which this change
+doesn't revisit or invalidate. Unlike the stack-local fixes elsewhere
+in this file, `temp_format` is `static` (BSS), so every byte here is a
+permanent, unconditional cost for the process's whole lifetime, not a
+conditional one.
+
+- **Verified**: `./build lnx`, 0 warnings; full smoketest suite 31/31.
+  Pushed and rebuilt on real hardware.
+- **Size delta**: real hardware `bss` (or `data`, depending on how
+  this target's linker classifies an uninitialized `static` array)
+  dropped by exactly 384 bytes (1024-640) alongside this entry's
+  `context.c` changes (which are stack-only and don't show up in
+  `size` at all) -- confirmed via a real-hardware rebuild showing the
+  full 384-byte drop with no other `size`-visible change in the same
+  build.

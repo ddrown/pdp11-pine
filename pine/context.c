@@ -1,6 +1,3 @@
-#if !defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: context.c,v 4.25 1993/12/01 02:56:46 mikes Exp $";
-#endif
 /*
  * Program:	Mailbox Context Management
  *
@@ -180,6 +177,11 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
      * MAXPATH-sized) -- see the bounds-check fix below and
      * context_fqn_to_an()'s comment for why. */
     static char tmp[MAXPATH];
+    /* shared by all three "too long" return sites below -- a C
+     * compiler this old doesn't dedupe identical string literals even
+     * within one function, so three separate copies each cost the
+     * full 17 bytes. See TODO-pdp11-done.md. */
+    static char *too_long = "Context too long";
     char *p, *viewp = view;
     int   i = 0;
 
@@ -209,7 +211,7 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
 	     * anything else fixed alongside it -- see TODO-pdp11-done.md.
 	     */
 	    if(i >= MAXPATH - 1)
-	      return("Context too long");
+	      return(too_long);
 	    rcontext[i++] = *p;		/* copy if requested */
 	}
 
@@ -240,7 +242,7 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
 	     * but with no length check at all rather than just the
 	     * wrong constant -- see TODO-pdp11-done.md. */
 	    if(viewp - view >= MAXPATH - 1)
-	      return("Context too long");
+	      return(too_long);
 	    *viewp++ = *p;
 	}
     }
@@ -251,7 +253,7 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
     for(; *p ; p++){			/* trailing context ? */
 	if(rcontext){
 	    if(i >= MAXPATH - 1)
-	      return("Context too long");
+	      return(too_long);
 	    rcontext[i++] = *p;
 	}
     }
@@ -289,6 +291,15 @@ context_digest(char *context, char *scontext, char *rcontext, char *view)
  * Accepts: buffer to write, context to apply, ambiguous folder name
  * Returns: buffer filled with fully qualified name in context
  *          No context applied if error
+ *
+ * NOTE: neither write into `b` below (the sprintf() nor the strcpy())
+ * bounds-checks against `b`'s actual size -- every caller in this file
+ * passes its own MAXPATH-sized local, so `n` longer than that
+ * overflows it. Not fixed here (would mean adding a size parameter
+ * and updating every call site); every caller was at least resized
+ * down from MAILTMPLEN to MAXPATH this session, which *tightens* the
+ * trigger length for this pre-existing gap rather than closing it --
+ * see TODO-pdp11.md.
  */
 void
 context_apply(char *b, char *c, char *n)
@@ -388,17 +399,27 @@ context_find_all(char *context, MAILSTREAM *stream, char *pat)
 long
 context_create(char *context, MAILSTREAM *stream, char *mailbox)
 {
-  char tmp[MAILTMPLEN];		/* must be within context */
+  /* MAXPATH, not MAILTMPLEN -- same "holds a folder/context path"
+   * contract already established for context_fqn_to_an()/
+   * context_digest()/context_find_all()/context_apply() (see those
+   * functions' comments). Every sprintf() below that copies caller-
+   * supplied content (mailbox) in has an explicit precision matching
+   * this size, since neither of those was true before this resize. */
+  char tmp[MAXPATH];		/* must be within context */
 
   if (!context_isambig (mailbox)) {
-    char *s, errbuf[MAILTMPLEN];
+    char *s, errbuf[MAXPATH];
     if(mailbox[0] != '{' && context[0] == '{' && (s = strindex(context, '}'))){
       strncpy(tmp, context, (s - context) + 1);
-      strcpy(&tmp[(s - context)+1], mailbox);
+      strncpy(&tmp[(s - context)+1], mailbox, sizeof(tmp) - (s - context) - 2);
+      tmp[sizeof(tmp) - 1] = '\0';
     }
-    else strcpy(tmp, mailbox);	/* allow create for now */
+    else{
+      strncpy(tmp, mailbox, sizeof(tmp) - 1);	/* allow create for now */
+      tmp[sizeof(tmp) - 1] = '\0';
+    }
 
-    sprintf (errbuf,"Create of mailbox outside context: %.988s", tmp);
+    sprintf (errbuf,"Create of mailbox outside context: %.219s", tmp);
     mm_log (errbuf,(long) NIL);
   }
   else
@@ -410,7 +431,7 @@ context_create(char *context, MAILSTREAM *stream, char *mailbox)
 	requires a local mailbox to exist even if all you want is
 	a prototype back.  */
      if (!(stream = mail_open (NIL,tmp,OP_PROTOTYPE))){
-	 sprintf (tmp,"Unable to infer network server from context: %s",
+	 sprintf (tmp,"Unable to infer network server from context: %.219s",
 		  mailbox);
 	 mm_log (tmp,ERROR);
 	 return NIL;
@@ -432,14 +453,15 @@ context_create(char *context, MAILSTREAM *stream, char *mailbox)
 MAILSTREAM *
 context_open(char *context, MAILSTREAM *old, char *name, long opt)
 {
-  char *s,tmp[MAILTMPLEN];	/* build FQN from ambiguous name */
-  char host[MAILTMPLEN];
+  /* MAXPATH, not MAILTMPLEN -- see context_create()'s comment. */
+  char *s,tmp[MAXPATH];	/* build FQN from ambiguous name */
 
   if (!context) context = "[]";	/* non spec'd, pass name */
   if(context_isambig (name)) context_apply(s = tmp, context, name);
   else if(name[0] != '{' && context[0] == '{' && (s = strindex(context, '}'))){
       strncpy(tmp, context, (s - context) + 1);
-      strcpy(&tmp[(s - context)+1], name);
+      strncpy(&tmp[(s - context)+1], name, sizeof(tmp) - (s - context) - 2);
+      tmp[sizeof(tmp) - 1] = '\0';
       s = tmp;
   }
   else s = name;		/* fully-qualified name */
@@ -458,20 +480,23 @@ context_open(char *context, MAILSTREAM *old, char *name, long opt)
 long
 context_rename(char *context, MAILSTREAM *stream, char *old, char *new)
 {
-  char *s,*t,tmp[MAILTMPLEN],tmp2[MAILTMPLEN];
+  /* MAXPATH, not MAILTMPLEN -- see context_create()'s comment. */
+  char *s,*t,tmp[MAXPATH],tmp2[MAXPATH];
 	/* build FQN from ambiguous name */
   if (context_isambig (old)) context_apply (s = tmp,context,old);
   else if(old[0] != '{' && context[0] == '{' && (s = strindex(context, '}'))){
       strncpy(tmp, context, (s - context) + 1);
-      strcpy(&tmp[(s - context)+1], old);
+      strncpy(&tmp[(s - context)+1], old, sizeof(tmp) - (s - context) - 2);
+      tmp[sizeof(tmp) - 1] = '\0';
       s = tmp;
   }
   else s = old;		/* fully-qualified name */
   if (context_isambig (new)) context_apply (t = tmp2,context,new);
   else if(new[0] != '{' && context[0] == '{' && (t = strindex(context, '}'))){
-      strncpy(tmp, context, (t - context) + 1);
-      strcpy(&tmp[(t - context)+1], new);
-      t = tmp;
+      strncpy(tmp2, context, (t - context) + 1);
+      strncpy(&tmp2[(t - context)+1], new, sizeof(tmp2) - (t - context) - 2);
+      tmp2[sizeof(tmp2) - 1] = '\0';
+      t = tmp2;
   }
   else t = new;		/* fully-qualified name */
   return mail_rename (stream,s,t);
@@ -488,11 +513,13 @@ context_rename(char *context, MAILSTREAM *stream, char *old, char *new)
 long
 context_delete(char *context, MAILSTREAM *stream, char *name)
 {
-  char *s,tmp[MAILTMPLEN];	/* build FQN from ambiguous name */
+  /* MAXPATH, not MAILTMPLEN -- see context_create()'s comment. */
+  char *s,tmp[MAXPATH];	/* build FQN from ambiguous name */
   if (context_isambig (name)) context_apply (s = tmp,context,name);
   else if(name[0] != '{' && context[0] == '{' && (s = strindex(context, '}'))){
       strncpy(tmp, context, (s - context) + 1);
-      strcpy(&tmp[(s - context)+1], name);
+      strncpy(&tmp[(s - context)+1], name, sizeof(tmp) - (s - context) - 2);
+      tmp[sizeof(tmp) - 1] = '\0';
       s = tmp;
   }
   else s = name;		/* fully-qualified name */
@@ -511,11 +538,13 @@ context_delete(char *context, MAILSTREAM *stream, char *name)
 long
 context_append(char *context, MAILSTREAM *stream, char *name, STRING *msg)
 {
-  char *s,tmp[MAILTMPLEN];	/* build FQN from ambiguous name */
+  /* MAXPATH, not MAILTMPLEN -- see context_create()'s comment. */
+  char *s,tmp[MAXPATH];	/* build FQN from ambiguous name */
   if (context_isambig (name)) context_apply (s = tmp,context,name);
   else if(name[0] != '{' && context[0] == '{' && (s = strindex(context, '}'))){
       strncpy(tmp, context, (s - context) + 1);
-      strcpy(&tmp[(s - context)+1], name);
+      strncpy(&tmp[(s - context)+1], name, sizeof(tmp) - (s - context) - 2);
+      tmp[sizeof(tmp) - 1] = '\0';
       s = tmp;
   }
   else s = name;		/* fully-qualified name */

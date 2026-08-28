@@ -1,6 +1,3 @@
-#if !defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: signals.c,v 4.14 1993/10/29 01:35:42 mikes Exp $";
-#endif
 /*----------------------------------------------------------------------
 
             T H E    P I N E    M A I L   S Y S T E M
@@ -281,23 +278,39 @@ usr2_signal(int signo)
 #ifdef RESIZING
 /*----------------------------------------------------------------------
    Handle window resize signal -- SIGWINCH
-  
-   The planned strategy is just force a redraw command. This is similar
-  to new mail handling which forces a noop command. The signals are
-  help until pine reads input. Then a KEY_RESIZE is forced into the command
-  stream .
-  ----------------------------------------------------------------------*/
-extern jmp_buf  winch_state;
-extern int      ready_for_winch, winch_occured;
 
-SigType
-static winch_signal(int signo)
+   The planned strategy is just force a redraw command. This is similar
+  to new mail handling which forces a noop command. The signal is held
+  until pine reads input (winch_occured), at which point read_with_timeout()
+  (ttyin.c) turns it into a KEY_RESIZE -- either promptly, if it was
+  already blocked in select()/poll() and gets EINTR, or on its next call
+  otherwise.
+
+   This used to longjmp() straight out of the handler and back into
+  read_with_timeout()'s blocked select() call for an immediate redraw
+  instead of waiting for EINTR. That doesn't work under this program's
+  real target: pine-ovl auto-overlays its text across ld -i -X segments,
+  and the linker's mkovmake only tracks *statically visible* calls to
+  decide what belongs together -- it can't see that this handler
+  (invoked by the kernel via a raw function-pointer registered with
+  signal()) needs to be resident whenever a signal arrives, nor that a
+  longjmp() target recorded by a setjmp() in another file needs to stay
+  resident until the matching longjmp() fires. Either one landing in an
+  overlay that isn't loaded at the moment the signal is delivered jumps
+  into whatever code that overlay's segment happens to have there
+  instead -- see TODO-pdp11-done.md's gf_terminal()/gf_out_putc entry
+  for the same hazard via an explicit function pointer instead of a
+  signal handler. A signal handler's own text has no way around needing
+  to be resident (see this file's forced inclusion in the mkovmake
+  base, pine/makefile.bsd's pine-ovl target), but avoiding a raw-PC
+  longjmp() target entirely removes the second half of the problem. */
+extern int winch_occured;	/* ttyin.c owns this copy */
+
+static SigType
+winch_signal(int signo)
 {
     get_windsize(ps_global->ttyo);
-    if(ready_for_winch)
-      longjmp(winch_state, 1);
-    else
-      winch_occured = 1;
+    winch_occured = 1;
 }
 #endif
 

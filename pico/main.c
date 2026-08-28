@@ -1,6 +1,3 @@
-#if	!defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: main.c,v 4.4 1993/10/06 17:09:24 mikes Exp $";
-#endif
 /*
  * Program:	Main stand-alone Pine Composer routines
  *

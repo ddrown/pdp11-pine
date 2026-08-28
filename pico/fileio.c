@@ -1,6 +1,3 @@
-#if	!defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: fileio.c,v 4.4 1993/11/17 01:03:50 mikes Exp $";
-#endif
 /*
  * Program:	ASCII file reading routines
  *

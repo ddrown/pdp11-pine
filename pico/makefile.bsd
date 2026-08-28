@@ -97,10 +97,24 @@ pico:		main.c libpico.a
 # overlays), so this target bypasses libpico.a entirely.
 #
 MKOVMAKE=	mkovmake
-MKOVFLAGS=	-O2
+# Plain `-O2` (no basesize hint) let mkovmake's optimizer pack nearly
+# everything into the base (real hardware: base 49408 bytes against
+# just 3 small overlays) -- ld -i -X then failed with "ld: too big for
+# type 431" on that split (same unexplained internal ld limit as
+# TODO-pdp11-done.md's gf_terminal()/gf_out_putc entry hit for pine,
+# not the documented round8k(base)+round8k(overlay)<=64KB ceiling,
+# since that arithmetic doesn't come close to failing here). Capping
+# the base with an explicit size, same fix pattern as pine/makefile.bsd's
+# `MKOVFLAGS= -O2 8k`, forces more modules into overlays instead and
+# avoids it -- confirmed working on real hardware (base 36160, three
+# overlays 15872/15936/13696). 16k is a first working data point, not
+# a tuned optimum -- revisit if a future change pushes total size
+# enough to need adjusting up or down.
+MKOVFLAGS=	-O2 16k
 
 pico-ovl:	main.o $(OFILES)
 		$(MKOVMAKE) $(MKOVFLAGS) -o pico -f mkov *.o -ltermcap
+		rm -f pico
 		make -f mkov
 
 main.o:		$(HFILES)

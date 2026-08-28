@@ -1,6 +1,3 @@
-#if !defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: mailcmd.c,v 4.128 1993/12/06 20:08:15 mikes Exp $";
-#endif
 /*----------------------------------------------------------------------
 
             T H E    P I N E    M A I L   S Y S T E M
@@ -85,6 +82,12 @@ static char *cant_open_use_compose    = "\007Can't open \"%s\", use Compose";
 extern char *out_of_mem_msg;	/* send.c owns this copy */
 /* not static -- also used from folder.c/mailview.c, see the externs there */
 char         *word_not_found_msg = "\007Word not found";
+/* not static -- also used from mailview.c/pine.c, see the externs there */
+char         *undefined_here_msg = "\007\"%s\" undefined here (%s for help)";
+/* not static -- also used from mailview.c, see the extern there */
+char         *word_search_prompt = "Word to search for [%s] : ";
+extern char  *attr_name;	/* mailview.c owns this copy */
+extern char   km_save[];	/* mailindx.c owns this copy */
 
 
  
@@ -186,7 +189,7 @@ process_cmd(command, in_index, orig_command, force_mailchk)
               char *labels[3];
 	      int ret;
 
-              labels[0] = "Save";
+              labels[0] = km_save;
               labels[1] = "View";
               labels[2] = NULL;
 	      sprintf(prompt, "Save or View attachment %s ? (s/v) [s] ",
@@ -674,8 +677,7 @@ do_sortindex:
           /*--------- Default, unknown command ----------*/
         default:
         bogus:
-          q_status_message2(0, 0, 2,
-	      "\007\"%s\" undefined here (%s for help)",
+          q_status_message2(0, 0, 2, undefined_here_msg,
                           (void *)pretty_command(orig_command), "?");
           break;
       }
@@ -909,7 +911,10 @@ save(folder, context, message, index_sorted_msgno)
      * context_append...
      */
     /* set up string driver */
-    INIT(&msg, mail_string, (void *)so_text(so), strlen((char *)so_text(so)));
+    /* Was strlen((char *)so_text(so)) -- see send.c's append_message2()
+     * for why that's wrong on real hardware; so->used is the accurate,
+     * safe length. See TODO-pdp11-done.md. */
+    INIT(&msg, mail_string, (void *)so_text(so), (unsigned long) so->used);
 
     save_folder = (strucmp(folder, ps_global->inbox_name) == 0)
                    ? ps_global->VAR_INBOX_PATH : folder;
@@ -1813,7 +1818,16 @@ search_headers(command_line, sorted_msg, max_msg)
     HelpType	help;
 
 
-    sprintf(prompt, "Word to search for [%s] : ", search_string);
+    /* word_search_prompt is a compile-time-fixed literal shared with
+     * mailview.c, not a user-influenced format string. */
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
+    sprintf(prompt, word_search_prompt, search_string);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
     help = NO_HELP;
     new_string[0] = '\0';
 
@@ -2101,7 +2115,7 @@ save_attachment(qline, msgno, a)
 
     /*-------  Figure out suggested file name ----*/
     for(param = a->body->parameter; param != NULL; param = param->next) {
-        if(strucmp(param->attribute, "name") == 0)
+        if(strucmp(param->attribute, attr_name) == 0)
           break;
     }
     if(param != NULL && param->value != NULL) {

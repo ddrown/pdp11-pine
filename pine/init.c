@@ -1,6 +1,3 @@
-#if !defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: init.c,v 4.102 1993/11/23 00:04:05 mikes Exp $";
-#endif
 /*----------------------------------------------------------------------
 
             T H E    P I N E    M A I L   S Y S T E M
@@ -71,6 +68,8 @@ static char rcsid[] = "$Id: init.c,v 4.102 1993/11/23 00:04:05 mikes Exp $";
 
 #include "headers.h"
 #include <time.h>
+
+extern char inbox_name[];	/* osdep/expnfldr owns this copy */
 
 
 extern char version_buff[];
@@ -176,7 +175,7 @@ init_vars(ps)
 
     /*--- The defaults here are defined in os-xxx.h so they can vary
           per machine ---*/
-    vars[V_INBOX_PATH].global_val.p       = cpystr("inbox");
+    vars[V_INBOX_PATH].global_val.p       = cpystr(inbox_name);
     vars[V_DEFAULT_FCC].global_val.p      = cpystr(DF_DEFAULT_FCC);
     vars[V_USE_ONLY_DOMAIN_NAME].global_val.p = cpystr(DF_USE_ONLY_DOMAIN_NAME);
     vars[V_SORT_KEY].global_val.p         = cpystr(DF_SORT_KEY);

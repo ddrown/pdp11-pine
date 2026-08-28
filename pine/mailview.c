@@ -1,6 +1,3 @@
-#if !defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: mailview.c,v 4.71 1993/12/06 20:09:20 mikes Exp $";
-#endif
 /*----------------------------------------------------------------------
 
             T H E    P I N E    M A I L   S Y S T E M
@@ -61,7 +58,20 @@ static char rcsid[] = "$Id: mailview.c,v 4.71 1993/12/06 20:09:20 mikes Exp $";
 
 
 
-#define TYPICAL_BIG_MESSAGE_LINES 200 
+/* Was 200 -- format_scroll_text() below allocates this many
+ * char*+short slots (text_lines[]/line_lengths[]) up front and
+ * doubles (fs_resize()) whenever an actual message needs more, so
+ * this is only an initial guess, not a cap. On this target a char* is
+ * 2 bytes, so 200 slots cost 400 bytes for text_lines[] alone -- a
+ * real "Out of free storage (400 bytes)" crash here, confirmed via
+ * adb (mail_view_screen -> scrolltool -> format_scroll_text ->
+ * fs_get), is the same "oversized initial guess" pattern as every
+ * other buffer fixed this session (MSIZE_INIT, RBUFSZ, bezerk.c's
+ * BUFLEN, pretty_addr_string()'s MAILTMPLEN floor) -- just the next
+ * smallest one, once those were gone. A short message needs far fewer
+ * than 200 lines; doubling still gets a long one to the same eventual
+ * size either way, just via a couple more resize() calls. */
+#define TYPICAL_BIG_MESSAGE_LINES 25
 
 void       format_envelope(ENVELOPE *, gf_io_t);
 void	   set_scroll_text(void *, int, int, int, SourceType);
@@ -81,9 +91,42 @@ static int match_charset(char *);
  * storage instead of a separate copy of each at every site */
 static char *err_writing_msg = "Error writing message: %s";
 static char *us_ascii        = "us-ascii";
-static char *richtext        = "richtext";
+/* not static -- also used from reply.c, see the externs there */
+char *richtext              = "richtext";
+char *external_body         = "external-body";
+char *err_fetching_text_msg = "    [ERROR fetching text of message]";
+char *formatting_error_fmt  = "%s%s    [Formatting error: %s]%s";
+/* not static -- also used from mailcmd.c, see the extern there */
+char *attr_name             = "name";
 extern char *charset_attr;	/* send.c owns this copy -- also "charset" */
 extern char *word_not_found_msg;	/* mailcmd.c owns this copy */
+extern char *undefined_here_msg;	/* mailcmd.c owns this copy */
+extern char *word_search_prompt;	/* mailcmd.c owns this copy */
+extern char km_qmark[];	/* mailindx.c owns this copy */
+extern char km_help[];	/* mailindx.c owns this copy */
+extern char km_othercmds[];	/* mailindx.c owns this copy */
+extern char km_mainmenu[];	/* mailindx.c owns this copy */
+extern char km_gotofldr[];	/* mailindx.c owns this copy */
+extern char km_compose[];	/* mailindx.c owns this copy */
+extern char km_prevpage[];	/* mailindx.c owns this copy */
+extern char km_nextpage[];	/* mailindx.c owns this copy */
+extern char km_spc[];	/* mailindx.c owns this copy */
+extern char km_delete[];	/* mailindx.c owns this copy */
+extern char km_undelete[];	/* mailindx.c owns this copy */
+extern char km_forward[];	/* mailindx.c owns this copy */
+extern char km_prevmsg[];	/* mailindx.c owns this copy */
+extern char km_nextmsg[];	/* mailindx.c owns this copy */
+extern char km_nextnew[];	/* mailindx.c owns this copy */
+extern char km_hdrmode[];	/* mailindx.c owns this copy */
+extern char km_save[];	/* mailindx.c owns this copy */
+extern char km_whereis[];	/* mailindx.c owns this copy */
+extern char km_listfldrs[];	/* mailindx.c owns this copy */
+extern char km_quit[];	/* mailindx.c owns this copy */
+extern char km_exithelp[];	/* mailindx.c owns this copy */
+extern char km_o[];	/* mailindx.c owns this copy */
+extern char km_w[];	/* mailindx.c owns this copy */
+extern char km_e[];	/* mailindx.c owns this copy */
+extern char km_dash[];	/* mailindx.c owns this copy */
 
 /* "message"/"help"/"text" word for the "Already at start/end of ..."
  * status messages below -- was a 4-way ternary (with the "help" string
@@ -192,6 +235,25 @@ mail_view_screen(pine_state)
                    (int *)NULL, MessageText, src, (struct attachment *)NULL);
 
 	so_give(&store);	/* free resources associated with store */
+
+	/*
+	 * c-client caches every message's ENVELOPE/BODY (mail_elt()'s
+	 * LONGCACHE) for the life of the stream -- fine on a normal
+	 * machine, but on this target's single 64KB D-space it's an
+	 * unbounded, ever-growing cost with no eviction anywhere in this
+	 * tree (mail_gc() was never called from pine at all). Confirmed
+	 * on real hardware: repeated "Out of free storage" crashes at
+	 * progressively *smaller* request sizes across a session, each
+	 * one just the next-smallest allocation once the last was fixed
+	 * -- the real driver was cumulative cache growth from browsing,
+	 * not any single buffer. Free this message's envelope/body right
+	 * after displaying it -- mail_elt()'s lighter per-message flags/
+	 * dates (used by the index) aren't touched by GC_ENV, so the
+	 * index stays correct; only re-viewing an already-seen message
+	 * costs a re-fetch/re-parse from the mailbox file instead of a
+	 * cache hit.
+	 */
+	mail_gc(pine_state->mail_stream, GC_ENV);
 
         if(pine_state->max_msgno == 0) {
             q_status_message(0, 2, 3, "\007No messages to read!");
@@ -309,11 +371,11 @@ describe_mime(body, prefix, num, should_show)
         a->body        = body;
         a->can_display = mime_can_display(body->type, body->subtype,
                                           body->parameter);
-	for(param = a->body->parameter; 
-	    param != NULL && strucmp(param->attribute,"name") != 0;
+	for(param = a->body->parameter;
+	    param != NULL && strucmp(param->attribute,attr_name) != 0;
 	    param = param->next)
 	      ;
-	if (param != NULL && strucmp(param->attribute,"name") == 0)
+	if (param != NULL && strucmp(param->attribute,attr_name) == 0)
 	    has_name = 1;
 	else
 	    has_name = 0;
@@ -399,7 +461,7 @@ type_desc(type, subtype, params, full)
 
       case TYPEAPPLICATION:
         if(subtype != NULL && strucmp(subtype, "octet-stream") == 0){
-            while(params != NULL && strucmp(params->attribute,"name") != 0)
+            while(params != NULL && strucmp(params->attribute,attr_name) != 0)
               params = params->next;
             if(full)
               sprintf(type_d, "Attached file \"%.100s\"",
@@ -566,15 +628,25 @@ format_message(msgno, env, body, flgs, pc)
 	    gf_filter_init();
 	    gf_link_filter(gf_nvtnl_local);
 	    if(decode_error = gf_pipe(gc, pc)){
-                sprintf(tmp_20k_buf, "%s%s    [Formatting error: %s]%s",
+		/* formatting_error_fmt is a compile-time-fixed literal
+		 * shared with reply.c, not a user-influenced format
+		 * string. */
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
+                sprintf(tmp_20k_buf, formatting_error_fmt,
 			NEWLINE, NEWLINE, decode_error, NEWLINE);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 		if(!gf_puts(tmp_20k_buf, pc))
 		  goto write_error;
 	    }
 	}
 	else{
 	    if(!gf_puts(NEWLINE, pc)
-	       || !gf_puts("    [ERROR fetching text of message]", pc)
+	       || !gf_puts(err_fetching_text_msg, pc)
 	       || !gf_puts(NEWLINE, pc)
 	       || !gf_puts(NEWLINE, pc))
 	      goto write_error;
@@ -674,7 +746,7 @@ format_message(msgno, env, body, flgs, pc)
 		format_envelope(a->body->contents.msg.env, pc);
 	    }
             else if(a->body->subtype 
-		    && strucmp(a->body->subtype, "external-body") == 0) {
+		    && strucmp(a->body->subtype, external_body) == 0) {
 		if(!gf_puts("This part is not included and can be ", pc)
 		   || !gf_puts("fetched as follows:", pc)
 		   || !gf_puts(NEWLINE, pc)
@@ -945,36 +1017,36 @@ part_desc(number, body, type)
  * is stored with each entry and it could be different for each.
  */
 static struct key help_keys[] =
-       {{"M","Main Menu",0},  {NULL,NULL,0},            {"E","Exit Help",0},
+       {{"M",km_mainmenu,0},  {NULL,NULL,0},            {km_e,km_exithelp,0},
         {NULL,NULL,0},        {NULL,NULL,0},            {NULL,NULL,0},
-        {"-","PrevPage",0},   {"Spc","NextPage",0},     {NULL,NULL,0},
-        {NULL,NULL,0},        {NULL,NULL,0},            {"W", "WhereIs",0}};
+        {km_dash,km_prevpage,0},   {km_spc,km_nextpage,0},     {NULL,NULL,0},
+        {NULL,NULL,0},        {NULL,NULL,0},            {km_w, km_whereis,0}};
 static struct key_menu help_keymenu =
 	{sizeof(help_keys)/(sizeof(help_keys[0])*12), 0, 0,0,0,0, help_keys};
 
 static struct key composer_help_keys[] =
-       {{NULL,NULL,0},        {NULL,NULL,0},            {"E","Exit Help",0},
+       {{NULL,NULL,0},        {NULL,NULL,0},            {km_e,km_exithelp,0},
         {NULL,NULL,0},        {NULL,NULL,0},            {NULL,NULL,0},
-        {"-","PrevPage",0},   {"Spc","NextPage",0},     {NULL,NULL,0},
-        {NULL,NULL,0},        {NULL,NULL,0},            {"W", "WhereIs",0}};
+        {km_dash,km_prevpage,0},   {km_spc,km_nextpage,0},     {NULL,NULL,0},
+        {NULL,NULL,0},        {NULL,NULL,0},            {km_w, km_whereis,0}};
 static struct key_menu composer_help_keymenu =
     {sizeof(composer_help_keys)/(sizeof(composer_help_keys[0])*12), 0, 0,0,0,0,
 							composer_help_keys};
 
 static struct key view_keys[] = 
-       {{"?","Help",0},        {"O","OTHER CMDS",0},    {"M","Main Menu",0},
-        {"V","ViewAttch",0},   {"P","PrevMsg",0},       {"N","NextMsg",0},
-        {"-","PrevPage",0},    {"Spc","NextPage",0},    {"D","Delete",0},
-        {"U","Undelete",0},    {"R","Reply",0},         {"F","Forward",0}, 
+       {{km_qmark,km_help,0},        {km_o,km_othercmds,0},    {"M",km_mainmenu,0},
+        {"V","ViewAttch",0},   {"P",km_prevmsg,0},       {"N",km_nextmsg,0},
+        {km_dash,km_prevpage,0},    {km_spc,km_nextpage,0},    {"D",km_delete,0},
+        {"U",km_undelete,0},    {"R","Reply",0},         {"F",km_forward,0}, 
 
-        {"?","Help",0},        {"O","OTHER CMDS",0},    {"Q","Quit",0},
-        {"C","Compose",0},     {"L","ListFldrs",0},     {"G","GotoFldr",0},
-        {"I","Index",0},       {"W","WhereIs",0},       {NULL,NULL,0},
-        {NULL,NULL,0},         {"S","Save",0},          {"E","Export",0},
+        {km_qmark,km_help,0},        {km_o,km_othercmds,0},    {"Q",km_quit,0},
+        {"C",km_compose,0},     {"L",km_listfldrs,0},     {"G",km_gotofldr,0},
+        {"I","Index",0},       {km_w,km_whereis,0},       {NULL,NULL,0},
+        {NULL,NULL,0},         {"S",km_save,0},          {km_e,"Export",0},
 
-        {"?","Help",0},        {"O","OTHER CMDS",0},    {NULL,NULL,0},
+        {km_qmark,km_help,0},        {km_o,km_othercmds,0},    {NULL,NULL,0},
         {NULL,NULL,0},         {NULL,NULL,0},           {NULL,NULL,0}, 
-        {"J","Jump",0},        {"TAB","NextNew",0},     {"H","HdrMode",0},
+        {"J","Jump",0},        {"TAB",km_nextnew,0},     {"H",km_hdrmode,0},
         {"B","Bounce",0},      {"*","Flag",0},          {"|","Pipe",0}}; 
 static struct key_menu view_keymenu =
 	{sizeof(view_keys)/(sizeof(view_keys[0])*12), 0, 0,0,0,0, view_keys};
@@ -984,10 +1056,10 @@ static struct key_menu view_keymenu =
 #define VIEW_PIPE_KEY 35
 
 static struct key text_att_view_keys[] =
-       {{"?","Help",0},       {NULL,NULL,0},           {"E","Exit Viewer",0},
+       {{km_qmark,km_help,0},       {NULL,NULL,0},           {km_e,"Exit Viewer",0},
         {NULL,NULL,0},        {NULL,NULL,0},           {NULL,NULL,0},
-        {"-","PrevPage",0},   {"Spc","NextPage",0},    {NULL,NULL,0},
-        {NULL,NULL,0},        {"S","Save",0},          {"W", "WhereIs",0}};
+        {km_dash,km_prevpage,0},   {km_spc,km_nextpage,0},    {NULL,NULL,0},
+        {NULL,NULL,0},        {"S",km_save,0},          {km_w, km_whereis,0}};
 static struct key_menu text_att_view_keymenu =
      {sizeof(text_att_view_keys)/(sizeof(text_att_view_keys[0])*12), 0, 0,0,0,0,
 							text_att_view_keys};
@@ -1441,8 +1513,7 @@ whereis:
                 }else {
 unknown:
     	            /*----------- Unknown command -------*/
-                    q_status_message2(0, 0, 2,
-              "\007\"%s\" undefined here (%s for help)",
+                    q_status_message2(0, 0, 2, undefined_here_msg,
                           (void *)pretty_command(orig_ch), "?");
     	        }
             }
@@ -1483,7 +1554,16 @@ search_text(q_line, start_line)
     HelpType	help;
     int         rc;
 
-    sprintf(prompt, "Word to search for [%s] : ", search_string);
+    /* word_search_prompt is a compile-time-fixed literal shared with
+     * mailcmd.c, not a user-influenced format string. */
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
+    sprintf(prompt, word_search_prompt, search_string);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
     help = NO_HELP;
     nsearch_string[0] = '\0';
 

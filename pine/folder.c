@@ -1,6 +1,3 @@
-#if !defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: folder.c,v 4.74 1993/11/23 00:03:51 mikes Exp $";
-#endif
 /*----------------------------------------------------------------------
 
             T H E    P I N E    M A I L   S Y S T E M
@@ -150,18 +147,33 @@ static char *no_folders_to_fmt = "\007No folders to %s";
 extern char *word_not_found_msg;	/* mailcmd.c owns this copy */
 extern char *already_first_page;	/* mailindx.c owns this copy */
 extern char *already_last_page;	/* mailindx.c owns this copy */
+extern char km_qmark[];	/* mailindx.c owns this copy */
+extern char km_help[];	/* mailindx.c owns this copy */
+extern char km_othercmds[];	/* mailindx.c owns this copy */
+extern char km_gotofldr[];	/* mailindx.c owns this copy */
+extern char km_compose[];	/* mailindx.c owns this copy */
+extern char km_prevpage[];	/* mailindx.c owns this copy */
+extern char km_nextpage[];	/* mailindx.c owns this copy */
+extern char km_spc[];	/* mailindx.c owns this copy */
+extern char km_delete[];	/* mailindx.c owns this copy */
+extern char km_whereis[];	/* mailindx.c owns this copy */
+extern char km_quit[];	/* mailindx.c owns this copy */
+extern char km_o[];	/* mailindx.c owns this copy */
+extern char km_w[];	/* mailindx.c owns this copy */
+extern char km_dash[];	/* mailindx.c owns this copy */
+extern char km_mainmenu[];	/* mailindx.c owns this copy */
 
 static int sort_folder_entry = 0;
 
 static struct key folder_keys[] =
-    {{"?","Help",0},      {"O","OTHER CMDS",0},    {NULL,NULL, 0},
+    {{km_qmark,km_help,0},      {km_o,km_othercmds,0},    {NULL,NULL, 0},
      {NULL,NULL,0},       {"P","PrevFldr",0},      {"N","NextFldr",0},
-     {"-","PrevPage",0},  {"Spc","NextPage",0},    {"D","Delete",0},
-     {"A","Add",0},       {"R","Rename",0},        {"W","WhereIs",0},
+     {km_dash,km_prevpage,0},  {km_spc,km_nextpage,0},    {"D",km_delete,0},
+     {"A","Add",0},       {"R","Rename",0},        {km_w,km_whereis,0},
 
-     {"?","Help",0},      {"O","OTHER CMDS",0},    {"Q","Quit",0},
-     {"C","Compose",0},   {NULL,NULL,0},           {"G","GotoFldr",0},
-     {"I","CurIndex",0},  {"W","WhereIs",0},       {NULL,NULL,0},
+     {km_qmark,km_help,0},      {km_o,km_othercmds,0},    {"Q",km_quit,0},
+     {"C",km_compose,0},   {NULL,NULL,0},           {"G",km_gotofldr,0},
+     {"I","CurIndex",0},  {km_w,km_whereis,0},       {NULL,NULL,0},
      {NULL,NULL,0},       {NULL,NULL,0},           {NULL,NULL,0}};
 static struct key_menu folder_keymenu =
   {sizeof(folder_keys)/(sizeof(folder_keys[0])*12), 0, 0,0,0,0,folder_keys};
@@ -307,7 +319,7 @@ folder_lister(ps, do_what, start_context, return_context, return_string)
 	    if(do_what == FolderMaint){
 	      km->how_many = 2;
 	      folder_keys[MAIN_KEY].name = "M";
-	      folder_keys[MAIN_KEY].label = "Main Menu";
+	      folder_keys[MAIN_KEY].label = km_mainmenu;
 	      folder_keys[SELECT_KEY].name = "V";
 	      folder_keys[SELECT_KEY].label = 
 		   (fs.context->use & CNTXT_PSEUDO) ? select_label:"[ViewFldr]";

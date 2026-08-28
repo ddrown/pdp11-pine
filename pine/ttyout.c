@@ -1,6 +1,3 @@
-#if !defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: ttyout.c,v 4.15 1993/09/29 22:32:47 mikes Exp $";
-#endif
 /*----------------------------------------------------------------------
 
             T H E    P I N E    M A I L   S Y S T E M
@@ -113,6 +110,9 @@ static void CursorRight(int);
 #define FARAWAY 1000
 
 
+/* not static -- also used from pine.c, see the extern there */
+char *term_envvar = "TERM";
+
 static char *_clearscreen, *_moveto, *_up, *_down, *_right, *_left,
             *_setinverse, *_clearinverse,
             *_setunderline, *_clearunderline,
@@ -171,7 +171,7 @@ config_screen(tt)
     int err;
 
     *tt = NULL;
-    ttnm = getenv ("TERM");
+    ttnm = getenv (term_envvar);
     if (!ttnm) return -1;
     strcpy (termname, ttnm);
     setupterm (termname, 1 /* (ignored) */, &err);
@@ -211,11 +211,12 @@ config_screen(tt)
 #else
     int  tgetent(char *, const char *);      /* get termcap entry */
     int  err;
+    char *ttnm;
 
     *tt = NULL;
-    if (getenv("TERM") == NULL) return(-1);
+    if ((ttnm = getenv(term_envvar)) == NULL) return(-1);
 
-    if (strcpy(termname, getenv("TERM")) == NULL)
+    if (strcpy(termname, ttnm) == NULL)
     	return(-1);
 
     if ((err = tgetent(_terminal, termname)) != 1)
@@ -1002,11 +1003,17 @@ PutLine0n8b(x, y, line, length)
  * screen.c's "%s of %s %3d%% %s%s" (update_titlebar_message) at
  * comatose()<=~13 + comatose()<=~13 + "%3d"<=3 + BAR_STATUS()<=3 +
  * repeat_char()<=511 (its own hard internal cap) plus ~20 bytes of
- * literal text, call it ~570 bytes worst case. Sized well above that,
- * matching this codebase's existing MAILTMPLEN convention, rather than
- * the original UW-inherited 10KB "just in case" sizing.
- */
-static char temp_format[MAILTMPLEN];
+ * literal text, call it ~570 bytes worst case. Originally sized to
+ * MAILTMPLEN (1024, "matching this codebase's convention" rather than
+ * the audited real max) -- tightened to 640 (still ~70 bytes above
+ * the ~570-byte worst case established by the audit above, which this
+ * change doesn't revisit or invalidate) once every other MAILTMPLEN-
+ * as-a-floor buffer this size class turned out to matter on real
+ * hardware (see TODO-pdp11-done.md's "send/read/compose crash chain"
+ * entry) -- this is a static/BSS buffer, so unlike a stack or heap
+ * floor, every byte here is a permanent, unconditional cost for the
+ * entire life of the process. */
+static char temp_format[640];
 /*----------------------------------------------------------------------
       Printf style output line to the screen at given position, 1 arg
 

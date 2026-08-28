@@ -1,6 +1,3 @@
-#if !defined(lint) && !defined(DOS)
-static char rcsid[] = "$Id: reply.c,v 4.44 1993/10/08 23:21:57 mikes Exp $";
-#endif
 /*----------------------------------------------------------------------
 
             T H E    P I N E    M A I L   S Y S T E M
@@ -85,6 +82,10 @@ char          *forward_delimiter(void);
 /* messages repeated verbatim at multiple call sites below -- shared
  * storage instead of a separate copy of each at every site */
 extern char *cancelled_msg;	/* mailcmd.c owns this copy */
+extern char *richtext;		/* mailview.c owns this copy */
+extern char *external_body;	/* mailview.c owns this copy */
+extern char *err_fetching_text_msg;	/* mailview.c owns this copy */
+extern char *formatting_error_fmt;	/* mailview.c owns this copy */
 static char *err_alloc_msg_text = "\007Error allocating message text";
 static char *err_incl_all_parts = "\007Error including all message parts";
 static char *text_not_incl      = ". Text not included";
@@ -704,16 +705,26 @@ get_body_part_text(body, msg_no, part_no, pc, prefix, hmm)
 	     */
 	    gf_link_filter(gf_nvtnl_local);
 	    if(decode_error = gf_pipe(gc, pc)){
-		sprintf(tmp_20k_buf, "%s%s    [Formatting error: %s]%s",
+		/* formatting_error_fmt is a compile-time-fixed literal
+		 * shared with mailview.c, not a user-influenced format
+		 * string. */
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
+		sprintf(tmp_20k_buf, formatting_error_fmt,
 			NEWLINE, NEWLINE,
 			decode_error, NEWLINE);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 		gf_puts(tmp_20k_buf, pc);
 		rv++;
 	    }
 	}
 	else{
 	    gf_puts(NEWLINE, pc);
-	    gf_puts("    [ERROR fetching text of message]", pc);
+	    gf_puts(err_fetching_text_msg, pc);
 	    gf_puts(NEWLINE, pc);
 	    gf_puts(NEWLINE, pc);
 	    rv++;
@@ -728,7 +739,7 @@ get_body_part_text(body, msg_no, part_no, pc, prefix, hmm)
      * just use detach, but add an auxiliary filter to insert prefix,
      * and, perhaps, digest richtext
      */
-    if(body->subtype != NULL && strucmp(body->subtype,"richtext") == 0){
+    if(body->subtype != NULL && strucmp(body->subtype,richtext) == 0){
 	gf_rich2plain_opt(1);		/* set up to filter richtext */
 	filters[i++] = gf_rich2plain;
     }
@@ -829,7 +840,7 @@ fetch_contents(stream, msgno, body, part_offset, start_part)
             part->body.contents.msg.env = NULL;
             part->body.contents.msg.body = NULL;
             if(part->body.subtype != NULL &&
-		strucmp(part->body.subtype,"external-body") != 0) {
+		strucmp(part->body.subtype,external_body) != 0) {
 		/*
 		 * the idea here is to fetch everything into storage objects
 		 */
@@ -1106,14 +1117,23 @@ pretty_addr_string(field_name, addr, line_prefix, pc)
 	 * stack (jumped to an address built from the injected bytes).
 	 * Size dynamically per address instead, same technique as
 	 * addrutil.c's addr_string().
+	 *
+	 * No MAILTMPLEN floor here (there used to be one, "if(need <
+	 * MAILTMPLEN) need = MAILTMPLEN;") -- an ordinary short address
+	 * needs a small fraction of that, and forcing every single
+	 * address in every viewed message's To/Cc/From up to a full
+	 * 1024 bytes regardless is exactly what a real "Out of free
+	 * storage (1024 bytes)" crash here on real hardware traced back
+	 * to (confirmed via adb: mail_view_screen -> format_message ->
+	 * format_envelope -> pretty_addr_string -> fs_get). The `+32`
+	 * above already covers this function's own escaping/quoting
+	 * overhead for the smallest addresses.
 	 */
 	need = 2 * ((addr->personal ? strlen(addr->personal) : 0)
 	            + (addr->mailbox ? strlen(addr->mailbox) : 0)
 	            + (addr->host   ? strlen(addr->host)   : 0)
 	            + (addr->adl    ? strlen(addr->adl)    : 0))
 	       + 32;    /* "<>", "@", quotes, group ": ", ";" */
-	if(need < MAILTMPLEN)
-	  need = MAILTMPLEN;
 	buf        = (char *) fs_get(need);
 	buf[0]     = '\0';
 	rfc822_write_address(buf, addr); /* write address into buf */
