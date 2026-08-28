@@ -11061,3 +11061,34 @@ entry below.
 - **Size delta**: negligible (one operator/negation change, no
   size-constant impact). Not separately measured.
 
+### Fixed a one-byte global-buffer-overflow read in `byte_string()`
+
+- **Root cause**: `byte_string()`'s abbreviation-suffix loop
+  (`pine/strings.c`) -- `for(a = abbrevs, i = 1000000000; i >= 1; i /=
+  1000, a++) { if (bytes > i) { ...; break; } }` -- walks `a` across
+  the 4-byte literal `"GMK"` (3 letters + NUL). For any `bytes <= 1`
+  (only reachable via `bytes == 1`, since `bytes == 0` is handled
+  separately above), the `if` never matches even at the last tier
+  (`i == 1`), so the loop falls through to its own `a++`, leaving `a`
+  one byte past the string's NUL terminator; the subsequent `aa[0] =
+  *a;` then reads that out-of-bounds byte. Reached via
+  `format_mime_size()` -> `describe_mime()` on any non-text MIME part
+  with exactly a 1-byte body. Confirmed via a real ASan
+  `global-buffer-overflow` crash before the fix, hand-crafted a
+  minimal repro (`MIME-Version: 1.0\nContent-Type:
+  application/octet-stream\n\nX`, a 1-byte `application/octet-stream`
+  part) and confirmed it reproduces the same crash on the pre-fix code
+  (verified via a temporary `git stash` of just the fix) and runs
+  clean after.
+- **Fixed**: added `if (i == 1) break;` right after the existing `if`
+  inside the loop, so it stops at the last tier instead of running one
+  more (nonexistent) iteration -- same "stop before running one past
+  the end" shape as the trailing-backslash bug class fixed earlier in
+  this file.
+- **Verified**: the minimized repro added as a permanent regression
+  seed, `fuzz/corpus/consumer/regress_byte_string_gmk_overflow`. Full
+  clean rebuild (plain and `ASAN=1`), 0 warnings; 31/31 smoketests;
+  extended `consumer_fuzz` run (7.5M execs) with zero further crashes.
+- **Size delta**: negligible (one added `break` condition). Not
+  separately measured.
+
