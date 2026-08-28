@@ -128,6 +128,15 @@ static int  bfmappings[12][2] = { { F1,  '?'},	/* function key */
 			          { F12, NODATA } };
 
 
+/* Shared across this file's several near-identical wkeyhelp()/emlwrite()
+ * call sites -- this old K&R compiler doesn't dedupe identical string
+ * literals (see TODO-pdp11-done.md's string-cutting entries), so six-plus
+ * separate copies of each would otherwise land in the binary. */
+static char km_gc_keys[]      = "GC0000000000";
+static char km_get_help_cancel[] = "Get Help,Cancel";
+static char cancelled_msg[]   = "Cancelled";
+static char no_help_yet_msg[] = "\007No help yet!";
+
 /*
  * Browser help for pico (pine composer help handed to us by pine)
  */
@@ -522,13 +531,13 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 
 	    while(!i){
 
-		wkeyhelp("GC0000000000", "Get Help,Cancel");
+		wkeyhelp(km_gc_keys, km_get_help_cancel);
 
 		status = mlreply("Directory to go to: ", child, NLINE, QFFILE);
 
 		switch(status){
 		  case HELPCH:
-		    emlwrite("\007No help yet!", NULL);
+		    emlwrite(no_help_yet_msg, NULL);
 /* remove break and sleep after help text is installed */
 		    sleep(3);
 		    break;
@@ -536,7 +545,7 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 		    PaintBrowser(gmp, 0);
 		    break;
 		  case ABORT:
-		    emlwrite("Cancelled", NULL);
+		    emlwrite(cancelled_msg, NULL);
 		    i++;
 		    break;
 		  case FALSE:
@@ -585,11 +594,11 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 
 	    while(!i){
 
-		wkeyhelp("GC0000000000", "Get Help,Cancel");
+		wkeyhelp(km_gc_keys, km_get_help_cancel);
 
 		switch(status=mlreply("Name of new copy: ", child, NLINE, QFFILE)){
 		  case HELPCH:
-		    emlwrite("\007No help yet!", NULL);
+		    emlwrite(no_help_yet_msg, NULL);
 /* remove break and sleep after help text is installed */
 		    sleep(3);
 		    break;
@@ -693,11 +702,11 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 
 	    while(!i){
 
-		wkeyhelp("GC0000000000", "Get Help,Cancel");
+		wkeyhelp(km_gc_keys, km_get_help_cancel);
 
 		switch(status=mlreply("Rename file to: ", child, NLINE, QFFILE)){
 		  case HELPCH:
-		    emlwrite("\007No help yet!", NULL);
+		    emlwrite(no_help_yet_msg, NULL);
 /* remove break and sleep after help text is installed */
 		    sleep(3);
 		    break;
@@ -705,7 +714,7 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 		    PaintBrowser(gmp, 0);
 		    break;
 		  case ABORT:
-		    emlwrite("Cancelled", NULL);
+		    emlwrite(cancelled_msg, NULL);
 		    i++;
 		    break;
 		  case FALSE:
@@ -842,7 +851,7 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 			break;
 		    }
 		    else if(i == ABORT){
-			emlwrite("Cancelled", NULL);
+			emlwrite(cancelled_msg, NULL);
 			break;
 		    }
 		    else if(i == (CTRL|'L')){
@@ -871,7 +880,7 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 				    switch(status=mlreply("Command line : ",
 						       child, NLINE, QNORML)){
 				      case HELPCH:
-					emlwrite("\007No help yet!", NULL);
+					emlwrite(no_help_yet_msg, NULL);
 /* remove break and sleep after help text is installed */
 					sleep(3);
 					break;
@@ -879,7 +888,7 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 					PaintBrowser(gmp, 0);
 					break;
 				      case ABORT:
-					emlwrite("Cancelled", NULL);
+					emlwrite(cancelled_msg, NULL);
 					i++;
 					break;
 				      case FALSE:
@@ -911,7 +920,7 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 				break;
 			      case ABORT:
 				i++;
-				emlwrite("Cancelled", NULL);
+				emlwrite(cancelled_msg, NULL);
 				break;
 			      case (CTRL|'L'):
 				PaintBrowser(gmp, 0);
@@ -928,11 +937,11 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 
 		    while(!i){
 			*child = '\0';
-			wkeyhelp("GC0000000000", "Get Help,Cancel");
+			wkeyhelp(km_gc_keys, km_get_help_cancel);
 			switch(status=mlreply("Program to use on file : ",
 					      child, NLINE, QNORML)){
 			  case HELPCH:
-			    emlwrite("\007No help yet!", NULL);
+			    emlwrite(no_help_yet_msg, NULL);
 /* remove break and sleep after help text is installed */
 			    sleep(3);
 			    break;
@@ -940,7 +949,7 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 			    PaintBrowser(gmp, 0);
 			    break;
 			  case ABORT:
-			    emlwrite("Cancelled", NULL);
+			    emlwrite(cancelled_msg, NULL);
 			    i++;
 			    break;
 			  case FALSE:
@@ -985,11 +994,11 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 
 	    while(!i){
 
-		wkeyhelp("GC0000000000", "Get Help,Cancel");
+		wkeyhelp(km_gc_keys, km_get_help_cancel);
 
 		switch(readpattern("File name to find")){
 		  case HELPCH:
-		    emlwrite("\007No help yet!", NULL);
+		    emlwrite(no_help_yet_msg, NULL);
 /* remove break and sleep after help text is installed */
 		    sleep(3);
 		    break;
@@ -997,7 +1006,7 @@ FileBrowse(char *dir, char *fn, char *sz)	/* dir, name and optional size */
 		    PaintBrowser(gmp, 0);
 		    break;
 		  case ABORT:
-		    emlwrite("Cancelled", NULL);
+		    emlwrite(cancelled_msg, NULL);
 		    i++;
 		    break;
 		  case FALSE:
