@@ -137,6 +137,25 @@ compose_screen(pine_state)
 
 
 
+/* TEMPORARY brk() checkpoint logging -- see the calls in compose_mail()
+ * below. Logs to a file instead of printf()'ing to stdout: stdio's
+ * output buffer isn't guaranteed to be flushed before an abort() (the
+ * exact failure mode this is chasing), and terminal scrollback is
+ * finite anyway, so open/write/close immediately each time instead of
+ * keeping a handle open across the whole function -- each line is
+ * durably on disk before compose_mail() goes on to do anything risky.
+ * See TODO-pdp11-done.md. */
+static void
+brk_checkpoint(char *label)
+{
+    FILE *f = fopen("/tmp/compose_brk.log", "a");
+    if(f){
+	fprintf(f, "%s: brk=%ld\n", label, (long) sbrk(0));
+	fclose(f);
+    }
+}
+
+
 /*----------------------------------------------------------------------
      Format envelope for outgoing message and call editor
 
@@ -164,6 +183,22 @@ compose_mail(given_to)
     gf_io_t    gc, pc;
     fpos_t     body_start;
 
+    /* TEMPORARY brk() checkpoint -- bracket compose_mail() to see
+     * whether one full compose+send cycle leaks heap, or whether the
+     * budget is just genuinely too tight for two cycles in one
+     * session. See TODO-pdp11-done.md. */
+    brk_checkpoint("compose_mail() entry");
+
+    /* TEMPORARY -- proactively GC the mail_stream's per-message
+     * envelope/body cache before composing, the same cleanup already
+     * used in mail_view_screen(), to see whether it reclaims the
+     * otherwise-unexplained heap growth seen opening a folder and
+     * going straight to compose (no message ever viewed). Bracketed
+     * with checkpoints to measure the effect directly regardless of
+     * what actually populated the cache. See TODO-pdp11-done.md. */
+    if(ps_global->mail_stream)
+      mail_gc(ps_global->mail_stream, GC_ENV);
+    brk_checkpoint("compose_mail() after mail_gc");
 
     fcc2 = NULL;
     file_path[0] = '\0';
@@ -327,6 +362,9 @@ compose_mail(given_to)
 
     mail_free_envelope(&outgoing);
     pine_free_body(&body);
+
+    /* TEMPORARY brk() checkpoint -- see the matching one at entry, above. */
+    brk_checkpoint("compose_mail() exit");
 }
 
 
@@ -836,6 +874,8 @@ pine_send(outgoing, body, editor_title, fcc, are_replying)
         fs_give((void **)&ccbuf);
         fs_give((void **)&bccbuf);
 
+        brk_checkpoint("pine_send() after editor");
+
         removing_trailing_white_space(fccbuf);
 
 	/*-------- Stamp it with a current date -------*/
@@ -913,7 +953,9 @@ pine_send(outgoing, body, editor_title, fcc, are_replying)
                continue;
             }
 
+            brk_checkpoint("pine_send() before call_mailer");
             if(call_mailer(fccbuf, outgoing, *body)){
+		brk_checkpoint("pine_send() after call_mailer (sent)");
 		/*
 		 * If message successfully sent, we're replying
 		 * AND we're allowed to write back state, do it.

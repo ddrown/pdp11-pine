@@ -1467,6 +1467,19 @@ do_broach_folder(new_folder, new_context)
 		     (open_inbox) ? ps_global->VAR_INBOX_PATH : expanded_file,
 		     openmode);
 
+    /* TEMPORARY brk() checkpoints -- bracketing do_broach_folder()'s
+     * phases (raw open/scan, sort, first-unseen scan) to localize the
+     * unexplained heap growth seen opening a folder and going
+     * straight to compose. See TODO-pdp11-done.md. */
+    {
+	FILE *f = fopen("/tmp/compose_brk.log", "a");
+	if(f){
+	    fprintf(f, "do_broach_folder() after context_open: brk=%ld\n",
+		    (long) sbrk(0));
+	    fclose(f);
+	}
+    }
+
 
     /* Can get m != NULL if correct passwd for remote, but wrong name */
     if(m == NULL || ((p = strindex(m->mailbox, '<')) != NULL &&
@@ -1586,6 +1599,15 @@ do_broach_folder(new_folder, new_context)
 
     sort_current_folder();
 
+    {
+	FILE *f = fopen("/tmp/compose_brk.log", "a");
+	if(f){
+	    fprintf(f, "do_broach_folder() after sort_current_folder: brk=%ld\n",
+		    (long) sbrk(0));
+	    fclose(f);
+	}
+    }
+
     if(ps_global->max_msgno > 0) {
         MsgNo first_unseen;
 	if(ps_global->start_entry > 0) {
@@ -1610,7 +1632,16 @@ do_broach_folder(new_folder, new_context)
     if(open_inbox && ps_global->inbox_stream == NULL) {
 	ps_global->inbox_stream = ps_global->mail_stream;
     }
-	
+
+    {
+	FILE *f = fopen("/tmp/compose_brk.log", "a");
+	if(f){
+	    fprintf(f, "do_broach_folder() returning: brk=%ld\n",
+		    (long) sbrk(0));
+	    fclose(f);
+	}
+    }
+
     return(1);
 }
 
