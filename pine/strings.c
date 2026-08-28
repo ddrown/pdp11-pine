@@ -790,6 +790,10 @@ byte_string(bytes)
                   tenths = (bytes - (ones * i)) / (i / 10L);
                 break;
             }
+            if (i == 1) break;	/* last tier (no abbreviation) already
+				   tried and didn't match (bytes <= 1) --
+				   stop here, or the loop's a++ runs `a`
+				   one byte past abbrevs' NUL terminator */
         }
     
         aa[0] = *a;  aa[1] = '\0'; 

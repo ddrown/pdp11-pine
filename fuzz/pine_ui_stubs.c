@@ -39,6 +39,36 @@ char *h_oe_searchview[] = { NULL };
 char *charset_attr = "charset";
 char *word_not_found_msg = "\007Word not found";
 char *cancelled_msg = "\007Cancelled";
+char *undefined_here_msg = "\007\"%s\" undefined here (%s for help)";
+char *word_search_prompt = "Word to search for [%s] : ";
+
+/* key-menu command-key strings (data+bss shrink) -- real owner is
+   pine/mailindx.c, not linked here. */
+char km_othercmds[] = "OTHER CMDS";
+char km_mainmenu[] = "Main Menu";
+char km_gotofldr[] = "GotoFldr";
+char km_qmark[] = "?";
+char km_nextpage[] = "NextPage";
+char km_prevpage[] = "PrevPage";
+char km_spc[] = "Spc";
+char km_compose[] = "Compose";
+char km_delete[] = "Delete";
+char km_forward[] = "Forward";
+char km_prevmsg[] = "PrevMsg";
+char km_nextmsg[] = "NextMsg";
+char km_nextnew[] = "NextNew";
+char km_hdrmode[] = "HdrMode";
+char km_save[] = "Save";
+char km_whereis[] = "WhereIs";
+char km_listfldrs[] = "ListFldrs";
+char km_quit[] = "Quit";
+char km_exithelp[] = "Exit Help";
+char km_o[] = "O";
+char km_w[] = "W";
+char km_e[] = "E";
+char km_dash[] = "-";
+char km_help[] = "Help";
+char km_undelete[] = "Undelete";
 
 #define TMP_20K_BUF_BASELINE 20480
 
@@ -106,6 +136,7 @@ void build_path(char *a, size_t b, char *c, char *d) { if (a && b) a[0] = '\0'; 
 int can_access(char *a, int b) { return -1; }
 char *error_description(int a) { return "error"; }
 char *fnexpand(char *a, int b) { return a; }
+int unix_puts(void *a, char *b) { return 0; }
 void pine_free_body(BODY **a) { }
 void pine_send(ENVELOPE *a, BODY **b, char *c, char *d, long e) { }
 int want_to(char *a, int b, int c, HelpType d, int e) { return 0; }

@@ -11481,3 +11481,103 @@ The `mail_gc(GC_ENV)` call itself in `compose_mail()` is harmless and
 could stay as a no-cost hygiene improvement even though it didn't
 address this particular issue -- or be reverted since it doesn't fix
 anything real; left as a judgment call for whoever cleans this up.
+
+### Re-ran the fuzz corpus after merging `three/main`, found two more real bugs and a second harness-init gap
+
+Rebuilding the fuzz harnesses after merging in `three/main`'s batch of
+context.c/cross-overlay fixes required extending `fuzz/pine_ui_stubs.c`
+again (`three/main`'s own string-literal-sharing pass added `km_*`
+key-menu constants, `undefined_here_msg`, `word_search_prompt`, and a
+newly-non-static `unix_puts()`, none owned by files this harness
+links) -- same shape as the earlier `charset_attr`/etc. fix, just a
+longer list this time. Once it linked again, an extended run turned up
+two more real, pre-existing bugs (both present since the original
+Pine 3.89 import, unrelated to anything in this session's merge) plus
+a second fuzz-harness initialization gap, each covered in its own
+entry below.
+
+### Fixed a memory leak in `rfc822_parse_content_header()`'s Content-Description case
+
+- **Root cause**: `rfc822_parse_content_header()`'s `case 'D':`
+  (Content-Description) read `if (!(strcmp (name+1,"ESCRIPTION")) ||
+  body->description) body->description = cpystr (s);` -- the `||`
+  should have been the De Morgan negation of `case 'I'` (Content-ID)'s
+  pattern immediately above it (`if (!(strcmp(...) || body->id))
+  body->id = cpystr(s);`), i.e. `&&`/no-negation-flip. As written, a
+  *second* header whose 8-char-stripped name starts with `D` (matching
+  "ESCRIPTION" or not) unconditionally overwrites an already-set
+  `body->description` without freeing the old allocation first,
+  leaking it. Minimized trigger: `MIME-Version:\nContent-Description:
+  \nContent-D:B` (46 bytes) -- first header sets a 1-byte
+  `body->description`, second (`Content-D:B`, not even a full
+  "Description" match) overwrites it.
+- **Fixed**: restored the same "only take the first, matching header"
+  logic as the `case 'I'` pattern: `if (!(strcmp (name+1,"ESCRIPTION")
+  || body->description)) body->description = cpystr (s);`.
+- **Verified**: `fuzz/corpus/rfc822/regress_overwritten_personal_leak`
+  was already covering this bug's general shape from an earlier
+  session, but for a different field (`ADDRESS.personal`) -- this is
+  a genuinely different trigger, on `BODY.description`, so no new
+  regression seed was needed beyond confirming the minimized 46-byte
+  trigger runs clean under `ASAN_OPTIONS=detect_leaks=1` post-fix.
+  Full clean rebuild (plain and `ASAN=1`), 0 warnings; 31/31
+  smoketests; extended `rfc822_fuzz` run (18.5M execs) with zero
+  further leaks.
+- **Size delta**: negligible (one operator/negation change, no
+  size-constant impact). Not separately measured.
+
+### Fixed a one-byte global-buffer-overflow read in `byte_string()`
+
+- **Root cause**: `byte_string()`'s abbreviation-suffix loop
+  (`pine/strings.c`) -- `for(a = abbrevs, i = 1000000000; i >= 1; i /=
+  1000, a++) { if (bytes > i) { ...; break; } }` -- walks `a` across
+  the 4-byte literal `"GMK"` (3 letters + NUL). For any `bytes <= 1`
+  (only reachable via `bytes == 1`, since `bytes == 0` is handled
+  separately above), the `if` never matches even at the last tier
+  (`i == 1`), so the loop falls through to its own `a++`, leaving `a`
+  one byte past the string's NUL terminator; the subsequent `aa[0] =
+  *a;` then reads that out-of-bounds byte. Reached via
+  `format_mime_size()` -> `describe_mime()` on any non-text MIME part
+  with exactly a 1-byte body. Confirmed via a real ASan
+  `global-buffer-overflow` crash before the fix, hand-crafted a
+  minimal repro (`MIME-Version: 1.0\nContent-Type:
+  application/octet-stream\n\nX`, a 1-byte `application/octet-stream`
+  part) and confirmed it reproduces the same crash on the pre-fix code
+  (verified via a temporary `git stash` of just the fix) and runs
+  clean after.
+- **Fixed**: added `if (i == 1) break;` right after the existing `if`
+  inside the loop, so it stops at the last tier instead of running one
+  more (nonexistent) iteration -- same "stop before running one past
+  the end" shape as the trailing-backslash bug class fixed earlier in
+  this file.
+- **Verified**: the minimized repro added as a permanent regression
+  seed, `fuzz/corpus/consumer/regress_byte_string_gmk_overflow`. Full
+  clean rebuild (plain and `ASAN=1`), 0 warnings; 31/31 smoketests;
+  extended `consumer_fuzz` run (7.5M execs) with zero further crashes.
+- **Size delta**: negligible (one added `break` condition). Not
+  separately measured.
+
+### Fixed a fuzz-harness init gap: `tmp_20k_buf` never allocated before `display_parameters()` runs
+
+- **Root cause**: the same investigation above also turned up a
+  NULL-pointer write crash in `display_parameters()`
+  (`tmp_20k_buf[0] = '\0'` when `parameter_list == NULL`) on the same
+  1-byte-`application/octet-stream` input. Real `pine.c` startup
+  unconditionally calls `grow_tmp_20k_buf(TMP_20K_BUF_BASELINE)` once,
+  before any UI-rendering code can run (`pine.c:181`, well before
+  `pine_state` itself is even allocated) -- guaranteeing `tmp_20k_buf`
+  is always non-NULL by the time `display_parameters()` touches it in
+  real operation. `fuzz/consumer_fuzz.c`'s `LLVMFuzzerInitialize()`
+  never did the equivalent, so `tmp_20k_buf` stayed NULL until some
+  other code path happened to call `grow_tmp_20k_buf()` with a
+  positive `need` first -- which never happens for a body with no
+  Content-Type parameters. Not a real pine bug (harness initialization
+  gap only).
+- **Fixed**: added the matching `grow_tmp_20k_buf()` call to
+  `LLVMFuzzerInitialize()`.
+- **Verified**: the minimized repro added as a permanent regression
+  seed, `fuzz/corpus/consumer/regress_display_parameters_null_tmpbuf`.
+  Full clean rebuild (plain and `ASAN=1`), 0 warnings; 31/31
+  smoketests; extended `consumer_fuzz` run (7.5M execs) with zero
+  further crashes.
+- **Size delta**: none (fuzz harness only, not shipped code).
