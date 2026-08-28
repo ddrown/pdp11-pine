@@ -1913,6 +1913,10 @@ pine_rfc822_output_body(body, f, s)
     char *cookie = NIL, *t, *encode_error;
     char *tmp;
     gf_io_t            gc, pc;
+    char gf_out_buf_local[GF_OUT_BUF_LEN + 2];  /* owns the storage
+			gf_set_output()/gf_out_putc() write into -- real
+			stack space instead of a permanent bss buffer,
+			see filter.c's gf_out_buf comment */
 
     if(body->type == TYPEMULTIPART) {   /* multipart gets special handling */
 	part = body->contents.part;	/* first body part */
@@ -1976,7 +1980,7 @@ pine_rfc822_output_body(body, f, s)
 	}
     }
 
-    gf_set_output(s, fcc_so);	/* set up for writing chars...  */
+    gf_set_output(s, fcc_so, gf_out_buf_local);	/* set up for writing chars...  */
     pc       = gf_output_putc_fn();	/* using our output function	*/
     gf_filter_init();
 

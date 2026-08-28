@@ -704,7 +704,10 @@ void	 gf_set_so_writec(gf_io_t *, STORE_S *);
 void	 gf_set_readc(gf_io_t *, void *, unsigned long, SourceType);
 int      gf_puts(char *, gf_io_t);
 void	 gf_set_terminal(gf_io_t);
-void	 gf_set_output(TCPSTREAM *, STORE_S *);
+/* size of the batching buffer gf_set_output()'s caller must supply --
+ * see the comment above filter.c's gf_out_buf. */
+#define  GF_OUT_BUF_LEN 1024
+void	 gf_set_output(TCPSTREAM *, STORE_S *, char *);
 gf_io_t	 gf_output_putc_fn(void);
 void	 gf_flush_net(void);
 int	 unix_puts(void *, char *);	/* send.c owns this copy */

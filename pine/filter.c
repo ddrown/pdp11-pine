@@ -823,27 +823,44 @@ static STORE_S   *gf_out_fcc_so;
 static unsigned   gf_out_c_in_buf = 0;
 
 /*
- * gf_out_buf is a fixed, dedicated buffer -- unlike tmp_20k_buf, its
- * job is purely to batch bytes of the (already-formatted) outgoing
- * message body to cut down on write() calls, so its size is a
+ * gf_out_buf's job is purely to batch bytes of the (already-formatted)
+ * outgoing message body to cut down on write() calls, so its size is a
  * self-contained performance tradeoff, not a function of message
- * content, and it never needs to grow.
+ * content, and it never needs to grow -- but its *lifetime* is scoped
+ * to a single pine_rfc822_output_body() call (gf_set_output() and
+ * gf_flush_net() are each called exactly once per call, from there),
+ * not the whole program. It used to be a permanent static/BSS array
+ * regardless, at a fixed 1026-byte cost for the entire life of the
+ * process. Now the caller (send.c's pine_rfc822_output_body(), the
+ * one place that calls gf_set_output()) owns the storage as an
+ * ordinary local array and just hands us a pointer -- real stack
+ * space, reclaimed automatically on every return path (including the
+ * early returns between gf_set_output() and gf_flush_net()) with no
+ * explicit free needed, and it doesn't compete with the data+bss+heap
+ * budget the way a static array or an fs_get()'d one would. See
+ * TODO-pdp11-done.md's "send/read/compose crash chain" entry for why
+ * that budget is worth protecting on this target. GF_OUT_BUF_LEN
+ * (pine.h) is the shared size both this file and send.c's local array
+ * must agree on.
  */
-#define GF_OUT_BUF_LEN 1024
-static char       gf_out_buf[GF_OUT_BUF_LEN + 2];
+static char *gf_out_buf;
 
 /*
  * gf_set_output - register the real destination (stream, plus the
  *                 optional Fcc storage object) before calling gf_pipe()
  *                 with gf_output_putc_fn()'s function as the terminal.
  *                 Replaces send.c's old direct l_f/l_stream assignment.
+ *                 buf must be at least GF_OUT_BUF_LEN+2 bytes, owned
+ *                 and kept alive by the caller (see the comment above
+ *                 gf_out_buf).
  */
 void
-gf_set_output(TCPSTREAM *s, STORE_S *fcc_so)
+gf_set_output(TCPSTREAM *s, STORE_S *fcc_so, char *buf)
 {
     gf_out_stream = s;
     gf_out_fcc_so = fcc_so;
     gf_out_c_in_buf = 0;
+    gf_out_buf = buf;
 }
 
 /*
