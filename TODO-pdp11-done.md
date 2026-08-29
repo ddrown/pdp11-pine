@@ -11847,3 +11847,102 @@ reasons, but this time from a different, structural cause.
   `text`/`data`/`bss` unchanged (275777/9264/53936 vs. before the
   split). This is purely an overlay-linking fix.
 
+### Always close the INBOX stream on folder switch
+
+Real-hardware crash, found while retesting the bezerk cache rewrite
+above with actual use (sending several messages, then trying to open
+"sent-mail"): `Bug in Pine detected: "Out of free storage (1025
+bytes, brk=56320 sp=63150 gap=6830)"`, `adb`'s `$c` showing the
+failure inside `bezerk_open()`'s very first allocation (`fs_get`ing
+`LOCAL->buf`, `MAILTMPLEN+1` = 1025 bytes -- matches `02001` octal in
+the error) while opening the *new* folder from `context_open()` via
+`do_broach_folder()`.
+
+- **Root cause**: `do_broach_folder()` (`pine/mailcmd.c`) has always
+  had a special case -- stock UW pine, not something this fork
+  added -- where leaving INBOX for a different folder does *not*
+  close the INBOX `MAILSTREAM`; it's kept resident
+  (`ps_global->inbox_stream`) purely so switching back is instant
+  instead of a re-parse. On a 64KB PDP-11 that means two full mailbox
+  streams can be alive at once. The crash was exactly that: INBOX (a
+  handful of messages, all viewed) stayed resident while opening a
+  second stream for "sent-mail" needed its own baseline allocations,
+  and came up exactly one byte short (1024 bytes of headroom to the
+  hard ceiling, 1025 needed). The bezerk cache rewrite genuinely
+  helped here -- the *old* code would have failed this same scenario
+  far more easily, since INBOX's stream would still be holding every
+  message's full raw text rather than a small fixed record -- but
+  didn't eliminate the deeper architectural issue: this target likely
+  can't reliably afford two mailbox streams alive simultaneously at
+  all.
+- **Fixed**: `do_broach_folder()`'s "close the old one" block now
+  always calls `expunge_and_close()`, INBOX included, instead of
+  special-casing it to stay open. `ps_global->inbox_stream` is
+  explicitly set `NULL` at the same point (not left dangling) --
+  `newmail.c`, `signals.c`, and `ttyin.c` all dereference it whenever
+  it's non-NULL, so leaving a stale pointer there after the stream is
+  freed would be a use-after-free waiting to happen the next time any
+  of them ran.
+- **A second bug this exposed, fixed in the same pass**: further down
+  the same function, the error-recovery path taken when the *new*
+  folder fails to open (`m == NULL`, falling back to whatever was
+  open before) had its own INBOX special case that assumed
+  `inbox_stream` was still valid and just pointed `mail_stream` back
+  at it directly. Once INBOX is always actually closed above, that
+  assumption breaks -- `inbox_stream` is unconditionally NULL by the
+  time this runs, so the old code would silently set `mail_stream` to
+  NULL on this fallback path instead of actually recovering anything.
+  Merged it with the already-correct non-INBOX branch, which properly
+  re-opens via `mail_open (NULL, old_path, openmode)` regardless of
+  whether the folder being restored happens to be INBOX, and sets
+  `ps_global->inbox_stream` back appropriately when it is.
+- **Known follow-on, not done here**: the original "easy case" fast
+  path a few lines above the fix (`if (open_inbox && ps_global->
+  inbox_stream != NULL) {...}`, restoring straight from the cached
+  stream) can now never execute -- `inbox_stream` is NULL by
+  construction whenever that check is reached, since it only becomes
+  non-NULL again once INBOX is the actively open folder. Left in
+  place rather than deleted (out of scope for what was asked), but
+  it's dead code now and a legitimate candidate for removal in a
+  future size pass -- unlike most dead code on this project, this one
+  actually costs real `text` bytes since it's genuine reachable-looking
+  C, not something the compiler can prove unreachable and elide itself.
+- **Trade-offs accepted, not defects**: switching back to INBOX now
+  costs a full re-parse every time instead of being instant. Also,
+  `newmail.c`'s periodic "new mail arrived" check for INBOX is gated
+  on `ps_global->inbox_stream` being non-NULL, so that background
+  notification is now silent while browsing any other folder (it
+  still works normally whenever INBOX is the folder actually open).
+  Both are direct, expected consequences of no longer keeping a
+  second stream resident, not new bugs -- reliably not crashing on a
+  64KB machine is worth more than either.
+- **A debugging detour worth recording**: an early attempt to write a
+  permanent smoketest regression test for this (switch away from
+  INBOX, switch back, verify content survives) produced a false
+  alarm -- "reopening INBOX" appeared to come back with 0 messages.
+  Root cause turned out to be entirely in the *test*, not the fix: the
+  smoketest harness's `Session(mbox=...)` opens its scratch mailbox
+  via `-f PATH`, which does not make `ps_global->cur_folder` equal to
+  the literal string `"INBOX"` -- so the Folder List screen's actual
+  "INBOX" entry refers to the real system default inbox path the whole
+  time, a completely different (and, in the sandboxed test
+  environment, genuinely empty) file, unrelated to whatever `-f`
+  pointed at. Confirmed directly with temporary `bezerk_parse()` entry/
+  exit logging: every real open in the trace correctly reported the
+  right message count for whichever file it was actually asked to
+  open; there was never a case of the same file being reopened and
+  returning the wrong count. No permanent smoketest was added for this
+  specific scenario as a result -- doing so correctly would need a
+  non-`-f` (real default-inbox) `Session`, which the harness doesn't
+  currently have an easy way to pre-seed with content.
+- **Verified**: `./build lnx`, 0 warnings; `python3
+  test/run_smoketests.py`, 31/31 (unaffected -- none of the existing
+  cases exercise a folder-list round trip back to INBOX). Real
+  hardware: `c-client` rebuild + fresh `pine-ovl` relink succeeded
+  cleanly (`text 37952 data 28482 bss 11682`, 8 overlays all well
+  under the ceiling) -- the crash scenario itself (send several
+  messages, open "sent-mail") is the user's own next real-hardware
+  retest, not yet independently reconfirmed as of this write-up.
+- **Size delta**: negligible (a handful of lines changed, no new
+  fields or buffers) -- not the point of this fix.
+

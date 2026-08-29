@@ -1448,17 +1448,28 @@ do_broach_folder(new_folder, new_context)
     if(ps_global->mail_stream != NULL) {
         old_folder   = cpystr(ps_global->cur_folder);
         old_path     = cpystr(ps_global->mail_stream->mailbox);
-	if(strcmp(ps_global->cur_folder, ps_global->inbox_name) == 0) {
-	    /*-- don't close the inbox stream, save a bit of state --*/
-	    ps_global->inbox_max_msgno  = ps_global->max_msgno;
-	    ps_global->inbox_raw_msgno  = 
-                             ps_global->sort[ps_global->current_sorted_msgno];
-	    ps_global->inbox_sort_order = ps_global->current_sort_order;
-	} else {
-            expunge_and_close(ps_global->mail_stream, ps_global->cur_folder);
-	}
+	/*
+	 * Stock pine keeps the INBOX stream open here (instead of
+	 * closing it like any other folder) so switching back to INBOX
+	 * later is instant. This PDP-11 target can't afford two mailbox
+	 * streams alive at once -- see TODO-pdp11-done.md's "Always
+	 * close the INBOX stream on folder switch" entry: a real crash
+	 * opening a second folder while INBOX stayed resident came
+	 * within a single byte of the hard memory ceiling. Always close
+	 * it, same as any other folder, at the cost of a full re-parse
+	 * next time the user switches back to INBOX (and of the
+	 * background new-mail check other files gate on
+	 * ps_global->inbox_stream being non-NULL, which now only holds
+	 * while INBOX is the folder actually open). inbox_stream must be
+	 * cleared here, not left dangling, since several other files
+	 * (newmail.c, signals.c, ttyin.c) dereference it whenever it's
+	 * non-NULL.
+	 */
+	if(strcmp(ps_global->cur_folder, ps_global->inbox_name) == 0)
+	  ps_global->inbox_stream = NULL;
+	expunge_and_close(ps_global->mail_stream, ps_global->cur_folder);
     }
-    
+
     q_status_message1(0, 1, 1, "Opening \"%s\"...", pretty_fn(new_folder));
     display_message('x'); /* So they see the message */
 
@@ -1488,31 +1499,31 @@ do_broach_folder(new_folder, new_context)
         /* fall back to currently open mailbox */
         rv = 0;
         if(old_folder != NULL) {
-            if(strcmp(old_folder, ps_global->inbox_name) == 0){
-                ps_global->mail_stream          = ps_global->inbox_stream;
-                ps_global->max_msgno            = ps_global->inbox_max_msgno;
-		ps_global->current_sort_order   = ps_global->inbox_sort_order;
-		ps_global->current_sorted_msgno = sorted_msgno(ps_global,
-						  ps_global->inbox_raw_msgno);
-
-                strcpy(ps_global->cur_folder, ps_global->inbox_name);
+	    /*
+	     * The INBOX stream is always fully closed above now (see the
+	     * "close the old one" block's comment), so there's no more
+	     * "just point back at the still-open inbox_stream" fast case
+	     * here -- INBOX has to be re-opened via mail_open() same as
+	     * any other folder.
+	     */
+            ps_global->mail_stream = mail_open(NULL, old_path, openmode);
+            /* mm_log will take care of error message here */
+            if(ps_global->mail_stream == NULL) {
+                rv = -1;
             } else {
-                ps_global->mail_stream = mail_open(NULL, old_path, openmode);
-                /* mm_log will take care of error message here */
-                if(ps_global->mail_stream == NULL) {
-                    rv = -1;
-                } else {
-                    ps_global->max_msgno = ps_global->mail_stream->nmsgs;
-                    ps_global->expunge_count       = 0;
-                    ps_global->new_mail_count      = 0;
-                    ps_global->noticed_dead_stream = 0;
-                    ps_global->dead_stream         = 0;
-		    ps_global->last_msgno_flagged  = 0L;
+                ps_global->max_msgno = ps_global->mail_stream->nmsgs;
+                ps_global->expunge_count       = 0;
+                ps_global->new_mail_count      = 0;
+                ps_global->noticed_dead_stream = 0;
+                ps_global->dead_stream         = 0;
+		ps_global->last_msgno_flagged  = 0L;
 
-                    reset_check_point();
-                    q_status_message1(0, 1, 3, "Folder \"%s\" reopened",
-                                      old_folder);
-                }
+                reset_check_point();
+                q_status_message1(0, 1, 3, "Folder \"%s\" reopened",
+                                  old_folder);
+                strcpy(ps_global->cur_folder, old_folder);
+                if(strcmp(old_folder, ps_global->inbox_name) == 0)
+                  ps_global->inbox_stream = ps_global->mail_stream;
             }
 
 	    if(rv == 0)
