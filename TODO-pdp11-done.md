@@ -11581,3 +11581,269 @@ entry below.
   smoketests; extended `consumer_fuzz` run (7.5M execs) with zero
   further crashes.
 - **Size delta**: none (fuzz harness only, not shipped code).
+
+### Rewrote bezerk.c's message cache to stop permanently storing raw message text
+
+The single highest-leverage item flagged by the "Root-caused the 'Out
+of free storage' crash chain" entry above: `bezerk_open()`/
+`bezerk_parse()` (`imap/ANSI/c-client/bezerk.c`) permanently cached
+every message's full raw text in a `FILECACHE` node kept forever in
+`LOCAL->msgs[]`, so memory use scaled with total mailbox *byte size*,
+not message count. This was flagged as needing a genuine, deliberately
+scoped rewrite rather than a small patch -- this is that rewrite.
+
+- **Design**: replaced the permanent in-RAM raw-text blob
+  (`FILECACHE.internal[]` plus `header`/`body` pointers into it) with a
+  small fixed-size record (`hoff`/`fromlen`/`headersize`/`bodysize`/
+  `status[]`) describing an offset span in a new **private, per-stream
+  scratch file**, `LOCAL->cf` -- a raw fd (`int`, not a stdio `FILE *`),
+  opened via `open(path,O_RDWR|O_CREAT|O_EXCL,0600)` and immediately
+  `unlink()`ed in `bezerk_open()`, sliced with `lseek()`/`read()`/
+  `write()` in `bezerk_readcache()` and the parse-finalize/write-message
+  code. First tried plain ANSI `tmpfile()` (matching `pine/os.c`'s
+  `create_tmpfile()` elsewhere in this codebase) but real-hardware
+  compilation failed it outright: `tmpfile()` is an ANSI C addition
+  this target's pre-ANSI stdio.h doesn't declare, so the K&R-defaulted
+  `int` return assigned to `LOCAL->cf` produced "illegal combination of
+  pointer and integer, op =", and the follow-on `fseek()`/`SEEK_SET`
+  calls failed the same way `L_SET` already had to route around for
+  `lseek()` elsewhere in this file ("`SEEK_SET` undefined"). Rather
+  than guess at which other stdio entry points this target's headers
+  do or don't declare, dropped stdio entirely for the cache file and
+  used only `open()`/`lseek()`/`read()`/`write()`/`close()`/`unlink()`
+  -- primitives this exact file already relies on everywhere else, so
+  no further target-specific surprises are expected here. The
+  open()+unlink() idiom needs no further cleanup bookkeeping either:
+  the fd stays valid and readable/writable after the name is removed
+  from the directory, so nothing is left behind even if the process
+  dies without a clean `bezerk_abort()` -- and, like `tmpfile()`, works
+  identically whether the stream ends up read-only or read-write,
+  unlike an alternative considered and rejected -- normalizing the real
+  mailbox file in place -- which can't safely run on a shared-lock or
+  readonly open. Disk space was never the scarce resource on this
+  project's PDP-11 target; RAM is, so trading a bit of transient
+  CPU/I/O and per-stream disk scratch space for a flat, message-count-
+  scaled RAM footprint is the right trade.
+- **What stayed untouched**: `bezerk_parse()`'s header-line scanning,
+  Status:/X-Status: stripping via `memmove`, flag/date extraction into
+  `elt`, and `VALID()` re-validation are byte-for-byte unchanged --
+  they still run once per message during parse, since
+  `elt->seen/deleted/flagged/answered`, `elt->internaldate`, and
+  `elt->rfc822_size` all need to be correct immediately for the whole
+  index, before any message is individually fetched. Only the very end
+  of the per-message finalize loop changed: instead of keeping the
+  transient raw-text block (renamed `RAWCACHE` -- literally the old
+  `FILECACHE` layout, now scoped to parsing only) forever, its
+  finished, compacted header and body are written to `LOCAL->cf` and
+  the block is freed immediately.
+- **A real bug caught during verification, not before**: the initial
+  version assumed a message's `[From line][header][body]` was one
+  contiguous span it could copy to the cache file in a single `fwrite`.
+  That's true for `[From line][header]` (`m->header` is always exactly
+  `m->internal + fromlen`), but **not** always true for
+  `[header][body]`: when the header's last line(s) before the blank
+  line were Status:/X-Status: lines being deleted, the `'\n'`/`'\0'`
+  cases just patch a synthetic newline in and shrink `headersize`
+  *without* physically `memmove()`-ing the now-logically-deleted bytes
+  out (unlike the `default` case, which does `memmove()` when a normal
+  line follows a deletion run) -- so there can be a few bytes of stale
+  gap between the logical header end and the real `m->body` pointer.
+  Harmless for the original permanent-RAM-pointer design (`m->body`
+  was always an independently correct pointer regardless of any gap
+  before it), but broke the new cache file's assumed gap-free
+  `[header][body]` layout: reading `bodysize` bytes starting right
+  after the (too-early) assumed header end pulled in leftover
+  Status:/X-Status: text instead of real body content, corrupting the
+  view of any message that had gone through a prior compaction (i.e.
+  any mailbox previously saved by this same code -- the *common*
+  case, not an edge case, for a real returning-user INBOX). Caught via
+  the close-then-reopen verification below, not by inspection. Fixed
+  by writing header and body as two separate `fwrite`s that land
+  adjacent in the cache file, instead of assuming source contiguity.
+- **Files touched**: `imap/ANSI/c-client/bezerk.h` (`FILECACHE`
+  struct, `BEZERKLOCAL` gains `cf`/`cfsize`, new `bezerk_readcache()`
+  prototype, `bezerk_write_message()`'s signature changed) and
+  `imap/ANSI/c-client/bezerk.c` (`bezerk_open()`, `bezerk_abort()`,
+  `bezerk_parse()`'s finalize-loop tail, `bezerk_fetchstructure()`,
+  `bezerk_fetchheader()`, `bezerk_fetchtext()`, `bezerk_fetchbody()`,
+  `bezerk_snarf()`, `bezerk_extend()`, new `bezerk_readcache()`,
+  `bezerk_write_message()`, `bezerk_save()`, `bezerk_copy_messages()`).
+  Confirmed via a full read of both files that `FILECACHE`/
+  `LOCAL->msgs[]` are never referenced outside this one file.
+- **Deliberate simplification**: `bezerk_write_message()`'s two callers
+  (`bezerk_save()`, `bezerk_copy_messages()`) used to batch up to 16
+  messages' iovecs into one `writev()`, pointing directly at permanent
+  RAM. That doesn't work once the source bytes have to be read from
+  `LOCAL->cf` into a scratch buffer first -- a shared buffer would be
+  overwritten by the next message before a batched `writev()` flushes.
+  Dropped the batching in favor of one `writev()` per message (still
+  using one growable scratch buffer reused/grown across the whole
+  loop, not a per-message allocation) -- a few more `write(2)` calls on
+  a cold path (close/check/expunge/copy), trading syscalls for RAM,
+  consistent with this project's usual trade on this target.
+  `mail_copy()`/`bezerk_copy_messages()` turned out to be unreachable
+  from pine's own UI in this fork -- "Save" goes through
+  `mail_append()`/`bezerk_append()` (fetch text, then append with a
+  freshly synthesized "From" line) instead -- so this path is currently
+  dead code, kept correct/consistent but not exercised interactively.
+- **Verified**:
+  - `./build lnx`: 0 warnings.
+  - `python3 test/run_smoketests.py`: 31/31, both before and after the
+    contiguous-span bug fix above (the existing suite didn't happen to
+    exercise a close-then-reopen of a previously-saved mailbox, so it
+    didn't catch that bug on its own).
+  - Manual functional pass (`test/smoketest.py`'s `Session`, driven
+    ad hoc): view a message (Seen flag -> status round-trip), delete +
+    expunge (confirmed exactly the right message removed, others
+    intact), Save to another folder (confirmed via
+    `bezerk_fetchheader()`/`bezerk_snarf()`'s new cache-file reads),
+    and -- critically -- close then reopen the rewritten mailbox in a
+    fresh process and view every remaining message. This last step is
+    what caught the contiguous-span bug above; after the fix, header
+    and body round-trip cleanly with no leaked Status:/X-Status: text
+    and no truncation.
+  - Direct A/B memory measurement on the dev build: `sbrk()` alone
+    turned out to be unreliable for this comparison here (glibc's
+    allocator can satisfy new small/medium allocations from an
+    already-`brk()`-grown arena -- unavoidably grown large during
+    parsing anyway, since the *transient* delta-reading buffer already
+    has to hold a whole mailbox's unparsed bytes at once, unchanged by
+    this fix -- without any further `sbrk()` call, masking the exact
+    effect being measured). Used `mallinfo2().uordblks` (actual live
+    malloc'd bytes) instead, comparing the old code (via a temporary
+    `git stash` of this fix) against the new code, both against the
+    identical synthetic 12-message/241910-byte mailbox, at the same
+    `do_broach_folder() after context_open` checkpoint used throughout
+    the original investigation: **old code, 253056 bytes of growth
+    over an empty mailbox; new code, 15168 bytes** -- flat, and clearly
+    unrelated to the 241910-byte message content (matches a small
+    fixed per-message record plus this project's existing, unrelated
+    per-message `MESSAGECACHE`/mailcache overhead). All temporary
+    `mallinfo2()`/extra-checkpoint instrumentation was removed after
+    the comparison; nothing beyond the actual fix was committed.
+- **Not done here, left as a known limitation**: `bezerk_fetchstructure()`
+  and `bezerk_fetchbody()` still need one message's full body
+  transiently in RAM to parse/decode it -- the same requirement
+  `rfc822_parse_msg()`/`rfc822_contents()` already had before this
+  fix. That's unchanged behavior for whichever single message is
+  actively being viewed, not a regression; a real file-backed
+  `STRINGDRIVER` (streaming body bytes on demand instead of
+  materializing the whole body first) would bound *transient* memory
+  too, not just permanent, and is worth a future dedicated pass.
+  `bezerk_expunge()` also still just frees a message's small
+  `FILECACHE` record and shifts the array down, leaving its bytes in
+  `LOCAL->cf` as unreclaimed (but bounded, and disk- not RAM-resident)
+  dead space until the whole stream closes.
+- **Size delta**: not the point of this change (no reduction in
+  `data`/`bss`/`text` claimed or expected -- `bin/pine`'s dev-build
+  `text`/`data`/`bss` are essentially unchanged, 275841/9264/53928).
+  The fix is entirely about *permanent per-message heap retention*
+  scaling with message count instead of mailbox byte size, which the
+  A/B `mallinfo2()` comparison above demonstrates directly.
+- **Real-hardware compile fallout, fixed separately**: `tmpfile()` (an
+  ANSI C addition this target's pre-ANSI stdio.h doesn't declare) and
+  `fseek()`'s `SEEK_SET` (same class of gap `L_SET` already routes
+  around for `lseek()` elsewhere in this file) both failed to compile
+  on the real target even though they compiled and ran fine on the
+  `lnx` dev build. Replaced `LOCAL->cf` with a raw fd (not a stdio
+  `FILE *`) and rewrote the cache-file I/O as `open()`+`unlink()` (an
+  anonymous-temp-file idiom needing no ANSI additions) plus
+  `lseek()`/`read()`/`write()` throughout -- primitives this file
+  already relied on everywhere else, so no further target-specific
+  surprises were expected (none turned up).
+- **Confirmed functionally on real hardware**, after the compile fix
+  above and the object-file split below got it linking again: reading
+  and sending mail both worked end to end. But the `brk()` checkpoint
+  log showed the whole session pinned at exactly `brk=57344` (the
+  hard ceiling documented in this file's "real memory budget" entry)
+  from `compose_mail() entry` through `pine_send()`/send completion and
+  into the next folder's `build_header_line()` calls -- meaning
+  folder-open alone already used 100% of the budget above `data+bss`
+  for this test's mailbox, zero headroom left over. The scaling bug
+  (memory growing with mailbox *byte size*) is confirmed gone; the
+  *fixed* per-message floor (one `FILECACHE` record, one
+  `MESSAGECACHE` elt, plus `LONGCACHE` envelope/body for viewed
+  messages) is apparently now the binding constraint even for an
+  ordinary mailbox, given real hardware's ~17KB of heap headroom above
+  measured `data+bss`. See the "real memory budget" entry's own
+  Update for the follow-up question this raises.
+
+### Split bezerk.c into two object files (bezerk.c, bezerk2.c)
+
+Fallout from the cache rewrite above, on real hardware only: once
+`bezerk.o` grew past a certain size, `pine-ovl`'s link failed with `ld:
+too big for type 431` -- the same error this project has hit before
+(see `pine/makefile.bsd`'s own historical comments) for unrelated
+reasons, but this time from a different, structural cause.
+
+- **Root cause, precisely** (read directly out of `ld.c`, which ended
+  up in this repo's root as a debugging aid): for a separate-I&D
+  (`-i`) link, `ld` requires `rnd8k(resident text) + rnd8k(largest
+  overlay) <= 65536`. Real numbers: resident text 37952 (rounds to
+  40960) + largest overlay 32384 (rounds to 32768) = 73728, over by
+  exactly one 8K page. Two things ruled out an easy flag-tuning fix:
+  (1) `-O1` (mkovmake's "only explicitly-listed modules go in base"
+  mode) produced the *identical* partition to `-O2` (which lets
+  mkovmake also auto-select base modules) -- meaning
+  `addrutil.o`/`args.o`/`help.o`/`log.o`/`mailbox.o`/`dummy.o`/`misc.o`
+  are resident by structural necessity (this overlay scheme has no
+  overlay-to-overlay call mechanism, only base<->overlay, so anything
+  called from code split across multiple different overlay groups must
+  itself be resident), not by an optimizer choice `-O1` could skip. (2)
+  Forcing a smaller max overlay size directly (`-s 24k`, chosen because
+  65536-40960=24576 is exactly the headroom the overlay side has) made
+  mkovmake successfully repack *everything else* into 7 overlays under
+  that cap, but give up entirely on `bezerk.o` itself: *"After 7
+  overlays, the following module was left out... bezerk.o"* --
+  `bezerk.o` alone (25132 bytes on real hardware) was already bigger
+  than the 24576-byte ceiling, and a single module can never be split
+  across overlays no matter how many are allowed or how they're
+  packed.
+- **Fixed**: split `bezerk.c` into two files along an existing, clean
+  seam -- every cross-reference between the two halves was already a
+  function prototyped in `bezerk.h` (shared state like
+  `LOCAL->msgs[]`/`FILECACHE` was never file-scoped to begin with), so
+  this was a pure move, zero interface changes. `bezerk.c` keeps
+  mailbox lifecycle (`bezerk_open`/`close`/`abort`), parsing
+  (`bezerk_parse`, by far the largest single function at ~5.8KB, plus
+  `bezerk_eom`), and writing back (`bezerk_extend`/`save`/
+  `copy_messages`/`write_message`/`readcache`/`update_status`).
+  `bezerk2.c` gets the per-message operations: fetch (`fetchstructure`/
+  `snarf`/`fetchheader`/`fetchtext`/`fetchbody`), flags (`setflag`/
+  `clearflag`/`getflags`), and the mailbox-mutating operations
+  (`ping`/`check`/`expunge`/`copy`/`move`/`append`/`append_putc`/`gc`).
+  Rebuilding both object files and relinking with a completely fresh
+  `mkovmake` run (plain `-O2 8k`, no `-s` override -- the split alone
+  was enough) produced 8 overlays, none over 24512 bytes, `ld`
+  succeeding cleanly for the first time since the cache rewrite:
+  ```
+  text    data    bss     dec     hex
+  37952   28482   11682   78116   13124   total text: 214464
+          overlays: 23872,24512,23744,22656,24448,19072,18816,19392
+  ```
+  `rnd8k(37952) + rnd8k(24512)` = 40960 + 24576 = 65536 exactly -- right
+  at the ceiling, not over it.
+- **Why this is the right fix, not a workaround**: chasing an exact
+  byte-count cut in `bezerk.c` (or `-s`-tuning around its current size)
+  would only have bought until the next legitimate change grew it
+  again, and every future edit to either file would need to keep
+  watching the same cliff. Splitting removes the "one giant object
+  file" constraint entirely -- both halves now sit at roughly half
+  their combined size, with large headroom against any single-overlay
+  ceiling this project is likely to hit again.
+- **Files touched**: new `imap/ANSI/c-client/bezerk2.c` (functions
+  moved verbatim, no logic changes); `imap/ANSI/c-client/bezerk.c`
+  (functions removed, otherwise untouched); `imap/ANSI/c-client/
+  makefile.bsd` and `makefile.lnx` (add `bezerk2.o` to `c-client.a`'s
+  member list and dependency rules); `pine/makefile.bsd`
+  (`CCLIENTOFILES` gains `../c-client/bezerk2.o`).
+- **Verified**: `./build lnx`, 0 warnings; `python3
+  test/run_smoketests.py`, 31/31; real-hardware rebuild of both
+  `c-client.a` and `pine-ovl` from a clean state, `ld` succeeding with
+  no manual flag tuning needed beyond reverting the `-O1`/`-s 24k`
+  experiments back to the project's original `-O2 8k`.
+- **Size delta**: none in the shipped binary (same functions, same
+  code, just moved between two files) -- `bin/pine`'s dev-build
+  `text`/`data`/`bss` unchanged (275777/9264/53936 vs. before the
+  split). This is purely an overlay-linking fix.
+

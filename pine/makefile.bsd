@@ -175,7 +175,19 @@ pine:  $(obj) $(LOCLIBES)
 MKOVMAKE=	mkovmake
 MKOVFLAGS=	-O2 8k
 
+# bezerk.o is split into bezerk.o (mailbox lifecycle/parse/write) and
+# bezerk2.o (per-message fetch/flags/expunge/copy/append) -- see
+# TODO-pdp11-done.md's "Split bezerk.c into two object files" entry.
+# mkovmake can't place part of one .o in one overlay and part in
+# another, and bezerk.o alone grew past the largest size any single
+# overlay could be once its message-cache rewrite landed, regardless of
+# -O level/basesize/ovsize tuning (verified: -O1 produced an identical
+# base/overlay partition to -O2, and forcing a smaller ovsize just made
+# mkovmake give up on placing bezerk.o at all -- "ld: too big for type
+# 431" either way). Splitting removes the ceiling entirely instead of
+# needing to keep bezerk.c under an exact byte count forever after.
 CCLIENTOFILES=	../c-client/mail.o ../c-client/bezerk.o \
+		../c-client/bezerk2.o \
 		../c-client/dummy.o ../c-client/rfc822.o \
 		../c-client/misc.o ../c-client/osdep.o
 

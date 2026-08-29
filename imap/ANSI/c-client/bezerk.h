@@ -166,20 +166,33 @@
 
 #define STATUS "Status: RO\nX-Status: DFA\n\n"
 
-/* BEZERK per-message cache information */
+/* BEZERK per-message cache information
+ *
+ * Deliberately holds no message text, only enough to slice it back out
+ * of LOCAL->cf on demand -- see bezerk_readcache() in bezerk.c. Used to
+ * be a variable-length block (this struct plus a trailing "internal[]"
+ * holding the message's entire raw text) kept forever in LOCAL->msgs[],
+ * which made permanent memory use scale with total mailbox byte size
+ * instead of message count -- see TODO-pdp11-done.md's "bezerk_open()
+ * permanently caches every message's full raw text" entry. hoff/fromlen
+ * /headersize/bodysize together describe one contiguous span written to
+ * the cache file at parse time: [From line][real RFC822 header][body],
+ * i.e. hoff is the From line's start, the real header starts at
+ * hoff+fromlen, and the body starts at hoff+fromlen+headersize.
+ */
 
 typedef struct file_cache {
-  char *header;			/* pointer to RFC 822 header */
-  unsigned long headersize;	/* size of RFC 822 header */
-  char *body;			/* pointer to message body */
+  off_t hoff;			/* cache-file offset of "From " line */
+  unsigned long fromlen;	/* length of the "From " line prefix */
+  unsigned long headersize;	/* size of RFC 822 header (excludes the
+				   "From " line, same meaning as before) */
   unsigned long bodysize;	/* size of message body */
   char status[sizeof (STATUS)];	/* status flags */
-  char internal[1];		/* start of internal header and data */
 } FILECACHE;
 
 
 /* BEZERK I/O stream local data */
-	
+
 typedef struct bezerk_local {
   unsigned int dirty : 1;	/* disk copy needs updating */
   int ld;			/* lock file descriptor */
@@ -191,6 +204,18 @@ typedef struct bezerk_local {
   FILECACHE **msgs;		/* pointers to message-specific information */
   char *buf;			/* temporary buffer */
   unsigned long buflen;		/* current size of temporary buffer */
+  int cf;			/* per-stream message-text cache file
+				   descriptor (see bezerk_readcache()) --
+				   replaces the old FILECACHE.internal[]
+				   permanent RAM copy. A raw fd (opened,
+				   then immediately unlink()ed) rather than
+				   a stdio FILE * -- this target's pre-ANSI
+				   stdio.h doesn't declare tmpfile(), and
+				   this file already relies on raw
+				   open()/lseek()/read()/write() throughout,
+				   so this avoids depending on anything new
+				   from stdio at all */
+  long cfsize;			/* current end-of-file append offset in cf */
 } BEZERKLOCAL;
 
 
@@ -237,6 +262,9 @@ char *bezerk_eom (char *som,char *sod,long i);
 int bezerk_extend (MAILSTREAM *stream,int fd,char *error);
 void bezerk_save (MAILSTREAM *stream,int fd);
 int bezerk_copy_messages (MAILSTREAM *stream,char *mailbox);
-void bezerk_write_message (struct iovec iov[],int *i,FILECACHE *m);
+char *bezerk_readcache (MAILSTREAM *stream,off_t off,unsigned long size,
+			char **buf,unsigned long *buflen);
+long bezerk_write_message (MAILSTREAM *stream,int fd,FILECACHE *m,
+			   char **buf,unsigned long *buflen);
 void bezerk_update_status (char *status,MESSAGECACHE *elt);
 short bezerk_getflags (MAILSTREAM *stream,char *flag);

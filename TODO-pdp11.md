@@ -10,47 +10,6 @@ Completed cuts and fixes have their detailed write-ups split out into
 what's still open; check there for history/rationale on anything marked
 DONE elsewhere or referenced in passing below.
 
-### `bezerk_open()` permanently caches every message's full raw text -- the real driver of "Out of free storage" crashes
-
-- [ ] Root-caused via a durable brk()-checkpoint logging chase (see
-      `TODO-pdp11-done.md`'s "Root-caused the 'Out of free storage'
-      crash chain" entry for the full investigation): `bezerk_parse()`
-      (`imap/ANSI/c-client/bezerk.c`) copies every message's entire
-      raw text into a `FILECACHE` node (~40 bytes fixed overhead per
-      message, `imap/ANSI/c-client/bezerk.h`) and keeps the whole
-      array (`LOCAL->msgs[]`) resident for the stream's entire
-      lifetime -- not parse scratch space. Confirmed by bracketing
-      `do_broach_folder()`: for a 12-message/4781-byte mailbox, the
-      *entire* 14336-byte growth that later crashes a compose+send
-      happens inside `context_open()` (i.e. `bezerk_open()`), with
-      zero further growth during sorting, index building, or
-      composing -- and a proactive `mail_gc(stream, GC_ENV)` reclaims
-      exactly zero of it, ruling out c-client's normal envelope/body
-      cache as the mechanism.
-    - **Why this matters**: memory use scales directly with total
-      mailbox *byte size*, independent of how many messages have been
-      viewed -- exactly matching the observed "crashes happen sooner
-      as the mailbox grows." Against the ~57344-byte `data+bss+heap`
-      ceiling (see below), a mailbox of even a few tens of KB will
-      exhaust the budget on its own, regardless of any other fix in
-      this file.
-    - **Not fixed**: a real fix means re-reading each message's raw
-      text from the mailbox file on demand (when actually fetching
-      structure/body) instead of caching every message's full text at
-      open time -- a genuine rewrite of `bezerk.c`'s caching model
-      (`LOCAL->msgs[]`/`FILECACHE` is threaded through
-      `bezerk_structure()`, `bezerk_header()`, `bezerk_text()`, and
-      others), not a small patch. Worth a dedicated, deliberately
-      scoped pass rather than folding into opportunistic fixes --
-      this is very likely the single highest-leverage remaining item
-      in this file, since it's a hard ceiling on usable mailbox size
-      regardless of any other data/rodata/stack reduction.
-    - A smaller, separate gap found along the way and *not* fixed:
-      `build_header_line()`'s "empty envelope" early-return path
-      (`mailindx.c`) skips its own per-message `mail_free_envelope()`/
-      `mail_free_body()` cleanup -- real, but minor next to the
-      `bezerk_open()` finding above.
-
 ### `context_apply()` writes into its caller's buffer with no bounds check at all
 
 - [ ] Found while resizing `context.c`'s sibling functions' stack
@@ -110,11 +69,37 @@ DONE elsewhere or referenced in passing below.
       57344-byte budget gets used -- i.e. exactly the ongoing data+
       rodata reduction work in this file and `TODO-pdp11-done.md`.
     - **Update**: a still later session found the single biggest
-      consumer of this budget in real use -- see this file's
-      `bezerk_open()` entry above. It caches every message's full raw
-      text permanently, so usable mailbox size against this ceiling is
-      bounded far more tightly than any amount of buffer-shrinking
-      elsewhere in this file can fix on its own.
+      consumer of this budget in real use -- `bezerk_open()` used to
+      cache every message's full raw text permanently, bounding usable
+      mailbox size against this ceiling far more tightly than any
+      amount of buffer-shrinking elsewhere in this file could fix on
+      its own. Fixed -- see `TODO-pdp11-done.md`'s "Rewrote bezerk.c's
+      message cache to stop permanently storing raw message text"
+      entry.
+    - **Update**: real-hardware retest after that fix, and after
+      splitting `bezerk.c` in two to get the build linking again (see
+      `TODO-pdp11-done.md`'s corresponding entries) -- reading and
+      sending mail both worked end to end. But the `brk()` checkpoint
+      log shows the whole session sitting at exactly `brk=57344` (this
+      ceiling, precisely) from `compose_mail() entry` all the way
+      through `pine_send()`/`call_mailer()`/`compose_mail() exit` and
+      into the next `build_header_line()` calls -- i.e. folder-open
+      alone, for whatever mailbox size this test used, already
+      consumed 100% of the budget above `data+bss`, with zero bytes of
+      headroom left for anything compose/send did afterward. The
+      per-mailbox-*byte* scaling bug is gone, but the *fixed*
+      per-message floor (one `FILECACHE` record, one `MESSAGECACHE`
+      elt, plus whatever `LONGCACHE` envelope/body gets fetched per
+      viewed message) still fully saturates the roughly 17KB of heap
+      headroom available above real hardware's measured `data+bss`
+      (28482+11682=40164; 57344-40164=17180) for a perfectly ordinary
+      mailbox. This didn't crash this time, but there is currently
+      *no* margin at all -- next candidate investigation: work out
+      exactly how many messages were open and what the actual
+      per-message fixed cost is now, to see whether the `~17KB` floor
+      itself has further headroom to find (e.g. in `MESSAGECACHE`'s
+      own per-message fields, or in when/whether `LONGCACHE` entries
+      get freed) rather than only in `bezerk.c`.
 
 ### `folder_exists()` and `mail_create()`'s internal `mail_valid()` check disagree about whether a folder exists
 
@@ -301,14 +286,23 @@ DONE elsewhere or referenced in passing below.
       than 8, could still find the edge of the freed headroom.
     - **Update 5**: the crash recurred with a slightly bigger inbox
       (12 messages) -- and this time got fully root-caused rather than
-      just improved. See this file's `bezerk_open()` entry above and
-      `TODO-pdp11-done.md`'s "Root-caused the 'Out of free storage'
-      crash chain" entry: the dominant driver is `bezerk_open()`
-      permanently caching every message's full raw text at open time,
-      scaling with total mailbox byte size. The 1664-byte bss fix
-      above genuinely helped (more headroom before hitting the wall)
-      but was never going to fully close this -- the real ceiling is
-      how big a mailbox this driver's caching model can hold at all.
+      just improved. See `TODO-pdp11-done.md`'s "Root-caused the 'Out
+      of free storage' crash chain" entry: the dominant driver is
+      `bezerk_open()` permanently caching every message's full raw
+      text at open time, scaling with total mailbox byte size. The
+      1664-byte bss fix above genuinely helped (more headroom before
+      hitting the wall) but was never going to fully close this -- the
+      real ceiling is how big a mailbox this driver's caching model
+      can hold at all.
+    - **Update 6**: fixed -- see `TODO-pdp11-done.md`'s "Rewrote
+      bezerk.c's message cache to stop permanently storing raw message
+      text" entry. `bezerk_open()`/`bezerk_parse()` no longer keep any
+      message's raw bytes in RAM after parsing; permanent per-message
+      cost is now a small fixed-size record, independent of message or
+      mailbox size, directly confirmed via a real-vs-old-code
+      `mallinfo2()` comparison on the dev build (253056 bytes of
+      growth for a 12-message/241910-byte mailbox before the fix, 15168
+      bytes -- flat, unrelated to message size -- after).
 
 ### "Out of free storage (1024 bytes)" viewing a second message, real hardware
 

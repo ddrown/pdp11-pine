@@ -63,6 +63,11 @@ extern int errno;		/* just in case */
 #include <time.h>
 #include <sys/uio.h>
 
+/* Counter for building unique names for bezerk_open()'s per-stream
+ * message cache file (see LOCAL->cf) -- getpid() alone isn't enough
+ * since one process can have more than one bezerk stream open at once. */
+static int bezcache_ctr = 0;
+
 /* Berkeley mail routines */
 
 
@@ -308,6 +313,26 @@ MAILSTREAM *bezerk_open (MAILSTREAM *stream)
    * (the common one for a brand new user) of enough room to open at
    * all -- see TODO-pdp11-done.md. */
   LOCAL->buf = (char *) fs_get ((LOCAL->buflen = MAILTMPLEN) + 1);
+  /* Per-stream scratch file backing every message's compacted raw text
+   * (see bezerk_readcache()) -- replaces a permanent per-message RAM
+   * copy that made memory scale with total mailbox size instead of
+   * message count. open()+unlink() (rather than tmpfile(), an ANSI C
+   * addition this target's stdio.h doesn't declare) needs no further
+   * cleanup bookkeeping -- the fd stays valid and readable/writable
+   * after the name is removed from the directory, so nothing is left
+   * behind even if the process dies without a clean bezerk_abort() --
+   * and works the same whether this stream ends up read-only or
+   * read-write, unlike normalizing the real mailbox file in place.
+   * tmp is free to reuse here; its only other uses in this function
+   * are already done with it by this point. */
+  sprintf (tmp,"/tmp/.bezcache%d.%d",getpid (),bezcache_ctr++);
+  if ((LOCAL->cf = open (tmp,O_RDWR|O_CREAT|O_EXCL,0600)) < 0) {
+    mm_log ("Can't create message cache file",ERROR);
+    bezerk_abort (stream);
+    return NIL;
+  }
+  unlink (tmp);
+  LOCAL->cfsize = 0;
   stream->sequence++;		/* bump sequence number */
 
   LOCAL->dirty = NIL;		/* no update yet */
@@ -400,475 +425,6 @@ void bezerk_close (MAILSTREAM *stream)
 }
 
 
-/* Berkeley mail fetch fast information
- * Accepts: MAIL stream
- *	    sequence
- */
-
-void bezerk_fetchfast (MAILSTREAM *stream,char *sequence)
-{
-  return;			/* no-op for local mail */
-}
-
-
-/* Berkeley mail fetch flags
- * Accepts: MAIL stream
- *	    sequence
- */
-
-void bezerk_fetchflags (MAILSTREAM *stream,char *sequence)
-{
-  return;			/* no-op for local mail */
-}
-
-/* Berkeley mail fetch structure
- * Accepts: MAIL stream
- *	    message # to fetch
- *	    pointer to return body
- * Returns: envelope of this message, body returned in body value
- *
- * Fetches the "fast" information as well
- */
-
-ENVELOPE *bezerk_fetchstructure (MAILSTREAM *stream,long msgno,BODY **body)
-{
-  ENVELOPE **env;
-  BODY **b;
-  STRING bs;
-  LONGCACHE *lelt;
-  FILECACHE *m = LOCAL->msgs[msgno - 1];
-  long i = max (m->headersize,m->bodysize);
-  if (stream->scache) {		/* short cache */
-    if (msgno != stream->msgno){/* flush old poop if a different message */
-      mail_free_envelope (&stream->env);
-      mail_free_body (&stream->body);
-    }
-    stream->msgno = msgno;
-    env = &stream->env;		/* get pointers to envelope and body */
-    b = &stream->body;
-  }
-  else {			/* long cache */
-    lelt = mail_lelt (stream,msgno);
-    env = &lelt->env;		/* get pointers to envelope and body */
-    b = &lelt->body;
-  }
-  if ((body && !*b) || !*env) {	/* have the poop we need? */
-    mail_free_envelope (env);	/* flush old envelope and body */
-    mail_free_body (b);
-    if (i > LOCAL->buflen) {	/* make sure enough buffer space */
-      fs_give ((void **) &LOCAL->buf);
-      LOCAL->buf = (char *) fs_get ((LOCAL->buflen = i) + 1);
-    }
-    INIT (&bs,mail_string,(void *) m->body,m->bodysize);
-				/* parse envelope and body */
-    rfc822_parse_msg (env,body ? b : NIL,m->header,m->headersize,&bs,lhostn,
-		      LOCAL->buf);
-  }
-  if (body) *body = *b;		/* return the body */
-  return *env;			/* return the envelope */
-}
-
-/* Berkeley mail snarf message, only for Tenex driver
- * Accepts: MAIL stream
- *	    message # to snarf
- *	    pointer to size to return
- * Returns: message text in RFC822 format
- */
-
-char *bezerk_snarf (MAILSTREAM *stream,long msgno,long *size)
-{
-  MESSAGECACHE *elt = mail_elt (stream,msgno);
-  FILECACHE *m = LOCAL->msgs[msgno - 1];
-  if (((*size = m->headersize + m->bodysize) > LOCAL->buflen) ||
-      LOCAL->buflen > CHUNK) {	/* make sure stream can hold the text */
-				/* fs_resize would do an unnecessary copy */
-    fs_give ((void **) &LOCAL->buf);
-    LOCAL->buf = (char *) fs_get((LOCAL->buflen = max (*size,(long) CHUNK))+1);
-  }
-				/* copy the text */
-  if (m->headersize) memcpy (LOCAL->buf,m->header,(unsigned)m->headersize);
-  if (m->bodysize) memcpy (LOCAL->buf + m->headersize,m->body,(unsigned)m->bodysize);
-  LOCAL->buf[*size] = '\0';	/* tie off string */
-  return LOCAL->buf;
-}
-
-/* Berkeley mail fetch message header
- * Accepts: MAIL stream
- *	    message # to fetch
- * Returns: message header in RFC822 format
- */
-
-char *bezerk_fetchheader (MAILSTREAM *stream,long msgno)
-{
-  FILECACHE *m = LOCAL->msgs[msgno - 1];
-				/* copy the string */
-  strcrlfcpy (&LOCAL->buf,&LOCAL->buflen,m->header,m->headersize);
-  return LOCAL->buf;
-}
-
-
-/* Berkeley mail fetch message text (body only)
- * Accepts: MAIL stream
- *	    message # to fetch
- * Returns: message text in RFC822 format
- */
-
-char *bezerk_fetchtext (MAILSTREAM *stream,long msgno)
-{
-  MESSAGECACHE *elt = mail_elt (stream,msgno);
-  FILECACHE *m = LOCAL->msgs[msgno - 1];
-  if (!elt->seen) {		/* if message not seen */
-    elt->seen = T;		/* mark message as seen */
-				/* recalculate Status/X-Status lines */
-    bezerk_update_status (m->status,elt);
-    LOCAL->dirty = T;		/* note stream is now dirty */
-  }
-  strcrlfcpy (&LOCAL->buf,&LOCAL->buflen,m->body,m->bodysize);
-  return LOCAL->buf;
-}
-
-/* Berkeley fetch message body as a structure
- * Accepts: Mail stream
- *	    message # to fetch
- *	    section specifier
- *	    pointer to length
- * Returns: pointer to section of message body
- */
-
-char *bezerk_fetchbody (MAILSTREAM *stream,long m,char *s,unsigned long *len)
-{
-  BODY *b;
-  PART *pt;
-  unsigned long i;
-  char *base = LOCAL->msgs[m - 1]->body;
-  unsigned long offset = 0;
-  MESSAGECACHE *elt = mail_elt (stream,m);
-				/* make sure have a body */
-  if (!(bezerk_fetchstructure (stream,m,&b) && b && s && *s &&
-	((i = strtol (s,&s,10)) > 0))) return NIL;
-  do {				/* until find desired body part */
-				/* multipart content? */
-    if (b->type == TYPEMULTIPART) {
-      pt = b->contents.part;	/* yes, find desired part */
-      while (--i && (pt = pt->next));
-      if (!pt) return NIL;	/* bad specifier */
-				/* note new body, check valid nesting */
-      if (((b = &pt->body)->type == TYPEMULTIPART) && !*s) return NIL;
-      offset = pt->offset;	/* get new offset */
-    }
-    else if (i != 1) return NIL;/* otherwise must be section 1 */
-				/* need to go down further? */
-    if (i = *s) switch (b->type) {
-    case TYPEMESSAGE:		/* embedded message */
-      offset = b->contents.msg.offset;
-      b = b->contents.msg.body;	/* get its body, drop into multipart case */
-    case TYPEMULTIPART:		/* multipart, get next section */
-      if ((*s++ == '.') && (i = strtol (s,&s,10)) > 0) break;
-    default:			/* bogus subpart specification */
-      return NIL;
-    }
-  } while (i);
-				/* lose if body bogus */
-  if ((!b) || b->type == TYPEMULTIPART) return NIL;
-  if (!elt->seen) {		/* if message not seen */
-    elt->seen = T;		/* mark message as seen */
-				/* recalculate Status/X-Status lines */
-    bezerk_update_status (LOCAL->msgs[m - 1]->status,elt);
-    LOCAL->dirty = T;		/* note stream is now dirty */
-  }
-  return rfc822_contents (&LOCAL->buf,&LOCAL->buflen,len,base + offset,
-			  b->size.ibytes,b->encoding);
-}
-
-/* Berkeley mail set flag
- * Accepts: MAIL stream
- *	    sequence
- *	    flag(s)
- */
-
-void bezerk_setflag (MAILSTREAM *stream,char *sequence,char *flag)
-{
-  MESSAGECACHE *elt;
-  long i;
-  short f = bezerk_getflags (stream,flag);
-  if (!f) return;		/* no-op if no flags to modify */
-				/* get sequence and loop on it */
-  if (mail_sequence (stream,sequence)) for (i = 1; i <= stream->nmsgs; i++)
-    if ((elt = mail_elt (stream,i))->sequence) {
-				/* set all requested flags */
-      if (f&fSEEN) elt->seen = T;
-      if (f&fDELETED) elt->deleted = T;
-      if (f&fFLAGGED) elt->flagged = T;
-      if (f&fANSWERED) elt->answered = T;
-				/* recalculate Status/X-Status lines */
-      bezerk_update_status (LOCAL->msgs[i - 1]->status,elt);
-      LOCAL->dirty = T;		/* note stream is now dirty */
-    }
-}
-
-
-/* Berkeley mail clear flag
- * Accepts: MAIL stream
- *	    sequence
- *	    flag(s)
- */
-
-void bezerk_clearflag (MAILSTREAM *stream,char *sequence,char *flag)
-{
-  MESSAGECACHE *elt;
-  long i;
-  short f = bezerk_getflags (stream,flag);
-  if (!f) return;		/* no-op if no flags to modify */
-				/* get sequence and loop on it */
-  if (mail_sequence (stream,sequence)) for (i = 1; i <= stream->nmsgs; i++)
-    if ((elt = mail_elt (stream,i))->sequence) {
-				/* clear all requested flags */
-      if (f&fSEEN) elt->seen = NIL;
-      if (f&fDELETED) elt->deleted = NIL;
-      if (f&fFLAGGED) elt->flagged = NIL;
-      if (f&fANSWERED) elt->answered = NIL;
-				/* recalculate Status/X-Status lines */
-      bezerk_update_status (LOCAL->msgs[i - 1]->status,elt);
-      LOCAL->dirty = T;		/* note stream is now dirty */
-    }
-}
-
-/* Berkeley mail ping mailbox
- * Accepts: MAIL stream
- * Returns: T if stream alive, else NIL
- * No-op for readonly files, since read/writer can expunge it from under us!
- */
-
-long bezerk_ping (MAILSTREAM *stream)
-{
-  char lock[MAILTMPLEN];
-  struct stat sbuf;
-  int fd;
-				/* does he want to give up readwrite? */
-  if (stream->readonly && LOCAL->ld) {
-    flock (LOCAL->ld,LOCK_UN);	/* yes, release the lock */
-    close (LOCAL->ld);		/* close the lock file */
-    LOCAL->ld = NIL;		/* no more lock fd */
-    unlink (LOCAL->lname);	/* delete it */
-    fs_give ((void **) &LOCAL->lname);
-  }
-				/* make sure it is alright to do this at all */
-  if (LOCAL && LOCAL->ld && !stream->lock) {
-				/* get current mailbox size */
-				/* parse if mailbox changed */
-    if (!stat (LOCAL->name,&sbuf) && (sbuf.st_size != LOCAL->filesize) &&
-	((fd = bezerk_parse (stream,lock,LOCK_SH)) >= 0)) {
-				/* unlock mailbox */
-      bezerk_unlock (fd,stream,lock);
-      mail_unlock (stream);	/* and stream */
-    }
-  }
-  return LOCAL ? T : NIL;	/* return if still alive */
-}
-
-/* Berkeley mail check mailbox
- * Accepts: MAIL stream
- * No-op for readonly files, since read/writer can expunge it from under us!
- */
-
-void bezerk_check (MAILSTREAM *stream)
-{
-  char lock[MAILTMPLEN];
-  int fd;
-				/* parse and lock mailbox */
-  if (LOCAL && LOCAL->ld && ((fd = bezerk_parse (stream,lock,LOCK_EX)) >= 0)) {
-    if (LOCAL->dirty && bezerk_extend (stream,fd,"Unable to update mailbox"))
-      bezerk_save (stream,fd);	/* dump checkpoint if needed */
-				/* flush locks */
-    bezerk_unlock (fd,stream,lock);
-    mail_unlock (stream);
-  }
-  if (LOCAL && LOCAL->ld) mm_log ("Check completed",NIL);
-}
-
-/* Berkeley mail expunge mailbox
- * Accepts: MAIL stream
- */
-
-void bezerk_expunge (MAILSTREAM *stream)
-{
-  int fd,j;
-  long i = 1;
-  long n = 0;
-  unsigned long recent;
-  MESSAGECACHE *elt;
-  char *r = "No messages deleted, so no update needed";
-  char lock[MAILTMPLEN];
-  if (LOCAL && LOCAL->ld) {	/* parse and lock mailbox */
-    if ((fd = bezerk_parse (stream,lock,LOCK_EX)) >= 0) {
-      recent = stream->recent;	/* get recent now that new ones parsed */
-      while ((j = (i<=stream->nmsgs)) && !(elt = mail_elt (stream,i))->deleted)
-	i++;			/* find first deleted message */
-      if (j) {			/* found one? */
-				/* make sure we can do the worst case thing */
-	if (bezerk_extend (stream,fd,"Unable to expunge mailbox")) {
-	  do {			/* flush deleted messages */
-	    if ((elt = mail_elt (stream,i))->deleted) {
-				/* if recent, note one less recent message */
-	      if (elt->recent) --recent;
-				/* flush local cache entry */
-	      fs_give ((void **) &LOCAL->msgs[i - 1]);
-	      for (j = i; j < stream->nmsgs; j++)
-		LOCAL->msgs[j - 1] = LOCAL->msgs[j];
-	      LOCAL->msgs[stream->nmsgs - 1] = NIL;
-				/* notify upper levels */
-	      mail_expunged (stream,i);
-	      n++;		/* count another expunged message */
-	    }
-	    else i++;		/* otherwise try next message */
-	  } while (i <= stream->nmsgs);
-				/* dump checkpoint of the results */
-	  bezerk_save (stream,fd);
-	  sprintf ((r = LOCAL->buf),"Expunged %ld messages",n);
-	}
-      }
-				/* notify upper level, free locks */
-      mail_exists (stream,stream->nmsgs);
-      mail_recent (stream,recent);
-      bezerk_unlock (fd,stream,lock);
-      mail_unlock (stream);
-    }
-  }
-  else r = "Expunge ignored on readonly mailbox";
-  if (LOCAL && !stream->silent) mm_log (r,NIL);
-}
-
-/* Berkeley mail copy message(s)
- * Accepts: MAIL stream
- *	    sequence
- *	    destination mailbox
- * Returns: T if copy successful, else NIL
- */
-
-long bezerk_copy (MAILSTREAM *stream,char *sequence,char *mailbox)
-{
-				/* copy the messages */
-  return (mail_sequence (stream,sequence)) ?
-    bezerk_copy_messages (stream,mailbox) : NIL;
-}
-
-
-/* Berkeley mail move message(s)
- * Accepts: MAIL stream
- *	    sequence
- *	    destination mailbox
- * Returns: T if move successful, else NIL
- */
-
-long bezerk_move (MAILSTREAM *stream,char *sequence,char *mailbox)
-{
-  long i;
-  MESSAGECACHE *elt;
-  if (!(mail_sequence (stream,sequence) &&
-	bezerk_copy_messages (stream,mailbox))) return NIL;
-				/* delete all requested messages */
-  for (i = 1; i <= stream->nmsgs; i++)
-    if ((elt = mail_elt (stream,i))->sequence) {
-      elt->deleted = T;		/* mark message deleted */
-				/* recalculate Status/X-Status lines */
-      bezerk_update_status (LOCAL->msgs[i - 1]->status,elt);
-      LOCAL->dirty = T;		/* note stream is now dirty */
-    }
-  return T;
-}
-
-/* Berkeley mail append message from stringstruct
- * Accepts: MAIL stream
- *	    destination mailbox
- *	    stringstruct of messages to append
- * Returns: T if append successful, else NIL
- */
-
-/* Was 8*MAILTMPLEN (8192) -- a stack-allocated write-batching buffer
- * this size is the same class of oversized fixed buffer as this
- * file's own CHUNK-vs-MAILTMPLEN bezerk_open() bug and pine's
- * MSIZE_INIT/RBUFSZ, all fixed elsewhere this session (see
- * TODO-pdp11-done.md) -- confirmed via a real-hardware adb crash
- * ("Illegal instruction") inside bezerk_append_putc(), called from
- * bezerk_append(), right after a Send: this function's ~9KB combined
- * stack frame (this buffer plus lock[MAILTMPLEN] just below) landing
- * on top of an already near-full 64KB D-space very plausibly collided
- * the stack into the heap. BUFLEN only controls how often
- * bezerk_append_putc() flushes to write(2) -- smaller just means more
- * write() calls for a large message, not a correctness change. */
-#define BUFLEN (MAILTMPLEN/2)
-
-long bezerk_append (MAILSTREAM *stream,char *mailbox,STRING *message)
-{
-  struct stat sbuf;
-  int fd,i;
-  char buf[BUFLEN],lock[MAILTMPLEN];
-  char c = '\n';
-  long ok = T;
-  unsigned long t = time (0);
-  long size = SIZE (message);
-  if ((fd = bezerk_lock (bezerk_file (buf,mailbox),O_WRONLY|O_APPEND|O_CREAT,
-			 S_IREAD|S_IWRITE,lock,LOCK_EX)) < 0) {
-    sprintf (buf,"Can't open append mailbox: %s",strerror (errno));
-    mm_log (buf,ERROR);
-    return NIL;
-  }
-  mm_critical (stream);		/* go critical */
-  fstat (fd,&sbuf);		/* get current file size */
-  sprintf (buf,"From %s@%s %s",myusername (),lhostn,ctime (&t));
-  i = strlen (buf);		/* initial buffer space used */
-  while (ok && size--) {	/* copy text, tossing out CR's */
-    if (c == '\n') {		/* if at start of line */
-      t = GETPOS (message);	/* prepend a broket if needed */
-      if ((SNX (message) == 'F') && (SNX (message) == 'r') &&
-	  (SNX (message) == 'o') && (SNX (message) == 'm') &&
-	  (SNX (message) == ' ')) ok = bezerk_append_putc (fd,buf,&i,'>');
-      SETPOS (message,t);	/* restore position as needed */
-    }
-				/* copy another character */
-    if ((c = SNX (message)) != '\015') ok = bezerk_append_putc (fd,buf,&i,c);
-  }
-				/* write trailing newline */
-  if (ok) ok = bezerk_append_putc (fd,buf,&i,'\n');
-  if (!(ok && (ok = (write (fd,buf,i) >= 0)))) {
-    sprintf (buf,"Message append failed: %s",strerror (errno));
-    mm_log (buf,ERROR);
-    ftruncate (fd,sbuf.st_size);
-  }
-  fsync (fd);			/* force out the update */
-  bezerk_unlock (fd,NIL,lock);	/* unlock and close mailbox */
-  mm_nocritical (stream);	/* release critical */
-  return ok;			/* return success */
-}
-
-/* Berkeley mail append character
- * Accepts: file descriptor
- *	    output buffer
- *	    pointer to current size of output buffer
- *	    character to append
- * Returns: T if append successful, else NIL
- */
-
-long bezerk_append_putc (int fd,char *s,int *i,char c)
-{
-  s[(*i)++] = c;
-  if (*i == BUFLEN) {		/* dump if buffer filled */
-    if (write (fd,s,*i) < 0) return NIL;
-    *i = 0;			/* reset */
-  }
-  return T;
-}
-
-/* Berkeley garbage collect stream
- * Accepts: Mail stream
- *	    garbage collection flags
- */
-
-void bezerk_gc (MAILSTREAM *stream,long gcflags)
-{
-  /* nothing here for now */
-}
-
 /* Internal routines */
 
 
@@ -893,6 +449,8 @@ void bezerk_abort (MAILSTREAM *stream)
     }
 				/* free local text buffers */
     if (LOCAL->buf) fs_give ((void **) &LOCAL->buf);
+				/* close and delete the message cache file */
+    if (LOCAL->cf) close (LOCAL->cf);
 				/* nuke the local data */
     fs_give ((void **) &stream->local);
     stream->open = NIL;		/* mark as no longer open */
@@ -1040,6 +598,26 @@ void bezerk_unlock (int fd,MAILSTREAM *stream,char *lock)
   if (lock && *lock) unlink (lock);
 }
 
+/* Transient per-message parse scratch block -- this is what FILECACHE
+ * used to be before message text moved out of permanent RAM (see
+ * bezerk.h's FILECACHE comment): a variable-length block holding one
+ * message's raw text, linked into a scratch list (via "header" doing
+ * double duty as a "next" pointer until finalized) while bezerk_parse()
+ * scans and compacts it. Once a message's header/body split and
+ * Status:/X-Status: stripping are finalized, its RAWCACHE block is
+ * flushed to LOCAL->cf and freed -- nothing here is kept permanently.
+ */
+
+typedef struct raw_cache {
+  char *header;			/* pointer to RFC 822 header, or (until
+				   finalized) next block in the scratch list */
+  unsigned long headersize;	/* size of RFC 822 header */
+  char *body;			/* pointer to message body */
+  unsigned long bodysize;	/* size of message body */
+  char status[sizeof (STATUS)];	/* status flags */
+  char internal[1];		/* start of internal header and data */
+} RAWCACHE;
+
 /* Berkeley mail parse and lock mailbox
  * Accepts: MAIL stream
  *	    space to write lock file name
@@ -1059,7 +637,7 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
   long recent = stream->recent;
   struct stat sbuf;
   MESSAGECACHE *elt;
-  FILECACHE *m = NIL,*n = NIL;
+  RAWCACHE *m = NIL,*n = NIL;
   mail_lock (stream);		/* guard against recursion or pingers */
 				/* open and lock mailbox (shared OK) */
   if ((fd = bezerk_lock (LOCAL->name,LOCAL->ld ? O_RDWR : O_RDONLY,NIL,
@@ -1149,10 +727,10 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
 				/* calculate message length */
 	j = ((e ? e : s1 + i) - s) - 1;
 	if (m) {		/* new cache needed, have previous data? */
-	  n->header = (char *) fs_get (sizeof (FILECACHE) + j + 1);
-	  n = (FILECACHE *) n->header;
+	  n->header = (char *) fs_get (sizeof (RAWCACHE) + j + 1);
+	  n = (RAWCACHE *) n->header;
 	}
-	else m = n = (FILECACHE *) fs_get (sizeof (FILECACHE) + j + 1);
+	else m = n = (RAWCACHE *) fs_get (sizeof (RAWCACHE) + j + 1);
 				/* copy message data */
 	/*
 	 * Same argument-width bug as the read() call above: memcpy()
@@ -1202,8 +780,11 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
     LOCAL->buf = (char *) fs_get ((LOCAL->buflen = CHUNK) + 1);
   }
   for (i = stream->nmsgs, n = m; i < nmsgs; i++) {
-    LOCAL->msgs[i] = m = n;	/* set cache, and next cache pointer */
-    n = (FILECACHE *) n->header;
+    m = n;			/* current and next scratch block --
+				   LOCAL->msgs[i] isn't set until this
+				   message's text has been flushed to the
+				   cache file, below */
+    n = (RAWCACHE *) n->header;
     /* This is a bugtrap for bogons in the new message cache, which may happen
      * if memory is corrupted.  Note that in the case of a totally empty
      * message, a newline is appended and counts adjusted.
@@ -1334,6 +915,49 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
 				/* count newlines in body */
     if (s = m->body) while (*s) if (*s++ == '\n') is++;
     elt->rfc822_size = m->headersize + m->bodysize + is;
+    {			/* flush this message's now-compacted text to the
+			   cache file and replace the transient RAWCACHE
+			   block with a small permanent FILECACHE record --
+			   see bezerk.h's FILECACHE comment.
+
+			   [From line][header] (m->internal through
+			   m->header+m->headersize) is always genuinely
+			   contiguous -- but m->body is NOT always exactly
+			   m->header+m->headersize: when the header's last
+			   line(s) before the blank line were Status:/
+			   X-Status: lines being deleted, the '\n'/'\0' cases
+			   above just patch a synthetic newline in and shrink
+			   headersize, without physically memmove()'ing the
+			   now-logically-deleted bytes out (unlike the
+			   default case, which does memmove() when a normal
+			   line follows a deletion run) -- so there can be a
+			   few bytes of stale gap between the logical header
+			   end and the real m->body pointer. Harmless for the
+			   original permanent-RAM-pointer design (m->body was
+			   always independently correct), but this cache file
+			   is laid out as [header][body] with NO gap, so
+			   header and body are written separately here rather
+			   than as one assumed-contiguous span. m->body may be
+			   NIL (a message with no blank line before end of
+			   text), but only when m->bodysize == 0, so the
+			   second write below is skipped in that case. */
+      FILECACHE *fc = (FILECACHE *) fs_get (sizeof (FILECACHE));
+      unsigned long fromlen = m->header - m->internal;
+      unsigned long hlen = fromlen + m->headersize;
+      if ((lseek (LOCAL->cf,LOCAL->cfsize,L_SET) < 0) ||
+	  (hlen && write (LOCAL->cf,m->internal,(unsigned) hlen) != hlen) ||
+	  (m->bodysize &&
+	   write (LOCAL->cf,m->body,(unsigned) m->bodysize) != m->bodysize))
+	fatal ("Message cache file write failed");
+      fc->hoff = LOCAL->cfsize;
+      fc->fromlen = fromlen;
+      fc->headersize = m->headersize;
+      fc->bodysize = m->bodysize;
+      memcpy (fc->status,m->status,sizeof (STATUS));
+      LOCAL->cfsize += hlen + m->bodysize;
+      LOCAL->msgs[i] = fc;
+      fs_give ((void **) &m);
+    }
   }
   if (n) fatal ("Cache link-list inconsistency");
   while (i < LOCAL->cachesize) LOCAL->msgs[i++] = NIL;
@@ -1408,7 +1032,7 @@ int bezerk_extend (MAILSTREAM *stream,int fd,char *error)
 				/* calculate estimated size of mailbox */
   for (i = 0,f = 0; i < stream->nmsgs; i++) {
     m = LOCAL->msgs[i];		/* get cache pointer */
-    f += (m->header - m->internal) + m->headersize + sizeof (STATUS) +
+    f += m->fromlen + m->headersize + sizeof (STATUS) +
       m->bodysize + 1;		/* update guesstimate */
     }
   mm_critical (stream);		/* go critical */
@@ -1450,37 +1074,42 @@ int bezerk_extend (MAILSTREAM *stream,int fd,char *error)
 void bezerk_save (MAILSTREAM *stream,int fd)
 {
   struct stat sbuf;
-  struct iovec iov[16];
-  int iovc;
-  long i;
-  int e;
+  long i,e;
+  int err;
   int retry;
+				/* scratch buffer for bezerk_write_message(),
+				   grown as needed, shared/reused across every
+				   message instead of a per-message alloc */
+  char *buf = NIL;
+  unsigned long buflen = 0;
   do {				/* restart point if failure */
     retry = NIL;		/* no need to retry yet */
 				/* start at beginning of file */
     lseek (fd,LOCAL->filesize = 0,L_SET);
-				/* loop through all messages */
-    for (i = 1,iovc = 0; i <= stream->nmsgs; i++) {
-				/* set up iov's for this message */
-      bezerk_write_message (iov,&iovc,LOCAL->msgs[i-1]);
-				/* filled up iovec or end of messages? */
-      if ((iovc == 16) || (i == stream->nmsgs)) {
-				/* write messages */
-	if ((e = writev (fd,iov,iovc)) < 0) {
-	  sprintf (LOCAL->buf,"Unable to rewrite mailbox: %s",
-		   strerror (e = errno));
-	  mm_log (LOCAL->buf,WARN);
-	  mm_diskerror (stream,e,T);
-	  retry = T;		/* must retry */
-	  break;		/* abort this particular try */
-	}
-	else {			/* won */
-	  iovc = 0;		/* restart iovec */
-	  LOCAL->filesize += e;	/* count these bytes in data */
-	}
+				/* loop through all messages, one writev()
+				   per message -- was batched up to 16
+				   messages per writev() when the source
+				   bytes were RAM-resident; now that they're
+				   read from LOCAL->cf into a single reused
+				   scratch buffer, batching would mean the
+				   next message's read clobbers a still-
+				   unflushed earlier one, so this trades a
+				   few more write(2) calls (a cold path) for
+				   not needing several buffers alive at once */
+    for (i = 1; i <= stream->nmsgs; i++) {
+      if ((e = bezerk_write_message (stream,fd,LOCAL->msgs[i-1],
+				      &buf,&buflen)) < 0) {
+	err = errno;
+	sprintf (LOCAL->buf,"Unable to rewrite mailbox: %s",strerror (err));
+	mm_log (LOCAL->buf,WARN);
+	mm_diskerror (stream,err,T);
+	retry = T;		/* must retry */
+	break;		/* abort this particular try */
       }
+      LOCAL->filesize += e;	/* count these bytes in data */
     }
   } while (retry);		/* repeat if need to try again */
+  if (buf) fs_give ((void **) &buf);
   fsync (fd);			/* make sure the disk has the update */
 				/* nuke any cruft after that */
   ftruncate (fd,LOCAL->filesize);
@@ -1501,11 +1130,15 @@ int bezerk_copy_messages (MAILSTREAM *stream,char *mailbox)
 {
   char file[MAILTMPLEN];
   char lock[MAILTMPLEN];
-  struct iovec iov[16];
-  int fd,iovc;
+  int fd;
   struct stat sbuf;
   long i;
   int ok = T;
+				/* scratch buffer for bezerk_write_message(),
+				   see bezerk_save()'s comment on why this is
+				   one-message-at-a-time now */
+  char *buf = NIL;
+  unsigned long buflen = 0;
 				/* make sure valid mailbox */
   if (!bezerk_isvalid (mailbox,file)) {
     if (errno == ENOENT)	/* failed, was it no such file? */
@@ -1525,21 +1158,16 @@ int bezerk_copy_messages (MAILSTREAM *stream,char *mailbox)
   mm_critical (stream);		/* go critical */
   fstat (fd,&sbuf);		/* get current file size */
 				/* write all requested messages to mailbox */
-  for (i = 1,iovc = 0; ok && i <= stream->nmsgs; i++) {
-				/* set up iov's if message selected */
-    if (mail_elt (stream,i)->sequence)
-      bezerk_write_message (iov,&iovc,LOCAL->msgs[i - 1]);
-				/* filled up iovec or end of messages? */
-    if (iovc && ((iovc == 16) || (i == stream->nmsgs))) {
-      if (ok = (writev (fd,iov,iovc) >= 0)) iovc = 0;
-      else {
-	sprintf (LOCAL->buf,"Message copy failed: %s",strerror (errno));
-	mm_log (LOCAL->buf,ERROR);
-	ftruncate (fd,sbuf.st_size);
-	break;
-      }
+  for (i = 1; ok && i <= stream->nmsgs; i++)
+				/* write it if message selected */
+    if (mail_elt (stream,i)->sequence &&
+	bezerk_write_message (stream,fd,LOCAL->msgs[i - 1],&buf,&buflen) < 0) {
+      sprintf (LOCAL->buf,"Message copy failed: %s",strerror (errno));
+      mm_log (LOCAL->buf,ERROR);
+      ftruncate (fd,sbuf.st_size);
+      ok = NIL;
     }
-  }
+  if (buf) fs_give ((void **) &buf);
   fsync (fd);			/* force out the update */
   bezerk_unlock (fd,NIL,lock);	/* unlock and close mailbox */
   mm_nocritical (stream);	/* release critical */
@@ -1547,31 +1175,47 @@ int bezerk_copy_messages (MAILSTREAM *stream,char *mailbox)
 }
 
 /* Berkeley write message to mailbox
- * Accepts: I/O vector
- *	    I/O vector index
+ * Accepts: MAIL stream
+ *	    destination file descriptor
  *	    local cache for this message
+ *	    pointer to scratch buffer pointer (grown as needed)
+ *	    pointer to scratch buffer's current size
+ * Returns: number of bytes written, or -1 on error (errno set, same as
+ *	    writev())
  *
  * This routine is the reason why the local cache has a copy of the status.
  * We can be called to dump out the mailbox as part of a stream recycle, since
  * we don't write out the mailbox when flags change and hence an update may be
  * needed.  However, at this point the elt has already become history, so we
  * can't use any information other than what is local to us.
+ *
+ * Used to just build iovecs against RAM the caller could batch across many
+ * messages into one writev(); now that the source bytes live in LOCAL->cf
+ * (see bezerk.h's FILECACHE comment), this reads one message's text into
+ * *buf itself and writes it immediately -- see bezerk_save()'s comment for
+ * why batching across messages doesn't work with a shared scratch buffer.
  */
 
-void bezerk_write_message (struct iovec iov[],int *i,FILECACHE *m)
+long bezerk_write_message (MAILSTREAM *stream,int fd,FILECACHE *m,
+			   char **buf,unsigned long *buflen)
 {
-  iov[*i].iov_base =m->internal;/* pointer/counter to headers */
-				/* length of internal + message headers */
-  iov[*i].iov_len = (m->header + m->headersize) - m->internal;
+  struct iovec iov[4];
+  int i = 0;
+				/* From line + real header, contiguous */
+  unsigned long hlen = m->fromlen + m->headersize;
+				/* one read covers header and body, since
+				   they sit contiguously in the cache file */
+  bezerk_readcache (stream,m->hoff,hlen + m->bodysize,buf,buflen);
+  iov[i].iov_base = *buf;	/* pointer/counter to headers */
 				/* suppress extra newline if present */
-  if (((char *)iov[*i].iov_base)[iov[*i].iov_len - 2] == '\n') iov[(*i)++].iov_len--;
-  else (*i)++;			/* unlikely but... */
-  iov[*i].iov_base = m->status;	/* pointer/counter to status */
-  iov[(*i)++].iov_len = strlen (m->status);
-  iov[*i].iov_base = m->body;	/* pointer/counter to text body */
-  iov[(*i)++].iov_len = m->bodysize;
-  iov[*i].iov_base = "\n";	/* pointer/counter to extra newline */
-  iov[(*i)++].iov_len = 1;
+  iov[i++].iov_len = ((*buf)[hlen - 2] == '\n') ? hlen - 1 : hlen;
+  iov[i].iov_base = m->status;	/* pointer/counter to status */
+  iov[i++].iov_len = strlen (m->status);
+  iov[i].iov_base = *buf + hlen;	/* pointer/counter to text body */
+  iov[i++].iov_len = m->bodysize;
+  iov[i].iov_base = "\n";	/* pointer/counter to extra newline */
+  iov[i++].iov_len = 1;
+  return writev (fd,iov,i);
 }
 
 /* Berkeley update status string
@@ -1595,67 +1239,31 @@ void bezerk_update_status (char *status,MESSAGECACHE *elt)
   *t++ = '\n'; *t++ = '\n'; *t++ = '\0';
 }
 
-/* Parse flag list
+/* Berkeley read message text out of the per-stream cache file
  * Accepts: MAIL stream
- *	    flag list as a character string
- * Returns: flag command list
+ *	    cache file offset
+ *	    number of bytes to read
+ *	    pointer to destination buffer pointer
+ *	    pointer to destination buffer's current size
+ * Returns: destination buffer, filled with size bytes plus a trailing NUL
+ *
+ * Every FILECACHE consumer goes through here instead of dereferencing a
+ * header/body RAM pointer directly -- see bezerk.h's FILECACHE comment.
+ * The destination buffer and its size follow the same grow-as-needed
+ * convention LOCAL->buf itself uses throughout this file.
  */
 
-
-short bezerk_getflags (MAILSTREAM *stream,char *flag)
+char *bezerk_readcache (MAILSTREAM *stream,off_t off,unsigned long size,
+			char **buf,unsigned long *buflen)
 {
-  char *t;
-  short f = 0;
-  short i,j;
-  if (flag && *flag) {		/* no-op if no flag string */
-				/* check if a list and make sure valid */
-    if ((i = (*flag == '(')) ^ (flag[strlen (flag)-1] == ')')) {
-      mm_log ("Bad flag list",ERROR);
-      return NIL;
-    }
-				/* copy the flag string w/o list construct */
-    strncpy (LOCAL->buf,flag+i,(j = strlen (flag) - (2*i)));
-    LOCAL->buf[j] = '\0';
-    t = ucase (LOCAL->buf);	/* uppercase only from now on */
-
-    while (*t) {		/* parse the flags */
-      if (*t == '\\') {		/* system flag? */
-	switch (*++t) {		/* dispatch based on first character */
-	case 'S':		/* possible \Seen flag */
-	  if (t[1] == 'E' && t[2] == 'E' && t[3] == 'N') i = fSEEN;
-	  t += 4;		/* skip past flag name */
-	  break;
-	case 'D':		/* possible \Deleted flag */
-	  if (t[1] == 'E' && t[2] == 'L' && t[3] == 'E' && t[4] == 'T' &&
-	      t[5] == 'E' && t[6] == 'D') i = fDELETED;
-	  t += 7;		/* skip past flag name */
-	  break;
-	case 'F':		/* possible \Flagged flag */
-	  if (t[1] == 'L' && t[2] == 'A' && t[3] == 'G' && t[4] == 'G' &&
-	      t[5] == 'E' && t[6] == 'D') i = fFLAGGED;
-	  t += 7;		/* skip past flag name */
-	  break;
-	case 'A':		/* possible \Answered flag */
-	  if (t[1] == 'N' && t[2] == 'S' && t[3] == 'W' && t[4] == 'E' &&
-	      t[5] == 'R' && t[6] == 'E' && t[7] == 'D') i = fANSWERED;
-	  t += 8;		/* skip past flag name */
-	  break;
-	default:		/* unknown */
-	  i = 0;
-	  break;
-	}
-				/* add flag to flags list */
-	if (i && ((*t == '\0') || (*t++ == ' '))) f |= i;
-	else {			/* bitch about bogus flag */
-	  mm_log ("Unknown system flag",ERROR);
-	  return NIL;
-	}
-      }
-      else {			/* no user flags yet */
-	mm_log ("Unknown flag",ERROR);
-	return NIL;
-      }
-    }
+  if (size > *buflen) {	/* make sure enough buffer space */
+    if (*buf) fs_give ((void **) buf);
+    *buf = (char *) fs_get ((*buflen = size) + 1);
   }
-  return f;
+  if ((lseek (LOCAL->cf,off,L_SET) < 0) ||
+      (size && read (LOCAL->cf,*buf,(unsigned) size) != size))
+    fatal ("Message cache file read failed");
+  (*buf)[size] = '\0';		/* tie off string */
+  return *buf;
 }
+
