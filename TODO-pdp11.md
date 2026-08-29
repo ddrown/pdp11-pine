@@ -100,6 +100,18 @@ DONE elsewhere or referenced in passing below.
       itself has further headroom to find (e.g. in `MESSAGECACHE`'s
       own per-message fields, or in when/whether `LONGCACHE` entries
       get freed) rather than only in `bezerk.c`.
+    - **Update**: exactly this margin ran out for real at 10 messages
+      -- `addr_string()`'s unconditional `MAX_ADDR_EXPN` (1000-byte)
+      allocation floor turned out to be a real, fixed contributor
+      (every From address in the index forced to at least 1001 bytes
+      regardless of its actual length) and is fixed -- see
+      `TODO-pdp11-done.md`'s "`addr_string()`'s `MAX_ADDR_EXPN` floor"
+      entry. Not a full fix for this budget item, just one confirmed
+      piece of it -- the folder-open path was already shown pinned at
+      the hard ceiling *before* this specific allocation even ran, so
+      there's very likely more of the same shape (unconditional floors,
+      permanent per-message allocations) still to find along
+      `do_broach_folder()`/`build_header_line()`'s path.
 
 ### `folder_exists()` and `mail_create()`'s internal `mail_valid()` check disagree about whether a folder exists
 

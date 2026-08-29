@@ -227,9 +227,20 @@ addr_string(addr)
                 + (addr->host   ? strlen(addr->host)   : 0)
                 + (addr->adl    ? strlen(addr->adl)    : 0))
            + 32;    /* "<>", "@", quotes, group ": ", ";" */
-    if(need < MAX_ADDR_EXPN+1)
-      need = MAX_ADDR_EXPN+1;
-
+    /*
+     * No MAX_ADDR_EXPN+1 floor here (there used to be one) -- an
+     * ordinary short address needs a small fraction of that 1000-byte
+     * figure, and forcing every single From address in a folder index
+     * up to it regardless is exactly what a real "Out of free storage
+     * (1001 bytes)" crash traced back to on real hardware, opening a
+     * 10-message folder for the first time: confirmed via adb
+     * (build_header_line -> addr_list_string -> addr_string -> fs_get)
+     * -- the same bug class (and same fix) reply.c's
+     * pretty_addr_string() already went through, whose own comment on
+     * removing its equivalent MAILTMPLEN floor explains why this one's
+     * `+32` already covers the smallest addresses' escaping/quoting
+     * overhead without it. See TODO-pdp11-done.md.
+     */
     if(need > string_size){
 	if(string)
 	  fs_give((void **)&string);

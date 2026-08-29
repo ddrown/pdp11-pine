@@ -11946,3 +11946,56 @@ the error) while opening the *new* folder from `context_open()` via
 - **Size delta**: negligible (a handful of lines changed, no new
   fields or buffers) -- not the point of this fix.
 
+### `addr_string()`'s `MAX_ADDR_EXPN` floor -- the same bug class as `pretty_addr_string()`, still present in its sibling
+
+Direct next real-hardware crash after the fix above, and exactly the
+"zero headroom" concern that entry's own retest already flagged:
+growing the test mailbox to 10 messages hit `Bug in Pine detected:
+"Out of free storage (1001 bytes, brk=57344 ...)"` on ordinary
+startup, `adb` showing the failure on the very first index line drawn
+(`main -> mail_index_screen -> redraw_index_body -> build_header_line
+-> addr_list_string -> addr_string -> fs_get`).
+
+- **Root cause**: `pine/addrutil.c`'s `addr_string()` sizes its
+  static, reused formatting buffer dynamically from the actual
+  address's field lengths (`2 * (personal+mailbox+host+adl lengths) +
+  32`) -- correct and safe on its own -- but then floors the result:
+  `if (need < MAX_ADDR_EXPN+1) need = MAX_ADDR_EXPN+1;`, where
+  `MAX_ADDR_EXPN` is `1000` (`pine/os.h`). `1001` is exactly the
+  crashing allocation size. This forces *every* From address ever
+  formatted for a folder index -- including an ordinary short
+  `user@example.com`, needing well under 100 bytes -- up to at least
+  1001 bytes. `reply.c`'s `pretty_addr_string()` is the sibling
+  function this one's own comment says it copied its dynamic-sizing
+  technique from, and *that* function already had its equivalent
+  floor (`MAILTMPLEN`) removed in an earlier session for this exact
+  reason (see that entry's own write-up) -- `addr_string()` was
+  simply never given the same treatment.
+- **Fixed**: removed the `MAX_ADDR_EXPN+1` floor entirely, matching
+  `pretty_addr_string()`'s already-verified reasoning: the `+32`
+  fixed term already covers the smallest address's escaping/quoting
+  overhead, so nothing more is needed for the common case, and the
+  dynamic `need` calculation already scales correctly for long
+  addresses regardless (unaffected by removing a floor that only ever
+  raised the *minimum*).
+- **Verified**: `./build lnx`, 0 warnings; `python3
+  test/run_smoketests.py`, 31/31 (including
+  `test_resume_postponed_huge_address`, which exercises the long-
+  address path this change doesn't touch). Real hardware: `pine-ovl`
+  rebuild succeeded, resident text actually dropped slightly
+  (37952 -> 37888) from the two deleted lines. Not yet independently
+  reconfirmed against the original 10-message crash mailbox as of
+  this write-up -- next real-hardware retest should confirm the
+  specific reported crash is gone.
+- **Still open**: this fixes one confirmed contributor, not the
+  underlying "zero headroom" finding itself (see "The real memory
+  budget" entry's Update) -- `do_broach_folder()`'s own checkpoints
+  already showed `brk` pinned at the hard ceiling *before*
+  `build_header_line()` even starts, for a mailbox this small. Worth
+  specifically auditing what else in the folder-open/index-build path
+  still carries an unnecessary floor or permanent allocation of this
+  same shape before assuming this was the only one.
+- **Size delta**: `text -64` on real hardware (two fewer lines of
+  code); the real win is eliminating a spurious 1000-byte-plus
+  allocation floor on the folder-open critical path, not the code
+  size itself.
