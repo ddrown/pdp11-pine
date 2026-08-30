@@ -108,22 +108,6 @@ grow_tmp_20k_buf(need)
       tmp_20k_buf = (char *) fs_get(newsize);
 
     tmp_20k_buf_size = newsize;
-
-    /* TEMPORARY -- logging every real resize of this never-shrinking
-     * shared buffer, to check whether it (not a true leak) accounts
-     * for the 2048-byte-per-compose-cycle heap growth seen chasing
-     * the "Out of free storage" crash chain. Durable file log, same
-     * reasoning as send.c's brk_checkpoint(): stdio buffering isn't
-     * guaranteed to survive an abort(). See TODO-pdp11-done.md. */
-    {
-	FILE *f = fopen("/tmp/compose_brk.log", "a");
-	if(f){
-	    fprintf(f, "grow_tmp_20k_buf: need=%lu newsize=%lu brk=%ld\n",
-		    (unsigned long) need, (unsigned long) newsize,
-		    (long) sbrk(0));
-	    fclose(f);
-	}
-    }
 }
 
 
@@ -235,7 +219,6 @@ stack_paint_report(void)
     printf("stack high-water mark: depth=%ld bytes below main()'s start\n",
 	   (long) (stack_paint_high - p));
 }
-
 
 /*----------------------------------------------------------------------
      main routine -- entry point

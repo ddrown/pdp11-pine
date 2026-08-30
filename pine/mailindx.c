@@ -609,18 +609,6 @@ build_header_line(message_number)
     char         *s, *s_tmp, *buffer;
     struct date   d;
 
-    /* TEMPORARY -- unconditional per-call log, before any early
-     * return, to see whether/how often this function actually runs
-     * and which path it takes. See TODO-pdp11-done.md. */
-    {
-	FILE *f = fopen("/tmp/compose_brk.log", "a");
-	if(f){
-	    fprintf(f, "build_header_line(%ld) called: brk=%ld\n",
-		    message_number, (long) sbrk(0));
-	    fclose(f);
-	}
-    }
-
     if(*(buffer = get_index_cache(message_number)) != '\0') {
 	return(buffer);
     }
@@ -633,14 +621,6 @@ build_header_line(message_number)
 
     if(envelope == NULL || cache == NULL) {
         sprintf(buffer,"    %-3ld", message_number);
-	{
-	    FILE *f = fopen("/tmp/compose_brk.log", "a");
-	    if(f){
-		fprintf(f, "build_header_line(%ld) NULL envelope/cache, no free: brk=%ld\n",
-			message_number, (long) sbrk(0));
-		fclose(f);
-	    }
-	}
         return(buffer);
     }
 
@@ -656,14 +636,6 @@ build_header_line(message_number)
 	sprintf(buffer,"    %-3ld        %-*.*s", message_number,
 		max(i_cache_width()-15, 0), max(i_cache_width()-15, 0),
 		"[No Text]");
-	{
-	    FILE *f = fopen("/tmp/compose_brk.log", "a");
-	    if(f){
-		fprintf(f, "build_header_line(%ld) empty envelope, no free: brk=%ld\n",
-			message_number, (long) sbrk(0));
-		fclose(f);
-	    }
-	}
 	return(buffer);
     }
 
@@ -772,21 +744,6 @@ build_header_line(message_number)
 	if(lelt){
 	    mail_free_envelope(&lelt->env);
 	    mail_free_body(&lelt->body);
-	}
-    }
-
-    /* TEMPORARY -- per-row brk checkpoint, to check whether the
-     * mail_lelt()-based free above actually lets brk stabilize across
-     * rows (working) or grows roughly linearly per message (not
-     * working, or something else is also caching). Durable file log,
-     * same reasoning as send.c's brk_checkpoint(). See
-     * TODO-pdp11-done.md. */
-    {
-	FILE *f = fopen("/tmp/compose_brk.log", "a");
-	if(f){
-	    fprintf(f, "build_header_line(%ld): brk=%ld\n",
-		    message_number, (long) sbrk(0));
-	    fclose(f);
 	}
     }
 
