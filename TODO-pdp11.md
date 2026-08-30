@@ -132,6 +132,30 @@ DONE elsewhere or referenced in passing below.
       *resize* path had the identical bug the first-allocation fix
       only addressed for `icache.cache == NULL`. Fixed the same way;
       see the same entry above.
+    - **Update**: with 11 messages readable end to end, the next
+      real-hardware crash moved to opening the *sent-mail* folder
+      after composing and sending: `bezerk_parse()`'s original (pre-
+      rewrite) two-loop structure still `memcpy()`'d each message's
+      raw bytes out to a second, transient scratch copy before
+      compacting it -- i.e. every message's bytes were resident
+      *twice* at once during parse, on top of the earlier fix's
+      "only cache the small permanent record" win. Fixed by merging
+      the two loops so each message is compacted and flushed to the
+      on-disk cache directly against its span in the read buffer, with
+      no second copy ever made. A related zero-body-message crash in
+      `bezerk_readcache()` (unrelated `NULL` dereference, left over
+      from the original cache rewrite) surfaced during this fix's own
+      verification and was fixed alongside it. See
+      `TODO-pdp11-done.md`'s "`bezerk_parse()`'s two-loop message
+      parse duplicated every message's bytes" entry.
+    - **Update**: eliminating that duplicate copy still wasn't enough
+      by itself -- the *read-ahead* size (`CHUNK`, 8192 bytes) let
+      `bezerk_parse()` read an entire mailbox in one gulp whenever it
+      was smaller than that, holding everything simultaneously before
+      a single message could be flushed and freed. Shrunk to 1024
+      bytes (matching `MAILTMPLEN`) so a message gets flushed as soon
+      as its boundary is found instead of after the whole file is
+      read. See the same entry above.
     - **Update**: with sent-mail opening cleanly too, the next crash
       moved to the index cache again -- but this time at *exactly* the
       size `i_cache_size()`'s own fix says it should ask for (1863
@@ -149,6 +173,16 @@ DONE elsewhere or referenced in passing below.
       fixed-size ring buffer living in `.bss` (never allocated from
       the heap at all) -- see `TODO-pdp11-done.md`'s "`i_cache_size()`
       replaced with a fixed-size `.bss` ring buffer" entry.
+    - **Update**: with all four fixes above in place, a real-hardware
+      session read an 11-message INBOX, composed and sent mail, then
+      opened and read all 27 accumulated sent-mail messages end to
+      end with no crash (`stack high-water mark: depth=4984 bytes
+      below main()'s start`, clean exit). This is the first fully
+      clean run of this entire test sequence since the investigation
+      began. Not closing this entry yet -- a larger mailbox or a
+      different usage pattern may still find the next fixed-size
+      contributor, following the same shape every fix above has had
+      so far -- but this is a real, substantial milestone.
 
 ### `do_suspend()`'s IMAP-connection-timeout warning may be dead code on this fork
 

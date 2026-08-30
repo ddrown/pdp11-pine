@@ -598,26 +598,6 @@ void bezerk_unlock (int fd,MAILSTREAM *stream,char *lock)
   if (lock && *lock) unlink (lock);
 }
 
-/* Transient per-message parse scratch block -- this is what FILECACHE
- * used to be before message text moved out of permanent RAM (see
- * bezerk.h's FILECACHE comment): a variable-length block holding one
- * message's raw text, linked into a scratch list (via "header" doing
- * double duty as a "next" pointer until finalized) while bezerk_parse()
- * scans and compacts it. Once a message's header/body split and
- * Status:/X-Status: stripping are finalized, its RAWCACHE block is
- * flushed to LOCAL->cf and freed -- nothing here is kept permanently.
- */
-
-typedef struct raw_cache {
-  char *header;			/* pointer to RFC 822 header, or (until
-				   finalized) next block in the scratch list */
-  unsigned long headersize;	/* size of RFC 822 header */
-  char *body;			/* pointer to message body */
-  unsigned long bodysize;	/* size of message body */
-  char status[sizeof (STATUS)];	/* status flags */
-  char internal[1];		/* start of internal header and data */
-} RAWCACHE;
-
 /* Berkeley mail parse and lock mailbox
  * Accepts: MAIL stream
  *	    space to write lock file name
@@ -629,15 +609,19 @@ typedef struct raw_cache {
 int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
 {
   int fd;
-  long delta,i,j,is,is1;
-  char *s,*s1,*t = NIL,*e;
+  long delta,i,j,is,is1,msglen;
+  char *s,*s1,*t = NIL,*e,*sdel;
+  char *msgstart,*hdrstart,*bodystart,*msgend;
+  char savedch[2];
+  unsigned long hdrsize,bodysize;
+  char msgstatus[sizeof (STATUS)];
+  char datebuf[27];
   int ti = 0,zn = 0;
   int first = T;
   long nmsgs = stream->nmsgs;
   long recent = stream->recent;
   struct stat sbuf;
   MESSAGECACHE *elt;
-  RAWCACHE *m = NIL,*n = NIL;
   mail_lock (stream);		/* guard against recursion or pingers */
 				/* open and lock mailbox (shared OK) */
   if ((fd = bezerk_lock (LOCAL->name,LOCAL->ld ? O_RDWR : O_RDONLY,NIL,
@@ -725,25 +709,219 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
       while ((e = bezerk_eom (s,s1,i)) || !delta) {
 	nmsgs++;		/* yes, have a new message */
 				/* calculate message length */
-	j = ((e ? e : s1 + i) - s) - 1;
-	if (m) {		/* new cache needed, have previous data? */
-	  n->header = (char *) fs_get (sizeof (RAWCACHE) + j + 1);
-	  n = (RAWCACHE *) n->header;
-	}
-	else m = n = (RAWCACHE *) fs_get (sizeof (RAWCACHE) + j + 1);
-				/* copy message data */
+	msglen = ((e ? e : s1 + i) - s) - 1;
+	msgstart = s;
 	/*
-	 * Same argument-width bug as the read() call above: memcpy()
-	 * is also an unprototyped "char *memcpy();" here (string.h),
-	 * and j is long -- caused this to silently copy the wrong
-	 * number of bytes, leaving n->internal empty/garbage and
-	 * failing the per-message VALID() re-check below with "Bogus
-	 * entry in new cache list". See TODO-pdp11-done.md.
+	 * Process this message directly against its span in LOCAL->buf
+	 * instead of memcpy()'ing it out to a private scratch block
+	 * first (that used to be what the RAWCACHE struct/list below
+	 * this comment's old home were for) -- see TODO-pdp11-done.md's
+	 * writeup of the "Out of free storage" crash this caused when a
+	 * single message's bytes were transiently resident twice (once
+	 * here, once in its own copy) at the same time.
+	 *
+	 * msgend/savedch temporarily NUL-terminate the message in place
+	 * so the same strchr()/VALID()-based scanning logic below (kept
+	 * byte-for-byte) can run on it. Two bytes, not one, are saved
+	 * and restored: the empty-message bugtrap a few lines down can
+	 * strcat() a synthetic "\n" onto a message with no newlines at
+	 * all, which (like the original RAWCACHE allocation's own +1
+	 * spare byte) needs one byte of headroom past the terminator
+	 * for its own new terminator. msgend[1] is always a real,
+	 * already-valid buffer byte to borrow: either the following
+	 * message's first character (when e is set), or the read loop's
+	 * own chunk-tie-off NUL (when this is the last message and e is
+	 * NIL) -- save/restore leaves either case exactly as found.
 	 */
-	memcpy (n->internal,s,(unsigned)j);
-	n->internal[j] = '\0';
-	n->header = NIL;	/* initially no link */
-	n->headersize = j;	/* stash away buffer length */
+	msgend = s + msglen;
+	savedch[0] = msgend[0]; savedch[1] = msgend[1];
+	msgend[0] = '\0';
+
+	/* This is a bugtrap for bogons in the mailbox text, which may
+	 * happen if memory is corrupted.  Note that in the case of a
+	 * totally empty message, a newline is appended and counts
+	 * adjusted.
+	 */
+	if (!((s = msgstart) && VALID (s,t,ti,zn)))
+	  if (!(s && !strchr (s,'\n') && strcat (s,"\n") && VALID (s,t,ti,zn) &&
+		msglen++))
+	    fatal ("Bogus entry in mailbox text");
+				/* pointer to message header */
+	hdrstart = s = strchr (t++,'\n') + 1;
+	hdrsize = msglen - (hdrstart - msgstart);
+	bodystart = NIL;	/* assume no body as yet */
+	bodysize = 0;
+	recent++;		/* assume recent by default */
+	(elt = mail_elt (stream,nmsgs))->recent = T;
+				/* calculate initial Status/X-Status lines */
+	bezerk_update_status (msgstatus,elt);
+				/* generate plausable IMAPish date string */
+	datebuf[2] = datebuf[6] = datebuf[20] = '-';
+	datebuf[11] = ' ';
+	datebuf[14] = datebuf[17] = ':';
+				/* dd */
+	datebuf[0] = t[ti - 3]; datebuf[1] = t[ti - 2];
+				/* mmm */
+	datebuf[3] = t[ti - 7]; datebuf[4] = t[ti - 6];
+	datebuf[5] = t[ti - 5];
+				/* hh */
+	datebuf[12] = t[ti]; datebuf[13] = t[ti + 1];
+				/* mm */
+	datebuf[15] = t[ti + 3]; datebuf[16] = t[ti + 4];
+	if (t[ti += 5] == ':') {	/* ss if present */
+	  datebuf[18] = t[++ti];
+	  datebuf[19] = t[++ti];
+	  ti++;			/* move to space */
+	}
+	else datebuf[18] = datebuf[19] = '0';
+				/* yy -- advance over timezone if necessary */
+	if (zn == ++ti) ti += (((t[zn] == '+') || (t[zn] == '-')) ? 6 : 4);
+	datebuf[7] = t[ti]; datebuf[8] = t[ti + 1];
+	datebuf[9] = t[ti + 2]; datebuf[10] = t[ti + 3];
+				/* zzz */
+	t = zn ? (t + zn) : "LCL";
+	datebuf[21] = *t++; datebuf[22] = *t++; datebuf[23] = *t++;
+	if ((datebuf[21] != '+') && (datebuf[21] != '-'))
+	  datebuf[24] = '\0';
+	else {			/* numeric time zone */
+	  datebuf[24] = *t++; datebuf[25] = *t++;
+	  datebuf[26] = '\0'; datebuf[20] = ' ';
+	}
+				/* set internal date */
+	if (!mail_parse_date (elt,datebuf)) mm_log ("Unparsable date",WARN);
+
+	is = 0;			/* initialize newline count */
+	sdel = NIL;		/* no status stuff yet */
+	do switch (*(t = s)) {	/* look at header lines */
+	case 'X':		/* possible X-Status: line */
+	  if (s[1] == '-' && s[2] == 'S') s += 2;
+	  else {
+	    is++;		/* count another newline */
+	    break;		/* this is uninteresting after all */
+	  }
+	case 'S':		/* possible Status: line */
+	  if (s[1] == 't' && s[2] == 'a' && s[3] == 't' && s[4] == 'u' &&
+	      s[5] == 's' && s[6] == ':') {
+	    if (!sdel) sdel = t;	/* note deletion point */
+	    s += 6;			/* advance to status flags */
+	    do switch (*s++) {		/* parse flags */
+	    case 'R':		/* message read */
+	      elt->seen = T;
+	      break;
+	    case 'O':		/* message old */
+	      if (elt->recent) {	/* don't do this more than once! */
+		elt->recent = NIL;
+		recent--;		/* not recent any longer... */
+	      }
+	      break;
+	    case 'D':		/* message deleted */
+	      elt->deleted = T;
+	      break;
+	    case 'F':		/* message flagged */
+	      elt ->flagged = T;
+	      break;
+	    case 'A':		/* message answered */
+	      elt ->answered = T;
+	      break;
+	    default:		/* some other crap */
+	      break;
+	    } while (*s && *s != '\n');
+				/* recalculate Status/X-Status lines */
+	    bezerk_update_status (msgstatus,elt);
+	  }
+	  else is++;		/* otherwise random line */
+	  break;
+
+	case '\n':		/* end of header */
+	  bodystart = ++s;	/* start of body is here */
+	  j = bodystart - hdrstart;	/* new header size */
+				/* calculate body size */
+	  bodysize = hdrsize - j;
+	  if (sdel) {		/* saw status poop? */
+	    *sdel++ = '\n';	/* patch in trailing newline */
+	    hdrsize = sdel - hdrstart;
+	  }
+	  else hdrsize = j;	/* set header size */
+	  s = NIL;		/* don't scan any further */
+	  is++;			/* count a newline */
+	  break;
+	case '\0':		/* end of message */
+	  if (sdel) {		/* saw status poop? */
+	    *sdel++ = '\n';	/* patch in trailing newline */
+	    hdrsize = sdel - hdrstart;
+	  }
+	  is++;			/* count an extra newline here */
+	  break;
+	default:		/* anything else is uninteresting */
+	  if (sdel) {		/* have status stuff to worry about? */
+	    j = s - sdel;	/* yuck!!  calculate size of delete area */
+				/* blat remaining number of bytes down */
+	    memmove (sdel,s,hdrstart + hdrsize - s);
+	    hdrsize -= j;	/* update for new size */
+	    sdel = NIL;		/* no more delete area */
+				/* tie off old cruft */
+	    *(hdrstart + hdrsize) = '\0';
+	  }
+	  is++;
+	  break;
+	} while (s && (s = strchr (s,'\n')) && s++);
+				/* count newlines in body */
+	if (s = bodystart) while (*s) if (*s++ == '\n') is++;
+	elt->rfc822_size = hdrsize + bodysize + is;
+	{			/* flush this message's now-compacted text to
+				   the cache file and record a small
+				   permanent FILECACHE entry -- see
+				   bezerk.h's FILECACHE comment.
+
+				   [From line][header] (msgstart through
+				   hdrstart+hdrsize) is always genuinely
+				   contiguous -- but bodystart is NOT always
+				   exactly hdrstart+hdrsize: when the header's
+				   last line(s) before the blank line were
+				   Status:/X-Status: lines being deleted, the
+				   '\n'/'\0' cases above just patch a synthetic
+				   newline in and shrink hdrsize, without
+				   physically memmove()'ing the now-logically-
+				   deleted bytes out (unlike the default case,
+				   which does memmove() when a normal line
+				   follows a deletion run) -- so there can be a
+				   few bytes of stale gap between the logical
+				   header end and the real bodystart pointer.
+				   This cache file is laid out as
+				   [header][body] with NO gap, so header and
+				   body are written separately here rather
+				   than as one assumed-contiguous span.
+				   bodystart may be NIL (a message with no
+				   blank line before end of text), but only
+				   when bodysize == 0, so the second write
+				   below is skipped in that case. */
+	  FILECACHE *fc = (FILECACHE *) fs_get (sizeof (FILECACHE));
+	  unsigned long fromlen = hdrstart - msgstart;
+	  unsigned long hlen = fromlen + hdrsize;
+	  if ((lseek (LOCAL->cf,LOCAL->cfsize,L_SET) < 0) ||
+	      (hlen && write (LOCAL->cf,msgstart,(unsigned) hlen) != hlen) ||
+	      (bodysize &&
+	       write (LOCAL->cf,bodystart,(unsigned) bodysize) != bodysize))
+	    fatal ("Message cache file write failed");
+	  fc->hoff = LOCAL->cfsize;
+	  fc->fromlen = fromlen;
+	  fc->headersize = hdrsize;
+	  fc->bodysize = bodysize;
+	  memcpy (fc->status,msgstatus,sizeof (STATUS));
+	  LOCAL->cfsize += hlen + bodysize;
+				/* expand the message-info cache if needed */
+	  if (LOCAL->msgs) {
+	    if (nmsgs >= LOCAL->cachesize)
+	      fs_resize ((void **) &LOCAL->msgs,
+			 (LOCAL->cachesize += CACHEINCREMENT) * sizeof (FILECACHE *));
+	  }
+	  else LOCAL->msgs = (FILECACHE **)
+	    fs_get ((LOCAL->cachesize = nmsgs + CACHEINCREMENT) *sizeof (FILECACHE *));
+	  LOCAL->msgs[nmsgs - 1] = fc;
+	}
+
+				/* restore the bytes the fence replaced */
+	msgend[0] = savedch[0]; msgend[1] = savedch[1];
 	if (e) {		/* saw end of message? */
 	  i -= e - s1;		/* new unparsed data count */
 	  s = s1 = e;		/* advance to new message */
@@ -765,201 +943,15 @@ int bezerk_parse (MAILSTREAM *stream,char *lock,int op)
     if (LOCAL->filetime && LOCAL->filetime != sbuf.st_mtime)
       mm_log ("New mailbox modification time but apparently no changes",WARN);
   }
-				/* expand the primary cache */
-  (*mailcache) (stream,nmsgs,CH_SIZE);
-  if (LOCAL->msgs) {		/* have a cache yet? */
-    if (nmsgs >= LOCAL->cachesize)
-      fs_resize ((void **) &LOCAL->msgs,
-		 (LOCAL->cachesize += CACHEINCREMENT) * sizeof (FILECACHE *));
-  }
-  else LOCAL->msgs = (FILECACHE **)
-    fs_get ((LOCAL->cachesize = nmsgs + CACHEINCREMENT) *sizeof (FILECACHE *));
-
-  if (LOCAL->buflen > CHUNK) {	/* maybe move where the buffer is in memory*/
+				/* maybe move where the buffer is in memory --
+				   safe now that every message has already
+				   been flushed to LOCAL->cf above, so
+				   nothing still needs LOCAL->buf's content */
+  if (LOCAL->buflen > CHUNK) {
     fs_give ((void **) &LOCAL->buf);
     LOCAL->buf = (char *) fs_get ((LOCAL->buflen = CHUNK) + 1);
   }
-  for (i = stream->nmsgs, n = m; i < nmsgs; i++) {
-    m = n;			/* current and next scratch block --
-				   LOCAL->msgs[i] isn't set until this
-				   message's text has been flushed to the
-				   cache file, below */
-    n = (RAWCACHE *) n->header;
-    /* This is a bugtrap for bogons in the new message cache, which may happen
-     * if memory is corrupted.  Note that in the case of a totally empty
-     * message, a newline is appended and counts adjusted.
-     */
-    if (!((s = m->internal) && VALID (s,t,ti,zn)))
-      if (!(s && !strchr (s,'\n') && strcat (s,"\n") && VALID (s,t,ti,zn) &&
-	    m->headersize++))
-	fatal ("Bogus entry in new cache list");
-				/* pointer to message header */
-    m->header = s = strchr (t++,'\n') + 1;
-    m->headersize -= m->header - m->internal;
-    m->body = NIL;		/* assume no body as yet */
-    m->bodysize = 0;
-    recent++;			/* assume recent by default */
-    (elt = mail_elt (stream,i+1))->recent = T;
-				/* calculate initial Status/X-Status lines */
-    bezerk_update_status (m->status,elt);
-				/* generate plausable IMAPish date string */
-    LOCAL->buf[2] = LOCAL->buf[6] = LOCAL->buf[20] = '-';
-    LOCAL->buf[11] = ' ';
-    LOCAL->buf[14] = LOCAL->buf[17] = ':';
-				/* dd */
-    LOCAL->buf[0] = t[ti - 3]; LOCAL->buf[1] = t[ti - 2];
-				/* mmm */
-    LOCAL->buf[3] = t[ti - 7]; LOCAL->buf[4] = t[ti - 6];
-    LOCAL->buf[5] = t[ti - 5];
-				/* hh */
-    LOCAL->buf[12] = t[ti]; LOCAL->buf[13] = t[ti + 1];
-				/* mm */
-    LOCAL->buf[15] = t[ti + 3]; LOCAL->buf[16] = t[ti + 4];
-    if (t[ti += 5] == ':') {	/* ss if present */
-      LOCAL->buf[18] = t[++ti];
-      LOCAL->buf[19] = t[++ti];
-      ti++;			/* move to space */
-    }
-    else LOCAL->buf[18] = LOCAL->buf[19] = '0';
-				/* yy -- advance over timezone if necessary */
-    if (zn == ++ti) ti += (((t[zn] == '+') || (t[zn] == '-')) ? 6 : 4);
-    LOCAL->buf[7] = t[ti]; LOCAL->buf[8] = t[ti + 1];
-    LOCAL->buf[9] = t[ti + 2]; LOCAL->buf[10] = t[ti + 3];
-				/* zzz */
-    t = zn ? (t + zn) : "LCL";
-    LOCAL->buf[21] = *t++; LOCAL->buf[22] = *t++; LOCAL->buf[23] = *t++;
-    if ((LOCAL->buf[21] != '+') && (LOCAL->buf[21] != '-'))
-      LOCAL->buf[24] = '\0';
-    else {			/* numeric time zone */
-      LOCAL->buf[24] = *t++; LOCAL->buf[25] = *t++;
-      LOCAL->buf[26] = '\0'; LOCAL->buf[20] = ' ';
-    }
-				/* set internal date */
-    if (!mail_parse_date (elt,LOCAL->buf)) mm_log ("Unparsable date",WARN);
-
-    is = 0;			/* initialize newline count */
-    e = NIL;			/* no status stuff yet */
-    do switch (*(t = s)) {	/* look at header lines */
-    case 'X':			/* possible X-Status: line */
-      if (s[1] == '-' && s[2] == 'S') s += 2;
-      else {
-	is++;			/* count another newline */
-	break;			/* this is uninteresting after all */
-      }
-    case 'S':			/* possible Status: line */
-      if (s[1] == 't' && s[2] == 'a' && s[3] == 't' && s[4] == 'u' &&
-	  s[5] == 's' && s[6] == ':') {
-	if (!e) e = t;		/* note deletion point */
-	s += 6;			/* advance to status flags */
-	do switch (*s++) {	/* parse flags */
-	case 'R':		/* message read */
-	  elt->seen = T;
-	  break;
-	case 'O':		/* message old */
-	  if (elt->recent) {	/* don't do this more than once! */
-	    elt->recent = NIL;
-	    recent--;		/* not recent any longer... */
-	  }
-	  break;
-	case 'D':		/* message deleted */
-	  elt->deleted = T;
-	  break;
-	case 'F':		/* message flagged */
-	  elt ->flagged = T;
-	  break;
-	case 'A':		/* message answered */
-	  elt ->answered = T;
-	  break;
-	default:		/* some other crap */
-	  break;
-	} while (*s && *s != '\n');
-				/* recalculate Status/X-Status lines */
-	bezerk_update_status (m->status,elt);
-      }
-      else is++;		/* otherwise random line */
-      break;
-
-    case '\n':			/* end of header */
-      m->body = ++s;		/* start of body is here */
-      j = m->body - m->header;	/* new header size */
-				/* calculate body size */
-      m->bodysize = m->headersize - j;
-      if (e) {			/* saw status poop? */
-	*e++ = '\n';		/* patch in trailing newline */
-	m->headersize = e - m->header;
-      }
-      else m->headersize = j;	/* set header size */
-      s = NIL;			/* don't scan any further */
-      is++;			/* count a newline */
-      break;
-    case '\0':			/* end of message */
-      if (e) {			/* saw status poop? */
-	*e++ = '\n';		/* patch in trailing newline */
-	m->headersize = e - m->header;
-      }
-      is++;			/* count an extra newline here */
-      break;
-    default:			/* anything else is uninteresting */
-      if (e) {			/* have status stuff to worry about? */
-	j = s - e;		/* yuck!!  calculate size of delete area */
-				/* blat remaining number of bytes down */
-	memmove (e,s,m->header + m->headersize - s);
-	m->headersize -= j;	/* update for new size */
-	e = NIL;		/* no more delete area */
-				/* tie off old cruft */
-	*(m->header + m->headersize) = '\0';
-      }
-      is++;
-      break;
-    } while (s && (s = strchr (s,'\n')) && s++);
-				/* count newlines in body */
-    if (s = m->body) while (*s) if (*s++ == '\n') is++;
-    elt->rfc822_size = m->headersize + m->bodysize + is;
-    {			/* flush this message's now-compacted text to the
-			   cache file and replace the transient RAWCACHE
-			   block with a small permanent FILECACHE record --
-			   see bezerk.h's FILECACHE comment.
-
-			   [From line][header] (m->internal through
-			   m->header+m->headersize) is always genuinely
-			   contiguous -- but m->body is NOT always exactly
-			   m->header+m->headersize: when the header's last
-			   line(s) before the blank line were Status:/
-			   X-Status: lines being deleted, the '\n'/'\0' cases
-			   above just patch a synthetic newline in and shrink
-			   headersize, without physically memmove()'ing the
-			   now-logically-deleted bytes out (unlike the
-			   default case, which does memmove() when a normal
-			   line follows a deletion run) -- so there can be a
-			   few bytes of stale gap between the logical header
-			   end and the real m->body pointer. Harmless for the
-			   original permanent-RAM-pointer design (m->body was
-			   always independently correct), but this cache file
-			   is laid out as [header][body] with NO gap, so
-			   header and body are written separately here rather
-			   than as one assumed-contiguous span. m->body may be
-			   NIL (a message with no blank line before end of
-			   text), but only when m->bodysize == 0, so the
-			   second write below is skipped in that case. */
-      FILECACHE *fc = (FILECACHE *) fs_get (sizeof (FILECACHE));
-      unsigned long fromlen = m->header - m->internal;
-      unsigned long hlen = fromlen + m->headersize;
-      if ((lseek (LOCAL->cf,LOCAL->cfsize,L_SET) < 0) ||
-	  (hlen && write (LOCAL->cf,m->internal,(unsigned) hlen) != hlen) ||
-	  (m->bodysize &&
-	   write (LOCAL->cf,m->body,(unsigned) m->bodysize) != m->bodysize))
-	fatal ("Message cache file write failed");
-      fc->hoff = LOCAL->cfsize;
-      fc->fromlen = fromlen;
-      fc->headersize = m->headersize;
-      fc->bodysize = m->bodysize;
-      memcpy (fc->status,m->status,sizeof (STATUS));
-      LOCAL->cfsize += hlen + m->bodysize;
-      LOCAL->msgs[i] = fc;
-      fs_give ((void **) &m);
-    }
-  }
-  if (n) fatal ("Cache link-list inconsistency");
+  i = nmsgs;
   while (i < LOCAL->cachesize) LOCAL->msgs[i++] = NIL;
 				/* update parsed file size and time */
   LOCAL->filesize = sbuf.st_size;
@@ -1256,7 +1248,13 @@ void bezerk_update_status (char *status,MESSAGECACHE *elt)
 char *bezerk_readcache (MAILSTREAM *stream,off_t off,unsigned long size,
 			char **buf,unsigned long *buflen)
 {
-  if (size > *buflen) {	/* make sure enough buffer space */
+  /*
+   * "size > *buflen" alone left *buf NULL forever on a stream whose
+   * very first call here asks for 0 bytes (a message with an empty
+   * body, size==0, *buflen starts at 0 too) -- the tie-off write below
+   * then dereferenced that NULL. See TODO-pdp11-done.md.
+   */
+  if (!*buf || size > *buflen) {	/* make sure enough buffer space */
     if (*buf) fs_give ((void **) buf);
     *buf = (char *) fs_get ((*buflen = size) + 1);
   }

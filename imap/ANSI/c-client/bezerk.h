@@ -151,7 +151,24 @@
 
 #define KODRETRY 15		/* kiss-of-death retry in seconds */
 #define LOCKTIMEOUT 5		/* lock timeout in minutes */
-#define CHUNK 8192		/* read-in chunk size */
+/*
+ * Read-in chunk size. Was 8192: bezerk_parse()'s read loop reads
+ * min(CHUNK,delta) bytes in one gulp *before* looking for any message
+ * boundary within it, so on a fresh open (delta == whole file size)
+ * any mailbox at or under CHUNK bytes -- however many messages that
+ * is -- gets read into LOCAL->buf in a single shot, all still resident
+ * at once even after the loop-merge fix stopped requiring a *second*,
+ * duplicate copy per message (see TODO-pdp11-done.md). Confirmed by a
+ * real "Out of free storage (7208 bytes)" crash opening a two-message,
+ * ~7.2KB sent-mail folder that would have fit easily one message at a
+ * time. 1024 matches MAILTMPLEN (mail.h) -- comfortably above a
+ * typical single message, comfortably below the few KB of headroom
+ * this target has left during a folder-open. A message bigger than
+ * this still works via this same loop's existing fs_resize() growth
+ * path, just in smaller (1024-byte) increments instead of jumping
+ * straight to a possibly-oversized single read.
+ */
+#define CHUNK 1024
 
 
 /* Command bits from bezerk_getflags() */

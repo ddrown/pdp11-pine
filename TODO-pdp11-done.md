@@ -12208,3 +12208,122 @@ brk=57344 sp=64414 gap=7070)"`.
   size) in exchange for removing an unbounded-growth heap allocation
   that had already crashed twice at two different row counts.
 
+### `bezerk_parse()`'s two-loop message parse duplicated every message's bytes, and its read-ahead size could gulp a whole mailbox at once
+
+With the index-cache fix above landing, the next real-hardware crash
+moved past reading INBOX and into opening the *sent-mail* folder after
+composing and sending: `Bug in Pine detected: "Out of free storage
+(6927 bytes, brk=57344 sp=63020 gap=5676)"`, `adb` showing `fs_get`
+called directly from `bezerk_parse()`.
+
+- **Root cause (duplicated bytes)**: `bezerk_parse()`'s original (pre-
+  cache-rewrite) structure, left untouched by the earlier "stop
+  permanently caching raw text" rewrite as "the tricky part" to avoid
+  destabilizing, is two sequential loops. The first reads the mailbox
+  in `CHUNK`-sized pieces into `LOCAL->buf` and, as each message
+  boundary is found, `fs_get()`s a **brand new scratch block and
+  `memcpy()`s the message's raw bytes into it** -- duplicating bytes
+  that already exist in `LOCAL->buf`. Only after *every* message in
+  the read pass has been split off into its own block does the second
+  loop walk them one at a time, compact each one, flush it to the new
+  on-disk cache, and free it. A single ~6.9KB message's bytes were
+  therefore resident *twice* at once (once in the read buffer, once in
+  its own copy) with only 5676 bytes free -- and because the first
+  loop finishes before the second frees anything, a mailbox with
+  several moderate messages read in one pass could hit the same wall
+  even with no single large message.
+- **Fixed**: merged the two loops so each message is compacted
+  (header/body split, Status:/X-Status: stripping) and flushed to
+  `LOCAL->cf` **immediately**, directly against its span inside
+  `LOCAL->buf`, with the second-copy scratch block never allocated at
+  all. The delicate per-message logic itself (`VALID()` re-validation,
+  the header-line scanning switch, `memmove`-based Status compaction,
+  the IMAPish date-string construction) is unchanged, just renamed
+  from `m->`-prefixed fields to local variables and pointed at the
+  message's span inside `LOCAL->buf` instead of a private copy.
+  Two supporting techniques made this safe:
+  - **Temporary NUL-fence, not a copy**: the scanning logic needs the
+    message text NUL-terminated at its own end, which `LOCAL->buf` is
+    not (it's only tied off at the end of the currently-read chunk).
+    Rather than copy the message out to get a private, NUL-terminated
+    buffer, the byte immediately after the message's real end is
+    saved, temporarily overwritten with `'\0'`, and restored once this
+    message's processing finishes -- leaving the buffer exactly as
+    found either way (that byte is either the following message's
+    first real character, or the read loop's own chunk tie-off `'\0'`
+    for the last message in a chunk). Two bytes, not one, are saved
+    and restored: a pre-existing defensive bugtrap for a message with
+    *no* newlines anywhere can itself append a synthetic `"\n"` via
+    `strcat()`, which needs one spare byte past its own new
+    terminator -- exactly the safety margin the original scratch
+    block's `+1`-sized allocation always provided, now provided by
+    borrowing (and restoring) one more real buffer byte instead.
+  - **A second scratch buffer moved to the stack**: the per-message
+    finalize step also builds a 27-byte IMAPish date string, which
+    used to be built directly into `LOCAL->buf` -- safe in the
+    original two-loop design because the real message bytes had
+    already been copied elsewhere by then, but unsafe once processing
+    happens in place (the very first message in a chunk starts at
+    `LOCAL->buf+0`, so writing the date string there would clobber the
+    message's own "From " line while it's still being read). Moved to
+    a small local `char datebuf[27]` instead -- a change of which
+    buffer holds this unrelated scratch value, not to the date-parsing
+    logic itself.
+  `LOCAL->msgs[]`'s capacity growth (previously a single pre-sized
+  allocation done once after the whole first loop) and the explicit
+  `(*mailcache)(stream,nmsgs,CH_SIZE)` pre-sizing call (redundant --
+  `mail_elt()` already calls this internally before making each elt,
+  `imap/ANSI/c-client/mail.c:497`) both moved to run incrementally,
+  once per newly-discovered message, alongside everything else.
+- **A second, independent bug found during this fix's own
+  verification, not before**: constructing a synthetic zero-body
+  message to exercise the merged loop's edge cases crashed inside
+  `bezerk_readcache()` with a `NULL` pointer dereference
+  (`(*buf)[size] = '\0'` with `size == 0` and `*buf` still `NULL`).
+  `bezerk_readcache()`'s buffer-growth check, `if (size > *buflen)`,
+  never allocates anything the first time it's asked for exactly 0
+  bytes (`0 > 0` is false) -- confirmed this reproduces identically
+  against the pre-merge (already-committed) `bezerk_readcache()` too,
+  so it's a bug from the *original* cache rewrite, unrelated to this
+  merge, just surfaced by this merge's own test coverage. Fixed by
+  also allocating when `*buf` is still `NULL`, regardless of the
+  requested size (`if (!*buf || size > *buflen)`).
+- **A third, related fix once the above two got sent-mail opening
+  again**: it crashed once more, `"Out of free storage (7208 bytes...
+  gap=6624)"`, this time inside the read-loop's own `LOCAL->buf`-growth
+  `fs_get()`/`fs_resize()`, not the now-removed duplicate copy. Root
+  cause: `bezerk_parse()`'s read loop reads `min(CHUNK,delta)` bytes in
+  one gulp *before* ever checking for a message boundary inside that
+  data -- `CHUNK` was 8192, so a fresh open of any mailbox at or under
+  8192 bytes (sent-mail, by this point ~7.2KB across two messages) got
+  read into `LOCAL->buf` in a single shot, all still resident at once
+  even with the per-message duplicate gone. Fixed by shrinking `CHUNK`
+  to 1024 (`imap/ANSI/c-client/bezerk.h`, matching `MAILTMPLEN`) -- a
+  single message larger than that still grows the buffer via the same
+  pre-existing `fs_resize()` path, just in smaller increments; the
+  common case (several small-to-medium messages combining to more than
+  one `CHUNK`) now gets each message flushed and freed as soon as its
+  boundary is found, instead of holding everything read so far until
+  the whole gulp is scanned.
+- **Verified**: `./build lnx`, 0 warnings on both the normal build and
+  a `-Wall -Wextra` check confirming the merged `bezerk_parse()`
+  introduces no new warning classes versus the pre-merge file (19
+  warnings either way, identical categories). `python3
+  test/run_smoketests.py`, 31/31 after each of the three fixes above.
+  New targeted pty-driven scenarios beyond the standard suite: several
+  small messages packed within one `CHUNK` read, a mailbox whose total
+  size straddles multiple `CHUNK` boundaries, a message with pre-
+  existing Status:/X-Status: lines (exercises the in-place compaction
+  path), and a zero-body message (exercises the `bezerk_readcache()`
+  fix) -- all render correctly with no corruption across message
+  boundaries. Real hardware: `c-client` + `pine-ovl` rebuilt cleanly
+  after each fix; final user retest (11-message INBOX read, compose,
+  send, then open and read all 27 sent-mail messages) completed with
+  no crash.
+- **Files touched**: `imap/ANSI/c-client/bezerk.c` (`bezerk_parse()`
+  only, plus deleting the now-dead `RAWCACHE` typedef/comment) and
+  `bezerk_readcache()`; `imap/ANSI/c-client/bezerk.h` (`CHUNK`'s
+  value and comment).
+- **Size delta**: negligible on `bin/pine`'s own footprint (this is
+  all c-client-side transient-memory behavior, not permanent
+  structures) -- the win is peak parse-time memory, not static size.
