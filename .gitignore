@@ -31,3 +31,9 @@ fuzz/consumer_fuzz
 fuzz/*.o
 fuzz/crash-*
 fuzz/findings/
+.dz-cache/
+.dz-remote-dest
+cache-compare.sh
+ld.c
+ld.txt
+mkovmake.txt
