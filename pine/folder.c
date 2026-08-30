@@ -1644,6 +1644,24 @@ folder_exists(c_string, file)
 	if(strlen(file) >= sizeof(fn))
 	  return(0);
 	strcpy(fn, file);
+	/*
+	 * A bare name (no '/','~','{','*' prefix) was left completely
+	 * unexpanded here -- e.g. "sent-mail" instead of "<folders_dir>/
+	 * sent-mail" -- so the search below (context_find_all() ->
+	 * dummy_find_all()) looked for it in the user's HOME directory
+	 * (c-client's generic default) instead of the actual folders
+	 * directory it really lives in, always reporting "doesn't exist"
+	 * for a perfectly real folder. Confirmed live: answering "y" to
+	 * the resulting bogus "sent-mail" doesn't exist. Create?" prompt
+	 * immediately produced "Can't create ... folder already exists"
+	 * from mail_create(), which resolves the same bare name correctly.
+	 * expand_foldername() (os.c) is the same helper mailcmd.c/send.c
+	 * already use to resolve a bare Fcc/folder name the same way
+	 * mail_create() itself will -- use it here too instead of a raw
+	 * copy. See TODO-pdp11-done.md.
+	 */
+	if(!expand_foldername(fn))
+	  return(0);
     }
 
     find_stream = mail_open(NULL, fn, OP_PROTOTYPE);

@@ -11999,3 +11999,41 @@ startup, `adb` showing the failure on the very first index line drawn
   code); the real win is eliminating a spurious 1000-byte-plus
   allocation floor on the folder-open critical path, not the code
   size itself.
+
+### `folder_exists()` resolves a bare folder name against the wrong directory
+
+Direct next real-hardware crash after the `addr_string()` fix above:
+sending mail prompted `"sent-mail" doesn't exist. Create?`, and
+answering "y" immediately produced `[Can't create folder mail/sent-
+mail: folder already exists]` from `mail_create()` -- two different
+c-client entry points disagreeing about whether the same, real folder
+exists. Previously tracked as an open TODO ("`folder_exists()` and
+`mail_create()`'s internal `mail_valid()` check disagree about whether
+a folder exists").
+
+- **Root cause**: `pine/folder.c`'s `folder_exists()`, in its no-
+  context branch, copied the bare candidate name (`"sent-mail"`)
+  straight into its search buffer with `strcpy()` and searched for it
+  via `context_find_all()` unexpanded. A bare name with no `/`, `~`,
+  `{`, or `*` prefix means "look in the configured `folders_dir`", but
+  nothing here ever applied that expansion -- so the search actually
+  looked in the user's home directory (c-client's generic default for
+  an unqualified name), found nothing, and reported "doesn't exist"
+  for a folder that was really sitting in `folders_dir` the whole
+  time. `mail_create()` (`imap/ANSI/c-client/mail.c`), asked to create
+  the same bare name moments later, resolves it correctly and
+  immediately collides with the real file.
+- **Fixed**: call `expand_foldername()` (`pine/os.c`) on the bare name
+  before searching, exactly like `mailcmd.c`/`send.c` already do
+  before ever handing a bare Fcc/folder name to `mail_create()` -- so
+  `folder_exists()` now resolves the name the same way its caller's
+  eventual create attempt will.
+- **Verified**: `./build lnx`, 0 warnings; `python3
+  test/run_smoketests.py`, 31/31. Real hardware: rebuilt cleanly; the
+  user's own later real-hardware retest (send, read 10 messages, send
+  again) reached this exact code path without the false "doesn't
+  exist" prompt recurring, though the deeper memory-pressure crashes
+  further down this session's chain (see below) meant it wasn't
+  independently isolated with a dedicated repro at the time.
+- **Size delta**: negligible (one function call added).
+

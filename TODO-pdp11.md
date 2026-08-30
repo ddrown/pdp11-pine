@@ -113,24 +113,6 @@ DONE elsewhere or referenced in passing below.
       permanent per-message allocations) still to find along
       `do_broach_folder()`/`build_header_line()`'s path.
 
-### `folder_exists()` and `mail_create()`'s internal `mail_valid()` check disagree about whether a folder exists
-
-- [ ] Found live on real hardware: answering "y" to `"sent-mail"
-      doesn't exist. Create?` immediately produced `Can't create ...
-      folder already exists`. `pine/folder.c`'s `folder_exists()`
-      (used by `send.c`'s Fcc-exists check before prompting) answers
-      via `context_find_all()` -- a pattern-matching folder *search*
-      built for browsing/completion UI -- while `mail_create()`
-      (`imap/ANSI/c-client/mail.c`) answers via `mail_valid()`, a
-      direct existence check. Plausible that `context_find_all()`
-      doesn't correctly match a plain, non-wildcard name when called
-      with a NULL context (`folder_exists(NULL, fcc)`, `send.c`'s
-      exact call shape), but not traced further -- has a trivial
-      workaround (don't confirm the create when it's already there),
-      so didn't block continuing to test other things. See
-      `TODO-pdp11-done.md`'s "The send/read/compose crash chain" entry
-      for the exact repro sequence.
-
 ### `do_suspend()`'s IMAP-connection-timeout warning may be dead code on this fork
 
 - [ ] Found while string-cutting `signals.c` (see `TODO-pdp11-done.md`).
