@@ -586,8 +586,22 @@ run_composer_subprocess(char *anchor, char *to, char *cc, char *bcc,
     hsig = signal(SIGHUP, SIG_IGN);
 
     if((pid = fork()) == 0){
-	execl(pico_child_path(), "pico", "-P", handoff_path, result_path,
-	      (char *)0);
+	/*
+	 * execlp(), not execl(): pico_child_path() falls back to a bare
+	 * "pico" (no '/') when pine's own argv[0] had no directory part
+	 * (e.g. pine found via $PATH lookup, invoked by bare name) --
+	 * that fallback only actually reaches $PATH via the "p" exec
+	 * variant. execl() never searches $PATH at all, so a pathless
+	 * "pico" was instead looked up relative to the current working
+	 * directory, silently failing (child _exit(-1), no result file)
+	 * unless the caller happened to be cd'd into pico's directory.
+	 * execlp() is a strict superset of execl()'s behavior when the
+	 * path *does* contain a '/' (used as-is, no $PATH search), so
+	 * this is safe for both branches of pico_child_path(). See
+	 * TODO-pdp11-done.md.
+	 */
+	execlp(pico_child_path(), "pico", "-P", handoff_path, result_path,
+	       (char *)0);
 	_exit(-1);
     }
 

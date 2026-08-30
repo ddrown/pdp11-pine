@@ -12327,3 +12327,55 @@ called directly from `bezerk_parse()`.
 - **Size delta**: negligible on `bin/pine`'s own footprint (this is
   all c-client-side transient-memory behavior, not permanent
   structures) -- the win is peak parse-time memory, not static size.
+
+### Composer subprocess failed to start when pine was invoked by bare name via `$PATH`
+
+User-reported: installing `pine` to a directory on `$PATH` and running
+it by typing just `pine` (not `./pine` or a full path) made every
+Compose fail immediately with `[Composer subprocess produced no
+result]`.
+
+- **Root cause**: `run_composer_subprocess()` (`pine/send.c`) execs the
+  composer via `pico_child_path()`, which derives pico's location from
+  `ps_global->pine_exe` -- a raw, unresolved copy of pine's own
+  `argv[0]` (`pine/args.c`). When a shell finds a program via a
+  `$PATH` search and runs it by bare name, it passes `argv[0]` as
+  exactly the bare name typed, not the resolved path (confirmed
+  directly against the real compiled binary with both `bash -c` and
+  `dash -c`) -- so `pico_child_path()` had no `/` to find and fell
+  back to a bare `"pico"` string, intending (per its own comment) to
+  rely on `$PATH`. But that string was handed to `execl()`, which
+  never searches `$PATH` at all (only `execlp()`/`execvp()` do) -- a
+  pathless `"pico"` was instead looked up relative to the current
+  working directory, so the exec silently failed (`_exit(-1)` in the
+  forked child, no result file ever written) unless the caller
+  happened to already be `cd`'d into pico's own directory.
+- **A wrong turn during diagnosis, corrected by the user**: an initial
+  attempt to verify "shells pass the bare name as argv[0]" tested a
+  Python script instead of a real binary and got the opposite (wrong)
+  answer -- a shebang script's `argv[0]` is rewritten by the kernel's
+  interpreter-dispatch mechanism on the way to the interpreter, a
+  completely different code path from execing a real ELF binary
+  directly. That false result led to briefly retracting the correct
+  diagnosis in favor of an unrelated (but real) constraint --
+  `pico_child_path()`'s normal has-a-`/` branch requires `pico` to sit
+  in the exact same directory as `pine` -- before the user's own
+  direct test of a real compiled binary (`argv[0]` printed as `"t"`,
+  not a resolved path) prompted re-testing against the actual `pine`
+  binary and confirming the original diagnosis was right all along.
+- **Fixed**: switched to `execlp()`, which searches `$PATH` when its
+  argument has no `/` and behaves exactly like `execl()` when it does
+  -- safe for both branches of `pico_child_path()`, no conditional
+  needed.
+- **Verified**: reproduced directly by copying `bin/pine`+`bin/pico`
+  into their own directory, adding it to `$PATH`, and running `bash -c
+  "pine"` (and separately `dash -c "pine"`) from an unrelated working
+  directory -- `[Composer subprocess produced no result]` before the
+  fix, composer starts cleanly after. Added
+  `test/cases/test_compose_argv0_no_slash.py`, which reproduces this
+  exact setup (careful to use a `cwd` outside the test's own bindir,
+  since running from inside it would let `execl()`'s buggy
+  cwd-relative lookup find `pico` by coincidence and mask the bug);
+  confirmed it fails against `execl()` and passes against `execlp()`.
+  Full smoketest suite green, 32/32.
+- **Size delta**: negligible (one function name change plus a comment).
