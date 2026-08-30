@@ -12037,3 +12037,174 @@ a folder exists").
   independently isolated with a dedicated repro at the time.
 - **Size delta**: negligible (one function call added).
 
+### `sort_current_folder()`'s comparators leak every message's `LONGCACHE` envelope/body
+
+Found while investigating why memory pressure got worse specifically
+after opening a folder and letting it sort, not just from reading
+messages individually -- the user's own bisection data (11-message
+mailbox: crash while just scrolling the index; 10-message mailbox:
+read fine, but a subsequent send failed as if out of memory) pointed
+at something proportional to *folder open*, not to how many messages
+had actually been viewed.
+
+- **Root cause**: every sort order except `SortSize`
+  (`compare_subjects`, `compare_from`, `compare_to`, `compare_cc`,
+  `compare_message_dates`) calls `mail_fetchstructure()` to read the
+  one field it sorts on. `mail_fetchstructure()` caches its result
+  into the stream's `LONGCACHE` (one `ENVELOPE`/`BODY` per message)
+  *permanently* by default -- fine for `build_header_line()`, which
+  fetches the identical structures right afterward to render the
+  index and immediately frees each one it fetched (see that function's
+  own comment), but the sort comparators never freed anything. Sorting
+  by, say, Subject on an N-message folder therefore populated and
+  permanently retained *every* message's envelope/body before a single
+  index line was ever drawn -- confirmed directly: `do_broach_folder()`'s
+  own `brk()` checkpoints showed the heap already pinned at the hard
+  ceiling immediately after `sort_current_folder()` returned, before
+  `build_header_line()`'s first call.
+- **Fixed**: added `mail_gc(ps_global->mail_stream, GC_ENV)` right
+  after `qsort()`, gated on `so != SortSize` (the one order that never
+  fetches anything). Sorting only ever needed to read each field once
+  to pick an order, not keep it -- `build_header_line()` re-fetches
+  (and re-frees) whatever it actually needs to display immediately
+  after this returns, so nothing downstream depends on the sort having
+  left anything cached.
+- **Verified**: `./build lnx`, 0 warnings; `python3
+  test/run_smoketests.py`, 31/31 (including sort-order-exercising
+  cases). Real hardware: rebuilt cleanly; got measurably further into
+  the same test sequence afterward (the next crash moved to
+  `i_cache_size()`, see below), consistent with this having freed
+  real headroom rather than just moving the failure point without
+  changing it.
+- **Size delta**: negligible (one line added).
+
+### `i_cache_size()`'s index-cache growth jumped to a full 20-entry chunk regardless of what was needed
+
+Next real-hardware crash after the `sort_current_folder()` fix, on the
+very first index row of an 11-message INBOX: `Bug in Pine detected:
+"Out of free storage (1701 bytes, brk=56320 sp=64416 gap=8096)"`, `adb`
+showing `fs_get` called from `i_cache_size()` from `get_index_cache()`
+from `build_header_line()`.
+
+- **Root cause**: `pine/mailindx.c`'s index-line cache (`icache`, a
+  single array `fs_resize()`'d bigger as higher message numbers are
+  viewed) unconditionally jumped its allocation to a full
+  `IC_SIZE`-entry (20) chunk on *both* the very first allocation and
+  every subsequent resize, regardless of how many entries were
+  actually needed right now -- `(20+1)*81 = 1701` bytes at 80 columns,
+  matching the crash exactly, for a folder whose very first index row
+  needed only one entry (81 bytes). Same "start small, grow on demand"
+  bug class as `MSIZE_INIT`/`tmp_20k_buf` elsewhere in this tree,
+  just not yet applied here.
+- **Fixed, in two steps** (the first alone wasn't sufficient -- see
+  below): sized the first allocation (`icache.cache == NULL`) to
+  exactly `indx+1` entries instead of jumping to `IC_SIZE`. This alone
+  got past row 1, but crashed one row later growing from 1 to 2
+  entries -- the *resize* ("else") branch had the identical
+  `while(indx >= icache.num) icache.num += IC_SIZE;` chunk-jump the
+  first-allocation fix only addressed for the `NULL` case
+  (`"Can't resize free storage (1782 bytes)"`, growing from 1 entry to
+  a full 21-entry chunk when only a 2nd entry was needed). Fixed the
+  same way: both branches now grow to exactly `icache.num = indx+1`,
+  with the `while`/`IC_SIZE` chunk-stepping removed entirely.
+- **Verified**: `./build lnx`, 0 warnings; `python3
+  test/run_smoketests.py`, 31/31; manual 30-message functional test
+  confirming both the shrunk first allocation and continued growth
+  past where `IC_SIZE` used to matter render correctly. Real hardware:
+  rebuilt cleanly, both crashes (first-allocation and resize-path)
+  confirmed gone via the user's own retest, which then proceeded
+  further into the same session before hitting the next issue (below).
+- **Superseded**: this exact-sizing fix, while correct and no longer
+  over-allocating, was itself later replaced by a fixed-size `.bss`
+  ring buffer once it became clear the underlying problem was heap
+  fragmentation, not over-allocation -- see the next entry. Documented
+  here anyway since it was a real, independently-verified fix at the
+  time and the reasoning (never allocate more than what's needed right
+  now) remains the operating principle the replacement also follows.
+- **Size delta**: negligible (the fix shrank a `while` loop, no new
+  fields or buffers).
+
+### `i_cache_size()` replaced with a fixed-size `.bss` ring buffer -- the exact-sizing fix wasn't enough once the heap is fragmented
+
+With four prior fixes in this same chain landing (`addr_string()`,
+`folder_exists()`, `sort_current_folder()`, `i_cache_size()`'s exact
+sizing), a real-hardware retest got to a 27-message sent-mail folder
+before crashing again in the *same* `i_cache_size()` code, at row 22:
+`Bug in Pine detected: "Can't resize free storage (1863 bytes,
+brk=57344 sp=64414 gap=7070)"`.
+
+- **Why the previous fix wasn't enough**: `1863` bytes is *exactly*
+  `(22+1)*81` -- precisely what the exact-sizing fix above is supposed
+  to request, not an over-allocation. And `gap` (7070, the reported
+  distance from `brk` to the stack pointer) was comfortably larger
+  than the request. That mismatch is the tell: `brk=57344` matches
+  every other recent crash's `brk` exactly, strongly suggesting 57344
+  is a genuine, fixed ceiling for this process (consistent with this
+  project's own "hard ceiling 57344" finding, see "The real memory
+  budget" entry) -- once `brk` reaches it, `sbrk()` cannot extend
+  further, and *every* subsequent allocation must be satisfied purely
+  from memory already freed earlier in the session. `gap` (distance to
+  the stack) is not a measure of that -- it's simply how far away the
+  stack happens to be, unrelated to whether the free list actually has
+  a suitably-sized contiguous chunk available. `icache`'s single,
+  ever-growing array needs a bigger contiguous block on literally
+  every resize (`fs_resize()`'s `realloc()`, confirmed via
+  `imap/ANSI/c-client/os_bsd.c`, allocates a whole new block of the
+  full new size and copies when it can't extend in place -- not just
+  the incremental growth), which is exactly the kind of request a
+  fragmented, maxed-out heap struggles to satisfy regardless of how
+  much free space exists in aggregate, scattered across many smaller
+  already-freed pieces from the rest of the session's allocation
+  churn.
+- **Design considered and rejected**: converting `icache.cache` from
+  one resizable array into an array of individually-`fs_get()`'d,
+  never-resized per-row buffers (mirroring how this codebase's other
+  caches -- `FILECACHE**`, `LONGCACHE*` -- already work) would shrink
+  the *largest single contiguous request* from `81*N` bytes to roughly
+  `2*N` (an outer pointer array) plus one-off ~89-byte row
+  allocations. Worked out concretely: at N=22 that's *slightly more*
+  total memory than the original design (~2010 bytes vs. 1863),
+  because per-allocation malloc-header overhead is now paid 22 times
+  instead of once -- and it still grows without bound as the folder
+  gets bigger, just with a much smaller multiplier. Rejected in favor
+  of the option below, which is strictly better on both axes.
+- **Fixed**: replaced `icache` with a fixed-size ring buffer, keyed by
+  `msgno % ICACHE_WINDOW` (24 rows), each row a static
+  `ICACHE_COLS+1`-byte (80+1) buffer -- `char
+  cache[ICACHE_WINDOW][ICACHE_COLS+1]` -- plus a parallel `long
+  msgno[ICACHE_WINDOW]` tagging which message currently occupies each
+  slot (0 = never used), so a stale row left over from a different
+  message that hashed to the same slot is never mistaken for a cache
+  hit. Both arrays are plain `static` data -- **not** heap-allocated at
+  all -- so this cache no longer competes with the fragmented heap in
+  any way; its entire footprint (`24*(81) + 24*sizeof(long)` = 1944 +
+  96 = 2040 bytes) is claimed once, at link time, and never grows
+  regardless of folder size. `i_cache_size()` is gone entirely -- there
+  is no more allocation to size. Its one other job (detecting a
+  terminal-width change and invalidating cached content formatted for
+  the old width) now lives directly in `get_index_cache()`, tracked via
+  a `static int last_cols`. 24 rows is comfortably more than one page
+  (`screen_rows-5`, ~19 rows on a 24-row terminal) so ordinary paging
+  doesn't evict a row it's about to redraw; 80 columns matches every
+  other `screen_cols` floor already used elsewhere in this file (a
+  wider terminal's index line is truncated to this width, an explicit,
+  deliberate trade-off). Scrolling back to a row that's aged out of the
+  window just re-runs `build_header_line()` to refill it -- an accepted
+  CPU-for-RAM trade, same as elsewhere in this tree.
+- **Verified**: `./build lnx`, 0 warnings (confirmed `bss` grew by
+  exactly 2040 bytes on the dev build, matching the static footprint
+  above exactly); `python3 test/run_smoketests.py`, 31/31; new
+  targeted pty-driven test confirming eviction/refill correctness (a
+  40-message mailbox: message 25 evicts message 1's slot via
+  `25 % 24 == 1 == 1 % 24`; revisiting message 1 afterward correctly
+  shows message 1's own content, not message 25's stale leftovers).
+  Real hardware: `pine-ovl` relink succeeded, `bss` grew by exactly
+  2040 bytes there too (11682 -> 13722); the user's own real-hardware
+  retest read an 11-message INBOX, composed and sent mail, then opened
+  and read all 27 accumulated sent-mail messages end to end with no
+  crash -- the first fully clean run of this entire test sequence
+  since the investigation began.
+- **Size delta**: `bss +2040` (fixed, one-time, independent of folder
+  size) in exchange for removing an unbounded-growth heap allocation
+  that had already crashed twice at two different row counts.
+

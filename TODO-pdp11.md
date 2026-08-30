@@ -112,6 +112,43 @@ DONE elsewhere or referenced in passing below.
       there's very likely more of the same shape (unconditional floors,
       permanent per-message allocations) still to find along
       `do_broach_folder()`/`build_header_line()`'s path.
+    - **Update**: a follow-on session found and fixed three more
+      contributors along exactly that path, each caught live on real
+      hardware in turn as the previous fix let the same test sequence
+      get one step further: `folder_exists()` reporting a real
+      `sent-mail` folder as nonexistent (unrelated to memory, but
+      blocked testing further), `sort_current_folder()` leaking every
+      message's `LONGCACHE` envelope/body via unfreed
+      `mail_fetchstructure()` calls in its own comparators, and
+      `i_cache_size()` unconditionally jumping to a full 20-entry
+      chunk on the index cache's first allocation. See
+      `TODO-pdp11-done.md`'s "`folder_exists()` resolves a bare folder
+      name against the wrong directory", "`sort_current_folder()`'s
+      comparators leak every message's `LONGCACHE` envelope/body", and
+      "`i_cache_size()`'s index-cache growth" entries.
+    - **Update**: the `i_cache_size()` fix above (size the first
+      allocation exactly instead of jumping to a 20-entry chunk) still
+      crashed one row later, growing from 1 to 2 entries -- the
+      *resize* path had the identical bug the first-allocation fix
+      only addressed for `icache.cache == NULL`. Fixed the same way;
+      see the same entry above.
+    - **Update**: with sent-mail opening cleanly too, the next crash
+      moved to the index cache again -- but this time at *exactly* the
+      size `i_cache_size()`'s own fix says it should ask for (1863
+      bytes for row 22), with a nominally-larger "gap" reported than
+      what was requested. This was the first clear real-hardware
+      evidence that, once `brk` reaches this ceiling (57344, the same
+      value every recent crash has hit), it does not grow further --
+      *every* allocation from that point on must come from memory
+      already freed earlier in the session, so a request's chances
+      depend on finding an existing free chunk of that exact size, not
+      on how much free memory exists in aggregate. `i_cache_size()`'s
+      single ever-growing array needed an ever-larger *contiguous*
+      block on every resize, which is exactly what a fragmented, maxed-
+      out heap struggles to produce. Fixed by replacing it with a
+      fixed-size ring buffer living in `.bss` (never allocated from
+      the heap at all) -- see `TODO-pdp11-done.md`'s "`i_cache_size()`
+      replaced with a fixed-size `.bss` ring buffer" entry.
 
 ### `do_suspend()`'s IMAP-connection-timeout warning may be dead code on this fork
 

@@ -137,7 +137,6 @@ int   compare_cc(const QSType *, const QSType *);
 int   compare_message_dates(const QSType *, const QSType *);
 int   compare_size(const QSType *, const QSType *);
 char *get_index_cache(long);
-int   i_cache_size(long);
 int   i_cache_width(void);
 void  sort_blip(void);
 
@@ -750,8 +749,8 @@ build_header_line(message_number)
     /*
      * The formatted summary line above is all this function's callers
      * ever need again -- it's already saved into pine's own index
-     * cache (get_index_cache()/i_cache_size(), already bounded to
-     * IC_SIZE entries). The full ENVELOPE/BODY c-client just fetched
+     * cache (get_index_cache(), a small fixed-size window -- see its
+     * comment). The full ENVELOPE/BODY c-client just fetched
      * to build it, though, stays cached in the stream's LONGCACHE for
      * the rest of the session with no bound at all (same underlying
      * issue as mail_view_screen()'s mail_gc(GC_ENV) call). Unlike
@@ -1110,6 +1109,28 @@ sort_current_folder()
                  so == SortCc      ? compare_cc :
                   so == SortDate    ? compare_message_dates :
                                        compare_size);
+
+        /*
+         * Every comparator above except compare_size() calls
+         * mail_fetchstructure() to read the field it's sorting on, but
+         * (unlike build_header_line(), which fetches the exact same
+         * structures right afterward to render the index and frees
+         * each one immediately -- see its own comment) none of them
+         * ever free what they fetch. mail_fetchstructure() permanently
+         * caches into the stream's LONGCACHE by default, so a sort by
+         * anything but arrival/size populates every message's
+         * envelope/body and leaves all of it resident -- on a mailbox
+         * with enough messages, this alone exhausts the real-hardware
+         * heap before a single index line is ever drawn (confirmed:
+         * "after sort_current_folder" brk already at the hard ceiling,
+         * before the first build_header_line() call). Sorting only
+         * ever needed to read each field once to pick an order, not
+         * keep it -- build_header_line() will re-fetch (and re-free)
+         * whatever it actually needs to display right after this
+         * returns. See TODO-pdp11-done.md.
+         */
+        if(so != SortSize)
+          mail_gc(ps_global->mail_stream, GC_ENV);
     }
 }
 
@@ -1136,24 +1157,51 @@ sort_name(so)
  * at some point, this could be made part of the pine_state struct.
  * the only changes here would be to pass the ps pointer around
  */
-static struct index_cache {
-   void	    *cache;			/* pointer to cache */
-   long      num;			/* number of last index in cache */
-   unsigned  size;			/* size of each index line       */
-} icache = { NULL, 0L, 0 };
-  
+
 /*
- * cache size growth increment. Was 100 -- an unconditional first
- * allocation of (100+1)*(screen_cols+1) bytes (8181 at 80 columns) as
- * soon as the FIRST index line is drawn, regardless of how many
- * messages the folder actually has (2, for a brand new PDP-11 user's
- * INBOX). fs_resize() below already grows this on demand in IC_SIZE
- * steps, so a smaller increment only changes resize frequency for a
- * large folder, not correctness -- same tradeoff as MSIZE_INIT
- * (filter.c) and other "start small, grow on demand" fixes in this
- * tree. See TODO-pdp11-done.md.
+ * Fixed-size ring buffer, keyed by msgno % ICACHE_WINDOW -- replaces an
+ * earlier design (a single array, fs_resize()'d bigger every time a
+ * new, higher message number was viewed) that kept every row ever
+ * rendered resident for the whole session, so its size scaled with how
+ * far into the folder the user had scrolled, not with anything fixed.
+ * On this target, once the heap's fixed ~57KB budget is fully claimed
+ * (a routine occurrence after opening a folder or two), *every*
+ * allocation must come from memory already freed earlier in the
+ * session -- so a request's chances depend on finding an existing free
+ * chunk of that exact size, not on how much free memory exists in
+ * aggregate. A single array that keeps growing needs an ever-larger
+ * *contiguous* chunk each time, which is exactly what a fragmented,
+ * maxed-out heap struggles to produce, however much free space is
+ * scattered around in smaller pieces -- confirmed by a real "Can't
+ * resize free storage (1863 bytes)" crash on only the 22nd row, well
+ * within what the old design considered a modest, exactly-sized
+ * request.
+ *
+ * ICACHE_WINDOW rows is comfortably more than one page
+ * (screen_rows-5, ~19 rows on a 24-row terminal) so ordinary paging
+ * doesn't evict a row it's about to redraw. ICACHE_COLS caps each
+ * row's width at compile time (needed since this is a plain static
+ * array, not a runtime allocation) -- 80 matches every other
+ * screen_cols floor in this file; a wider terminal's index line is
+ * truncated to this width (see i_cache_width()). Total footprint:
+ * ICACHE_WINDOW*(ICACHE_COLS+1) bytes, fixed, in .bss, never resized,
+ * regardless of folder size. Scrolling back to a row that's aged out
+ * of the window just re-runs build_header_line() to refill it -- an
+ * accepted CPU-for-RAM tradeoff, same as elsewhere in this tree. See
+ * TODO-pdp11-done.md.
  */
-#define	IC_SIZE		20
+#define ICACHE_WINDOW	24
+#define ICACHE_COLS	80
+
+static struct index_cache {
+   char cache[ICACHE_WINDOW][ICACHE_COLS+1];	/* the rows themselves */
+   long msgno[ICACHE_WINDOW];	/* message number each slot currently
+				   holds, or 0 if the slot has never been
+				   used -- distinguishes a real cache hit
+				   from a stale row left over from a
+				   different message that hashed to the
+				   same slot */
+} icache;
 
 /*
  * important values for cache building
@@ -1169,44 +1217,7 @@ static short bc_done = 0;
 int
 i_cache_width()
 {
-    return(icache.size-1);
-}
-
-
-/* 
- * i_cache_size - make sure the cache is big enough to contain
- * requested entry
- */
-int
-i_cache_size(indx)
-    long         indx;
-{
-    long j;
-
-    if(icache.size != (unsigned)(max(ps_global->ttyo->screen_cols, 80) + 1)){
-        clear_index_cache();		/* clear cache and start over! */
-	icache.size = max(ps_global->ttyo->screen_cols, 80) + 1;
-    }
-
-    if(indx > (j = icache.num - 1L)){		/* make room for entry! */
-	int     tmplen = (size_t)icache.size * sizeof(char);
-	char   *tmpline;
-
-	while(indx >= icache.num)
-	  icache.num += IC_SIZE;
-
-	if(icache.cache == NULL){
-	    icache.cache = (void *)fs_get((icache.num+1)*tmplen);
-	    memset(icache.cache, 0, (unsigned)((icache.num+1)*tmplen));
-	}
-	else{
-            fs_resize((void **)&(icache.cache), (size_t)(icache.num+1)*tmplen);
-	    tmpline = (char *)icache.cache + ((j+1) * tmplen);
-	    memset(tmpline, 0, (unsigned)((icache.num - j) * tmplen));
-	}
-    }
-
-    return(1);
+    return(ICACHE_COLS);
 }
 
 
@@ -1217,12 +1228,30 @@ char *
 get_index_cache(msgno)
     long         msgno;
 {
-    if(!i_cache_size(--msgno)){
-	q_status_message(0, 1, 3, "\007Index cache error");
-	return(NULL);
+    static int last_cols = -1;
+    int cols = max(ps_global->ttyo->screen_cols, 80);
+    unsigned slot;
+
+    if(cols != last_cols){
+	/*
+	 * Screen width changed -- previously-cached rows were formatted
+	 * assuming the old width (build_header_line()'s field layout
+	 * depends on screen_cols), so invalidate everything rather than
+	 * risk serving a row formatted for the wrong width.
+	 */
+	clear_index_cache();
+	last_cols = cols;
     }
 
-    return((char *)(icache.cache) + (msgno * (long)icache.size * sizeof(char)));
+    slot = (unsigned)((--msgno) % ICACHE_WINDOW);
+    if(icache.msgno[slot] != msgno + 1){
+	icache.cache[slot][0] = '\0';	/* different message -- force a
+					   rebuild instead of serving its
+					   stale content */
+	icache.msgno[slot] = msgno + 1;
+    }
+
+    return(icache.cache[slot]);
 }
 
 
@@ -1279,9 +1308,9 @@ clear_index_cache_ent(indx)
 void
 clear_index_cache()
 {
-    if(icache.cache)
-      fs_give((void **)&(icache.cache));
-    icache.num  = 0L;
-    icache.size = 0;
+    int i;
+
+    for(i = 0; i < ICACHE_WINDOW; i++)
+      icache.msgno[i] = 0L;
     bc_this_stream = NULL;
 }
