@@ -12379,3 +12379,67 @@ result]`.
   confirmed it fails against `execl()` and passes against `execlp()`.
   Full smoketest suite green, 32/32.
 - **Size delta**: negligible (one function name change plus a comment).
+
+### Outgoing mail's `From:` header showed the wrong domain, on real hardware
+
+User-reported: a real outbound message's `Return-Path`/`X-Envelope-From`
+came out correctly addressed, but its own `From:` header showed
+`mrbawb <abob@pdp11.ARPA>` -- a domain this UUCP station isn't actually
+known by externally.
+
+- **Root cause**: `compose_mail()` (`pine/send.c`) builds
+  `outgoing->from->host` from `ps_global->maildomain`, which
+  `init_hostname()` (`pine/init.c`) derives from a bare `gethostname()`
+  call (`getdomainnames()`, `pine/os.c`) -- this target has no
+  resolver, so that call was never going to return anything but the
+  machine's own local hostname. The one supported way to override it,
+  a `user-domain` setting in `.pinerc`/`pine.conf`, doesn't exist any
+  more -- `read_pinerc()` (all config-file parsing) was removed
+  entirely in an earlier session (see this file's `read_pinerc()`
+  removal entries) -- so there was no way left to tell pine the right
+  domain short of changing the machine's real hostname, which turned
+  out to have its own real cost: it broke `uucico`'s peer-identity
+  handshake (`Systems`/`Permissions` match on the caller's node name)
+  on a real attempt.
+- **Fixed**: instead of having pine guess at a domain it structurally
+  has no way to know correctly, `pine_rfc822_header()` now writes the
+  `From:` line as a bare local-part with no `@host` at all, and leaves
+  qualification to the local `sendmail` -- its ruleset 3
+  canonicalization already fully-qualifies any header address with no
+  `@` using its own (correctly configured) notion of this host's mail
+  domain, which is exactly the mechanism that was already getting
+  `Return-Path`/the envelope-sender right. `rfc822_address_line()`/
+  `rfc822_address()` (`imap/ANSI/c-client/rfc822.c`) can't be handed a
+  `NULL`-host `ADDRESS` to get this, though: they already overload a
+  `NULL` host to mean "this address starts an RFC822 *group*" (e.g.
+  `undisclosed-recipients: ;`), not "bare address" -- feeding one in
+  would write a malformed `From: abob: ` group opener with no closing
+  `;`. So `pine_rfc822_header()` special-cases `From:` and writes it
+  directly (`personal <mailbox>` or just `mailbox`, matching the
+  existing display convention minus `@host`) instead of going through
+  the shared address-list writer for that one field.
+  `outgoing->from->host` itself is untouched and still set to
+  `maildomain` -- it's still needed internally for Reply-To
+  defaulting, `Return-Path`, and `addrutil.c`'s "is this my own
+  address" checks; only the literal bytes handed to `sendmail` for
+  `From:` changed.
+- **Known limitation, accepted rather than fixed**: a message stored
+  with a bare `From:` line, if later re-parsed and re-emitted through
+  the same address-list writer (e.g. Forwarding a self-sent message
+  from the Sent-mail folder), would hit the exact same "no host means
+  group" ambiguity on the way back out, since re-parsing a `From:`
+  header with no `@` legitimately produces a `NULL`-host `ADDRESS`
+  too. This is a pre-existing wart in the shared RFC822 writer, not
+  something this fix introduced -- any message with a genuinely
+  unqualified sender (which this target's local UUCP mail already has
+  to tolerate, since bare local `From ` lines are a normal thing to
+  receive) has always had this same latent issue. Not addressed here;
+  flagged in case a future session finds a real reproduction of it.
+- **Verified**: added `test/cases/test_send_bare_from.py`, which
+  composes and sends a message through `call_sendmail()`'s real
+  shell-out (via `smoketest.Session`'s `sendmail_stub`, same technique
+  as `test_send_body_header_overflow_via_sendmail.py`) and asserts the
+  captured `From:` line contains no `@`. Confirmed it fails against the
+  pre-fix code (`From: abob <abob@sandfish.lan>` on this dev box) and
+  passes with the fix. Full smoketest suite green, 33/33.
+- **Size delta**: negligible (a few extra lines in one function).

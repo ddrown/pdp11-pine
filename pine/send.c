@@ -1799,7 +1799,42 @@ pine_rfc822_header(header, env, body)
   else *header = '\0';		/* else initialize header to null */
   rfc822_header_line (&header,"Newsgroups",env,env->newsgroups);
   rfc822_header_line (&header,"Date",env,env->date);
-  rfc822_address_line (&header,"From",env,env->from);
+
+  /*
+   * From: is written as a bare mailbox name (no "@host") instead of
+   * through rfc822_address_line()/rfc822_address() -- this station has
+   * no working notion of its own mail domain (no DNS/resolver, see
+   * getdomainnames()'s comment in os.c; pinerc/pine.conf config-file
+   * parsing that could otherwise override it is gone entirely, see
+   * TODO-pdp11-done.md), so the local sendmail is left to fully-qualify
+   * the unqualified local-part itself -- its ruleset 3 canonicalization
+   * does this for any header address with no "@", the same mechanism
+   * that was already producing a correct Return-Path/envelope-sender
+   * even while this From: line was wrong. rfc822_address_line() can't
+   * be handed a host-less ADDRESS to get this: it special-cases
+   * "mailbox with no host" as an RFC822 *group* opener ("From: abob: "
+   * with no matching ";" terminator), not a bare address -- so this
+   * writes the From: line directly instead, bypassing that. Only the
+   * literal bytes sent to sendmail change -- outgoing->from->host
+   * (compose_mail(), above) stays set to ps_global->maildomain for
+   * every other internal use (Reply-To defaulting, Return-Path,
+   * addrutil.c's "is this my own address" checks).
+   */
+  if (env->from && env->from->mailbox) {
+    extern const char *rspecials, *wspecials;
+    header += strlen (header);
+    strcat (header,"From: ");
+    if (env->from->personal) {
+      rfc822_cat (header,env->from->personal,rspecials);
+      strcat (header," <");
+      rfc822_cat (header,env->from->mailbox,wspecials);
+      strcat (header,">");
+    }
+    else rfc822_cat (header,env->from->mailbox,wspecials);
+    strcat (header,"\015\012");
+  }
+  else rfc822_address_line (&header,"From",env,env->from);
+
   rfc822_address_line (&header,"Sender",env,env->sender);
   rfc822_address_line (&header,"Reply-To",env,env->reply_to);
   rfc822_header_line (&header,"Subject",env,env->subject);
