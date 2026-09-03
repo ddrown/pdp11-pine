@@ -51,6 +51,24 @@ DONE elsewhere or referenced in passing below.
       ceiling to design `data+bss` and peak heap usage against -- not
       64KB minus whatever the stack happens to be using at the moment,
       which is what earlier size accounting in this file assumed.
+    - **Resolved**: confirmed directly against `kern_exec.c`'s
+      `getxfile()` and `sys/kern_mman.c`'s `estabur()`. The KT11 MMU
+      gives each address space exactly 8 segment registers (APRs), each
+      mapping a fixed, all-or-nothing 8192-byte block -- 8*8192 = 65536
+      bytes max, and a single byte requested from a new segment reserves
+      the whole 8KB. On a separate-I&D binary, the stack (D-space) is
+      handed its own top segment (`0xE000`-`0x10000`) the instant
+      `getxfile()` calls `expand(ss, S_STACK)`, regardless of how much
+      of that 8KB is actually in use -- `estabur()`'s `ctos()` (clicks
+      to segments) rounds up, so even the ~1280-byte initial `SSIZE`
+      stack still consumes a full segment. That leaves exactly 7
+      segments (57344 bytes) for `nd` (data+bss+heap) -- a fixed
+      hardware partition decided once at exec time, not a boundary that
+      tracks real stack depth. So a stack pointer sitting far above
+      `0xE000` doesn't mean that space is available to the heap; it
+      belongs to a different MMU register entirely. Full derivation
+      (with the exact `kern_exec.c`/`kern_mman.c` source lines) written
+      up outside this repo.
     - **Update**: a still later session tried to directly confirm the
       exact page boundary by painting a known byte pattern down to
       `0xE010` (this ceiling's implied floor) and scanning for
