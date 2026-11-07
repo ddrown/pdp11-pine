@@ -85,7 +85,11 @@ per-file coverage summary after the run.
 
 ## Status
 
-This is a work in progress. Pine and Pico both build and run on Linux
-today; the binary is shrinking but hasn't yet been cross-compiled for
-or run on an actual PDP-11. Follow along in
-[`TODO-pdp11.md`](TODO-pdp11.md).
+This is a work in progress, but the core goal is done: both
+`pine-ovl` and `pico-ovl` build, link, and run on a real 2.11BSD
+PDP-11 — not just the Linux dev build — fitting the PDP-11's 64KB
+per-address-space limit via swappable overlays for code and the
+~56KB `data+bss+heap` budget imposed by the MMU's segment registers.
+A real message has been composed, sent, and received through this
+station's UUCP-connected `sendmail`. Remaining cuts, open bugs, and
+exact size numbers are tracked in [`TODO-pdp11.md`](TODO-pdp11.md).
