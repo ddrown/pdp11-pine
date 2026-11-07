@@ -4,6 +4,8 @@ This is a fork of University of Washington's Pine 3.89 (the original
 `README` in this directory is the unmodified upstream file), being cut
 down to fit the address space of a PDP-11 running 2.11BSD.
 
+![Reading email on a serial terminal connected to an emulated PDP-11/70](https://blog.dan.drown.org/content/images/size/w1600/2026/09/PXL_20260918_011749123.jpg)
+
 The goal isn't a modern mail client — it's the opposite. It's a mail
 UI that could plausibly have existed in the early-to-mid 1990s on a
 PDP-11 that talks to the outside world over UUCP rather than TCP/IP: a
